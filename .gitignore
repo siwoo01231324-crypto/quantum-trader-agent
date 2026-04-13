@@ -1,0 +1,45 @@
+# 금지 파일 형식 (레포 규칙)
+*.pdf
+*.csv
+*.pkl
+*.parquet
+
+# 환경 변수
+.env
+.env.*
+!.env.example
+
+# 의존성
+node_modules/
+.venv/
+__pycache__/
+*.pyc
+
+# 빌드 결과물
+dist/
+build/
+.next/
+out/
+
+# 테스트 결과물
+test-results/
+playwright-report/
+coverage/
+.coverage
+
+# 워크트리 (git이 자동 관리)
+.worktree/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude Code 로컬 설정
+.claude/settings.local.json
+
+# OMC (oh-my-claudecode)
+.omc/
+
+# IDE
+.idea/
+*.swp

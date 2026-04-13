@@ -1,0 +1,103 @@
+name: Project Board Automation
+
+# 이슈·PR 이벤트에 따라 GitHub Project 보드 상태를 자동으로 이동한다.
+# 이슈 생성 → Backlog / 이슈 Assign → In Progress / PR 오픈 → In Review
+
+on:
+  issues:
+    types: [opened, assigned]
+  pull_request:
+    types: [opened, ready_for_review]
+
+jobs:
+  issue-automate:
+    if: github.event_name == 'issues'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add to project & set status
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+          # ⚠️  설정 필요: PROJECT_TOKEN — Classic PAT (repo + project + read:org 스코프 필요)
+          # 발급: Settings → Developer settings → Tokens (classic) → Generate new token
+        run: |
+          ISSUE_URL="${{ github.event.issue.html_url }}"
+          EVENT="${{ github.event.action }}"
+
+          # ⚠️  설정 필요: 아래 값들을 프로젝트에 맞게 변경하세요
+          # PROJECT_NUMBER: GitHub Projects 탭에서 확인 (URL의 숫자)
+          PROJECT_NUMBER="1"
+          # OWNER: GitHub organization 또는 username
+          OWNER="${{ github.repository_owner }}"
+
+          # 프로젝트에 이슈 추가
+          ITEM_ID=$(gh project item-add "$PROJECT_NUMBER" \
+            --owner "$OWNER" \
+            --url "$ISSUE_URL" \
+            --format json | jq -r '.id')
+
+          # ⚠️  설정 필요: 아래 ID들은 프로젝트마다 다릅니다.
+          # 조회 방법: gh project field-list {PROJECT_NUMBER} --owner {OWNER} --format json
+          PROJECT_ID="YOUR_PROJECT_ID"           # PVT_xxx 형태
+          FIELD_ID="YOUR_STATUS_FIELD_ID"        # PVTSSF_xxx 형태
+          OPTION_BACKLOG="YOUR_BACKLOG_OPTION_ID"       # Backlog 상태 ID
+          OPTION_IN_PROGRESS="YOUR_IN_PROGRESS_OPTION_ID"  # In Progress 상태 ID
+
+          if [ "$EVENT" = "opened" ]; then
+            gh project item-edit \
+              --project-id "$PROJECT_ID" \
+              --id "$ITEM_ID" \
+              --field-id "$FIELD_ID" \
+              --single-select-option-id "$OPTION_BACKLOG"
+            echo "→ Backlog"
+
+          elif [ "$EVENT" = "assigned" ]; then
+            gh project item-edit \
+              --project-id "$PROJECT_ID" \
+              --id "$ITEM_ID" \
+              --field-id "$FIELD_ID" \
+              --single-select-option-id "$OPTION_IN_PROGRESS"
+            echo "→ In Progress"
+          fi
+
+  pr-automate:
+    if: github.event_name == 'pull_request' && github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Linked issues → In Review
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          REPO="${{ github.repository }}"
+          PROJECT_NUMBER="1"
+          OWNER="${{ github.repository_owner }}"
+
+          # ⚠️  설정 필요
+          PROJECT_ID="YOUR_PROJECT_ID"
+          FIELD_ID="YOUR_STATUS_FIELD_ID"
+          OPTION_IN_REVIEW="YOUR_IN_REVIEW_OPTION_ID"   # In Review 상태 ID
+
+          # PR 본문에서 연결된 이슈 번호 추출 (Closes/Fixes/Resolves #N)
+          ISSUE_NUMS=$(echo "$PR_BODY" | grep -oiE '(closes|fixes|resolves) #[0-9]+' | grep -oE '[0-9]+')
+
+          if [ -z "$ISSUE_NUMS" ]; then
+            echo "연결된 이슈 없음. 종료."
+            exit 0
+          fi
+
+          for ISSUE_NUM in $ISSUE_NUMS; do
+            ISSUE_URL="https://github.com/$REPO/issues/$ISSUE_NUM"
+            echo "이슈 #$ISSUE_NUM → In Review 시도"
+
+            ITEM_ID=$(gh project item-add "$PROJECT_NUMBER" \
+              --owner "$OWNER" \
+              --url "$ISSUE_URL" \
+              --format json | jq -r '.id')
+
+            gh project item-edit \
+              --project-id "$PROJECT_ID" \
+              --id "$ITEM_ID" \
+              --field-id "$FIELD_ID" \
+              --single-select-option-id "$OPTION_IN_REVIEW"
+            echo "→ In Review (#$ISSUE_NUM)"
+          done
