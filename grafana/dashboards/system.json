@@ -1,0 +1,63 @@
+{
+  "title": "QTA System",
+  "uid": "qta-system",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "tags": ["qta", "system"],
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Process up",
+      "datasource": "Prometheus",
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
+      "targets": [{ "expr": "up{app=\"qta-engine\"}", "refId": "A" }]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Order ack latency p50/p95/p99",
+      "datasource": "Prometheus",
+      "gridPos": { "x": 6, "y": 0, "w": 18, "h": 8 },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum by (le) (rate(qta_order_latency_seconds_bucket[5m])))", "refId": "p50" },
+        { "expr": "histogram_quantile(0.95, sum by (le) (rate(qta_order_latency_seconds_bucket[5m])))", "refId": "p95" },
+        { "expr": "histogram_quantile(0.99, sum by (le) (rate(qta_order_latency_seconds_bucket[5m])))", "refId": "p99" }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Market data lag (s)",
+      "datasource": "Prometheus",
+      "gridPos": { "x": 0, "y": 4, "w": 6, "h": 8 },
+      "targets": [{ "expr": "qta_market_data_lag_seconds", "refId": "A" }]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Kill switch",
+      "datasource": "Prometheus",
+      "gridPos": { "x": 0, "y": 12, "w": 6, "h": 4 },
+      "targets": [{ "expr": "max(qta_kill_switch_state)", "refId": "A" }],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "OK" }, "1": { "text": "TRIPPED" } } }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] }
+        }
+      }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Order rate",
+      "datasource": "Prometheus",
+      "gridPos": { "x": 6, "y": 12, "w": 18, "h": 8 },
+      "targets": [{ "expr": "sum by (broker) (rate(qta_orders_total[1m]))", "refId": "A" }]
+    }
+  ]
+}
