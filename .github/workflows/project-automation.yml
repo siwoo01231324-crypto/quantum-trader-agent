@@ -25,7 +25,7 @@ jobs:
 
           # ⚠️  설정 필요: 아래 값들을 프로젝트에 맞게 변경하세요
           # PROJECT_NUMBER: GitHub Projects 탭에서 확인 (URL의 숫자)
-          PROJECT_NUMBER="1"
+          PROJECT_NUMBER="3"
           # OWNER: GitHub organization 또는 username
           OWNER="${{ github.repository_owner }}"
 
@@ -37,10 +37,10 @@ jobs:
 
           # ⚠️  설정 필요: 아래 ID들은 프로젝트마다 다릅니다.
           # 조회 방법: gh project field-list {PROJECT_NUMBER} --owner {OWNER} --format json
-          PROJECT_ID="YOUR_PROJECT_ID"           # PVT_xxx 형태
-          FIELD_ID="YOUR_STATUS_FIELD_ID"        # PVTSSF_xxx 형태
-          OPTION_BACKLOG="YOUR_BACKLOG_OPTION_ID"       # Backlog 상태 ID
-          OPTION_IN_PROGRESS="YOUR_IN_PROGRESS_OPTION_ID"  # In Progress 상태 ID
+          PROJECT_ID="PVT_kwHODnFVv84BUgVs"           # PVT_xxx 형태
+          FIELD_ID="PVTSSF_lAHODnFVv84BUgVszhBn_yQ"        # PVTSSF_xxx 형태
+          OPTION_BACKLOG="166930ea"       # Backlog 상태 ID
+          OPTION_IN_PROGRESS="642c5a45"  # In Progress 상태 ID
 
           if [ "$EVENT" = "opened" ]; then
             gh project item-edit \
@@ -69,13 +69,13 @@ jobs:
           PR_BODY: ${{ github.event.pull_request.body }}
         run: |
           REPO="${{ github.repository }}"
-          PROJECT_NUMBER="1"
+          PROJECT_NUMBER="3"
           OWNER="${{ github.repository_owner }}"
 
           # ⚠️  설정 필요
-          PROJECT_ID="YOUR_PROJECT_ID"
-          FIELD_ID="YOUR_STATUS_FIELD_ID"
-          OPTION_IN_REVIEW="YOUR_IN_REVIEW_OPTION_ID"   # In Review 상태 ID
+          PROJECT_ID="PVT_kwHODnFVv84BUgVs"
+          FIELD_ID="PVTSSF_lAHODnFVv84BUgVszhBn_yQ"
+          OPTION_IN_REVIEW="c8e4554f"   # In Review 상태 ID
 
           # PR 본문에서 연결된 이슈 번호 추출 (Closes/Fixes/Resolves #N)
           ISSUE_NUMS=$(echo "$PR_BODY" | grep -oiE '(closes|fixes|resolves) #[0-9]+' | grep -oE '[0-9]+')
