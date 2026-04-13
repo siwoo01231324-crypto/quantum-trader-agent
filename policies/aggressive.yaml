@@ -1,0 +1,33 @@
+policy_version: 1
+name: aggressive
+description: "공격적 운용 — 변동성 베팅 허용"
+
+per_trade:
+  max_notional_krw: 30_000_000
+  max_qty: 1000
+  allowed_sides: [buy, sell]
+
+per_day:
+  max_orders: 300
+  max_loss_krw: 5_000_000
+  max_turnover_krw: 500_000_000
+
+per_portfolio:
+  max_gross_exposure_krw: 500_000_000
+  max_net_exposure_krw: 300_000_000
+  max_leverage: 3.0
+
+per_position:
+  max_weight_pct: 20.0
+  max_qty: 5000
+
+sector_limits:
+  - sector: tech
+    max_weight_pct: 60.0
+  - sector: finance
+    max_weight_pct: 40.0
+
+drawdown:
+  max_intraday_dd_pct: 5.0
+  max_running_dd_pct: 15.0
+  on_breach: reduce

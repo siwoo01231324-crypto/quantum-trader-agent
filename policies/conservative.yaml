@@ -1,0 +1,33 @@
+policy_version: 1
+name: conservative
+description: "초기 운용용 보수 한도 — 손실 최소화 우선"
+
+per_trade:
+  max_notional_krw: 3_000_000
+  max_qty: 50
+  allowed_sides: [buy, sell]
+
+per_day:
+  max_orders: 30
+  max_loss_krw: 300_000
+  max_turnover_krw: 30_000_000
+
+per_portfolio:
+  max_gross_exposure_krw: 50_000_000
+  max_net_exposure_krw: 30_000_000
+  max_leverage: 1.0
+
+per_position:
+  max_weight_pct: 5.0
+  max_qty: 200
+
+sector_limits:
+  - sector: tech
+    max_weight_pct: 20.0
+  - sector: finance
+    max_weight_pct: 15.0
+
+drawdown:
+  max_intraday_dd_pct: 1.0
+  max_running_dd_pct: 5.0
+  on_breach: halt
