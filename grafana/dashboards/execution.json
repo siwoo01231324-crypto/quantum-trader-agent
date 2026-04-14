@@ -1,0 +1,56 @@
+{
+  "title": "QTA Execution",
+  "uid": "qta-execution",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "tags": ["qta", "execution"],
+  "time": { "from": "now-6h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Order vs Fill rate",
+      "datasource": "Prometheus",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum(rate(qta_orders_total[1m]))", "refId": "orders", "legendFormat": "orders" },
+        { "expr": "sum(rate(qta_fills_total[1m]))", "refId": "fills", "legendFormat": "fills" }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Fill ratio by broker",
+      "datasource": "Prometheus",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "sum by (broker) (rate(qta_fills_total[5m])) / clamp_min(sum by (broker) (rate(qta_orders_total[5m])), 1)",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "heatmap",
+      "title": "Order ack latency heatmap",
+      "datasource": "Prometheus",
+      "gridPos": { "x": 0, "y": 8, "w": 24, "h": 8 },
+      "targets": [{ "expr": "sum by (le) (rate(qta_order_latency_seconds_bucket[1m]))", "refId": "A", "format": "heatmap" }]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Failed orders by broker",
+      "datasource": "Prometheus",
+      "gridPos": { "x": 0, "y": 16, "w": 24, "h": 6 },
+      "targets": [
+        {
+          "expr": "sum by (broker) (rate(qta_orders_total{status=~\"rejected|error\"}[5m]))",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}

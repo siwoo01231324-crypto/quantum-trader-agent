@@ -1,0 +1,48 @@
+{
+  "title": "QTA Strategy",
+  "uid": "qta-strategy",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "tags": ["qta", "strategy"],
+  "time": { "from": "now-24h", "to": "now" },
+  "templating": {
+    "list": [
+      { "name": "strategy", "type": "query", "datasource": "Prometheus", "query": "label_values(qta_pnl_current, strategy)" }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "PnL (KRW)",
+      "datasource": "Prometheus",
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 8 },
+      "targets": [{ "expr": "qta_pnl_current{strategy=~\"$strategy\"}", "refId": "A" }]
+    },
+    {
+      "id": 2,
+      "type": "table",
+      "title": "Open positions",
+      "datasource": "Prometheus",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "targets": [{ "expr": "qta_position_qty{strategy=~\"$strategy\"} != 0", "refId": "A", "format": "table", "instant": true }]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Signal rate",
+      "datasource": "Prometheus",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "targets": [{ "expr": "sum by (signal) (rate(qta_strategy_signal_total{strategy=~\"$strategy\"}[5m]))", "refId": "A" }]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Risk breaches",
+      "datasource": "Prometheus",
+      "gridPos": { "x": 0, "y": 16, "w": 24, "h": 6 },
+      "targets": [{ "expr": "sum by (rule, severity) (rate(qta_risk_breach_total[5m]))", "refId": "A" }]
+    }
+  ]
+}
