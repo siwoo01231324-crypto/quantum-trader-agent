@@ -1,0 +1,14 @@
+PREFIX qta: <https://siwoo.dev/qta/ontology#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+# 자신을 참조하는 Backtest 가 하나도 없는 Strategy
+SELECT ?strategy ?label
+WHERE {
+  ?strategy a qta:Strategy .
+  OPTIONAL { ?strategy rdfs:label ?label }
+  FILTER NOT EXISTS {
+    ?bt a qta:Backtest ;
+        qta:backtestOf ?strategy .
+  }
+}
+ORDER BY ?strategy

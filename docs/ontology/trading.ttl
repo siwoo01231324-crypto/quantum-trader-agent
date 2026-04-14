@@ -1,0 +1,142 @@
+@prefix qta:   <https://siwoo.dev/qta/ontology#> .
+@prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:   <http://www.w3.org/2002/07/owl#> .
+@prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
+
+<https://siwoo.dev/qta/ontology> a owl:Ontology ;
+    rdfs:label "Quantum Trader Agent Trading Ontology" ;
+    rdfs:comment "LFT 규칙기반 자동매매 에이전트의 트레이딩 도메인 온톨로지." .
+
+#################################################################
+#    Classes
+#################################################################
+
+qta:Strategy a owl:Class ;
+    rdfs:label "Strategy" ;
+    rdfs:comment "거래 전략 명세." .
+
+qta:Signal a owl:Class ;
+    rdfs:label "Signal" ;
+    rdfs:comment "진입·청산 신호 정의." .
+
+qta:RiskRule a owl:Class ;
+    rdfs:label "RiskRule" ;
+    rdfs:comment "리스크 규칙." .
+
+qta:Instrument a owl:Class ;
+    rdfs:label "Instrument" ;
+    rdfs:comment "거래 종목 메타데이터." .
+
+qta:Backtest a owl:Class ;
+    rdfs:label "Backtest" ;
+    rdfs:comment "백테스트 실행 결과." .
+
+qta:Incident a owl:Class ;
+    rdfs:label "Incident" ;
+    rdfs:comment "운영 중 발생한 장애·사건." .
+
+qta:MLModel a owl:Class ;
+    rdfs:label "MLModel" ;
+    rdfs:comment "시그널을 생성하는 ML 모델." .
+
+#################################################################
+#    Subclasses
+#################################################################
+
+qta:LiveStrategy a owl:Class ;
+    rdfs:subClassOf qta:Strategy ;
+    rdfs:label "LiveStrategy" ;
+    rdfs:comment "status=live 인 Strategy." .
+
+qta:CriticalRule a owl:Class ;
+    rdfs:subClassOf qta:RiskRule ;
+    rdfs:label "CriticalRule" ;
+    rdfs:comment "severity=critical 인 RiskRule." .
+
+#################################################################
+#    Object Properties
+#################################################################
+
+qta:usesSignal a owl:ObjectProperty ;
+    rdfs:domain qta:Strategy ;
+    rdfs:range  qta:Signal ;
+    rdfs:label  "usesSignal" .
+
+qta:appliesRule a owl:ObjectProperty ;
+    rdfs:domain qta:Strategy ;
+    rdfs:range  qta:RiskRule ;
+    rdfs:label  "appliesRule" .
+
+qta:tradesOn a owl:ObjectProperty ;
+    rdfs:domain qta:Strategy ;
+    rdfs:range  qta:Instrument ;
+    rdfs:label  "tradesOn" .
+
+qta:violatesRule a owl:ObjectProperty ;
+    rdfs:domain qta:Incident ;
+    rdfs:range  qta:RiskRule ;
+    rdfs:label  "violatesRule" .
+
+qta:derivedFromModel a owl:ObjectProperty ;
+    rdfs:domain qta:Signal ;
+    rdfs:range  qta:MLModel ;
+    rdfs:label  "derivedFromModel" .
+
+qta:backtestOf a owl:ObjectProperty ;
+    rdfs:domain qta:Backtest ;
+    rdfs:range  qta:Strategy ;
+    rdfs:label  "backtestOf" .
+
+qta:affectsStrategy a owl:ObjectProperty ;
+    rdfs:domain qta:Incident ;
+    rdfs:range  qta:Strategy ;
+    rdfs:label  "affectsStrategy" .
+
+#################################################################
+#    Datatype Properties
+#################################################################
+
+qta:sharpeRatio a owl:DatatypeProperty ;
+    rdfs:domain qta:Backtest ;
+    rdfs:range  xsd:decimal ;
+    rdfs:label  "sharpeRatio" .
+
+qta:status a owl:DatatypeProperty ;
+    rdfs:domain qta:Strategy ;
+    rdfs:range  xsd:string ;
+    rdfs:label  "status" .
+
+qta:severity a owl:DatatypeProperty ;
+    rdfs:range  xsd:string ;
+    rdfs:label  "severity" .
+
+qta:threshold a owl:DatatypeProperty ;
+    rdfs:domain qta:RiskRule ;
+    rdfs:range  xsd:decimal ;
+    rdfs:label  "threshold" .
+
+qta:timeframe a owl:DatatypeProperty ;
+    rdfs:domain qta:Strategy ;
+    rdfs:range  xsd:string ;
+    rdfs:label  "timeframe" .
+
+qta:lookback a owl:DatatypeProperty ;
+    rdfs:domain qta:Signal ;
+    rdfs:range  xsd:integer ;
+    rdfs:label  "lookback" .
+
+qta:occurred a owl:DatatypeProperty ;
+    rdfs:domain qta:Incident ;
+    rdfs:range  xsd:dateTime ;
+    rdfs:label  "occurred" .
+
+qta:assetClass a owl:DatatypeProperty ;
+    rdfs:domain qta:Instrument ;
+    rdfs:range  xsd:string ;
+    rdfs:label  "assetClass" .
+
+qta:venue a owl:DatatypeProperty ;
+    rdfs:domain qta:Instrument ;
+    rdfs:range  xsd:string ;
+    rdfs:label  "venue" .

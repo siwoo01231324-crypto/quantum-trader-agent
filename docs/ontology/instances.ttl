@@ -1,0 +1,28 @@
+@prefix inst: <https://siwoo.dev/qta/instance/> .
+@prefix qta: <https://siwoo.dev/qta/ontology#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+inst:momo-btc-v2 a qta:Strategy ;
+    rdfs:label "BTC Momentum v2" ;
+    qta:appliesRule inst:max-drawdown-5pct ;
+    qta:status "backtest" ;
+    qta:timeframe "15m" ;
+    qta:tradesOn inst:BTCUSDT ;
+    qta:usesSignal inst:rsi-divergence .
+
+inst:BTCUSDT a qta:Instrument ;
+    rdfs:label "BTC Perpetual" ;
+    qta:assetClass "crypto-perp" ;
+    qta:venue "binance" .
+
+inst:max-drawdown-5pct a qta:CriticalRule,
+        qta:RiskRule ;
+    rdfs:label "Max Drawdown 5%" ;
+    qta:severity "critical" ;
+    qta:threshold 0.05 .
+
+inst:rsi-divergence a qta:Signal ;
+    rdfs:label "RSI Divergence" ;
+    qta:lookback 14 .
+
