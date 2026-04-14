@@ -1,0 +1,33 @@
+policy_version: 1
+name: neutral
+description: "표준 운용 한도"
+
+per_trade:
+  max_notional_krw: 10_000_000
+  max_qty: 200
+  allowed_sides: [buy, sell]
+
+per_day:
+  max_orders: 100
+  max_loss_krw: 1_000_000
+  max_turnover_krw: 100_000_000
+
+per_portfolio:
+  max_gross_exposure_krw: 200_000_000
+  max_net_exposure_krw: 100_000_000
+  max_leverage: 1.5
+
+per_position:
+  max_weight_pct: 10.0
+  max_qty: 1000
+
+sector_limits:
+  - sector: tech
+    max_weight_pct: 35.0
+  - sector: finance
+    max_weight_pct: 25.0
+
+drawdown:
+  max_intraday_dd_pct: 2.0
+  max_running_dd_pct: 8.0
+  on_breach: reduce
