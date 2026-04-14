@@ -1,0 +1,14 @@
+{
+  "vault_root": "docs",
+  "allowed_paths": [
+    "specs/strategies/",
+    "specs/signals/",
+    "specs/risk-rules/",
+    "specs/instruments/",
+    "work/active/",
+    "work/done/backtests/",
+    "work/incidents/"
+  ],
+  "write_mode": "dry-run",
+  "sparql_endpoint": null
+}
