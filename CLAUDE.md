@@ -1,4 +1,4 @@
-# {{PROJECT_NAME}} — Claude Code 가이드
+# quantum-trader-agent — Claude Code 가이드
 
 > 세션 시작 시 이 파일을 먼저 읽는다. 지도(map)다. 백과사전이 아니다.
 
@@ -10,13 +10,16 @@
 
 ## 아키텍처 불변식 (위반 시 CI 차단)
 
-> ⚠️ 프로젝트에 맞게 직접 정의하세요. `scripts/check_invariants.py` 와 연동됩니다.
+`scripts/check_invariants.py --strict` 와 `.github/workflows/ontology-check.yml` 가 강제한다.
 
 ```
-# 예시 — 프로젝트 특성에 맞게 수정/추가/삭제
-1. 예시: 인증 로직은 특정 레이어에서만 처리
-2. 예시: 외부 API 호출은 지정된 모듈에서만
-3. 예시: 테스트 없는 PR은 머지 금지
+1. docs/**/*.md (.ai.md·dashboards·schemas·ontology 제외) 는 프론트매터 `type` 필수
+2. 프론트매터 `id` 는 파일명과 일치 (work-done 제외)
+3. 본문 `[[위키링크]]` 대상 노트는 실제 존재해야 함 (inline/fenced 코드 제외)
+4. docs/ontology/trading.ttl 은 rdflib 로 파싱 가능해야 함
+5. .draft.md 는 정식 노트 검증 대상에서 제외 (#53, 머지 전 승격 필요)
+6. 주문 실행·리스크 결정을 LLM 에 위임 금지 — LLM 은 문서·설계 보조만
+7. 새 전략·신호·리스크·종목 노트는 docs/schemas/note-schemas.md 의 스키마 준수
 ```
 
 ## 레포 규칙
@@ -39,6 +42,16 @@
 - 기능 명세 + AC → `docs/specs/`
 - 온보딩·워크플로우 → `docs/onboarding/`
 - 작업 내역 → `docs/work/active/` · `docs/work/done/`
+- 프론트매터 스키마 → `docs/schemas/note-schemas.md` (12 타입)
+- 도메인 온톨로지 → `docs/ontology/trading.ttl` + `queries/*.rq`
+- Dataview 대시보드 → `docs/dashboards/`
+
+## 지식볼트 · LLM 레이어
+- `docs/` 는 **Obsidian 볼트**. 노트는 `[[id]]` 위키링크로 연결되고 RDF 온톨로지에 동기화됨
+- 새 노트 만들 때는 `docs/schemas/note-schemas.md` 스키마 준수
+- LLM 에이전트가 볼트를 도구로 사용할 때는 `services/obsidian_mcp/` MCP 서버 경유 (#51)
+- 백테스트·인시던트 초안 자동 생성은 `services/doc_agent/` (#53) — 출력은 항상 `.draft.md`, 정식 승격은 사람이 rename
+- 자동 커밋 금지 — 드래프트도 리뷰 후 수동 커밋
 
 ## 조사·리서치 규칙
 - 서베이·리서치 등 조사 작업은 팩트에 근거한 내용만 작성한다

@@ -50,11 +50,24 @@ quantum-trader-agent/
 │   │   ├── 15-llm-agent-layer.md                (#30)
 │   │   └── ref-snowflake-alt-data-trading-demo.md  (#31 외부 참고)
 │   ├── onboarding/                  환경 설정·기여 가이드
+│   ├── schemas/                     노트 타입별 프론트매터 규약 (#47)
+│   │   └── note-schemas.md                        12개 타입
+│   ├── ontology/                    도메인 온톨로지 (#47)
+│   │   ├── trading.ttl                            OWL T-Box
+│   │   ├── instances.ttl                          ontology_sync 결과 (A-Box)
+│   │   └── queries/*.rq                           SPARQL 프리셋
+│   ├── dashboards/                  Dataview 대시보드 (#47)
+│   │   ├── strategies-live.md · risk-coverage.md
+│   │   └── recent-incidents.md · ml-model-usage.md
+│   ├── .obsidian/                   Obsidian 볼트 설정 (#47)
+│   │   └── mcp-config.json                        MCP 서버 허용 경로 (#51)
 │   ├── runbooks/                    운영 런북
 │   │   └── kill-switch-runbook.md               (#27)
 │   └── work/                        이슈별 작업 내역
 │       ├── active/                  진행 중
-│       └── done/                    완료
+│       ├── done/                    완료
+│       ├── incidents/               인시던트 · 포스트모템
+│       └── agent-runs/              doc_agent 실행 감사 로그 (#53)
 │
 ├── src/                             ← 애플리케이션 소스
 │   ├── data_lake/                   Parquet 스키마·저장소 (#20)
@@ -70,7 +83,16 @@ quantum-trader-agent/
 │   └── tax/                         KR 개인 세법 자동화 (#28)
 │       ├── calculator.py · reporter.py
 │
+├── services/                        ← 주변 에이전트·서비스 (LLM 연동)
+│   ├── obsidian_mcp/                Obsidian 볼트 MCP 서버 (#51)
+│   │   ├── server.py · tools.py                   7개 도구 (read/list/search/write/append/sparql/neighbors)
+│   └── doc_agent/                   자동 노트 생성 에이전트 (#53)
+│       ├── generators.py · cli.py
+│       ├── llm.py · audit.py
+│       └── prompts/                               백테스트·인시던트·포스트모템 템플릿
+│
 ├── tests/                           pytest 스위트
+│   └── fixtures/                    샘플 볼트 · doc_agent 입력 JSON
 │
 ├── policies/                        리스크 정책 YAML (#24)
 │   ├── conservative.yaml
@@ -83,8 +105,10 @@ quantum-trader-agent/
 ├── loki/                            Loki 라벨 규약 (#26)
 │
 └── scripts/                         유틸리티 스크립트
-    ├── check_invariants.py          아키텍처 불변식 검증
-    └── check_forbidden_files.py     금지 파일 검사
+    ├── check_invariants.py          프론트매터 스키마 · 위키링크 · TTL 검증 (strict 모드)
+    ├── check_forbidden_files.py     금지 파일 검사
+    ├── ontology_sync.py             프론트매터 → instances.ttl 동기화 (#47)
+    └── migrate_frontmatter.py       경로 기반 type 추론 일괄 적용 (#52, idempotent)
 ```
 
 ---
@@ -109,7 +133,7 @@ quantum-trader-agent/
 
 ### 볼트 구조
 - `docs/.obsidian/` — Obsidian 설정 (app / core-plugins / community-plugins / graph)
-- `docs/schemas/note-schemas.md` — 공식 프론트매터 규약 (7개 타입)
+- `docs/schemas/note-schemas.md` — 공식 프론트매터 규약 (12개 타입: 7개 + work-done + spec-architecture/runbook/research/onboarding/whitepaper)
 - `docs/specs/{strategies,signals,risk-rules,instruments}/` — 타입별 인스턴스 노트
 - `docs/ontology/trading.ttl` — OWL 온톨로지 (T-Box)
 - `docs/ontology/instances.ttl` — `ontology_sync.py --write` 로 생성 (A-Box)
@@ -120,11 +144,27 @@ quantum-trader-agent/
 - Dataview, Graph Analysis (+ 선택: Templater)
 
 ### 핵심 스크립트
-- `scripts/check_invariants.py` — 프론트매터 스키마 · 위키링크 · TTL 파싱 검증 (v1 warn)
+- `scripts/check_invariants.py` — 프론트매터 스키마 · 위키링크 · TTL 파싱 검증 (**strict 모드**, CI 차단)
 - `scripts/ontology_sync.py` — 프론트매터 → `instances.ttl` 동기화 (`--check` / `--write`)
+- `scripts/migrate_frontmatter.py` — 경로 기반 type 추론 일괄 적용 (#52, idempotent, `--dry-run` / `--apply`)
+
+### LLM 에이전트 레이어
+- `services/obsidian_mcp/` (#51) — stdio MCP 서버, Claude Code 등 외부 LLM 이 볼트를 도구로 사용
+  - 도구: `read_note` · `list_notes` · `search` · `write_note` (dry-run 기본) · `append_section` · `sparql` · `graph_neighbors`
+  - 등록: `.claude/mcp.json` 또는 `docs/onboarding/mcp-setup.md` 참조
+- `services/doc_agent/` (#53) — 이벤트 기반 초안 노트 자동 생성
+  - 대상: 백테스트 결과 · 인시던트 · 포스트모템
+  - 출력은 `.draft.md` 확장자 (정식 노트 승격은 사람 리뷰 후 rename)
+  - CLI: `python -m services.doc_agent.cli backtest <json>`
+  - Claude Code 서브에이전트: `.claude/agents/doc-writer.md`
+
+### CI 워크플로우
+- `.github/workflows/ontology-check.yml` — check_invariants (strict) + migration idempotency
+- `.github/workflows/mcp-smoke.yml` — MCP 서버 스모크 테스트
 
 ### 온보딩 문서
 - `docs/onboarding/obsidian-setup.md` — 볼트 오픈·플러그인 설치
-- `docs/onboarding/frontmatter-guide.md` — 7개 타입 작성법
+- `docs/onboarding/frontmatter-guide.md` — 12개 타입 작성법
 - `docs/onboarding/ontology-primer.md` — Turtle · SPARQL 기초
-- `docs/onboarding/obsidian-migration.md` — 기존 문서 이관
+- `docs/onboarding/obsidian-migration.md` — 기존 문서 이관 · `migrate_frontmatter.py` 사용법
+- `docs/onboarding/mcp-setup.md` — MCP 서버 등록 가이드
