@@ -1,3 +1,10 @@
+---
+type: work-done
+id: 000028-tax-automation-00-issue
+name: "[feat] 세금·회계 자동화 (KR 개인 양도세·연말 신고)"
+status: done
+---
+
 # [feat] 세금·회계 자동화 (KR 개인 양도세·연말 신고)
 
 ## 사용자 관점 목표

@@ -1,3 +1,10 @@
+---
+type: work-done
+id: 000004-what-is-algo-00-issue
+name: "주식 자동매매(Algorithmic Trading)란 무엇인가 — 정의·분류·개인 투자자 관점"
+status: done
+---
+
 # 주식 자동매매(Algorithmic Trading)란 무엇인가 — 정의·분류·개인 투자자 관점
 
 ## 목적

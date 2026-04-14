@@ -1,3 +1,10 @@
+---
+type: work-done
+id: 000024-risk-dsl-00-issue
+name: "[feat] 리스크 룰 DSL 설계 (YAML 기반 한도 정책)"
+status: done
+---
+
 # [feat] 리스크 룰 DSL 설계 (YAML 기반 한도 정책)
 
 ## 사용자 관점 목표

@@ -1,3 +1,10 @@
+---
+type: work-done
+id: 000022-validation-protocol-00-issue
+name: "[research] 백테스트 검증 프로토콜 (walk-forward·purged K-fold)"
+status: done
+---
+
 # [research] 백테스트 검증 프로토콜 (walk-forward·purged K-fold)
 
 ## 목적

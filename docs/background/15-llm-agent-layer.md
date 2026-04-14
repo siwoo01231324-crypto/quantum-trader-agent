@@ -1,3 +1,10 @@
+---
+type: research
+id: 15-llm-agent-layer
+name: "15. LLM 에이전트 레이어 탐색 — Agentic Trading"
+sources: []
+---
+
 # 15. LLM 에이전트 레이어 탐색 — Agentic Trading
 
 > 2024~2025년에 부상한 "Agentic Trading" 아키텍처를 본 프로젝트에 결합할 가치가 있는지 검토한다. (1) 문헌 5건 요약, (2) 결합 방식 2안 (adapter / replacement), (3) 리스크 평가, (4) 결론을 정리한다.

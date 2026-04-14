@@ -1,3 +1,10 @@
+---
+type: work-done
+id: 000029-quantum-poc-00-issue
+name: "[research] 양자 PoC 설계 (Phase 4 옵션, QAOA 포트폴리오 최적화)"
+status: done
+---
+
 # [research] 양자 PoC 설계 (Phase 4 옵션, QAOA 포트폴리오 최적화)
 
 ## 목적

@@ -1,3 +1,10 @@
+---
+type: work-done
+id: 000045-agents-md-tree-00-issue
+name: "[chore] AGENTS.md 레포 구조 트리 최신화"
+status: done
+---
+
 # [chore] AGENTS.md 레포 구조 트리 최신화
 
 ## 목적

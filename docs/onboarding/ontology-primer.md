@@ -1,3 +1,9 @@
+---
+type: onboarding
+id: ontology-primer
+name: "온톨로지 입문"
+---
+
 # 온톨로지 입문
 
 트레이딩 지식을 RDF/OWL 로 형식화해 SPARQL 로 질의 가능한 지식 그래프를 만드는 것이 목표다. 본 가이드는 Turtle 읽는 법, SPARQL 기본 문법, 그리고 `ontology_sync.py` 사용법을 다룬다.

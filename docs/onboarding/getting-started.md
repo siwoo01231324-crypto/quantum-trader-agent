@@ -1,3 +1,9 @@
+---
+type: onboarding
+id: getting-started
+name: "Getting Started — 처음 시작 가이드"
+---
+
 # Getting Started — 처음 시작 가이드
 
 > 이 템플릿을 새 프로젝트에 적용할 때 **처음 한 번** 읽는 문서입니다.

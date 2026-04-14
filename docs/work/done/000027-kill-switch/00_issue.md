@@ -1,3 +1,10 @@
+---
+type: work-done
+id: 000027-kill-switch-00-issue
+name: "[feat] Kill Switch & DR 런북"
+status: done
+---
+
 # [feat] Kill Switch & DR 런북
 
 ## 사용자 관점 목표

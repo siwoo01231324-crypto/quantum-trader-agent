@@ -1,3 +1,10 @@
+---
+type: work-done
+id: 000047-obsidian-ontology-01-plan
+name: "01_plan — Obsidian 지식볼트 + 트레이딩 온톨로지 구현"
+status: done
+---
+
 # 01_plan — Obsidian 지식볼트 + 트레이딩 온톨로지 구현
 
 > ⚠️ 이 문서는 `/start-issue`가 생성한 **AC 체크리스트 초안**이다.

@@ -1,3 +1,10 @@
+---
+type: work-done
+id: 000019-broker-api-00-issue
+name: "[research] 브로커 Open API 비교·선정 (KIS / 키움 / LS)"
+status: done
+---
+
 # [research] 브로커 Open API 비교·선정 (KIS / 키움 / LS)
 
 ## 목적

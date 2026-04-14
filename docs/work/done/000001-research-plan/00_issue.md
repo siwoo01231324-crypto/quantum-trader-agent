@@ -1,3 +1,10 @@
+---
+type: work-done
+id: 000001-research-plan-00-issue
+name: "자동매매 프로그램 구현을 위한 선행 리서치 + 구현 플랜 초안"
+status: done
+---
+
 # 자동매매 프로그램 구현을 위한 선행 리서치 + 구현 플랜 초안
 
 ## 목적

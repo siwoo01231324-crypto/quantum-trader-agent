@@ -5,7 +5,7 @@
 ## 공통 규칙
 
 - 모든 노트는 YAML 프론트매터로 시작한다.
-- `type` 은 필수. 아래 7개 타입 중 하나.
+- `type` 은 필수. 아래 타입 중 하나.
 - `id` 는 파일명(확장자 제외)과 반드시 일치해야 한다.
 - 다른 노트 참조는 본문에서 `[[id]]` 위키링크 형식 사용.
 - 날짜는 ISO 8601 (`YYYY-MM-DD` 또는 `YYYY-MM-DDTHH:MM:SS+09:00`).
@@ -22,6 +22,12 @@
 | `backtest` | `docs/work/done/backtests/` | 백테스트 결과 |
 | `incident` | `docs/work/incidents/` | 장애·사건 기록 |
 | `postmortem` | `docs/work/incidents/` | 장애 회고 |
+| `spec-architecture` | `docs/specs/*.md` (플랫) | 아키텍처·기술 명세 |
+| `runbook` | `docs/runbooks/` | 운영 런북 |
+| `research` | `docs/background/` | 조사·리서치 노트 |
+| `onboarding` | `docs/onboarding/` | 온보딩 가이드 |
+| `whitepaper` | `docs/whitepaper/` | 백서 |
+| `work-done` | `docs/work/done/*/` · `docs/work/active/*/` | 이슈 작업 내역 (보조 타입) |
 
 ---
 
@@ -190,3 +196,105 @@ action_items: [ai-2026-04-13-slippage-guard]  # 선택
 
 ## 예시 노트
 최소 샘플은 Phase 2 마이그레이션에서 `docs/specs/strategies/`, `docs/specs/signals/`, `docs/specs/risk-rules/` 하위에 3~5건 추가된다.
+
+---
+
+## 8. SpecArchitecture (아키텍처 명세)
+
+`docs/specs/` 바로 아래(서브폴더 없이) 놓이는 아키텍처·기술 설계 문서. 위 4개 엔티티 타입(strategy/signal/risk-rule/instrument)과 구분된다.
+
+```yaml
+---
+type: spec-architecture
+id: data-lake-schema             # 필수, 파일명과 일치
+name: Data Lake Schema           # 필수
+owner: siwoo                     # 필수
+status: draft                    # 필수: draft|accepted|superseded
+tags: [storage, parquet]         # 선택
+---
+```
+
+### 필수 필드
+`type`, `id`, `name`, `owner`, `status`
+
+---
+
+## 9. Runbook (운영 런북)
+
+```yaml
+---
+type: runbook
+id: kill-switch-runbook          # 필수
+name: Kill Switch & DR Runbook   # 필수
+severity: P1                     # 필수: P0|P1|P2|P3
+related_rules: [max-drawdown-5pct]  # 선택, risk-rule id 리스트
+---
+```
+
+### 필수 필드
+`type`, `id`, `name`, `severity`
+
+---
+
+## 10. Research (조사·리서치)
+
+`docs/background/` 하위의 팩트 기반 조사 노트. 출처 목록이 필수.
+
+```yaml
+---
+type: research
+id: 07-market-microstructure-basics  # 필수
+name: KRX Market Microstructure Basics  # 필수
+sources:                         # 필수, 출처 URL 또는 문서 경로 리스트
+  - https://example.com/paper
+---
+```
+
+### 필수 필드
+`type`, `id`, `name`, `sources`
+
+---
+
+## 11. Onboarding (온보딩 가이드)
+
+```yaml
+---
+type: onboarding
+id: getting-started              # 필수
+name: Getting Started            # 필수
+---
+```
+
+### 필수 필드
+`type`, `id`, `name`
+
+---
+
+## 12. Whitepaper (백서)
+
+```yaml
+---
+type: whitepaper
+id: qta-whitepaper-v01           # 필수
+name: QTA Whitepaper             # 필수
+version: "0.1"                   # 필수
+---
+```
+
+### 필수 필드
+`type`, `id`, `name`, `version`
+
+---
+
+## 13. WorkDone (이슈 작업 내역, 보조 타입)
+
+`docs/work/done/<issue>/` 와 `docs/work/active/<issue>/` 하위 작업 노트용. 엔티티가 아니라 기록 노트이므로 최소 필드만 요구.
+
+```yaml
+---
+type: work-done
+id: 00_issue                     # 필수 (파일명과 일치)
+name: "#9 시스템 구성요소 개괄"    # 필수
+status: done                     # 필수: active|done
+---
+```

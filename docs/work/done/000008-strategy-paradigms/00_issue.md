@@ -1,3 +1,10 @@
+---
+type: work-done
+id: 000008-strategy-paradigms-00-issue
+name: "트레이딩 전략 패러다임 개괄 (규칙기반/통계/ML/양자)"
+status: done
+---
+
 # 트레이딩 전략 패러다임 개괄 (규칙기반/통계/ML/양자)
 
 ## 목적

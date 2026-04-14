@@ -1,3 +1,10 @@
+---
+type: work-done
+id: 000005-positioning-00-issue
+name: "자동매매 vs 퀀트 vs 퀀텀 — 차이와 관계 정리"
+status: done
+---
+
 # 자동매매 vs 퀀트 vs 퀀텀 — 차이와 관계 정리
 
 ## 목적

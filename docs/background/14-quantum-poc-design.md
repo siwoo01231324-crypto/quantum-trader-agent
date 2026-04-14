@@ -1,3 +1,10 @@
+---
+type: research
+id: 14-quantum-poc-design
+name: "14. 양자 PoC 설계 — QAOA 포트폴리오 최적화 (Phase 4 옵션)"
+sources: []
+---
+
 # 14. 양자 PoC 설계 — QAOA 포트폴리오 최적화 (Phase 4 옵션)
 
 > 양자 컴포넌트는 메인 경로에서 제외(#5 결정)됐으나, 별도 트랙 PoC는 유지한다. 본 문서는 (1) 문제 정식화, (2) Qiskit Finance QAOA 50종목 벤치마크 설계, (3) 고전 baseline, (4) 성공·기각 기준, (5) IBM Quantum 비용 추정, (6) 일정·산출물을 정의한다.

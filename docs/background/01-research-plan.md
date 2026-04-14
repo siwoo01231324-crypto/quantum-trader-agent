@@ -1,3 +1,10 @@
+---
+type: research
+id: 01-research-plan
+name: "자동매매 프로그램 구현을 위한 선행 리서치 + 구현 플랜 초안"
+sources: []
+---
+
 # 자동매매 프로그램 구현을 위한 선행 리서치 + 구현 플랜 초안
 
 > Issue #1 — Phase 0 메타 리서치. 이후 Phase 1+ 이슈의 AC는 이 플랜에서 파생된다.

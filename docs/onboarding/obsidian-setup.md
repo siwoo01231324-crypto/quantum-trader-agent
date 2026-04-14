@@ -1,3 +1,9 @@
+---
+type: onboarding
+id: obsidian-setup
+name: "Obsidian 볼트 세팅 가이드"
+---
+
 # Obsidian 볼트 세팅 가이드
 
 본 레포의 `docs/` 를 Obsidian 볼트로 열어 지식그래프·Dataview·온톨로지를 활용하기 위한 단계별 가이드.

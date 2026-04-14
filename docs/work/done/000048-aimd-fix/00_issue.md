@@ -1,3 +1,10 @@
+---
+type: work-done
+id: 000048-aimd-fix-00-issue
+name: "[chore] 누락 .ai.md 2건 추가 (docs/runbooks, grafana/dashboards)"
+status: done
+---
+
 # [chore] 누락 .ai.md 2건 추가 (docs/runbooks, grafana/dashboards)
 
 ## 목적

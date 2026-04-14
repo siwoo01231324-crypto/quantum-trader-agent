@@ -1,3 +1,10 @@
+---
+type: work-done
+id: 000026-observability-00-issue
+name: "[feat] 관측성 스택 (Prometheus/Grafana/Loki/알림)"
+status: done
+---
+
 # [feat] 관측성 스택 (Prometheus/Grafana/Loki/알림)
 
 ## 사용자 관점 목표

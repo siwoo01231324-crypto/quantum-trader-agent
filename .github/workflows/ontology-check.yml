@@ -24,8 +24,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install pyyaml rdflib jsonschema python-frontmatter pydantic
 
-      - name: Check invariants (warn mode)
-        run: python scripts/check_invariants.py
+      - name: Check invariants (strict)
+        run: python scripts/check_invariants.py --strict
+
+      - name: Frontmatter migration idempotency
+        run: python scripts/migrate_frontmatter.py --dry-run
 
       - name: Ontology sync check
         run: python scripts/ontology_sync.py --check || echo "instances.ttl out of sync (warn)"
