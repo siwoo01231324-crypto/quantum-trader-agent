@@ -1,0 +1,10 @@
+@prefix qta:   <https://siwoo.dev/qta/ontology#> .
+@prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:   <http://www.w3.org/2002/07/owl#> .
+
+qta:Strategy a owl:Class ; rdfs:label "Strategy" .
+qta:Signal a owl:Class ; rdfs:label "Signal" .
+qta:RiskRule a owl:Class ; rdfs:label "RiskRule" .
+qta:usesSignal a owl:ObjectProperty .
+qta:appliesRule a owl:ObjectProperty .

@@ -1,0 +1,15 @@
+@prefix qta:   <https://siwoo.dev/qta/ontology#> .
+@prefix inst:  <https://siwoo.dev/qta/instance/> .
+@prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+
+inst:momo-btc-v2 a qta:Strategy ;
+    rdfs:label "BTC Momentum v2" ;
+    qta:usesSignal inst:rsi-divergence ;
+    qta:appliesRule inst:max-drawdown-5pct .
+
+inst:rsi-divergence a qta:Signal ;
+    rdfs:label "RSI Divergence" .
+
+inst:max-drawdown-5pct a qta:RiskRule ;
+    rdfs:label "Max Drawdown 5%" .

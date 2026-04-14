@@ -1,0 +1,41 @@
+name: mcp-smoke
+
+on:
+  pull_request:
+    paths:
+      - "services/obsidian_mcp/**"
+      - "tests/test_obsidian_mcp.py"
+      - "tests/fixtures/obsidian_vault/**"
+      - "docs/.obsidian/mcp-config.json"
+      - ".github/workflows/mcp-smoke.yml"
+  push:
+    branches: [master, main]
+    paths:
+      - "services/obsidian_mcp/**"
+      - "tests/test_obsidian_mcp.py"
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install mcp rdflib pyyaml python-frontmatter pytest
+
+      - name: Import smoke
+        run: |
+          python -c "from services.obsidian_mcp import tools, server; print('tools:', [n for n in dir(tools) if not n.startswith('_')][:10])"
+
+      - name: Selftest
+        run: python -m services.obsidian_mcp.server --selftest --vault-root tests/fixtures/obsidian_vault
+
+      - name: Pytest
+        run: pytest tests/test_obsidian_mcp.py -q
