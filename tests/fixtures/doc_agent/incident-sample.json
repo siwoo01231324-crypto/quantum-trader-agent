@@ -1,0 +1,8 @@
+{
+  "occurred": "2026-04-12T14:30:00+09:00",
+  "severity": "P2",
+  "affected_strategies": ["momo-btc-v2"],
+  "violated_rules": ["max-drawdown-5pct"],
+  "symptom": "슬리피지 과다",
+  "market_context": "유동성 급감 구간"
+}

@@ -64,6 +64,10 @@ def _iter_md_with_fm(frontmatter_mod) -> list[tuple[Path, dict, str]]:
     for md in sorted(DOCS_DIR.rglob("*.md")):
         if ".obsidian" in md.parts:
             continue
+        # `.draft.md` 는 LLM 에이전트가 생성한 초안 — 스키마 검증에서 제외.
+        # (파일명이 `.draft.md` 로 끝나는 경우)
+        if md.name.endswith(".draft.md"):
+            continue
         try:
             post = frontmatter_mod.load(md)
         except Exception:
@@ -72,6 +76,41 @@ def _iter_md_with_fm(frontmatter_mod) -> list[tuple[Path, dict, str]]:
         if fm.get("type"):
             result.append((md, fm, post.content))
     return result
+
+
+def _collect_drafts() -> list[Path]:
+    if not DOCS_DIR.exists():
+        return []
+    return [p for p in DOCS_DIR.rglob("*.draft.md") if ".obsidian" not in p.parts]
+
+
+def check_drafts_on_main() -> list[str]:
+    """`.draft.md` 가 main 브랜치 작업 트리에 남아있으면 경고."""
+    import os
+    import subprocess
+
+    drafts = _collect_drafts()
+    if not drafts:
+        return []
+
+    branch = os.environ.get("GITHUB_REF_NAME") or os.environ.get("CI_BRANCH")
+    if not branch:
+        try:
+            out = subprocess.check_output(
+                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                cwd=str(REPO_ROOT),
+                stderr=subprocess.DEVNULL,
+            )
+            branch = out.decode("utf-8").strip()
+        except Exception:
+            branch = ""
+
+    if branch not in {"main", "master"}:
+        return []
+    return [
+        f"[draft] {p.relative_to(REPO_ROOT)}: .draft.md 가 {branch} 에 남아있음 (초안은 리뷰 후 .md 로 승격)"
+        for p in drafts
+    ]
 
 
 def check_frontmatter_schema(notes) -> list[str]:
@@ -148,6 +187,7 @@ def main() -> int:
         all_warnings += check_wikilinks(notes)
 
     all_warnings += check_ttl_parses()
+    all_warnings += check_drafts_on_main()
 
     if all_warnings:
         print(f"[check_invariants] {len(all_warnings)} 경고")

@@ -1,0 +1,12 @@
+{
+  "strategy": "momo-btc-v2",
+  "period": ["2024-01-01", "2026-04-01"],
+  "metrics": {
+    "sharpe": 1.82,
+    "mdd": -0.048,
+    "trades": 412,
+    "win_rate": 0.54,
+    "cagr": 0.35
+  },
+  "artifacts": ["reports/bt-2026-04-10.html"]
+}
