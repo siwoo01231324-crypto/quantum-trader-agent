@@ -1,0 +1,13 @@
+PREFIX qta: <https://siwoo.dev/qta/ontology#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+# severity=critical 인 RiskRule 을 위반한 Incident 목록
+SELECT ?incident ?rule ?occurred ?ruleSeverity
+WHERE {
+  ?incident a qta:Incident ;
+            qta:violatesRule ?rule .
+  ?rule qta:severity "critical" .
+  OPTIONAL { ?rule qta:severity ?ruleSeverity }
+  OPTIONAL { ?incident qta:occurred ?occurred }
+}
+ORDER BY DESC(?occurred)

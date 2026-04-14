@@ -43,3 +43,10 @@ Thumbs.db
 # IDE
 .idea/
 *.swp
+
+# Obsidian 볼트 (개인 설정만 제외, 공통 설정은 커밋)
+docs/.obsidian/workspace.json
+docs/.obsidian/workspace-mobile.json
+docs/.obsidian/cache/
+docs/.obsidian/plugins/
+docs/.trash/

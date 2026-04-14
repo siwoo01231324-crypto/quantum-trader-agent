@@ -1,0 +1,51 @@
+{
+  "collapse-filter": false,
+  "search": "",
+  "showTags": true,
+  "showAttachments": false,
+  "hideUnresolved": false,
+  "showOrphans": true,
+  "collapse-color-groups": false,
+  "colorGroups": [
+    {
+      "query": "path:specs/strategies",
+      "color": { "a": 1, "rgb": 3506616 }
+    },
+    {
+      "query": "path:specs/signals",
+      "color": { "a": 1, "rgb": 5749503 }
+    },
+    {
+      "query": "path:specs/risk-rules",
+      "color": { "a": 1, "rgb": 14757953 }
+    },
+    {
+      "query": "path:specs/instruments",
+      "color": { "a": 1, "rgb": 16755000 }
+    },
+    {
+      "query": "path:work/done/backtests",
+      "color": { "a": 1, "rgb": 10921638 }
+    },
+    {
+      "query": "path:work/incidents",
+      "color": { "a": 1, "rgb": 16733525 }
+    },
+    {
+      "query": "path:ontology",
+      "color": { "a": 1, "rgb": 12521983 }
+    }
+  ],
+  "collapse-display": false,
+  "showArrow": true,
+  "textFadeMultiplier": 0,
+  "nodeSizeMultiplier": 1,
+  "lineSizeMultiplier": 1,
+  "collapse-forces": false,
+  "centerStrength": 0.518713248970312,
+  "repelStrength": 10,
+  "linkStrength": 1,
+  "linkDistance": 250,
+  "scale": 1,
+  "close": true
+}

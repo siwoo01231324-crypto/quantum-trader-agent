@@ -1,0 +1,12 @@
+PREFIX qta: <https://siwoo.dev/qta/ontology#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+# 현재 라이브 상태인 Strategy 목록
+SELECT ?s ?label ?timeframe
+WHERE {
+  ?s a qta:Strategy ;
+     qta:status "live" .
+  OPTIONAL { ?s rdfs:label ?label }
+  OPTIONAL { ?s qta:timeframe ?timeframe }
+}
+ORDER BY ?s

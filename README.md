@@ -48,3 +48,24 @@ bash setup.sh
 | `/ci` | PR 머지 후 정리 |
 | `/drop-issue` | 이슈 중도 포기 |
 | `/update-changelog` | CHANGELOG 업데이트 |
+
+---
+
+## 지식볼트 · 온톨로지
+
+`docs/` 는 Obsidian 볼트로 열 수 있으며, 프론트매터 기반 노트가 RDF 온톨로지로 동기화된다.
+
+- **볼트 오픈**: Obsidian → "Open folder as vault" → `docs/` 선택
+- **구조**
+  - `docs/schemas/note-schemas.md` — 7개 타입 프론트매터 규약
+  - `docs/specs/{strategies,signals,risk-rules,instruments}/` — 인스턴스 노트
+  - `docs/ontology/` — OWL 온톨로지 (`trading.ttl`) + SPARQL 쿼리
+  - `docs/dashboards/` — Dataview 대시보드
+- **CLI**
+  ```bash
+  python scripts/check_invariants.py          # 스키마·링크·TTL 검증 (warn)
+  python scripts/ontology_sync.py --write     # instances.ttl 재생성
+  ```
+- **Phase**: Phase 1 볼트 세팅 → Phase 2 스키마·샘플 → Phase 3 온톨로지 → Phase 4 Dataview → Phase 5 CI·온보딩
+
+자세한 사용법은 `docs/onboarding/obsidian-setup.md` 참고.

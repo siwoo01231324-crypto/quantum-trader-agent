@@ -100,3 +100,31 @@ quantum-trader-agent/
 ## 프로젝트 정체성
 
 본 프로젝트는 한국 개인투자자가 국내 증권사 Open API로 운용하는 **저빈도(LFT) 규칙기반·퀀트 팩터 자동매매 에이전트**이며, 프로젝트명의 "quantum"은 브랜딩 표기일 뿐 양자컴퓨팅 기술과는 무관하다. (이슈 #5 결론)
+
+---
+
+## 지식볼트 · 온톨로지 (#47)
+
+`docs/` 는 Obsidian 볼트로 열린다. 프론트매터 기반 노트가 RDF 온톨로지로 동기화된다.
+
+### 볼트 구조
+- `docs/.obsidian/` — Obsidian 설정 (app / core-plugins / community-plugins / graph)
+- `docs/schemas/note-schemas.md` — 공식 프론트매터 규약 (7개 타입)
+- `docs/specs/{strategies,signals,risk-rules,instruments}/` — 타입별 인스턴스 노트
+- `docs/ontology/trading.ttl` — OWL 온톨로지 (T-Box)
+- `docs/ontology/instances.ttl` — `ontology_sync.py --write` 로 생성 (A-Box)
+- `docs/ontology/queries/*.rq` — SPARQL 쿼리 프리셋
+- `docs/dashboards/*.md` — Dataview 대시보드
+
+### 필수 플러그인
+- Dataview, Graph Analysis (+ 선택: Templater)
+
+### 핵심 스크립트
+- `scripts/check_invariants.py` — 프론트매터 스키마 · 위키링크 · TTL 파싱 검증 (v1 warn)
+- `scripts/ontology_sync.py` — 프론트매터 → `instances.ttl` 동기화 (`--check` / `--write`)
+
+### 온보딩 문서
+- `docs/onboarding/obsidian-setup.md` — 볼트 오픈·플러그인 설치
+- `docs/onboarding/frontmatter-guide.md` — 7개 타입 작성법
+- `docs/onboarding/ontology-primer.md` — Turtle · SPARQL 기초
+- `docs/onboarding/obsidian-migration.md` — 기존 문서 이관
