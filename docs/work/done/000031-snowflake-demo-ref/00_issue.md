@@ -1,3 +1,10 @@
+---
+type: work-done
+id: 000031-snowflake-demo-ref-00-issue
+name: "[research] Snowflake UGM 2026 대체데이터 트레이딩 데모 참고 자료 기록"
+status: done
+---
+
 # [research] Snowflake UGM 2026 대체데이터 트레이딩 데모 참고 자료 기록
 
 ## 목적

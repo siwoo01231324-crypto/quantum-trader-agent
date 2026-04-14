@@ -1,3 +1,10 @@
+---
+type: research
+id: 04-what-is-algo-trading
+name: "주식 자동매매(Algorithmic Trading)란 무엇인가"
+sources: []
+---
+
 # 주식 자동매매(Algorithmic Trading)란 무엇인가
 
 > 작성일: 2026-04-13 | 이슈: #4

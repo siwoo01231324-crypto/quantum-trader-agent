@@ -1,3 +1,10 @@
+---
+type: work-done
+id: 000023-alpha-catalog-00-issue
+name: "[research] 피처·알파 소스 카탈로그"
+status: done
+---
+
 # [research] 피처·알파 소스 카탈로그
 
 ## 목적

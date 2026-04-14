@@ -1,3 +1,10 @@
+---
+type: work-done
+id: 000030-llm-agent-00-issue
+name: "[research] LLM 에이전트 레이어 탐색 (Agentic Trading)"
+status: done
+---
+
 # [research] LLM 에이전트 레이어 탐색 (Agentic Trading)
 
 ## 목적

@@ -1,3 +1,12 @@
+---
+type: spec-architecture
+id: observability
+name: "관측성 스택 스펙 (Prometheus / Grafana / Loki / 알림)"
+owner: siwoo
+status: draft
+tags: []
+---
+
 # 관측성 스택 스펙 (Prometheus / Grafana / Loki / 알림)
 
 ## 1. 목적

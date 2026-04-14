@@ -1,3 +1,9 @@
+---
+type: onboarding
+id: frontmatter-guide
+name: "프론트매터 작성 가이드"
+---
+
 # 프론트매터 작성 가이드
 
 `docs/schemas/note-schemas.md` 의 공식 스펙을 실전 관점에서 풀어 쓴 가이드. 새 노트를 만들 때 이 문서를 체크리스트로 사용한다.

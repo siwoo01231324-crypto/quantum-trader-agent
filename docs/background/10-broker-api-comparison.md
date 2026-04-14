@@ -1,3 +1,10 @@
+---
+type: research
+id: 10-broker-api-comparison
+name: "브로커 Open API 비교·선정 (KIS / 키움 / LS)"
+sources: []
+---
+
 # 브로커 Open API 비교·선정 (KIS / 키움 / LS)
 
 > 목적: 한국 개인이 접근 가능한 대형 브로커 Open API 3종(KIS, 키움, LS)을 실증적으로 비교하여, 본 프로젝트(저빈도 규칙기반 퀀트 자동매매)의 1차 실행 채널과 2차 fallback 채널을 확정한다.

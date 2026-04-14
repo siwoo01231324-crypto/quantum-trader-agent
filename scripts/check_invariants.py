@@ -44,9 +44,23 @@ REQUIRED_FIELDS: dict[str, list[str]] = {
     "backtest": ["type", "id", "strategy", "period", "metrics"],
     "incident": ["type", "id", "occurred", "severity", "affected_strategies", "root_cause"],
     "postmortem": ["type", "id", "incident", "authors", "status"],
+    "spec-architecture": ["type", "id", "name", "owner", "status"],
+    "runbook": ["type", "id", "name", "severity"],
+    "research": ["type", "id", "name", "sources"],
+    "onboarding": ["type", "id", "name"],
+    "whitepaper": ["type", "id", "name", "version"],
+    "work-done": ["type", "id", "name", "status"],
 }
 
+# 필수 필드 중 "비어 있어도 허용" 하는 필드 (빈 리스트 등).
+EMPTY_OK_FIELDS = {"instruments", "inputs", "sources", "tags", "affected_strategies"}
+
+# threshold 처럼 0 이 정상 값인 필드는 None 만 금지.
+ZERO_OK_FIELDS = {"threshold", "lookback", "tick_size"}
+
 WIKILINK_RE = re.compile(r"\[\[([^\[\]|#]+?)(?:\|[^\]]+)?\]\]")
+INLINE_CODE_RE = re.compile(r"`[^`\n]*`")
+CODE_FENCE_RE = re.compile(r"```.*?```", re.DOTALL)
 
 
 def _load_frontmatter():
@@ -90,6 +104,9 @@ def check_frontmatter_schema(notes) -> list[str]:
 def check_id_filename_match(notes) -> list[str]:
     warnings: list[str] = []
     for path, fm, _body in notes:
+        # work-done 은 이슈 폴더 내부 파일(00_issue.md 등)이므로 id 가 폴더명 기반 — 파일명 일치 검증 제외
+        if fm.get("type") == "work-done":
+            continue
         expected = path.stem
         actual = fm.get("id")
         if actual and str(actual) != expected:
@@ -97,11 +114,18 @@ def check_id_filename_match(notes) -> list[str]:
     return warnings
 
 
+def _strip_code(body: str) -> str:
+    """Inline 코드(`...`) 와 펜스드 코드(```...```) 블록 제거."""
+    no_fence = CODE_FENCE_RE.sub("", body)
+    return INLINE_CODE_RE.sub("", no_fence)
+
+
 def check_wikilinks(notes) -> list[str]:
     warnings: list[str] = []
     known_ids = {str(fm.get("id")) for _, fm, _ in notes if fm.get("id")}
     for path, _fm, body in notes:
-        for m in WIKILINK_RE.finditer(body):
+        clean = _strip_code(body)
+        for m in WIKILINK_RE.finditer(clean):
             target = m.group(1).strip()
             if "/" in target or target.endswith(".md"):
                 continue  # 경로형 링크는 스킵

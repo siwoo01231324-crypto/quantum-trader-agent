@@ -1,3 +1,10 @@
+---
+type: work-done
+id: 000025-execution-algos-00-issue
+name: "[feat] 실행 알고리즘 (TWAP/VWAP/지정가·KRX 단일가 구간)"
+status: done
+---
+
 # [feat] 실행 알고리즘 (TWAP/VWAP/지정가·KRX 단일가 구간)
 
 ## 사용자 관점 목표

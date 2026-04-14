@@ -1,3 +1,10 @@
+---
+type: work-done
+id: 000002-terms-quant-vs-quantum-00-issue
+name: "용어 정의 리서치: 퀀트(Quant) vs 퀀텀(Quantum) 트레이딩"
+status: done
+---
+
 # 용어 정의 리서치: 퀀트(Quant) vs 퀀텀(Quantum) 트레이딩
 
 ## 목적

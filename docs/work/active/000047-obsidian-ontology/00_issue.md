@@ -1,3 +1,10 @@
+---
+type: work-done
+id: 000047-obsidian-ontology-00-issue
+name: "feat: Obsidian 지식볼트 + 트레이딩 온톨로지 구현"
+status: done
+---
+
 # feat: Obsidian 지식볼트 + 트레이딩 온톨로지 구현
 
 ## 사용자 관점 목표

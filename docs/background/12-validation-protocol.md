@@ -1,3 +1,10 @@
+---
+type: research
+id: 12-validation-protocol
+name: "백테스트 검증 프로토콜 (walk-forward · purged K-fold · data snooping)"
+sources: []
+---
+
 # 백테스트 검증 프로토콜 (walk-forward · purged K-fold · data snooping)
 
 > 목적: 저빈도 규칙기반 퀀트 전략의 데이터 스누핑·오버피팅을 구조적으로 차단할 수 있는 검증 방법론을 프로젝트 SOP로 고정한다. 주 레퍼런스: López de Prado, *Advances in Financial Machine Learning* (2018) + Bailey·López de Prado, *Deflated Sharpe Ratio* (2014) + *Probability of Backtest Overfitting* (2014).

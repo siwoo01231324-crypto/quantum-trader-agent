@@ -1,3 +1,12 @@
+---
+type: spec-architecture
+id: kill-switch-dr
+name: "Kill Switch & DR (Disaster Recovery) — 명세"
+owner: siwoo
+status: draft
+tags: []
+---
+
 # Kill Switch & DR (Disaster Recovery) — 명세
 
 ## 1. 목적

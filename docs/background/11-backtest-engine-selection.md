@@ -1,3 +1,10 @@
+---
+type: research
+id: 11-backtest-engine-selection
+name: "백테스트 엔진 선택·비교 (Zipline-reloaded / Backtrader / LEAN / Nautilus / 자체)"
+sources: []
+---
+
 # 백테스트 엔진 선택·비교 (Zipline-reloaded / Backtrader / LEAN / Nautilus / 자체)
 
 > 목적: 본 프로젝트 MVP의 baseline 백테스트 엔진을 5개 후보(Zipline-reloaded, Backtrader, QuantConnect LEAN, NautilusTrader, 자체 구현) 중 1개로 확정한다.

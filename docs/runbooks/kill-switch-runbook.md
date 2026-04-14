@@ -1,3 +1,10 @@
+---
+type: runbook
+id: kill-switch-runbook
+name: "Kill Switch & DR — 운영 런북"
+severity: P2
+---
+
 # Kill Switch & DR — 운영 런북
 
 > 사고 발생 시 본 문서를 그대로 따른다. 추측 금지.

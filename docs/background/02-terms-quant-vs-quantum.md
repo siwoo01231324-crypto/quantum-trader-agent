@@ -1,3 +1,10 @@
+---
+type: research
+id: 02-terms-quant-vs-quantum
+name: "용어 정의: 퀀트(Quant) vs 퀀텀(Quantum) 트레이딩"
+sources: []
+---
+
 # 용어 정의: 퀀트(Quant) vs 퀀텀(Quantum) 트레이딩
 
 > 작성일: 2026-04-13 | 이슈: #2

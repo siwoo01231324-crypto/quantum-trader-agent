@@ -1,3 +1,12 @@
+---
+type: spec-architecture
+id: data-lake-schema
+name: "Data Lake Schema (Issue #20)"
+owner: siwoo
+status: draft
+tags: []
+---
+
 # Data Lake Schema (Issue #20)
 
 ## 1. 목적

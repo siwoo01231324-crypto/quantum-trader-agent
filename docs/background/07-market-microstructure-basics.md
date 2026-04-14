@@ -1,3 +1,10 @@
+---
+type: research
+id: 07-market-microstructure-basics
+name: "주식 시장 구조 기초: 호가·체결·유동성·KRX 특성"
+sources: []
+---
+
 # 주식 시장 구조 기초: 호가·체결·유동성·KRX 특성
 
 > Phase 1 기초 문서. 전략·주문 시스템 설계의 공통 전제.

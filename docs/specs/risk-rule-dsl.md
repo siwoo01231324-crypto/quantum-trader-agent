@@ -1,3 +1,12 @@
+---
+type: spec-architecture
+id: risk-rule-dsl
+name: "Risk Rule DSL (Issue #24)"
+owner: siwoo
+status: draft
+tags: []
+---
+
 # Risk Rule DSL (Issue #24)
 
 ## 1. 목적

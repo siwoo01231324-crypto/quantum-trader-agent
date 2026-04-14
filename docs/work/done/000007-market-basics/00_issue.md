@@ -1,3 +1,10 @@
+---
+type: work-done
+id: 000007-market-basics-00-issue
+name: "주식 시장 구조 기초 리서치 (호가·체결·유동성·KRX 특성)"
+status: done
+---
+
 # 주식 시장 구조 기초 리서치 (호가·체결·유동성·KRX 특성)
 
 ## 목적

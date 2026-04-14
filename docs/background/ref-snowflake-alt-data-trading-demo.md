@@ -1,3 +1,10 @@
+---
+type: research
+id: ref-snowflake-alt-data-trading-demo
+name: "[외부 참고] Snowflake Marketplace 대체데이터 × 주식 투자 지표 데모"
+sources: []
+---
+
 # [외부 참고] Snowflake Marketplace 대체데이터 × 주식 투자 지표 데모
 
 > **출처**: Snowflake 해커톤 2026 UGM (2026-03-17), 발표자 **박준호 (스튜디오)**

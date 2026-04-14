@@ -1,3 +1,10 @@
+---
+type: work-done
+id: 000021-backtest-engine-00-issue
+name: "[research] 백테스트 엔진 선택·비교 (Zipline/Backtrader/LEAN/Nautilus)"
+status: done
+---
+
 # [research] 백테스트 엔진 선택·비교 (Zipline/Backtrader/LEAN/Nautilus)
 
 ## 목적

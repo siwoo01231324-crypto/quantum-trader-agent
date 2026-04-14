@@ -1,3 +1,12 @@
+---
+type: spec-architecture
+id: tax-automation
+name: "세금·회계 자동화 — 명세 (KR 개인, 2026년 세법 기준)"
+owner: siwoo
+status: draft
+tags: []
+---
+
 # 세금·회계 자동화 — 명세 (KR 개인, 2026년 세법 기준)
 
 ## 1. 목적

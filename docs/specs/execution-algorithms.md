@@ -1,3 +1,12 @@
+---
+type: spec-architecture
+id: execution-algorithms
+name: "실행 알고리즘 스펙 (TWAP/VWAP/지정가/시장가 + KRX 단일가 핸들러)"
+owner: siwoo
+status: draft
+tags: []
+---
+
 # 실행 알고리즘 스펙 (TWAP/VWAP/지정가/시장가 + KRX 단일가 핸들러)
 
 ## 1. 목적

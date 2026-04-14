@@ -1,3 +1,10 @@
+---
+type: work-done
+id: 000003-what-is-quantum-00-issue
+name: "퀀텀 트레이딩(Quantum Trading)이란 무엇인가 — 현재 수준과 풀려는 문제"
+status: done
+---
+
 # 퀀텀 트레이딩(Quantum Trading)이란 무엇인가 — 현재 수준과 풀려는 문제
 
 ## 목적

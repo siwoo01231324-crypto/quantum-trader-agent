@@ -1,3 +1,10 @@
+---
+type: work-done
+id: 000020-data-lake-00-issue
+name: "[feat] 데이터 레이크 스키마 설계 (OHLCV·호가·체결·팩터)"
+status: done
+---
+
 # [feat] 데이터 레이크 스키마 설계 (OHLCV·호가·체결·팩터)
 
 ## 사용자 관점 목표
