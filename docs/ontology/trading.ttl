@@ -40,6 +40,10 @@ qta:MLModel a owl:Class ;
     rdfs:label "MLModel" ;
     rdfs:comment "시그널을 생성하는 ML 모델." .
 
+qta:PostMortem a owl:Class ;
+    rdfs:label "PostMortem" ;
+    rdfs:comment "Incident 회고. status=draft|final." .
+
 #################################################################
 #    Subclasses
 #################################################################
@@ -93,6 +97,16 @@ qta:affectsStrategy a owl:ObjectProperty ;
     rdfs:range  qta:Strategy ;
     rdfs:label  "affectsStrategy" .
 
+qta:hasPostMortem a owl:ObjectProperty ;
+    rdfs:domain qta:Incident ;
+    rdfs:range  qta:PostMortem ;
+    rdfs:label  "hasPostMortem" .
+
+qta:postMortemOf a owl:ObjectProperty ;
+    rdfs:domain qta:PostMortem ;
+    rdfs:range  qta:Incident ;
+    rdfs:label  "postMortemOf" .
+
 #################################################################
 #    Datatype Properties
 #################################################################
@@ -140,3 +154,28 @@ qta:venue a owl:DatatypeProperty ;
     rdfs:domain qta:Instrument ;
     rdfs:range  xsd:string ;
     rdfs:label  "venue" .
+
+qta:scope a owl:DatatypeProperty ;
+    rdfs:domain qta:RiskRule ;
+    rdfs:range  xsd:string ;
+    rdfs:label  "scope" .
+
+qta:periodStart a owl:DatatypeProperty ;
+    rdfs:domain qta:Backtest ;
+    rdfs:range  xsd:date ;
+    rdfs:label  "periodStart" .
+
+qta:periodEnd a owl:DatatypeProperty ;
+    rdfs:domain qta:Backtest ;
+    rdfs:range  xsd:date ;
+    rdfs:label  "periodEnd" .
+
+qta:sharpeBt a owl:DatatypeProperty ;
+    rdfs:domain qta:Strategy ;
+    rdfs:range  xsd:decimal ;
+    rdfs:label  "sharpeBt" .
+
+qta:hasActionItem a owl:DatatypeProperty ;
+    rdfs:domain qta:PostMortem ;
+    rdfs:range  xsd:string ;
+    rdfs:label  "hasActionItem" .

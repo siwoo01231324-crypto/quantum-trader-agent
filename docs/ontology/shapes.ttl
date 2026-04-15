@@ -1,0 +1,137 @@
+@prefix qta:  <https://siwoo.dev/qta/ontology#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix sh:   <http://www.w3.org/ns/shacl#> .
+
+#################################################################
+# SHACL shapes — Quantum Trader Agent 도메인 제약
+#
+# 규칙 카탈로그는 docs/onboarding/shacl-rules.md 참조.
+# 각 shape 은 한국어 sh:message 를 포함해 CI 로그에서 해석 가능하다.
+#################################################################
+
+# --- 1. LiveStrategy 는 risk-rule 최소 1건 ----------------------
+qta:LiveStrategyRiskRuleShape a sh:NodeShape ;
+    sh:targetClass qta:LiveStrategy ;
+    sh:property [
+        sh:path qta:appliesRule ;
+        sh:minCount 1 ;
+        sh:message "라이브 전략은 최소 1개의 risk-rule 이 연결되어야 합니다. frontmatter 의 risk_rules 에 추가하세요." ;
+    ] .
+
+# --- 2. LiveStrategy 는 sharpe_bt 필수 --------------------------
+qta:LiveStrategySharpeShape a sh:NodeShape ;
+    sh:targetClass qta:LiveStrategy ;
+    sh:property [
+        sh:path qta:sharpeBt ;
+        sh:minCount 1 ;
+        sh:message "라이브 전략은 sharpe_bt 필드가 필수입니다 (백테스트 Sharpe)." ;
+    ] .
+
+# --- 3. CriticalRule 위반 Incident 은 48h 내 PostMortem 필요 ----
+qta:IncidentCriticalPostmortemShape a sh:NodeShape ;
+    sh:targetClass qta:Incident ;
+    sh:sparql [
+        sh:message "CriticalRule 위반 Incident 는 48시간 내 PostMortem 연결이 필요합니다 (qta:hasPostMortem)." ;
+        sh:prefixes [
+            sh:declare [ sh:prefix "qta" ; sh:namespace "https://siwoo.dev/qta/ontology#"^^xsd:anyURI ] ;
+            sh:declare [ sh:prefix "xsd" ; sh:namespace "http://www.w3.org/2001/XMLSchema#"^^xsd:anyURI ] ;
+        ] ;
+        sh:select """
+            SELECT $this WHERE {
+                $this qta:violatesRule ?rule .
+                ?rule a qta:CriticalRule .
+                $this qta:occurred ?t .
+                FILTER (?t < (NOW() - "PT48H"^^xsd:dayTimeDuration))
+                FILTER NOT EXISTS { $this qta:hasPostMortem ?pm }
+            }
+        """ ;
+    ] .
+
+# --- 4. Backtest period 시작일 < 종료일 ------------------------
+qta:BacktestPeriodShape a sh:NodeShape ;
+    sh:targetClass qta:Backtest ;
+    sh:sparql [
+        sh:message "Backtest period 시작일은 종료일 이전이어야 합니다." ;
+        sh:prefixes [
+            sh:declare [ sh:prefix "qta" ; sh:namespace "https://siwoo.dev/qta/ontology#"^^xsd:anyURI ] ;
+        ] ;
+        sh:select """
+            SELECT $this ?start ?end WHERE {
+                $this qta:periodStart ?start .
+                $this qta:periodEnd ?end .
+                FILTER (?start >= ?end)
+            }
+        """ ;
+    ] .
+
+# --- 5. Signal.lookback > 0 ------------------------------------
+qta:SignalLookbackShape a sh:NodeShape ;
+    sh:targetClass qta:Signal ;
+    sh:property [
+        sh:path qta:lookback ;
+        sh:datatype xsd:integer ;
+        sh:minExclusive 0 ;
+        sh:message "Signal lookback 은 0 보다 큰 정수여야 합니다." ;
+    ] .
+
+# --- 6. RiskRule.threshold ∈ [0, 1] -----------------------------
+qta:RiskRuleThresholdRangeShape a sh:NodeShape ;
+    sh:targetClass qta:RiskRule ;
+    sh:property [
+        sh:path qta:threshold ;
+        sh:minInclusive 0 ;
+        sh:maxInclusive 1 ;
+        sh:message "RiskRule threshold 는 0 이상 1 이하여야 합니다 (비율 기준)." ;
+    ] .
+
+# --- 7. Strategy.timeframe enum --------------------------------
+qta:StrategyTimeframeEnumShape a sh:NodeShape ;
+    sh:targetClass qta:Strategy ;
+    sh:property [
+        sh:path qta:timeframe ;
+        sh:in ( "1m" "5m" "15m" "1h" "4h" "1d" ) ;
+        sh:message "Strategy timeframe 은 {1m, 5m, 15m, 1h, 4h, 1d} 중 하나여야 합니다." ;
+    ] .
+
+# --- 8. Instrument.venue enum ----------------------------------
+qta:InstrumentVenueEnumShape a sh:NodeShape ;
+    sh:targetClass qta:Instrument ;
+    sh:property [
+        sh:path qta:venue ;
+        sh:in ( "binance" "upbit" "krx" "ibkr" ) ;
+        sh:message "Instrument venue 는 허용 거래소 목록 {binance, upbit, krx, ibkr} 중 하나여야 합니다." ;
+    ] .
+
+# --- 9. P0 Incident 는 affected_strategies 최소 1건 -------------
+qta:IncidentP0AffectedShape a sh:NodeShape ;
+    sh:targetClass qta:Incident ;
+    sh:sparql [
+        sh:message "P0 Incident 는 affected_strategies 를 최소 1건 기록해야 합니다." ;
+        sh:prefixes [
+            sh:declare [ sh:prefix "qta" ; sh:namespace "https://siwoo.dev/qta/ontology#"^^xsd:anyURI ] ;
+        ] ;
+        sh:select """
+            SELECT $this WHERE {
+                $this qta:severity "P0" .
+                FILTER NOT EXISTS { $this qta:affectsStrategy ?s }
+            }
+        """ ;
+    ] .
+
+# --- 10. PostMortem status=final 은 action_items 최소 1건 --------
+qta:PostmortemFinalActionItemShape a sh:NodeShape ;
+    sh:targetClass qta:PostMortem ;
+    sh:sparql [
+        sh:message "PostMortem status=final 은 action_items 를 최소 1건 포함해야 합니다." ;
+        sh:prefixes [
+            sh:declare [ sh:prefix "qta" ; sh:namespace "https://siwoo.dev/qta/ontology#"^^xsd:anyURI ] ;
+        ] ;
+        sh:select """
+            SELECT $this WHERE {
+                $this qta:status "final" .
+                FILTER NOT EXISTS { $this qta:hasActionItem ?ai }
+            }
+        """ ;
+    ] .

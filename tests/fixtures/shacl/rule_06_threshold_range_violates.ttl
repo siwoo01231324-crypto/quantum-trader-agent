@@ -1,0 +1,8 @@
+@prefix inst: <https://siwoo.dev/qta/instance/> .
+@prefix qta:  <https://siwoo.dev/qta/ontology#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+# threshold = 1.5 (> 1) → rule 6 위반.
+inst:test-rr-bad-threshold a qta:RiskRule ;
+    qta:severity "warn" ;
+    qta:threshold "1.5"^^xsd:decimal .

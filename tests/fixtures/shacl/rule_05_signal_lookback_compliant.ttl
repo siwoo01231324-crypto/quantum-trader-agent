@@ -1,0 +1,6 @@
+@prefix inst: <https://siwoo.dev/qta/instance/> .
+@prefix qta:  <https://siwoo.dev/qta/ontology#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+inst:test-sig-ok a qta:Signal ;
+    qta:lookback 14 .

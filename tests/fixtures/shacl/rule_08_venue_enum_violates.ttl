@@ -1,0 +1,6 @@
+@prefix inst: <https://siwoo.dev/qta/instance/> .
+@prefix qta:  <https://siwoo.dev/qta/ontology#> .
+
+# venue "bybit" 은 허용 enum 밖 → rule 8 위반.
+inst:test-inst-bad-venue a qta:Instrument ;
+    qta:venue "bybit" .

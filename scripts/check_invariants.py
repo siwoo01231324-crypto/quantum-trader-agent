@@ -9,6 +9,7 @@ v1 단계: 기본적으로 warn 모드 (exit 0). `--strict` 지정 시 위반이
   2. id 필드와 파일명 일치
   3. 본문의 [[id]] 위키링크 대상 존재 여부
   4. docs/ontology/trading.ttl rdflib 파싱 검증
+  5. SHACL 제약 검증 — docs/ontology/shapes.ttl + instances.ttl (pyshacl)
 
 사용법:
   python scripts/check_invariants.py              # warn 모드
@@ -35,6 +36,8 @@ except Exception:
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DOCS_DIR = REPO_ROOT / "docs"
 TRADING_TTL = DOCS_DIR / "ontology" / "trading.ttl"
+SHAPES_TTL = DOCS_DIR / "ontology" / "shapes.ttl"
+INSTANCES_TTL = DOCS_DIR / "ontology" / "instances.ttl"
 
 REQUIRED_FIELDS: dict[str, list[str]] = {
     "strategy": ["type", "id", "name", "status", "instruments", "timeframe", "owner", "created"],
@@ -173,6 +176,40 @@ def check_wikilinks(notes) -> list[str]:
     return warnings
 
 
+def check_shacl() -> list[str]:
+    """SHACL 제약 기반 도메인 규칙 검증."""
+    warnings: list[str] = []
+    if not INSTANCES_TTL.exists():
+        warnings.append(f"[shacl] {INSTANCES_TTL} 없음 — ontology_sync --write 먼저 실행 필요")
+        return warnings
+    if not SHAPES_TTL.exists():
+        warnings.append(f"[shacl] {SHAPES_TTL} 없음")
+        return warnings
+    # scripts/ 는 sys.path 에 보통 들어있지 않으므로 명시적으로 추가.
+    scripts_dir = str(Path(__file__).resolve().parent)
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, scripts_dir)
+    try:
+        from shacl_validate import run_shacl  # type: ignore
+    except ImportError as e:
+        warnings.append(f"[shacl] shacl_validate 임포트 실패: {e}")
+        return warnings
+    try:
+        violations = run_shacl(
+            data_path=INSTANCES_TTL,
+            shapes_path=SHAPES_TTL,
+            ontology_path=TRADING_TTL if TRADING_TTL.exists() else None,
+        )
+    except RuntimeError as e:
+        warnings.append(f"[shacl] 실행 실패: {e}")
+        return warnings
+    for v in violations:
+        shape = v.source_shape or "UnknownShape"
+        focus = v.focus_node
+        warnings.append(f"[shacl] {shape} · {focus}: {v.message}")
+    return warnings
+
+
 def check_ttl_parses() -> list[str]:
     warnings: list[str] = []
     if not TRADING_TTL.exists():
@@ -211,6 +248,7 @@ def main() -> int:
         all_warnings += check_wikilinks(notes)
 
     all_warnings += check_ttl_parses()
+    all_warnings += check_shacl()
     all_warnings += check_drafts_on_main()
 
     if all_warnings:

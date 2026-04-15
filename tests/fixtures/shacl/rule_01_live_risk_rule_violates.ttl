@@ -1,0 +1,9 @@
+@prefix inst: <https://siwoo.dev/qta/instance/> .
+@prefix qta:  <https://siwoo.dev/qta/ontology#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+# LiveStrategy 인데 appliesRule 이 하나도 없음 → rule 1 위반.
+# 다른 Strategy 규칙(2, 7)은 충족하도록 sharpeBt, timeframe 포함.
+inst:test-live-no-rule a qta:LiveStrategy ;
+    qta:sharpeBt "1.5"^^xsd:decimal ;
+    qta:timeframe "15m" .

@@ -1,0 +1,8 @@
+@prefix inst: <https://siwoo.dev/qta/instance/> .
+@prefix qta:  <https://siwoo.dev/qta/ontology#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+# periodStart >= periodEnd → rule 4 위반.
+inst:test-bt-bad-period a qta:Backtest ;
+    qta:periodStart "2026-04-10"^^xsd:date ;
+    qta:periodEnd   "2026-04-01"^^xsd:date .

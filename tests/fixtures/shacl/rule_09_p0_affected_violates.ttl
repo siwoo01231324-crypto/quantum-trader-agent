@@ -1,0 +1,9 @@
+@prefix inst: <https://siwoo.dev/qta/instance/> .
+@prefix qta:  <https://siwoo.dev/qta/ontology#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+# severity=P0 인데 affectsStrategy 없음 → rule 9 위반.
+# rule 3 트리거 회피 위해 violatesRule 는 포함하지 않는다.
+inst:test-p0-no-aff a qta:Incident ;
+    qta:severity "P0" ;
+    qta:occurred "2026-04-15T00:00:00+00:00"^^xsd:dateTime .

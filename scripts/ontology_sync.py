@@ -48,7 +48,7 @@ TYPE_TO_CLASS = {
     "instrument": QTA.Instrument,
     "backtest": QTA.Backtest,
     "incident": QTA.Incident,
-    "postmortem": QTA.Incident,  # postmortem 은 Incident 서브 개념으로 매핑
+    "postmortem": QTA.PostMortem,
     "ml-model": QTA.MLModel,
 }
 
@@ -75,6 +75,11 @@ def _add_strategy(g: Graph, subj: URIRef, fm: dict) -> None:
             g.add((subj, RDF.type, QTA.LiveStrategy))
     if fm.get("timeframe"):
         g.add((subj, QTA.timeframe, Literal(str(fm["timeframe"]))))
+    if fm.get("sharpe_bt") is not None:
+        try:
+            g.add((subj, QTA.sharpeBt, Literal(float(fm["sharpe_bt"]), datatype=XSD.decimal)))
+        except (TypeError, ValueError):
+            pass
     for sig in fm.get("uses_signals") or []:
         g.add((subj, QTA.usesSignal, _iri(str(sig))))
     for rr in fm.get("risk_rules") or []:
@@ -98,6 +103,8 @@ def _add_risk_rule(g: Graph, subj: URIRef, fm: dict) -> None:
         g.add((subj, QTA.severity, Literal(sev)))
         if sev == "critical":
             g.add((subj, RDF.type, QTA.CriticalRule))
+    if fm.get("scope"):
+        g.add((subj, QTA.scope, Literal(str(fm["scope"]))))
     if fm.get("threshold") is not None:
         try:
             g.add((subj, QTA.threshold, Literal(float(fm["threshold"]), datatype=XSD.decimal)))
@@ -123,6 +130,13 @@ def _add_backtest(g: Graph, subj: URIRef, fm: dict) -> None:
             g.add((subj, QTA.sharpeRatio, Literal(float(metrics["sharpe"]), datatype=XSD.decimal)))
         except (TypeError, ValueError):
             pass
+    period = fm.get("period")
+    if isinstance(period, list) and len(period) == 2:
+        start, end = period
+        if start is not None:
+            g.add((subj, QTA.periodStart, Literal(str(start), datatype=XSD.date)))
+        if end is not None:
+            g.add((subj, QTA.periodEnd, Literal(str(end), datatype=XSD.date)))
 
 
 def _add_incident(g: Graph, subj: URIRef, fm: dict) -> None:
@@ -135,6 +149,18 @@ def _add_incident(g: Graph, subj: URIRef, fm: dict) -> None:
         g.add((subj, QTA.violatesRule, _iri(str(rr))))
     for s in fm.get("affected_strategies") or []:
         g.add((subj, QTA.affectsStrategy, _iri(str(s))))
+    if fm.get("postmortem"):
+        g.add((subj, QTA.hasPostMortem, _iri(str(fm["postmortem"]))))
+
+
+def _add_postmortem(g: Graph, subj: URIRef, fm: dict) -> None:
+    _add_common(g, subj, fm, QTA.PostMortem)
+    if fm.get("incident"):
+        g.add((subj, QTA.postMortemOf, _iri(str(fm["incident"]))))
+    if fm.get("status"):
+        g.add((subj, QTA.status, Literal(str(fm["status"]))))
+    for ai in fm.get("action_items") or []:
+        g.add((subj, QTA.hasActionItem, Literal(str(ai))))
 
 
 def _add_mlmodel(g: Graph, subj: URIRef, fm: dict) -> None:
@@ -148,7 +174,7 @@ DISPATCH = {
     "instrument": _add_instrument,
     "backtest": _add_backtest,
     "incident": _add_incident,
-    "postmortem": _add_incident,
+    "postmortem": _add_postmortem,
     "ml-model": _add_mlmodel,
 }
 
