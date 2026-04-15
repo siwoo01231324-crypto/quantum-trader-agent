@@ -1,0 +1,6 @@
+@prefix inst: <https://siwoo.dev/qta/instance/> .
+@prefix qta:  <https://siwoo.dev/qta/ontology#> .
+
+# timeframe "2m" 은 허용 enum 밖 → rule 7 위반.
+inst:test-strat-bad-tf a qta:Strategy ;
+    qta:timeframe "2m" .

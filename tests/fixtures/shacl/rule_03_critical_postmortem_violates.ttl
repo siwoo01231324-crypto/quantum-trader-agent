@@ -1,0 +1,15 @@
+@prefix inst: <https://siwoo.dev/qta/instance/> .
+@prefix qta:  <https://siwoo.dev/qta/ontology#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+# CriticalRule 위반 + occurred 가 48h 훨씬 이전 + hasPostMortem 부재 → rule 3 위반.
+# severity 는 P2 로 두어 rule 9(P0 처리)는 트리거하지 않음.
+inst:test-inc-no-pm a qta:Incident ;
+    qta:severity "P2" ;
+    qta:occurred "2000-01-01T00:00:00+00:00"^^xsd:dateTime ;
+    qta:affectsStrategy inst:some-strategy ;
+    qta:violatesRule inst:test-critical .
+
+inst:test-critical a qta:CriticalRule, qta:RiskRule ;
+    qta:severity "critical" ;
+    qta:threshold "0.05"^^xsd:decimal .

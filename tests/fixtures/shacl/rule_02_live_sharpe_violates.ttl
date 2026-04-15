@@ -1,0 +1,8 @@
+@prefix inst: <https://siwoo.dev/qta/instance/> .
+@prefix qta:  <https://siwoo.dev/qta/ontology#> .
+
+# LiveStrategy 인데 sharpeBt 없음 → rule 2 위반.
+# rule 1 은 appliesRule 로 충족, rule 7 은 timeframe enum 으로 충족.
+inst:test-live-no-sharpe a qta:LiveStrategy ;
+    qta:appliesRule inst:some-rule ;
+    qta:timeframe "1h" .

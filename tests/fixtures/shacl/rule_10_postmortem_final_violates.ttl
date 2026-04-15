@@ -1,0 +1,7 @@
+@prefix inst: <https://siwoo.dev/qta/instance/> .
+@prefix qta:  <https://siwoo.dev/qta/ontology#> .
+
+# PostMortem status=final 인데 hasActionItem 없음 → rule 10 위반.
+inst:test-pm-final-no-ai a qta:PostMortem ;
+    qta:status "final" ;
+    qta:postMortemOf inst:some-incident .

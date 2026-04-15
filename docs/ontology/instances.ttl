@@ -6,6 +6,7 @@
 inst:momo-btc-v2 a qta:Strategy ;
     rdfs:label "BTC Momentum v2" ;
     qta:appliesRule inst:max-drawdown-5pct ;
+    qta:sharpeBt 1.82 ;
     qta:status "backtest" ;
     qta:timeframe "15m" ;
     qta:tradesOn inst:BTCUSDT ;
@@ -19,6 +20,7 @@ inst:BTCUSDT a qta:Instrument ;
 inst:max-drawdown-5pct a qta:CriticalRule,
         qta:RiskRule ;
     rdfs:label "Max Drawdown 5%" ;
+    qta:scope "portfolio" ;
     qta:severity "critical" ;
     qta:threshold 0.05 .
 

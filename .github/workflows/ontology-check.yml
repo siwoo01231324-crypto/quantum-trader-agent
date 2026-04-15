@@ -22,7 +22,11 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pyyaml rdflib jsonschema python-frontmatter pydantic
+          pip install pyyaml rdflib jsonschema python-frontmatter pydantic pyshacl
+
+      - name: SHACL validation (verbose pre-check)
+        continue-on-error: true
+        run: python scripts/shacl_validate.py --strict
 
       - name: Check invariants (strict)
         run: python scripts/check_invariants.py --strict

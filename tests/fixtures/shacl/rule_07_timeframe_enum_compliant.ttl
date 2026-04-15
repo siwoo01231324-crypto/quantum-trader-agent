@@ -1,0 +1,5 @@
+@prefix inst: <https://siwoo.dev/qta/instance/> .
+@prefix qta:  <https://siwoo.dev/qta/ontology#> .
+
+inst:test-strat-ok-tf a qta:Strategy ;
+    qta:timeframe "4h" .

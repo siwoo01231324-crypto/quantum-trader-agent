@@ -1,0 +1,7 @@
+@prefix inst: <https://siwoo.dev/qta/instance/> .
+@prefix qta:  <https://siwoo.dev/qta/ontology#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+inst:test-bt-ok-period a qta:Backtest ;
+    qta:periodStart "2024-01-01"^^xsd:date ;
+    qta:periodEnd   "2026-04-01"^^xsd:date .

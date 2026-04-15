@@ -1,0 +1,5 @@
+@prefix inst: <https://siwoo.dev/qta/instance/> .
+@prefix qta:  <https://siwoo.dev/qta/ontology#> .
+
+inst:test-inst-ok-venue a qta:Instrument ;
+    qta:venue "upbit" .

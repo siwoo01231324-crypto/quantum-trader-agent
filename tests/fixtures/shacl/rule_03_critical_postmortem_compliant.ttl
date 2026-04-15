@@ -1,0 +1,19 @@
+@prefix inst: <https://siwoo.dev/qta/instance/> .
+@prefix qta:  <https://siwoo.dev/qta/ontology#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+# CriticalRule 위반이지만 hasPostMortem 이 있으므로 rule 3 충족.
+inst:test-inc-pm-ok a qta:Incident ;
+    qta:severity "P2" ;
+    qta:occurred "2000-01-01T00:00:00+00:00"^^xsd:dateTime ;
+    qta:affectsStrategy inst:some-strategy ;
+    qta:violatesRule inst:test-critical-ok ;
+    qta:hasPostMortem inst:test-pm-ok .
+
+inst:test-critical-ok a qta:CriticalRule, qta:RiskRule ;
+    qta:severity "critical" ;
+    qta:threshold "0.05"^^xsd:decimal .
+
+inst:test-pm-ok a qta:PostMortem ;
+    qta:status "draft" ;
+    qta:postMortemOf inst:test-inc-pm-ok .

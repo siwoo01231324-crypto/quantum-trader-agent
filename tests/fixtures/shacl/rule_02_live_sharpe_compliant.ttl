@@ -1,0 +1,8 @@
+@prefix inst: <https://siwoo.dev/qta/instance/> .
+@prefix qta:  <https://siwoo.dev/qta/ontology#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+inst:test-live-sharpe-ok a qta:LiveStrategy ;
+    qta:appliesRule inst:some-rule ;
+    qta:sharpeBt "2.1"^^xsd:decimal ;
+    qta:timeframe "1h" .

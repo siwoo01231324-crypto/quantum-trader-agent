@@ -1,0 +1,8 @@
+@prefix inst: <https://siwoo.dev/qta/instance/> .
+@prefix qta:  <https://siwoo.dev/qta/ontology#> .
+
+inst:test-pm-final-ok a qta:PostMortem ;
+    qta:status "final" ;
+    qta:postMortemOf inst:some-incident ;
+    qta:hasActionItem "ai-2026-04-13-slippage-guard" ;
+    qta:hasActionItem "ai-2026-04-13-liquidity-monitor" .

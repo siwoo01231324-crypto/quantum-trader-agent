@@ -1,0 +1,8 @@
+@prefix inst: <https://siwoo.dev/qta/instance/> .
+@prefix qta:  <https://siwoo.dev/qta/ontology#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+inst:test-p0-ok a qta:Incident ;
+    qta:severity "P0" ;
+    qta:occurred "2026-04-15T00:00:00+00:00"^^xsd:dateTime ;
+    qta:affectsStrategy inst:affected-strategy .
