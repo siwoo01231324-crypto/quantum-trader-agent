@@ -29,3 +29,6 @@ Phase 2+ 이슈(#19~#30) 12개 PR이 머지되면 src/, tests/, policies/, grafa
 
 ## 작업 내역
 
+## 관련 노트 (구현 대상)
+
+- [[getting-started]]

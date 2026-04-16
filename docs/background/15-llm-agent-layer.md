@@ -102,6 +102,15 @@ gantt
 6. **버전 핀·회귀 스위트**: 모델·프롬프트 변경 시 골든 케이스 50건 회귀.
 7. **감사 로그**: 입력·도구호출·출력·근거를 90일 이상 보존.
 
+## 관련 노트
+
+- [[mcp-setup]] — 볼트 MCP 서버 셋업 (본 노트의 RAG 경로 구현)
+- [[ontology-primer]] — LLM 에이전트가 소비할 RDF 온톨로지 기초
+- [[shacl-rules]] — 볼트 노트의 SHACL 검증
+- [[observability]] — LLM 호출 메트릭·감사 로그 스택
+- [[frontmatter-guide]] — LLM 이 생성한 노트의 프론트매터 규약
+- [[12-validation-protocol]] — LLM 출력을 주문 흐름에 넣기 전 검증
+
 ## 출처
 
 - TradingAgents (arXiv): https://arxiv.org/abs/2412.20138

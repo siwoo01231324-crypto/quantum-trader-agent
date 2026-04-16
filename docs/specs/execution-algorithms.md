@@ -62,7 +62,17 @@ src/execution/
 tests/test_execution.py
 ```
 
-## 7. 출처
+## 7. 관련 노트
+
+- [[07-market-microstructure-basics]] — KRX 단일가 구간·가격제한폭·VI 근거
+- [[12-validation-protocol]] — 실행 알고의 백테스트·슬리피지 검증 절차
+- [[tax-automation]] — 실행 단계에서 계산될 거래세
+- [[20-position-sizing]] — 주문 크기 결정 (본 노트는 "어떻게 보낼지")
+- [[kill-switch-dr]] — 긴급 상황 시 신규 주문 차단 게이트
+- [[kill-switch-runbook]] — 청산 주문의 운영 절차
+- [[10-broker-api-comparison]] — 실행 알고 호출 대상 브로커
+
+## 8. 출처
 - Nautilus Trader execution algorithms: https://nautilustrader.io/docs/latest/concepts/execution.html
 - QuantConnect LEAN execution models: https://www.quantconnect.com/docs/v2/writing-algorithms/algorithm-framework/execution
 - KRX 단일가 매매 안내: https://global.krx.co.kr/contents/GLB/04/0403/0403010000/GLB0403010000.jsp

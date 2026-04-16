@@ -62,7 +62,16 @@ tags: []
 `docker-compose.yml`로 prometheus + grafana + loki + promtail 재현.
 포트: prom=9090, grafana=3000, loki=3100.
 
-## 8. 출처
+## 8. 관련 노트
+
+- [[kill-switch-dr]] — `qta_kill_switch_state` 메트릭 생산자
+- [[risk-rule-dsl]] — `qta_risk_breach_total` 이 송출될 정책 위반 소스
+- [[execution-algorithms]] — `qta_order_latency_seconds` 생산자
+- [[12-validation-protocol]] — §4 롤백 트리거가 본 스택의 메트릭을 소비
+- [[19-portfolio-risk]] — 포트폴리오 VaR/CVaR·ENB 를 대시보드에 노출 (v2)
+- [[15-llm-agent-layer]] — LLM 호출 메트릭·감사 로그 수용
+
+## 9. 출처
 - Prometheus naming: https://prometheus.io/docs/practices/naming/
 - Grafana dashboard JSON: https://grafana.com/docs/grafana/latest/dashboards/build-dashboards/view-dashboard-json-model/
 - Loki labels best practices: https://grafana.com/docs/loki/latest/get-started/labels/

@@ -52,3 +52,12 @@ python -m src.ops.cli kill --reason "<구체적 사유>" --operator <이름>
 - 원인 미식별 상태에서 release 금지
 - 1인 단독 release 금지
 - 로그 보존 전 시스템 재시작 금지
+
+## 6. 관련 노트
+
+- [[kill-switch-dr]] — 본 런북이 운영하는 스펙
+- [[max-drawdown-5pct]] — 자동 발동의 대표 룰
+- [[risk-rule-dsl]] — 정책 위반 → 본 런북 진입 경로
+- [[execution-algorithms]] — §2 청산 방식 (시장가·TWAP) 알고
+- [[observability]] — 알림·메트릭 스택
+- [[10-broker-api-comparison]] — 브로커 API 다운 시 백업 채널

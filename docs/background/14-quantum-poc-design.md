@@ -154,6 +154,15 @@ flowchart LR
     HER --> EVAL
 ```
 
+## 관련 노트
+
+- [[03-what-is-quantum-trading]] — 양자 트레이딩 개념 정의
+- [[06-why-quantum-now]] — NISQ 한계·연결성 제약
+- [[19-portfolio-risk]] — Ledoit-Wolf Σ 추정 상세 (본 PoC Σ 입력)
+- [[20-position-sizing]] — 포트폴리오 최적해 → 포지션 크기 변환
+- [[12-validation-protocol]] — 양자 vs 고전 해의 OOS 비교 프로토콜
+- [[data-lake-schema]] — 일간수익률·팩터 저장소 (PoC 데이터 소스)
+
 ## 출처
 
 - Qiskit Finance Portfolio Optimization Tutorial: https://qiskit-community.github.io/qiskit-finance/tutorials/01_portfolio_optimization.html

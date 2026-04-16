@@ -1,3 +1,9 @@
+---
+type: onboarding
+id: mcp-setup
+name: Obsidian 볼트 MCP 서버 — 셋업 가이드
+---
+
 # Obsidian 볼트 MCP 서버 — 셋업 가이드
 
 `services/obsidian_mcp/` 가 제공하는 stdio MCP 서버를 Claude Code / 외부 LLM 에

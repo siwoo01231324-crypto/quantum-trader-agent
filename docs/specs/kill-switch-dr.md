@@ -60,6 +60,15 @@ tags: []
 - `KillSwitch(dry_run=True)` 모드에서는 `trip()` 호출 시 신규 주문은 차단하지만 **청산 명령을 실제로 보내지 않고 로그만 남긴다**.
 - 테스트는 dry-run 경로만 사용한다.
 
-## 9. 출처
+## 9. 관련 노트
+
+- [[kill-switch-runbook]] — 본 스펙의 운영 절차 (사고 시 그대로 실행)
+- [[risk-rule-dsl]] — `halt` 액션이 본 게이트를 발동
+- [[max-drawdown-5pct]] — 자동 트리거 §4 "일일 DrawDown" 의 룰 정의
+- [[observability]] — `qta_kill_switch_state` 메트릭·알림 스택
+- [[execution-algorithms]] — 청산 주문의 TWAP 알고 스펙
+- [[12-validation-protocol]] — §4 롤백 트리거가 본 스펙의 `trip()` 을 호출
+
+## 10. 출처
 - 본 명세는 본 레포 이슈 #27 의 AC 를 기반으로 작성됨.
 - 관련 운영 사례: SEC Reg SCI(2014, https://www.sec.gov/rules/final/2014/34-73639.pdf), Knight Capital 사고(2012, https://www.sec.gov/litigation/admin/2013/34-70694.pdf).

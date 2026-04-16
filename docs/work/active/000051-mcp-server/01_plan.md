@@ -21,3 +21,7 @@
 3. SPARQL 도구 (rdflib + ontology_sync 재사용)
 4. 쓰기 도구 (write_note/append_section) + 안전장치
 5. Claude Code 등록 + 통합 테스트 + 온보딩
+
+## 관련 노트 (구현 대상)
+
+- [[mcp-setup]]

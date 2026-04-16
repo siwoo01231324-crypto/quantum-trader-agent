@@ -108,7 +108,17 @@ Snapshot(account, position, intent_order, daily_pnl, ...)
 - v2: 변동성 기반 동적 한도 (ATR×k 등).
 - v3: 시간대별 한도 (장 마감 30분 전 ½).
 
-## 9. 출처
+## 9. 관련 노트
+
+- [[19-portfolio-risk]] — v2·v3 에서 확장될 포트폴리오 레벨 CVaR·팩터 노출 이론 근거
+- [[20-position-sizing]] — 사이징 결과가 본 정책의 `per_position.max_weight_pct` 에 clamp 됨
+- [[12-validation-protocol]] — 백테스트 롤백 트리거가 본 정책의 평가와 연동
+- [[kill-switch-dr]] — 정책의 `halt` 액션이 kill-switch 를 발동
+- [[kill-switch-runbook]] — 위반 발생 시 운영 절차
+- [[max-drawdown-5pct]] — 본 DSL 로 표현된 drawdown 룰 예시
+- [[observability]] — `qta_risk_breach_total` 메트릭 송출 대상
+
+## 10. 출처
 - pydantic v2: https://docs.pydantic.dev/latest/
 - JSON Schema Draft 2020-12: https://json-schema.org/draft/2020-12/release-notes
 - PyYAML safe_load: https://pyyaml.org/wiki/PyYAMLDocumentation

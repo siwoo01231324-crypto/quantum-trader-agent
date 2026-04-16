@@ -33,3 +33,7 @@ status: done
 
 ## 작업 내역
 
+## 관련 노트 (구현 대상)
+
+- [[risk-rule-dsl]]
+- [[max-drawdown-5pct]]

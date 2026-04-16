@@ -154,6 +154,16 @@ flowchart LR
 - [ ] 공매도 금지 구간 플래그 (`is_short_banned`) 별도 컬럼
 - [ ] 유동성 필터 (`ADV20 >= 5e8 KRW`) 디폴트 적용
 
+## 관련 노트
+
+- [[data-lake-schema]] — 본 카탈로그의 feature 출력이 저장될 parquet 스키마
+- [[12-validation-protocol]] — 피처의 lag(1)·룩어헤드 방지 규칙
+- [[rsi-divergence]] — RSI 기술지표의 실 구현 시그널
+- [[momo-btc-v2]] — 모멘텀 팩터를 소비하는 전략 예시
+- [[20-position-sizing]] — ATR·EWMA σ 가 vol targeting 입력으로 사용
+- [[19-portfolio-risk]] — 팩터 노출 회귀·공분산 추정
+- [[07-market-microstructure-basics]] — 공매도·수급 알트데이터 근거
+
 ## 출처
 
 - pandas-ta 공식: https://www.pandas-ta.dev/ , https://pypi.org/project/pandas-ta/

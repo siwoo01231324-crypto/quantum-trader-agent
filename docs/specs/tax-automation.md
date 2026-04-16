@@ -67,7 +67,15 @@ class Dividend:
 - 해외주식, ETF/ELS/펀드, 파생상품은 본 모듈 v1 범위 외
 - 양도세 신고 대행은 아님 — 보조 자료 생성
 
-## 6. 출처
+## 6. 관련 노트
+
+- [[07-market-microstructure-basics]] — KRX 거래시간·단일가·거래세율 근거
+- [[execution-algorithms]] — 매도 체결 시점에 본 모듈이 거래세 산출
+- [[12-validation-protocol]] — 백테스트에서 거래세 포함 순수익 계산
+- [[20-position-sizing]] — 거래세 0.20% 가 리밸런스 주기 결정에 영향
+- [[observability]] — 세금 산출 결과 메트릭·감사 로그
+
+## 7. 출처
 - 기획재정부 2025 세제개편안 (2025-07-31 발표) — https://moef.go.kr/
 - 국세청 양도소득세 안내 — https://www.nts.go.kr/nts/cm/cntnts/cntntsView.do?mi=12274&cntntsId=8800
 - 헤럴드경제, "내년부터 증권거래세율 0.05%P 상향" — https://biz.heraldcorp.com/article/10627001

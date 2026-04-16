@@ -266,3 +266,9 @@ qta:status a owl:DatatypeProperty .
 ## 작업 내역
 
 - 2026-04-14 워크트리·브랜치 생성 (feat/000047-obsidian-ontology)
+
+## 관련 노트 (구현 대상)
+
+- [[ontology-primer]]
+- [[obsidian-setup]]
+- [[frontmatter-guide]]

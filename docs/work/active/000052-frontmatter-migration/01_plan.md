@@ -29,3 +29,7 @@ status: done
 3. 일괄 실행 → 리뷰 → 디렉토리별 단위 커밋
 4. 본문 위키링크 전환 (regex 보조)
 5. CI strict 모드 전환
+
+## 관련 노트 (구현 대상)
+
+- [[frontmatter-guide]]

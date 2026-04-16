@@ -66,6 +66,13 @@ sources: []
 - **시간 동기화**: NTP 필수(서버 시각 오차는 주문 시퀀스·체결 비교에 직접 영향).
 - **키/비밀 관리**: App Key/Secret은 secret manager + env에만 존재, 레포에 평문 금지.
 
+## 관련 노트
+
+- [[execution-algorithms]] — `BrokerAdapter` 가 감싸는 실행 알고리즘 스펙
+- [[kill-switch-dr]] — 브로커 전환 시 kill-switch 연계
+- [[observability]] — 브로커별 latency·실패율 메트릭
+- [[kill-switch-runbook]] — API 다운 시 수동 청산 절차
+
 ## 출처
 
 - [KIS Developers 공식 포털](https://apiportal.koreainvestment.com/apiservice)
