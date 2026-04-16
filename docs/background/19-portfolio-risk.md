@@ -187,6 +187,8 @@ factor_limits:
 - [[14-quantum-poc-design]] — QAOA 포트폴리오 최적화에서 LW 공분산을 입력으로 사용
 - [[20-position-sizing]] — 개별 포지션 크기 결정 (본 노트의 "Σ" 를 소비자)
 - [[risk-rule-dsl]] — 본 노트의 지표들을 YAML DSL 로 제약화
+- [[30-market-regime-detection]] — DCC-GARCH 시변 상관의 체제 탐지 상세 (vol regime + risk-on/off)
+- [[26-point-in-time-data]] — Σ 추정에 사용될 수익률이 PIT·수정주가 보장을 전제
 - [[max-drawdown-5pct]] — 개별 전략 레벨 리스크 룰 (본 노트의 보완 관계)
 - [[observability]] — 포트폴리오 VaR/CVaR·ENB 대시보드 대상
 - [[kill-switch-runbook]] — 포트폴리오 리스크 위반 시 실행 절차

@@ -177,6 +177,8 @@ CREATE TABLE calendar (
 - [[execution-algorithms]] — 실거래 체결이 `trade` 테이블로 적재
 - [[observability]] — 적재 파이프라인 메트릭 (ingest lag 등)
 - [[19-portfolio-risk]] — Σ 추정용 수익률 시계열 소스
+- [[26-point-in-time-data]] — 본 스키마의 `ingested_at` append-only · `ohlcv_adj` 물리화 확장
+- [[27-corporate-actions]] — `corp_action` 테이블의 이벤트별 필드 확장 상세
 
 ## 9. 출처
 - DuckDB Parquet & Hive partitioning: https://duckdb.org/docs/data/parquet/overview

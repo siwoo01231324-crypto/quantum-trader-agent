@@ -126,6 +126,10 @@ Phase 1/2 규칙기반 전략에 적용되는 **1페이지 SOP**:
 - [[13-feature-alpha-catalog]] — 백테스트 입력 피처의 lag·룩어헤드 규칙
 - [[19-portfolio-risk]] — §4 의 VaR/CVaR 계산 상세
 - [[20-position-sizing]] — 사이징 방법별 DSR/PBO 비교 적용
+- [[26-point-in-time-data]] — §2 체크리스트 1·2·5·6 의 PIT·수정주가 상세 설계
+- [[27-corporate-actions]] — §2 체크리스트 #6 "Corporate actions" 의 처리 프로토콜
+- [[29-paper-to-live-protocol]] — §3.8 라이브 전환을 4단계 프레임워크로 확장
+- [[30-market-regime-detection]] — §4 체제 변화 롤백 트리거의 사전 감지
 
 ## 출처
 
