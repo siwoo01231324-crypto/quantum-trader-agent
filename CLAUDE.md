@@ -50,6 +50,7 @@
 - `docs/` 는 **Obsidian 볼트**. 노트는 `[[id]]` 위키링크로 연결되고 RDF 온톨로지에 동기화됨
 - 새 노트 만들 때는 `docs/schemas/note-schemas.md` 스키마 준수
 - LLM 에이전트가 볼트를 도구로 사용할 때는 `services/obsidian_mcp/` MCP 서버 경유 (#51)
+- **새 에이전트 추가 시 볼트 연결 필수** — in-process 는 `from services.obsidian_mcp import tools`, 외부 프로세스는 `python -m services.obsidian_mcp.server` stdio MCP 로 붙인다. 볼트를 안 쓰는 에이전트라면 `.ai.md` 에 사유 명시
 - 백테스트·인시던트 초안 자동 생성은 `services/doc_agent/` (#53) — 출력은 항상 `.draft.md`, 정식 승격은 사람이 rename
 - 자동 커밋 금지 — 드래프트도 리뷰 후 수동 커밋
 
