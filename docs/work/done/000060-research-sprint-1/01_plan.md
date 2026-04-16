@@ -2,7 +2,7 @@
 type: work-done
 id: 01_plan
 name: "#60 구현 플랜"
-status: active
+status: done
 ---
 
 # 01_plan — #60 리서치 스프린트 1 (볼트 위키링크 백필 + 진짜 퀀트 갭)

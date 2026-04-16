@@ -2,7 +2,7 @@
 type: work-done
 id: 02_graph-stats
 name: "#60 볼트 그래프 연결성 측정"
-status: active
+status: done
 ---
 
 # #60 볼트 그래프 연결성 측정
