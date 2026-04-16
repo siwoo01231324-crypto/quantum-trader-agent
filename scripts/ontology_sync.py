@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import io
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -37,6 +38,9 @@ except ImportError as e:
     print("  설치: pip install python-frontmatter rdflib PyYAML")
     sys.exit(2)
 
+sys.path.insert(0, str(Path(__file__).parent))
+from graphdb_client import sparql_update  # noqa: E402
+
 
 QTA = Namespace("https://siwoo.dev/qta/ontology#")
 INST = Namespace("https://siwoo.dev/qta/instance/")
@@ -55,6 +59,7 @@ TYPE_TO_CLASS = {
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DOCS_DIR = REPO_ROOT / "docs"
 OUT_TTL = REPO_ROOT / "docs" / "ontology" / "instances.ttl"
+TRADING_TTL = REPO_ROOT / "docs" / "ontology" / "trading.ttl"
 
 
 def _iri(id_: str) -> URIRef:
@@ -209,12 +214,36 @@ def build_graph(docs_dir: Path = DOCS_DIR) -> tuple[Graph, list[str]]:
     return g, processed
 
 
+def push_to_graphdb(endpoint: str, repo: str, tbox: Path, abox: Path) -> None:
+    if not tbox.exists():
+        raise FileNotFoundError(f"T-Box missing: {tbox}")
+    if not abox.exists():
+        raise FileNotFoundError(f"A-Box missing: {abox} — run --write first")
+    merged = Graph()
+    merged.parse(tbox, format="turtle")
+    merged.parse(abox, format="turtle")
+    nt_body = merged.serialize(format="nt").strip()
+    update_query = f"CLEAR DEFAULT ;\nINSERT DATA {{ {nt_body} }}"
+    sparql_update(endpoint, repo, update_query)
+    print(f"[ontology_sync] pushed {len(merged)} triples to {endpoint}/repositories/{repo} (default graph)")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Obsidian 프론트매터 → RDF 동기화")
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--check", action="store_true", help="diff 감지만, 파일 쓰지 않음")
     mode.add_argument("--write", action="store_true", help="instances.ttl 재생성")
+    mode.add_argument("--push-graphdb", action="store_true",
+                      help="Push T-Box + A-Box to GraphDB via CLEAR+INSERT atomic SPARQL Update")
+    parser.add_argument("--endpoint",
+                        default=os.environ.get("QTA_SPARQL_ENDPOINT", "http://localhost:7200"),
+                        help="GraphDB base endpoint (default from QTA_SPARQL_ENDPOINT env or http://localhost:7200)")
+    parser.add_argument("--repo", default="qta", help="GraphDB repository name")
     args = parser.parse_args()
+
+    if args.push_graphdb:
+        push_to_graphdb(args.endpoint, args.repo, TRADING_TTL, OUT_TTL)
+        return 0
 
     g, processed = build_graph()
     print(f"[ontology_sync] {len(processed)} 인스턴스 처리")
