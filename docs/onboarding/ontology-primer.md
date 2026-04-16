@@ -105,3 +105,11 @@ for row in g.query(query):
 - 동기화 스크립트: `scripts/ontology_sync.py`
 - rdflib 공식: https://rdflib.readthedocs.io/
 - SPARQL 1.1: https://www.w3.org/TR/sparql11-query/
+
+## 관련 노트
+
+- [[shacl-rules]] — 본 온톨로지 기반 SHACL 제약 카탈로그
+- [[frontmatter-guide]] — 프론트매터가 `ontology_sync.py` 로 A-Box 에 반영
+- [[25-fibo-alignment]] — 산업표준 FIBO 온톨로지와의 대조·차용 전략
+- [[23-graphrag-for-trading-vault]] — 이 온톨로지를 LLM retrieval 에 활용하는 설계
+- [[15-llm-agent-layer]] — LLM 에이전트가 온톨로지를 소비하는 경로

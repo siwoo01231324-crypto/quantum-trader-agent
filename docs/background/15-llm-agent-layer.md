@@ -110,6 +110,8 @@ gantt
 - [[observability]] — LLM 호출 메트릭·감사 로그 스택
 - [[frontmatter-guide]] — LLM 이 생성한 노트의 프론트매터 규약
 - [[12-validation-protocol]] — LLM 출력을 주문 흐름에 넣기 전 검증
+- [[23-graphrag-for-trading-vault]] — 본 노트 §3 RAG 가드레일의 구체 retrieval 설계 (GraphRAG)
+- [[24-llm-agent-safety-finance]] — 본 노트 §3 리스크·§6 가드레일의 실무 구현 패턴 (Structured Output·Audit·Eval)
 
 ## 출처
 
