@@ -102,3 +102,41 @@ python -m services.obsidian_mcp.server --selftest
 - 온톨로지 일관성은 `scripts/ontology_sync.py --check` + `scripts/check_invariants.py`
   로 검증. MCP 도구가 프론트매터를 바꿨다면 `ontology_sync.py --write` 를 다시 돌려야 한다.
 - CI smoke 는 `.github/workflows/mcp-smoke.yml` 이 `tests/test_obsidian_mcp.py` 를 실행.
+
+## 7. 원격 SPARQL 엔드포인트 (GraphDB)
+
+`sparql` 도구는 3-layer fallback 으로 실행 경로를 결정한다:
+
+1. **ctx 우선** — `ctx.sparql_endpoint` (mcp-config.json 의 `sparql_endpoint` 키) 가 설정되면 해당 URL 사용
+2. **env 차선** — `QTA_SPARQL_ENDPOINT` 환경변수가 비어 있지 않으면 해당 URL 사용
+3. **로컬 fallback** — 둘 다 없으면 `vault_root/ontology/trading.ttl + instances.ttl` 를 rdflib 로 로드
+
+### 환경변수 설정
+
+```bash
+export QTA_SPARQL_ENDPOINT=http://localhost:7200/repositories/qta
+```
+
+### 프로그램적 설정 (`docs/.obsidian/mcp-config.json`)
+
+```json
+{
+  "sparql_endpoint": "http://localhost:7200/repositories/qta"
+}
+```
+
+### 우선순위 요약
+
+| 우선순위 | 설정 방법 | `result["source"]` |
+|----------|-----------|---------------------|
+| 1 (높음) | `ctx.sparql_endpoint` | `"remote-http"` |
+| 2 | `QTA_SPARQL_ENDPOINT` env | `"remote-http"` |
+| 3 (낮음) | 없음 (로컬 ttl) | `"local-rdflib"` |
+
+### 안전 쿼리 필터
+
+SELECT / ASK / DESCRIBE / CONSTRUCT 만 허용. INSERT / UPDATE / DELETE 등 쓰기 쿼리는 `ValueError` 로 차단된다 (CLAUDE.md 불변식 #6).
+
+### 참조
+
+- GraphDB 운영 절차: `docs/runbooks/graphdb-ops.md` (worker-5 작성 중)

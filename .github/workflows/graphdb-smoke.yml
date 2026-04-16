@@ -1,0 +1,82 @@
+name: graphdb-smoke
+on:
+  pull_request:
+    paths:
+      - 'docs/ontology/**'
+      - 'scripts/ontology_sync.py'
+      - 'scripts/graphdb_bootstrap.py'
+      - 'scripts/graphdb_client.py'
+      - 'services/obsidian_mcp/**'
+      - 'infra/graphdb/**'
+      - 'tests/test_graphdb_bootstrap.py'
+      - 'tests/test_ontology_sync_push.py'
+      - 'tests/test_obsidian_mcp_sparql.py'
+      - '.github/workflows/graphdb-smoke.yml'
+  workflow_dispatch: {}
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      graphdb:
+        image: ontotext/graphdb:10.6.4
+        ports: ["7200:7200"]
+        options: >-
+          --health-cmd "curl -sf http://localhost:7200/rest/repositories"
+          --health-interval 5s --health-timeout 3s --health-retries 20 --health-start-period 30s
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install deps
+        run: pip install rdflib pyyaml jsonschema python-frontmatter pydantic pyshacl requests responses pytest
+
+      - name: Bootstrap + sync
+        run: |
+          python scripts/graphdb_bootstrap.py --endpoint http://localhost:7200 --repo qta --timeout 90
+          python scripts/ontology_sync.py --write
+          python scripts/ontology_sync.py --push-graphdb --endpoint http://localhost:7200
+
+      - name: SPARQL smoke — query engine executes live_strategies.rq (AC4)
+        run: |
+          RESP=$(curl -sf -G http://localhost:7200/repositories/qta \
+              --data-urlencode "query=$(cat docs/ontology/queries/live_strategies.rq)" \
+              -H "Accept: application/sparql-results+json")
+          echo "$RESP"
+          # Validate the query engine responded with valid SPARQL JSON results
+          # (bindings may be empty if no strategies are currently in 'live' status —
+          # that's a vault state, not a smoke failure)
+          echo "$RESP" | python -c "import json,sys; d=json.load(sys.stdin); assert 'results' in d and 'bindings' in d['results']; print(f'live bindings={len(d[\"results\"][\"bindings\"])}')"
+
+      - name: SPARQL smoke — A-Box is actually loaded (Strategy count ≥ 1)
+        run: |
+          RESP=$(curl -sf -G http://localhost:7200/repositories/qta \
+              --data-urlencode "query=PREFIX qta: <https://siwoo.dev/qta/ontology#> SELECT (COUNT(?s) AS ?n) WHERE { ?s a qta:Strategy }" \
+              -H "Accept: application/sparql-results+json")
+          echo "$RESP"
+          N=$(echo "$RESP" | python -c "import json,sys; print(json.load(sys.stdin)['results']['bindings'][0]['n']['value'])")
+          echo "strategy_count=$N"
+          test "$N" -ge 1
+
+      - name: Latency budget (p95 < 2000ms over 5 samples)
+        run: |
+          : > times.txt
+          for i in 1 2 3 4 5; do
+            /usr/bin/time -f '%e' curl -sf -G http://localhost:7200/repositories/qta \
+              --data-urlencode "query=SELECT ?s WHERE {?s ?p ?o} LIMIT 100" \
+              -H "Accept: application/sparql-results+json" -o /dev/null 2>> times.txt
+          done
+          python -c "
+          ts = sorted(float(x) for x in open('times.txt').read().split())
+          p95 = ts[-1]
+          print(f'p95={p95}s')
+          import sys; sys.exit(0 if p95 < 2.0 else 1)"
+
+      - name: Unit tests (mocked, env unset for local rdflib branch coverage)
+        env:
+          QTA_SPARQL_ENDPOINT: ""
+        run: |
+          pytest tests/test_graphdb_bootstrap.py tests/test_ontology_sync_push.py \
+                 tests/test_obsidian_mcp_sparql.py tests/test_ontology_roundtrip.py -v

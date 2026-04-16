@@ -1,0 +1,256 @@
+@prefix : <https://siwoo.dev/qta/ontology#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix qta: <https://siwoo.dev/qta/ontology#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix xml: <http://www.w3.org/XML/1998/namespace> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@base <https://siwoo.dev/qta/ontology> .
+
+<https://siwoo.dev/qta/ontology> rdf:type owl:Ontology ;
+                                  rdfs:comment "LFT 규칙기반 자동매매 에이전트의 트레이딩 도메인 온톨로지." ;
+                                  rdfs:label "Quantum Trader Agent Trading Ontology" .
+
+#################################################################
+#    Datatypes
+#################################################################
+
+###  http://www.w3.org/2001/XMLSchema#date
+xsd:date rdf:type rdfs:Datatype .
+
+
+#################################################################
+#    Object Properties
+#################################################################
+
+###  https://siwoo.dev/qta/ontology#affectsStrategy
+qta:affectsStrategy rdf:type owl:ObjectProperty ;
+                    rdfs:domain qta:Incident ;
+                    rdfs:range qta:Strategy ;
+                    rdfs:label "affectsStrategy" .
+
+
+###  https://siwoo.dev/qta/ontology#appliesRule
+qta:appliesRule rdf:type owl:ObjectProperty ;
+                rdfs:domain qta:Strategy ;
+                rdfs:range qta:RiskRule ;
+                rdfs:label "appliesRule" .
+
+
+###  https://siwoo.dev/qta/ontology#backtestOf
+qta:backtestOf rdf:type owl:ObjectProperty ;
+               rdfs:domain qta:Backtest ;
+               rdfs:range qta:Strategy ;
+               rdfs:label "backtestOf" .
+
+
+###  https://siwoo.dev/qta/ontology#derivedFromModel
+qta:derivedFromModel rdf:type owl:ObjectProperty ;
+                     rdfs:domain qta:Signal ;
+                     rdfs:range qta:MLModel ;
+                     rdfs:label "derivedFromModel" .
+
+
+###  https://siwoo.dev/qta/ontology#hasPostMortem
+qta:hasPostMortem rdf:type owl:ObjectProperty ;
+                  rdfs:domain qta:Incident ;
+                  rdfs:range qta:PostMortem ;
+                  rdfs:label "hasPostMortem" .
+
+
+###  https://siwoo.dev/qta/ontology#postMortemOf
+qta:postMortemOf rdf:type owl:ObjectProperty ;
+                 rdfs:domain qta:PostMortem ;
+                 rdfs:range qta:Incident ;
+                 rdfs:label "postMortemOf" .
+
+
+###  https://siwoo.dev/qta/ontology#tradesOn
+qta:tradesOn rdf:type owl:ObjectProperty ;
+             rdfs:domain qta:Strategy ;
+             rdfs:range qta:Instrument ;
+             rdfs:label "tradesOn" .
+
+
+###  https://siwoo.dev/qta/ontology#usesSignal
+qta:usesSignal rdf:type owl:ObjectProperty ;
+               rdfs:domain qta:Strategy ;
+               rdfs:range qta:Signal ;
+               rdfs:label "usesSignal" .
+
+
+###  https://siwoo.dev/qta/ontology#violatesRule
+qta:violatesRule rdf:type owl:ObjectProperty ;
+                 rdfs:domain qta:Incident ;
+                 rdfs:range qta:RiskRule ;
+                 rdfs:label "violatesRule" .
+
+
+#################################################################
+#    Data properties
+#################################################################
+
+###  https://siwoo.dev/qta/ontology#assetClass
+qta:assetClass rdf:type owl:DatatypeProperty ;
+               rdfs:domain qta:Instrument ;
+               rdfs:range xsd:string ;
+               rdfs:label "assetClass" .
+
+
+###  https://siwoo.dev/qta/ontology#hasActionItem
+qta:hasActionItem rdf:type owl:DatatypeProperty ;
+                  rdfs:domain qta:PostMortem ;
+                  rdfs:range xsd:string ;
+                  rdfs:label "hasActionItem" .
+
+
+###  https://siwoo.dev/qta/ontology#lookback
+qta:lookback rdf:type owl:DatatypeProperty ;
+             rdfs:domain qta:Signal ;
+             rdfs:range xsd:integer ;
+             rdfs:label "lookback" .
+
+
+###  https://siwoo.dev/qta/ontology#occurred
+qta:occurred rdf:type owl:DatatypeProperty ;
+             rdfs:domain qta:Incident ;
+             rdfs:range xsd:dateTime ;
+             rdfs:label "occurred" .
+
+
+###  https://siwoo.dev/qta/ontology#periodEnd
+qta:periodEnd rdf:type owl:DatatypeProperty ;
+              rdfs:domain qta:Backtest ;
+              rdfs:range xsd:date ;
+              rdfs:label "periodEnd" .
+
+
+###  https://siwoo.dev/qta/ontology#periodStart
+qta:periodStart rdf:type owl:DatatypeProperty ;
+                rdfs:domain qta:Backtest ;
+                rdfs:range xsd:date ;
+                rdfs:label "periodStart" .
+
+
+###  https://siwoo.dev/qta/ontology#scope
+qta:scope rdf:type owl:DatatypeProperty ;
+          rdfs:domain qta:RiskRule ;
+          rdfs:range xsd:string ;
+          rdfs:label "scope" .
+
+
+###  https://siwoo.dev/qta/ontology#severity
+qta:severity rdf:type owl:DatatypeProperty ;
+             rdfs:range xsd:string ;
+             rdfs:label "severity" .
+
+
+###  https://siwoo.dev/qta/ontology#sharpeBt
+qta:sharpeBt rdf:type owl:DatatypeProperty ;
+             rdfs:domain qta:Strategy ;
+             rdfs:range xsd:decimal ;
+             rdfs:label "sharpeBt" .
+
+
+###  https://siwoo.dev/qta/ontology#sharpeRatio
+qta:sharpeRatio rdf:type owl:DatatypeProperty ;
+                rdfs:domain qta:Backtest ;
+                rdfs:range xsd:decimal ;
+                rdfs:label "sharpeRatio" .
+
+
+###  https://siwoo.dev/qta/ontology#status
+qta:status rdf:type owl:DatatypeProperty ;
+           rdfs:domain qta:Strategy ;
+           rdfs:range xsd:string ;
+           rdfs:label "status" .
+
+
+###  https://siwoo.dev/qta/ontology#threshold
+qta:threshold rdf:type owl:DatatypeProperty ;
+              rdfs:domain qta:RiskRule ;
+              rdfs:range xsd:decimal ;
+              rdfs:label "threshold" .
+
+
+###  https://siwoo.dev/qta/ontology#timeframe
+qta:timeframe rdf:type owl:DatatypeProperty ;
+              rdfs:domain qta:Strategy ;
+              rdfs:range xsd:string ;
+              rdfs:label "timeframe" .
+
+
+###  https://siwoo.dev/qta/ontology#venue
+qta:venue rdf:type owl:DatatypeProperty ;
+          rdfs:domain qta:Instrument ;
+          rdfs:range xsd:string ;
+          rdfs:label "venue" .
+
+
+#################################################################
+#    Classes
+#################################################################
+
+###  https://siwoo.dev/qta/ontology#Backtest
+qta:Backtest rdf:type owl:Class ;
+             rdfs:comment "백테스트 실행 결과." ;
+             rdfs:label "Backtest" .
+
+
+###  https://siwoo.dev/qta/ontology#CriticalRule
+qta:CriticalRule rdf:type owl:Class ;
+                 rdfs:subClassOf qta:RiskRule ;
+                 rdfs:comment "severity=critical 인 RiskRule." ;
+                 rdfs:label "CriticalRule" .
+
+
+###  https://siwoo.dev/qta/ontology#Incident
+qta:Incident rdf:type owl:Class ;
+             rdfs:comment "운영 중 발생한 장애·사건." ;
+             rdfs:label "Incident" .
+
+
+###  https://siwoo.dev/qta/ontology#Instrument
+qta:Instrument rdf:type owl:Class ;
+               rdfs:comment "거래 종목 메타데이터." ;
+               rdfs:label "Instrument" .
+
+
+###  https://siwoo.dev/qta/ontology#LiveStrategy
+qta:LiveStrategy rdf:type owl:Class ;
+                 rdfs:subClassOf qta:Strategy ;
+                 rdfs:comment "status=live 인 Strategy." ;
+                 rdfs:label "LiveStrategy" .
+
+
+###  https://siwoo.dev/qta/ontology#MLModel
+qta:MLModel rdf:type owl:Class ;
+            rdfs:comment "시그널을 생성하는 ML 모델." ;
+            rdfs:label "MLModel" .
+
+
+###  https://siwoo.dev/qta/ontology#PostMortem
+qta:PostMortem rdf:type owl:Class ;
+               rdfs:comment "Incident 회고. status=draft|final." ;
+               rdfs:label "PostMortem" .
+
+
+###  https://siwoo.dev/qta/ontology#RiskRule
+qta:RiskRule rdf:type owl:Class ;
+             rdfs:comment "리스크 규칙." ;
+             rdfs:label "RiskRule" .
+
+
+###  https://siwoo.dev/qta/ontology#Signal
+qta:Signal rdf:type owl:Class ;
+           rdfs:comment "진입·청산 신호 정의." ;
+           rdfs:label "Signal" .
+
+
+###  https://siwoo.dev/qta/ontology#Strategy
+qta:Strategy rdf:type owl:Class ;
+             rdfs:comment "거래 전략 명세." ;
+             rdfs:label "Strategy" .
+
+
+###  Generated by the OWL API (version 4.5.29.2024-05-13T12:11:03Z) https://github.com/owlcs/owlapi

@@ -51,3 +51,7 @@ docs/.obsidian/workspace-mobile.json
 docs/.obsidian/cache/
 docs/.obsidian/plugins/
 docs/.trash/
+
+# GraphDB 런타임 데이터
+infra/graphdb/data/
+infra/graphdb/logs/

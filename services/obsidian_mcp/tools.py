@@ -11,7 +11,20 @@ import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
+
+try:
+    import requests as _requests  # type: ignore
+except ImportError:  # pragma: no cover
+    _requests = None  # type: ignore
+
+_QUERY_PATH_FMT = "/repositories/{repo}"
+_WRITE_PATH_FMT = "/repositories/{repo}/statements"
+
+_SAFE_SPARQL_RE = re.compile(
+    r'^\s*(?:#[^\n]*\n|PREFIX[^\n]*\n|BASE[^\n]*\n)*\s*(SELECT|ASK|DESCRIBE|CONSTRUCT)\b',
+    re.IGNORECASE | re.MULTILINE,
+)
 
 try:
     import yaml  # type: ignore
@@ -352,8 +365,44 @@ def append_section(
     }
 
 
+def _resolve_endpoint(ctx: VaultContext) -> Optional[str]:
+    ep = getattr(ctx, "sparql_endpoint", None)
+    if ep:
+        return ep
+    env_ep = os.environ.get("QTA_SPARQL_ENDPOINT", "")
+    if env_ep:
+        return env_ep
+    return None
+
+
 def sparql(ctx: VaultContext, query: str) -> dict[str, Any]:
-    """`trading.ttl` + `instances.ttl` 에 대해 SPARQL 쿼리 실행."""
+    """`trading.ttl` + `instances.ttl` 에 대해 SPARQL 쿼리 실행, 또는 원격 GraphDB 엔드포인트 사용."""
+    if not _SAFE_SPARQL_RE.match(query):
+        raise ValueError("only SELECT/ASK/DESCRIBE/CONSTRUCT allowed")
+
+    endpoint = _resolve_endpoint(ctx)
+    if endpoint:
+        if _requests is None:
+            raise RuntimeError("requests library not installed")
+        try:
+            r = _requests.post(
+                endpoint,
+                data={"query": query},
+                headers={"Accept": "application/sparql-results+json"},
+                timeout=5.0,
+            )
+            r.raise_for_status()
+            data = r.json()
+            return {
+                "ok": True,
+                "source": "remote-http",
+                "endpoint": endpoint,
+                "bindings": data.get("results", {}).get("bindings", []),
+                "vars": data.get("head", {}).get("vars", []),
+            }
+        except (_requests.RequestException, ValueError) as e:
+            raise RuntimeError(f"remote SPARQL failed: {e}")
+
     try:
         from rdflib import Graph  # type: ignore
     except ImportError:
@@ -373,6 +422,7 @@ def sparql(ctx: VaultContext, query: str) -> dict[str, Any]:
         return {"ok": False, "error": "no ontology files found under vault_root/ontology/"}
 
     try:
+        # never use g.update() here — LLM safety boundary per CLAUDE.md invariant #6
         result = g.query(query)
     except Exception as e:
         return {"ok": False, "error": f"sparql error: {e}"}
@@ -384,7 +434,7 @@ def sparql(ctx: VaultContext, query: str) -> dict[str, Any]:
             rows.append({v: (str(row[v]) if row[v] is not None else None) for v in bindings_vars})
         else:
             rows.append({"value": str(row)})
-    return {"ok": True, "loaded": loaded, "count": len(rows), "rows": rows}
+    return {"ok": True, "source": "local-rdflib", "loaded": loaded, "count": len(rows), "rows": rows}
 
 
 def graph_neighbors(ctx: VaultContext, note_id: str, depth: int = 1) -> dict[str, Any]:
