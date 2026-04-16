@@ -154,6 +154,17 @@ sources: []
 
 ---
 
+## 관련 노트
+
+- [[13-feature-alpha-catalog]] — 본 노트의 전략 패러다임이 소비하는 알파·피처
+- [[12-validation-protocol]] — 각 패러다임의 백테스트 검증 방법
+- [[momo-btc-v2]] — 모멘텀 패러다임의 실 구현 예시
+- [[rsi-divergence]] — 규칙기반 신호 예시
+- [[14-quantum-poc-design]] — 양자 전략 PoC 설계
+- [[15-llm-agent-layer]] — LLM 에이전트 패러다임
+
+---
+
 ## 출처
 
 - [Top Algo Trading Strategies & How They Work (2026 Guide) — VPS Forex Trader](https://www.vpsforextrader.com/blog/algo-trading-strategies/)

@@ -120,6 +120,15 @@ python scripts/check_invariants.py --strict
 - `name` 은 본문 첫 `#` H1 을 추출. H1 이 없으면 파일명 사용.
 
 ## 참조
-- 프론트매터 가이드: `docs/onboarding/frontmatter-guide.md`
-- 스키마 스펙: `docs/schemas/note-schemas.md`
-- Obsidian 설정: `docs/onboarding/obsidian-setup.md`
+- 프론트매터 가이드: [[frontmatter-guide]]
+- 스키마 스펙: `docs/schemas/note-schemas.md` (스키마 파일 자체는 프론트매터 미적용)
+- Obsidian 설정: [[obsidian-setup]]
+
+## 관련 노트
+
+- [[getting-started]] — 전체 온보딩 입구
+- [[frontmatter-guide]] — 프론트매터 규약
+- [[obsidian-setup]] — Obsidian 앱 설정
+- [[ontology-primer]] — RDF 온톨로지 기초
+- [[shacl-rules]] — SHACL 검증 규칙
+- [[mcp-setup]] — 볼트 MCP 서버 연결

@@ -28,3 +28,6 @@ Phase 1 기초. 전략·시스템 설계의 공통 전제.
 
 ## 작업 내역
 
+## 관련 노트 (구현 대상)
+
+- [[07-market-microstructure-basics]]

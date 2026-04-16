@@ -23,3 +23,12 @@ BTC 무기한 선물 15분봉 기준 모멘텀 전략. 진입 신호로 [[rsi-di
 
 ## 청산
 - 반대 divergence 발생, 또는 [[max-drawdown-5pct]] halt 시.
+
+## 관련 노트
+
+- [[13-feature-alpha-catalog]] — RSI 계산 로직·룩어헤드 방지 규칙
+- [[12-validation-protocol]] — 본 전략의 백테스트 검증 (walk-forward, DSR/PBO)
+- [[20-position-sizing]] — 진입 크기 결정 (Half Kelly + vol targeting)
+- [[19-portfolio-risk]] — 멀티 전략 운영 시 상관·공분산 관리
+- [[execution-algorithms]] — 주문 실행 (Market/Limit/TWAP)
+- [[kill-switch-runbook]] — MDD halt 발생 시 청산 절차

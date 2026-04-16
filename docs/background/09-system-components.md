@@ -145,6 +145,20 @@ flowchart LR
 
 ---
 
+## 관련 노트
+
+- [[data-lake-schema]] — `TickStore`·`DataIngestor` 구현 근거
+- [[execution-algorithms]] — `OMS`·`ExecutionHandler` 하위 알고
+- [[risk-rule-dsl]] — `RiskManager` 의 YAML 정책 모델
+- [[observability]] — `Monitor`·`StructuredLogger` 메트릭 스펙
+- [[kill-switch-dr]] — kill-switch 아키텍처 상세
+- [[20-position-sizing]] — `PositionSizer` 이론적 근거
+- [[19-portfolio-risk]] — 포트폴리오 레벨 리스크 (Phase 2+ VaR/CVaR)
+- [[12-validation-protocol]] — 백테스트 검증 절차
+- [[13-feature-alpha-catalog]] — 전략이 소비하는 피처 카탈로그
+
+---
+
 ## 출처
 
 - Zipline 아키텍처 및 컴포넌트 구성 — https://zipline.ml4trading.io/ , https://github.com/stefan-jansen/zipline-reloaded

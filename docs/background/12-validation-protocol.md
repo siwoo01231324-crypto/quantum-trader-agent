@@ -116,6 +116,17 @@ Phase 1/2 규칙기반 전략에 적용되는 **1페이지 SOP**:
 - 파라미터: lookback ∈ {3, 6, 9, 12}, top-k ∈ {10, 20, 30} — 총 12 조합 → N=12로 DSR 계산
 - 승인 기준: DSR ≥ 0.95, PBO ≤ 0.2, turnover-adjusted Sharpe ≥ 0.8
 
+## 관련 노트
+
+- [[data-lake-schema]] — §3.1 의 point-in-time parquet 입력 (이슈 #20)
+- [[tax-automation]] — §2 체크리스트 7번 "거래세" 반영 (이슈 #28)
+- [[kill-switch-dr]] / [[kill-switch-runbook]] — §4 롤백 트리거 → kill-switch 연계 (이슈 #27)
+- [[observability]] — §4 SLO 위반 감지 (이슈 #26)
+- [[11-backtest-engine-selection]] — 검증 프로토콜을 실행할 엔진
+- [[13-feature-alpha-catalog]] — 백테스트 입력 피처의 lag·룩어헤드 규칙
+- [[19-portfolio-risk]] — §4 의 VaR/CVaR 계산 상세
+- [[20-position-sizing]] — 사이징 방법별 DSR/PBO 비교 적용
+
 ## 출처
 
 - López de Prado, M. *Advances in Financial Machine Learning*, Wiley, 2018. 핵심 요약: [Reasonable Deviations](https://reasonabledeviations.com/notes/adv_fin_ml/)

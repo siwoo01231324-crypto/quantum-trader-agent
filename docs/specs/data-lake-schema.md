@@ -169,7 +169,16 @@ CREATE TABLE calendar (
 - 컬럼 제거/타입 변경 → 메이저 버전, 별도 디렉터리(`ohlcv_v2/`)로 분리.
 - 모든 적재는 idempotent (PK 기준 upsert via DuckDB temp table merge).
 
-## 8. 출처
+## 8. 관련 노트
+
+- [[11-backtest-engine-selection]] — 본 스키마를 소비할 백테스트 엔진
+- [[12-validation-protocol]] — point-in-time 데이터·생존편향 방어 원칙
+- [[13-feature-alpha-catalog]] — `factor` 테이블에 저장될 피처
+- [[execution-algorithms]] — 실거래 체결이 `trade` 테이블로 적재
+- [[observability]] — 적재 파이프라인 메트릭 (ingest lag 등)
+- [[19-portfolio-risk]] — Σ 추정용 수익률 시계열 소스
+
+## 9. 출처
 - DuckDB Parquet & Hive partitioning: https://duckdb.org/docs/data/parquet/overview
 - Polars Schema/Datatype: https://docs.pola.rs/api/python/stable/reference/datatypes.html
 - Apache Parquet 권장 row-group 크기: https://parquet.apache.org/docs/file-format/configurations/

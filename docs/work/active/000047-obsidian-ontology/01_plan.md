@@ -33,3 +33,9 @@ status: done
 1. `/plan 47` 실행 → Phase별 구현 계획 보강
 2. Phase 1 착수 전 `docs/ontology/`, `docs/schemas/`, `docs/dashboards/`, `docs/onboarding/` 디렉토리의 `.ai.md` 먼저 계획
 3. PR #46(AGENTS.md) 머지 확인 후 본격 작업
+
+## 관련 노트 (구현 대상)
+
+- [[ontology-primer]]
+- [[obsidian-setup]]
+- [[frontmatter-guide]]

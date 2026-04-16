@@ -231,3 +231,7 @@ tests/fixtures/shacl/
 5. **Phase 5** — 온보딩 문서 + .ai.md 갱신
 6. **검증** — `python scripts/check_invariants.py --strict`, `pytest tests/test_shacl.py`, `python scripts/ontology_sync.py --check`
 7. 커밋 단위: Phase 단위 커밋 (5개 커밋) → `/finish-issue` 로 PR
+
+## 관련 노트 (구현 대상)
+
+- [[shacl-rules]]

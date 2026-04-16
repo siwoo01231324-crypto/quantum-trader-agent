@@ -97,3 +97,7 @@ status: done
 - `python scripts/ontology_sync.py --check` → up-to-date
 **변경 파일**: 11개 (트리당 shape/script/tests/docs 전반)
 **다음 작업**: `/finish-issue` 로 커밋·PR
+
+## 관련 노트 (구현 대상)
+
+- [[shacl-rules]]
