@@ -61,3 +61,5 @@ python -m src.ops.cli kill --reason "<구체적 사유>" --operator <이름>
 - [[execution-algorithms]] — §2 청산 방식 (시장가·TWAP) 알고
 - [[observability]] — 알림·메트릭 스택
 - [[10-broker-api-comparison]] — 브로커 API 다운 시 백업 채널
+- [[29-paper-to-live-protocol]] — 본 런북은 Phase 2 이후 단계 전환마다 1회씩 실제 실행되어야 함
+- [[30-market-regime-detection]] — 고변동성 체제 진입 시 drawdown 임계 자동 하향

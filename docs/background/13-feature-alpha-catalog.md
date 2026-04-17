@@ -163,6 +163,9 @@ flowchart LR
 - [[20-position-sizing]] — ATR·EWMA σ 가 vol targeting 입력으로 사용
 - [[19-portfolio-risk]] — 팩터 노출 회귀·공분산 추정
 - [[07-market-microstructure-basics]] — 공매도·수급 알트데이터 근거
+- [[26-point-in-time-data]] — 수정주가·생존편향 방어 설계 (본 노트 §2 KRX 주의점 상세)
+- [[27-corporate-actions]] — 액면분할·배당·유상증자 조정 프로토콜 (본 노트 §2 공통 주의사항 상세)
+- [[30-market-regime-detection]] — ADX·EWMA σ·Hurst 를 체제 분류 입력으로 활용
 
 ## 출처
 
