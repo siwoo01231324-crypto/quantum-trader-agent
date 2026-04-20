@@ -70,7 +70,19 @@ quantum-trader-agent/
 │       └── agent-runs/              doc_agent 실행 감사 로그 (#53)
 │
 ├── src/                             ← 애플리케이션 소스
-│   ├── data_lake/                   Parquet 스키마·저장소 (#20)
+│   ├── data_lake/                   Parquet 스키마·저장소·데이터 수집 (#20, #67)
+│   │   ├── schema.py                OHLCV/Trade/Factor 스키마 + partition_path
+│   │   └── fetcher.py               Binance REST → OHLCV Parquet 수집기
+│   ├── backtest/                    경량 이벤트 기반 백테스트 엔진 (#67)
+│   │   ├── protocol.py              Bar · Signal · Strategy 프로토콜
+│   │   ├── engine.py                bar-by-bar 이벤트 루프 + MDD halt
+│   │   ├── metrics.py               Sharpe(daily) · MDD · 수익률 · 승률
+│   │   ├── bundle.py                파티션 Parquet 데이터 로더
+│   │   ├── frontmatter.py           전략 프론트매터 sharpe_bt 업데이터
+│   │   └── strategies/
+│   │       └── momo_btc_v2.py       BTC 15m 모멘텀 전략 (RSI divergence, long-only)
+│   ├── signals/                     시그널 계산 함수 (#67)
+│   │   └── rsi.py                   RSI (Wilder) + divergence 감지 (lag-1)
 │   ├── risk/                        리스크 룰 DSL 파서·평가기 (#24)
 │   ├── execution/                   주문 실행 알고리즘 (#25)
 │   │   ├── base.py                  ExecutionAlgorithm 프로토콜

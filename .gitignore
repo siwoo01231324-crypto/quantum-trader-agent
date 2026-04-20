@@ -4,6 +4,9 @@
 *.pkl
 *.parquet
 
+# 데이터 레이크 (로컬 Parquet 저장소)
+lake/
+
 # 환경 변수
 .env
 .env.*
