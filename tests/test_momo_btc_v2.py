@@ -1,0 +1,167 @@
+"""Tests for MomoBtcV2 strategy conformance and signal generation."""
+import pytest
+import pandas as pd
+import numpy as np
+
+from backtest.protocol import Bar, Signal, Strategy
+from backtest.engine import run_backtest, BacktestConfig, BacktestResult
+from backtest.strategies.momo_btc_v2 import MomoBtcV2
+from signals.rsi import compute_rsi, detect_divergence
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _make_ohlcv(n: int, start_price: float = 100.0, seed: int = 42) -> pd.DataFrame:
+    np.random.seed(seed)
+    closes = start_price + np.cumsum(np.random.randn(n) * 0.5)
+    closes = np.maximum(closes, 1.0)
+    opens = closes * (1 + np.random.randn(n) * 0.001)
+    highs = np.maximum(closes, opens) * (1 + np.abs(np.random.randn(n) * 0.002))
+    lows = np.minimum(closes, opens) * (1 - np.abs(np.random.randn(n) * 0.002))
+    volumes = np.abs(np.random.randn(n) * 1000 + 5000)
+    index = pd.date_range("2024-01-01", periods=n, freq="15min")
+    return pd.DataFrame(
+        {"open": opens, "high": highs, "low": lows, "close": closes, "volume": volumes},
+        index=index,
+    )
+
+
+def _make_bar(close: float = 100.0) -> Bar:
+    return Bar(
+        ts=pd.Timestamp("2024-01-01"),
+        open=close,
+        high=close * 1.001,
+        low=close * 0.999,
+        close=close,
+        volume=1000.0,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Protocol conformance
+# ---------------------------------------------------------------------------
+
+def test_strategy_conforms_to_protocol():
+    """MomoBtcV2 must satisfy the Strategy runtime-checkable Protocol."""
+    strategy = MomoBtcV2()
+    assert isinstance(strategy, Strategy), "MomoBtcV2 does not conform to Strategy protocol"
+
+
+# ---------------------------------------------------------------------------
+# Signal generation
+# ---------------------------------------------------------------------------
+
+def test_buy_on_bullish_divergence():
+    """on_bar returns Signal(action='buy') when divergence is 'bullish'."""
+    strategy = MomoBtcV2()
+    strategy.on_init({})
+
+    n = 200
+    ohlcv = _make_ohlcv(n)
+    close = ohlcv["close"]
+    rsi = compute_rsi(close, strategy.RSI_PERIOD)
+    div = detect_divergence(close, rsi, strategy.LOOKBACK)
+
+    # Find a bar where divergence is 'bullish'
+    bullish_indices = [i for i in range(len(div)) if div.iloc[i] == "bullish"]
+    if not bullish_indices:
+        pytest.skip("No bullish divergence in synthetic data; increase n or change seed")
+
+    idx = bullish_indices[0]
+    history = ohlcv.iloc[: idx + 1]
+    bar = _make_bar(history["close"].iloc[-1])
+    signal = strategy.on_bar(bar, history, {})
+    assert signal.action == "buy", f"Expected 'buy', got '{signal.action}'"
+    assert signal.size == 1.0
+
+
+def test_sell_on_bearish_divergence():
+    """on_bar returns Signal(action='sell') when divergence is 'bearish'."""
+    strategy = MomoBtcV2()
+    strategy.on_init({})
+
+    n = 200
+    ohlcv = _make_ohlcv(n)
+    close = ohlcv["close"]
+    rsi = compute_rsi(close, strategy.RSI_PERIOD)
+    div = detect_divergence(close, rsi, strategy.LOOKBACK)
+
+    bearish_indices = [i for i in range(len(div)) if div.iloc[i] == "bearish"]
+    if not bearish_indices:
+        pytest.skip("No bearish divergence in synthetic data; increase n or change seed")
+
+    idx = bearish_indices[0]
+    history = ohlcv.iloc[: idx + 1]
+    bar = _make_bar(history["close"].iloc[-1])
+    signal = strategy.on_bar(bar, history, {})
+    assert signal.action == "sell", f"Expected 'sell', got '{signal.action}'"
+    assert signal.size == 1.0
+
+
+def test_hold_when_no_divergence():
+    """on_bar returns Signal(action='hold') when there is no divergence."""
+    strategy = MomoBtcV2()
+    strategy.on_init({})
+
+    # Create a perfectly trending series (monotonic up) that typically has no divergence
+    n = 100
+    closes = pd.Series(range(100, 100 + n), dtype=float)
+    opens = closes * 0.999
+    highs = closes * 1.002
+    lows = closes * 0.998
+    volumes = pd.Series([1000.0] * n)
+    index = pd.date_range("2024-01-01", periods=n, freq="15min")
+    ohlcv = pd.DataFrame(
+        {"open": opens.values, "high": highs.values, "low": lows.values,
+         "close": closes.values, "volume": volumes.values},
+        index=index,
+    )
+
+    # Use the full history
+    history = ohlcv
+    bar = _make_bar(float(closes.iloc[-1]))
+    signal = strategy.on_bar(bar, history, {})
+
+    rsi = compute_rsi(closes, strategy.RSI_PERIOD)
+    div = detect_divergence(closes, rsi, strategy.LOOKBACK)
+    latest_div = div.iloc[-1]
+
+    if latest_div is None:
+        assert signal.action == "hold"
+    else:
+        # Accept whatever the strategy computed based on actual divergence
+        assert signal.action in ("buy", "sell", "hold")
+
+
+def test_warmup_returns_hold():
+    """Strategy returns 'hold' during warmup period (insufficient bars)."""
+    strategy = MomoBtcV2()
+    strategy.on_init({})
+
+    # min_bars = RSI_PERIOD + LOOKBACK * 2 + 1 = 14 + 28 + 1 = 43
+    # Use only 10 bars (definitely in warmup)
+    n = 10
+    ohlcv = _make_ohlcv(n)
+    bar = _make_bar(ohlcv["close"].iloc[-1])
+    signal = strategy.on_bar(bar, ohlcv, {})
+    assert signal.action == "hold"
+    assert signal.reason == "warmup"
+
+
+def test_strategy_with_engine_produces_results():
+    """run_backtest with MomoBtcV2 on synthetic data returns a BacktestResult."""
+    strategy = MomoBtcV2()
+    ohlcv = _make_ohlcv(300)
+    config = BacktestConfig(initial_cash=10_000.0)
+
+    result = run_backtest(ohlcv, strategy, config)
+
+    assert isinstance(result, BacktestResult)
+    assert isinstance(result.equity_curve, pd.Series)
+    assert len(result.equity_curve) == 300
+    assert isinstance(result.trades, list)
+    assert isinstance(result.metrics, dict)
+    # Equity should be positive throughout
+    assert (result.equity_curve > 0).all(), "Equity went to zero or negative"

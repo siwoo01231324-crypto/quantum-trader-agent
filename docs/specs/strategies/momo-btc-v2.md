@@ -3,15 +3,20 @@ type: strategy
 id: momo-btc-v2
 name: BTC Momentum v2
 status: backtest
-instruments: [BTCUSDT]
+instruments:
+- BTCUSDT
 timeframe: 15m
-uses_signals: [rsi-divergence]
-risk_rules: [max-drawdown-5pct]
+uses_signals:
+- rsi-divergence
+risk_rules:
+- max-drawdown-5pct
 owner: siwoo
 created: 2026-04-14
-sharpe_bt: 1.82
+sharpe_bt: 0.1847
 sharpe_live: null
-tags: [momentum, crypto]
+tags:
+- momentum
+- crypto
 ---
 
 # BTC Momentum v2

@@ -8,6 +8,7 @@ from .schema import (
     CORP_ACTION_SCHEMA,
     CALENDAR_SCHEMA,
     validate_schema,
+    partition_path,
 )
 
 __all__ = [
@@ -19,4 +20,5 @@ __all__ = [
     "CORP_ACTION_SCHEMA",
     "CALENDAR_SCHEMA",
     "validate_schema",
+    "partition_path",
 ]
