@@ -48,6 +48,11 @@ Thumbs.db
 .idea/
 *.swp
 
+# 중복 경로 방지 — #84 작업 중 발견된 오래된 백업 흔적 (tests/fixtures/ 를 통째로 복사한 잔해).
+# 과거 한 번의 수동 실수가 mtime 보존 복사(cp -rp)로 untracked 상태로 남아있던 케이스.
+# 재발 시 scripts/check_invariants.py 에서 FAIL 처리됨.
+tests/fixtures/fixtures/
+
 # Obsidian 볼트 (개인 설정만 제외, 공통 설정은 커밋)
 docs/.obsidian/workspace.json
 docs/.obsidian/workspace-mobile.json
