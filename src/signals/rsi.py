@@ -1,7 +1,10 @@
 import pandas as pd
 import numpy as np
 
+from .registry import register
 
+
+@register("rsi", inputs=["close"], period=14)
 def compute_rsi(close: pd.Series, period: int = 14) -> pd.Series:
     """Wilder-smoothed RSI using true Wilder smoothing (SMMA).
 

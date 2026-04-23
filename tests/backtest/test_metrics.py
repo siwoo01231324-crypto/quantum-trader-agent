@@ -50,7 +50,7 @@ def test_counter_monotonic(metrics: Metrics):
 
 
 def test_grafana_dashboards_have_min_panels():
-    dash_dir = Path(__file__).resolve().parents[1] / "grafana" / "dashboards"
+    dash_dir = Path(__file__).resolve().parents[2] / "grafana" / "dashboards"
     for name in ("system.json", "strategy.json", "execution.json"):
         data = json.loads((dash_dir / name).read_text(encoding="utf-8"))
         assert len(data["panels"]) >= 4, f"{name} has fewer than 4 panels"
@@ -58,7 +58,7 @@ def test_grafana_dashboards_have_min_panels():
 
 
 def test_loki_labels_doc_present():
-    doc = Path(__file__).resolve().parents[1] / "loki" / "labels.md"
+    doc = Path(__file__).resolve().parents[2] / "loki" / "labels.md"
     text = doc.read_text(encoding="utf-8")
     for required in ("trace_id", "severity", "strategy", "broker"):
         assert required in text

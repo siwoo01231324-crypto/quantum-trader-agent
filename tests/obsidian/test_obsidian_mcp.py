@@ -14,7 +14,7 @@ import pytest
 from services.obsidian_mcp import tools as t
 from services.obsidian_mcp import server as srv
 
-FIXTURE_VAULT = Path(__file__).parent / "fixtures" / "obsidian_vault"
+FIXTURE_VAULT = Path(__file__).parent.parent / "fixtures" / "obsidian_vault"
 
 
 @pytest.fixture

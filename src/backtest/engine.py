@@ -39,6 +39,14 @@ def run_backtest(
     halted = False
     peak_equity = config.initial_cash
 
+    required_factors = list(getattr(strategy, "required_factors", []) or [])
+    if required_factors:
+        from signals.registry import FACTOR_REGISTRY
+
+        unknown = [n for n in required_factors if n not in FACTOR_REGISTRY]
+        if unknown:
+            raise KeyError(f"strategy requires unregistered factors: {unknown}")
+
     strategy.on_init({})
 
     for i in range(len(ohlcv)):
@@ -79,7 +87,17 @@ def run_backtest(
 
         if not halted:
             history = ohlcv.iloc[:i+1]
-            signal = strategy.on_bar(bar, history, {})
+            context: dict = {}
+            if required_factors:
+                from signals.registry import FACTOR_REGISTRY, compute
+
+                factors: dict[str, pd.Series | pd.DataFrame] = {}
+                for name in required_factors:
+                    spec = FACTOR_REGISTRY[name]
+                    kwargs = {col: history[col] for col in spec.inputs if col in history.columns}
+                    factors[name] = compute(name, **kwargs, **spec.default_params)
+                context["factors"] = factors
+            signal = strategy.on_bar(bar, history, context)
 
             if signal.action == "buy" and position == 0:
                 buy_price = bar.close * (1 + config.slippage_pct)

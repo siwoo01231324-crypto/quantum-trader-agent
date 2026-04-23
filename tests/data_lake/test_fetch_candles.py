@@ -15,7 +15,7 @@ import pyarrow.parquet as pq
 import pytest
 import responses as responses_lib
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 from data_lake import OHLCV_SCHEMA
 from data_lake.fetcher import (
@@ -244,7 +244,7 @@ def test_cli_args_parsed_correctly():
     """Validate --symbol, --interval, --start, --end, --output-dir arg parsing."""
     import importlib.util
 
-    script_path = Path(__file__).parent.parent / "scripts" / "fetch_candles.py"
+    script_path = Path(__file__).parent.parent.parent / "scripts" / "fetch_candles.py"
     spec = importlib.util.spec_from_file_location("fetch_candles_mod", script_path)
     mod = importlib.util.module_from_spec(spec)
     # exec_module runs top-level code but main() is guarded by __name__ == "__main__"

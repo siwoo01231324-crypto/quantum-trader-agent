@@ -18,6 +18,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "freezegun",
+    "pandas-ta",
     "pytest>=8.0",
     "pytest-cov",
     "responses>=0.25",
@@ -26,5 +27,8 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src", "."]
-markers = ["integration: requires network/secrets (default skipped)"]
-addopts = "-m 'not integration'"
+markers = [
+    "integration: requires network/secrets (default skipped)",
+    "slow: long-running benchmarks (default skipped; run with -m slow)",
+]
+addopts = "-m 'not integration and not slow'"

@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
 from services.doc_agent.generators import (  # noqa: E402
@@ -20,7 +20,7 @@ from services.doc_agent.generators import (  # noqa: E402
     generate_postmortem_draft,
 )
 
-FIXTURES = Path(__file__).parent / "fixtures" / "doc_agent"
+FIXTURES = Path(__file__).parent.parent / "fixtures" / "doc_agent"
 
 
 def _read_fm(path: Path) -> dict:
