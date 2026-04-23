@@ -1,0 +1,40 @@
+{
+  "strategy": "momo-btc-v2",
+  "data_source": "parquet",
+  "bars": 35041,
+  "period": [
+    "2025-04-23 00:00:00+00:00",
+    "2026-04-23 00:00:00+00:00"
+  ],
+  "runs": [
+    {
+      "mode": "full",
+      "sharpe": -0.1748434827156073,
+      "mdd": 0.05144005181413351,
+      "total_return": -0.011709488523260552,
+      "trades": 34,
+      "win_rate": 0.6470588235294118,
+      "final_equity": 9882.905114767394
+    },
+    {
+      "mode": "half-kelly",
+      "sharpe": -2.2117997960014595,
+      "mdd": 0.05116628018835015,
+      "total_return": -0.04798873443647608,
+      "trades": 24,
+      "win_rate": 0.4166666666666667,
+      "final_equity": 9520.11265563524
+    },
+    {
+      "mode": "vol-target",
+      "sharpe": -0.6661476016856958,
+      "mdd": 0.05096097621956705,
+      "total_return": -0.03061724926804436,
+      "trades": 34,
+      "win_rate": 0.6470588235294118,
+      "final_equity": 9693.827507319556
+    }
+  ],
+  "delta_sharpe_half_vs_full": -2.0369563132858524,
+  "delta_sharpe_voltarg_vs_full": -0.49130411897008847
+}

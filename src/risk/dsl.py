@@ -1,7 +1,7 @@
 """Risk rule DSL — pydantic schema, YAML loader, evaluation function.
 
-Stub implementation: covers per_trade / per_day / per_portfolio / per_position /
-sector_limits / drawdown. Returns first-violation Decision.
+Evaluation returns the first-violation Decision. Full block list and precedence:
+see docs/specs/risk-rule-dsl.md §2.2.
 """
 from __future__ import annotations
 
@@ -11,6 +11,8 @@ from typing import Optional
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, PositiveFloat, PositiveInt
+
+from .portfolio import PortfolioRiskReport
 
 
 class Action(str, Enum):
@@ -43,6 +45,40 @@ class PerPortfolio(_Strict):
     max_leverage: Optional[PositiveFloat] = None
 
 
+class PerPortfolioRisk(_Strict):
+    """Portfolio-level risk thresholds evaluated against Snapshot.portfolio_risk.
+
+    Theory: docs/background/19-portfolio-risk.md
+    - max_cvar_pct: Historical CVaR upper bound (§4.1 FRTB α=0.975)
+    - max_corr_avg: average pairwise correlation upper bound
+    - min_enb_ratio: ENB / N lower bound (§7: ENB >= 0.3·N guideline)
+
+    on_*_breach defaults chosen by rule semantics:
+    - cvar proportional to order size → REDUCE can actually shrink cvar
+    - correlation is a portfolio STATE → single new order cannot improve it → BLOCK
+    - ENB breach = structural diversification failure → HALT for human rebalance
+    """
+    max_cvar_pct: Optional[PositiveFloat] = Field(
+        default=None, lt=1.0,
+        description="Max portfolio CVaR (positive loss fraction). Cite: 19-portfolio-risk.md §4.1",
+    )
+    max_corr_avg: Optional[float] = Field(
+        default=None, ge=-1.0, le=1.0,
+        description="Max allowed average pairwise correlation.",
+    )
+    min_enb_ratio: Optional[PositiveFloat] = Field(
+        default=None, le=1.0,
+        description="Min ENB/N ratio. Guideline: 19-portfolio-risk.md §7 (ENB >= 0.3·N).",
+    )
+    alpha: Optional[float] = Field(
+        default=0.975, gt=0.0, lt=1.0,
+        description="CVaR/VaR alpha. Default 0.975 cites §4.1 Basel III FRTB.",
+    )
+    on_cvar_breach: Action = Action.REDUCE
+    on_corr_breach: Action = Action.BLOCK
+    on_enb_breach: Action = Action.HALT
+
+
 class PerPosition(_Strict):
     max_weight_pct: Optional[PositiveFloat] = Field(default=None, le=100.0)
     max_qty: Optional[PositiveInt] = None
@@ -66,6 +102,7 @@ class Policy(_Strict):
     per_trade: Optional[PerTrade] = None
     per_day: Optional[PerDay] = None
     per_portfolio: Optional[PerPortfolio] = None
+    per_portfolio_risk: Optional[PerPortfolioRisk] = None
     per_position: Optional[PerPosition] = None
     sector_limits: list[SectorLimit] = Field(default_factory=list)
     drawdown: Optional[Drawdown] = None
@@ -99,6 +136,7 @@ class Snapshot(_Strict):
     day_turnover_krw: float = 0.0
     intraday_dd_pct: float = 0.0            # positive number, % drop from intraday peak
     running_dd_pct: float = 0.0
+    portfolio_risk: Optional[PortfolioRiskReport] = None  # injected by periodic evaluator
 
 
 class Decision(_Strict):
@@ -166,6 +204,23 @@ def evaluate(policy: Policy, snap: Snapshot) -> Decision:
             if lev > pp.max_leverage:
                 return _block("per_portfolio.max_leverage",
                               f"leverage {lev:.2f} > {pp.max_leverage}")
+
+    # per_portfolio_risk (periodic-report-gated; no cost when report absent)
+    ppr = policy.per_portfolio_risk
+    rep = snap.portfolio_risk
+    if ppr is not None and rep is not None:
+        if ppr.max_cvar_pct is not None and rep.cvar_pct > ppr.max_cvar_pct:
+            return Decision(action=ppr.on_cvar_breach,
+                            rule_id="per_portfolio_risk.max_cvar_pct",
+                            message=f"cvar {rep.cvar_pct:.4f} > {ppr.max_cvar_pct:.4f}")
+        if ppr.max_corr_avg is not None and rep.corr_avg > ppr.max_corr_avg:
+            return Decision(action=ppr.on_corr_breach,
+                            rule_id="per_portfolio_risk.max_corr_avg",
+                            message=f"corr_avg {rep.corr_avg:.3f} > {ppr.max_corr_avg:.3f}")
+        if ppr.min_enb_ratio is not None and rep.enb_ratio < ppr.min_enb_ratio:
+            return Decision(action=ppr.on_enb_breach,
+                            rule_id="per_portfolio_risk.min_enb_ratio",
+                            message=f"enb_ratio {rep.enb_ratio:.3f} < {ppr.min_enb_ratio:.3f}")
 
     # per_position
     pos = policy.per_position

@@ -19,6 +19,11 @@ tags: []
 4. **검증 우선**: pydantic으로 파싱 단계에서 type/range 검증.
 5. **중립적 평가**: `evaluate(policy, snapshot) -> Decision` 시그니처 고정.
 
+### 2.2 평가 순서 (first-violation-wins, #70)
+`per_trade → per_day → per_portfolio → per_portfolio_risk → per_position → sector_limits → drawdown`
+
+`per_portfolio_risk` 는 `Snapshot.portfolio_risk` 가 주입된 경우에만 동작 (주기 평가기 경로). 미주입 스냅샷에서는 no-op 이라 per-order 핫패스 비용 0.
+
 ## 3. YAML 스키마 (요약)
 
 ```yaml
@@ -36,10 +41,19 @@ per_day:                         # 일일 집계
   max_loss_krw: 500_000          # 일일 실현 손실 한도 (양수 입력)
   max_turnover_krw: 50_000_000   # 일일 거래대금 한도
 
-per_portfolio:                   # 계좌 전체
+per_portfolio:                   # 계좌 전체 (주문 흐름 제약)
   max_gross_exposure_krw: 100_000_000
   max_net_exposure_krw: 50_000_000
   max_leverage: 1.5              # gross / equity
+
+per_portfolio_risk:              # 포트폴리오 상태 (주기 평가, #70)
+  max_cvar_pct: 0.08             # Historical CVaR(α) 상한, positive loss fraction
+  max_corr_avg: 0.80             # 평균 pairwise 상관 상한
+  min_enb_ratio: 0.3             # ENB/N 하한 (19-portfolio-risk §7)
+  alpha: 0.975                   # CVaR/VaR α (Basel III FRTB)
+  on_cvar_breach: reduce         # CVaR∝주문크기 → REDUCE
+  on_corr_breach: block          # state → 신규만 BLOCK
+  on_enb_breach: halt            # 구조 문제 → 사람 개입 필요
 
 per_position:                    # 종목 단위
   max_weight_pct: 10.0           # 단일 종목 비중 (%)
@@ -100,13 +114,26 @@ Snapshot(account, position, intent_order, daily_pnl, ...)
 ## 7. 운영 규칙
 - **편집은 PR 필수** — 정책은 코드와 동일하게 리뷰.
 - **핫스왑 금지** — 라이브 중 정책 변경은 reload API로만 (감사 로그 남김).
-- **breach 로그** — 모든 block/reduce/halt는 observability 채널로 forward.
+- **breach 로그** — 모든 block/reduce/halt는 observability 채널로 forward. `Decision.message` 는 `"<metric> <value> > <threshold>"` (혹은 `< threshold`) 포맷을 유지해야 감사 로그 파싱이 깨지지 않는다.
 - **테스트 필수** — 새 룰 추가 시 valid/invalid YAML + breach 케이스 단위 테스트.
 
+### 7.1 rule_id 라벨 공간 (Prometheus `qta_risk_breach_total{rule_id=...}`)
+기존 + #70 포트폴리오 리스크 라벨 (출처: [[19-portfolio-risk]]):
+
+- `per_trade.max_notional_krw`, `per_trade.max_qty`, `per_trade.allowed_sides`
+- `per_day.max_orders`, `per_day.max_loss_krw`, `per_day.max_turnover_krw`
+- `per_portfolio.max_gross_exposure_krw`, `per_portfolio.max_leverage`
+- `per_portfolio_risk.max_cvar_pct` — Historical CVaR(α=0.975) 상한, 기본 action `REDUCE`
+- `per_portfolio_risk.max_corr_avg` — 평균 pairwise ρ 상한, 기본 action `BLOCK`
+- `per_portfolio_risk.min_enb_ratio` — ENB/N 하한 ([[19-portfolio-risk]] §7), 기본 action `HALT`
+- `per_position.max_qty`, `per_position.max_weight_pct`
+- `sector_limits.<sector>`
+- `drawdown.max_intraday_dd_pct`, `drawdown.max_running_dd_pct`
+
 ## 8. 로드맵
-- v1 (현재): 위 5개 카테고리 + drawdown.
-- v2: 변동성 기반 동적 한도 (ATR×k 등).
-- v3: 시간대별 한도 (장 마감 30분 전 ½).
+- v1: per_trade/day/portfolio/position + sector_limits + drawdown.
+- **v2 (delivered #70)**: 포트폴리오 레벨 CVaR·평균 ρ·ENB — `per_portfolio_risk` 블록, `Snapshot.portfolio_risk` 주입, `src/risk/portfolio.py` 순수함수.
+- v3: 변동성 기반 동적 한도 (ATR×k 등) · 시간대별 한도 · 팩터 노출 ([[19-portfolio-risk]] §5).
 
 ## 9. 관련 노트
 
