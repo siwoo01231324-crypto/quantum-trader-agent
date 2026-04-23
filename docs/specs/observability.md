@@ -31,6 +31,19 @@ tags: []
 | 8 | `qta_kill_switch_state` | gauge | reason | 1=triggered |
 | 9 | `qta_strategy_signal_total` | counter | strategy, signal | 알파 시그널 발생 |
 | 10 | `qta_risk_breach_total` | counter | rule, severity | 리스크 룰 위반 |
+| 11 | `qta_open_orders` | gauge | broker, symbol | 현재 미체결 주문 수 |
+
+### 2.2 broker 라벨 표준값
+
+`broker` 라벨은 `BrokerAdapter.name` 값과 일치해야 한다.
+
+| 브로커 | `broker` 라벨 값 |
+|--------|-----------------|
+| Binance USDS-M Futures | `"binance_futures"` |
+| 한국투자증권 (KIS) | `"kis"` |
+| OrderRouter (위임) | 내부 `active.name` 위임 — Router 자체는 라벨에 노출하지 않음 |
+
+`symbol` 라벨: Binance는 `"BTCUSDT"` 형식, KIS는 종목코드 `"005930"` 형식. 화이트리스트 종목만 허용 (고카디널리티 방지).
 
 ## 3. Grafana 대시보드 (3종)
 각각 최소 4패널 이상.

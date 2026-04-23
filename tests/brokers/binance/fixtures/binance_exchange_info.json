@@ -1,0 +1,22 @@
+{
+  "symbols": [
+    {
+      "symbol": "BTCUSDT",
+      "filters": [
+        {"filterType": "PRICE_FILTER", "tickSize": "0.10"},
+        {"filterType": "LOT_SIZE", "stepSize": "0.0010", "minQty": "0.0010"},
+        {"filterType": "MIN_NOTIONAL", "notional": "5"},
+        {"filterType": "PERCENT_PRICE", "multiplierUp": "1.0500", "multiplierDown": "0.9500"}
+      ]
+    },
+    {
+      "symbol": "ETHUSDT",
+      "filters": [
+        {"filterType": "PRICE_FILTER", "tickSize": "0.01"},
+        {"filterType": "LOT_SIZE", "stepSize": "0.010", "minQty": "0.010"},
+        {"filterType": "MIN_NOTIONAL", "notional": "5"},
+        {"filterType": "PERCENT_PRICE", "multiplierUp": "1.0500", "multiplierDown": "0.9500"}
+      ]
+    }
+  ]
+}
