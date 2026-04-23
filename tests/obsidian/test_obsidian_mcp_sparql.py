@@ -16,7 +16,7 @@ import responses as responses_lib
 import services.obsidian_mcp.tools as mod
 from services.obsidian_mcp.tools import VaultContext, sparql
 
-FIXTURE_VAULT = Path(__file__).parent / "fixtures" / "obsidian_vault"
+FIXTURE_VAULT = Path(__file__).parent.parent / "fixtures" / "obsidian_vault"
 
 SELECT_QUERY = """
 PREFIX qta: <https://siwoo.dev/qta/ontology#>

@@ -12,8 +12,8 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 
 # ---------------------------------------------------------------------------
@@ -79,7 +79,7 @@ def _create_strategy_md(tmp_path: Path) -> Path:
 def test_cli_loads_strategy_by_name():
     """--strategy momo-btc-v2 -> loads MomoBtcV2 class."""
     import importlib.util
-    script_path = Path(__file__).parent.parent / "scripts" / "run_backtest.py"
+    script_path = Path(__file__).parent.parent.parent / "scripts" / "run_backtest.py"
     spec = importlib.util.spec_from_file_location("run_backtest_mod", script_path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)

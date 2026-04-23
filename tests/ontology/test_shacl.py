@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 FIXTURE_DIR = REPO_ROOT / "tests" / "fixtures" / "shacl"
 SHAPES_TTL = REPO_ROOT / "docs" / "ontology" / "shapes.ttl"
 ONTOLOGY_TTL = REPO_ROOT / "docs" / "ontology" / "trading.ttl"
