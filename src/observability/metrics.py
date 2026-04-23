@@ -17,6 +17,7 @@ METRIC_NAMES = [
     "qta_kill_switch_state",
     "qta_strategy_signal_total",
     "qta_risk_breach_total",
+    "qta_open_orders",
 ]
 
 
@@ -82,6 +83,12 @@ class Metrics:
             "qta_risk_breach_total",
             "Risk rule breaches",
             labelnames=("rule", "severity"),
+            registry=self.registry,
+        )
+        self.open_orders = Gauge(
+            "qta_open_orders",
+            "Current open order count",
+            labelnames=("broker", "symbol"),
             registry=self.registry,
         )
 

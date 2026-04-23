@@ -13,8 +13,11 @@ class Side(str, Enum):
 
 class TimeInForce(str, Enum):
     DAY = "DAY"
+    GTC = "DAY"   # alias: GTC maps to DAY (exchange-agnostic default)
     IOC = "IOC"
     FOK = "FOK"
+    GTX = "GTX"   # post-only (Binance Futures)
+    GTD = "GTD"   # good-till-date (Binance Futures)
 
 
 @dataclass
