@@ -4,7 +4,7 @@ on:
   pull_request:
     paths:
       - "services/obsidian_mcp/**"
-      - "tests/test_obsidian_mcp.py"
+      - "tests/obsidian/test_obsidian_mcp.py"
       - "tests/fixtures/obsidian_vault/**"
       - "docs/.obsidian/mcp-config.json"
       - ".github/workflows/mcp-smoke.yml"
@@ -12,7 +12,7 @@ on:
     branches: [master, main]
     paths:
       - "services/obsidian_mcp/**"
-      - "tests/test_obsidian_mcp.py"
+      - "tests/obsidian/test_obsidian_mcp.py"
 
 jobs:
   smoke:
@@ -38,4 +38,4 @@ jobs:
         run: python -m services.obsidian_mcp.server --selftest --vault-root tests/fixtures/obsidian_vault
 
       - name: Pytest
-        run: pytest tests/test_obsidian_mcp.py -q
+        run: pytest tests/obsidian/test_obsidian_mcp.py -q

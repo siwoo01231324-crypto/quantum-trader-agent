@@ -8,9 +8,9 @@ on:
       - 'scripts/graphdb_client.py'
       - 'services/obsidian_mcp/**'
       - 'infra/graphdb/**'
-      - 'tests/test_graphdb_bootstrap.py'
-      - 'tests/test_ontology_sync_push.py'
-      - 'tests/test_obsidian_mcp_sparql.py'
+      - 'tests/ontology/test_graphdb_bootstrap.py'
+      - 'tests/ontology/test_ontology_sync_push.py'
+      - 'tests/obsidian/test_obsidian_mcp_sparql.py'
       - '.github/workflows/graphdb-smoke.yml'
   workflow_dispatch: {}
 
@@ -78,5 +78,5 @@ jobs:
         env:
           QTA_SPARQL_ENDPOINT: ""
         run: |
-          pytest tests/test_graphdb_bootstrap.py tests/test_ontology_sync_push.py \
-                 tests/test_obsidian_mcp_sparql.py tests/test_ontology_roundtrip.py -v
+          pytest tests/ontology/test_graphdb_bootstrap.py tests/ontology/test_ontology_sync_push.py \
+                 tests/obsidian/test_obsidian_mcp_sparql.py tests/ontology/test_ontology_roundtrip.py -v
