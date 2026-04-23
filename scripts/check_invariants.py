@@ -130,6 +130,22 @@ def check_drafts_on_main() -> list[str]:
     ]
 
 
+FORBIDDEN_PATHS: list[tuple[str, str]] = [
+    (
+        "tests/fixtures/fixtures",
+        "tests/fixtures/ 의 오래된 중복. 실수로 남은 untracked 잔해 — 삭제 필요",
+    ),
+]
+
+
+def check_forbidden_paths() -> list[str]:
+    warnings: list[str] = []
+    for rel, reason in FORBIDDEN_PATHS:
+        if (REPO_ROOT / rel).exists():
+            warnings.append(f"[forbidden-path] {rel}: {reason}")
+    return warnings
+
+
 def check_frontmatter_schema(notes) -> list[str]:
     warnings: list[str] = []
     for path, fm, _body in notes:
@@ -250,6 +266,7 @@ def main() -> int:
     all_warnings += check_ttl_parses()
     all_warnings += check_shacl()
     all_warnings += check_drafts_on_main()
+    all_warnings += check_forbidden_paths()
 
     if all_warnings:
         print(f"[check_invariants] {len(all_warnings)} 경고")
