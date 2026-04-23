@@ -163,21 +163,26 @@ factor_limits:
 
 ## 6. 본 프로젝트 적용 로드맵
 
-1. **v1 (현재)**: [[risk-rule-dsl]] 의 `sector_limits` + drawdown + 개별 종목 비중만. 포트폴리오 리스크는 사람이 모니터링.
-2. **v2 (이 sprint 이후)**:
-   - LW 공분산 추정 → ENB 지표를 [[observability]] 대시보드에 노출
-   - 일간 historical CVaR(97.5%) 계산 → [[12-validation-protocol]] §4 롤백 트리거 연동
+1. **v1 (이전)**: [[risk-rule-dsl]] 의 `sector_limits` + drawdown + 개별 종목 비중만. 포트폴리오 리스크는 사람이 모니터링.
+2. **v2 (delivered #70)**:
+   - [x] LW shrinkage 공분산 추정 (`src/risk/portfolio.py::shrinkage_covariance`)
+   - [x] 일간 historical CVaR(97.5%) (`::historical_cvar`, α cite: §4.1 FRTB)
+   - [x] Meucci ENB + 평균 pairwise ρ (`::effective_number_of_bets`, `::average_pairwise_correlation`)
+   - [x] [[risk-rule-dsl]] `per_portfolio_risk` 블록으로 임계화 (max_cvar_pct · max_corr_avg · min_enb_ratio)
+   - [ ] [[observability]] 대시보드 wiring (별도 PR — `qta_risk_breach_total` 라벨은 [[risk-rule-dsl]] §7.1 에 확정)
+   - [ ] [[12-validation-protocol]] §4 롤백 트리거 연동 (별도 PR)
 3. **v3**:
-   - 팩터 노출 회귀 + `factor_limits` YAML 확장
-   - CVaR 최적화 기반 동적 리밸런스 (월 1회)
+   - [ ] 팩터 노출 회귀 + `factor_limits` YAML 확장 (본 노트 §5)
+   - [ ] CVaR 최적화 기반 동적 리밸런스 (Rockafellar-Uryasev LP, 월 1회)
+   - [ ] EVT tail 보조 추정 (§4.2)
 
 ## 7. 체크리스트 (운영)
 
-- [ ] 공분산 추정: LW shrinkage 고정 (샘플 공분산 금지)
-- [ ] 최소 universe 다변화: ENB ≥ 0.3 × N 유지
-- [ ] 리스크 측정치: CVaR(97.5%) 을 primary, VaR 는 참고용
-- [ ] 팩터 노출: 3-factor 최소, 월 1회 회귀 재추정
-- [ ] 위반 시 [[risk-rule-dsl]] `reduce` 액션 → [[kill-switch-runbook]] 연계
+- [x] 공분산 추정: LW shrinkage 고정 (샘플 공분산 금지) — `src/risk/portfolio.py::shrinkage_covariance` (#70)
+- [x] 최소 universe 다변화: ENB ≥ 0.3 × N 유지 — `per_portfolio_risk.min_enb_ratio` 기본값 0.3 (#70)
+- [x] 리스크 측정치: CVaR(97.5%) 을 primary, VaR 는 참고용 — `historical_cvar(α=0.975)` (#70)
+- [ ] 팩터 노출: 3-factor 최소, 월 1회 회귀 재추정 (v3 예정)
+- [x] 위반 시 [[risk-rule-dsl]] `reduce`/`block`/`halt` 액션 → [[kill-switch-runbook]] 연계 (의미론적 기본 action, #70)
 
 ---
 
