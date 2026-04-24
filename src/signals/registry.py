@@ -29,6 +29,7 @@ class FactorSpec:
     func: Callable[..., Any]
     inputs: list[str]
     default_params: dict[str, Any] = field(default_factory=dict)
+    causal: bool = True
     # Explicit alpha-horizon metadata (US8433645B1 differs: externalized, not engine-embedded)
     alpha_horizon_bars: int = 1
     bar_interval: str = "1d"
@@ -42,6 +43,7 @@ def register(
     name: str,
     *,
     inputs: list[str],
+    causal: bool = True,
     alpha_horizon_bars: int = 1,
     bar_interval: str = "1d",
     signal_type: str = "momentum",
@@ -88,6 +90,7 @@ def register(
             func=func,
             inputs=list(inputs),
             default_params=dict(defaults),
+            causal=causal,
             alpha_horizon_bars=alpha_horizon_bars,
             bar_interval=bar_interval,
             signal_type=signal_type,
