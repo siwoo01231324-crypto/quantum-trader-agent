@@ -9,7 +9,7 @@ import pandas as pd
 from .registry import register
 
 
-@register("realized_vol", inputs=["close"], window=20, annualize=252)
+@register("realized_vol", inputs=["close"], alpha_horizon_bars=20, bar_interval="1d", signal_type="volatility", window=20, annualize=252)
 def compute_realized_vol(
     close: pd.Series,
     window: int = 20,

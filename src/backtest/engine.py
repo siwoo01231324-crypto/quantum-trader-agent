@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 from .protocol import Strategy, Bar, Signal
 from .metrics import compute_all_metrics
+from risk.sizing import kelly_binary, kelly_continuous, ewma_sigma
 
 
 @dataclass
@@ -20,6 +21,37 @@ class BacktestResult:
     equity_curve: pd.Series
     trades: list
     metrics: dict
+
+
+def _resolve_size(signal: Signal, recent_returns: pd.Series) -> float:
+    """Resolve position size from Signal metadata with Signal-wins precedence.
+
+    Precedence:
+    1. signal.expected_return is not None → kelly_continuous(mu=expected_return, sigma)
+       Note: expected_return=0.0 is treated as 0.0 (explicit zero), not fallback.
+    2. signal.win_probability is not None → kelly_binary(p=win_probability, b=1.0)
+    3. Otherwise → 60-bar rolling-mean fallback via kelly_continuous.
+
+    If signal.size is already set and no metadata fields are present (all None),
+    return signal.size unchanged (backward-compatible path).
+    """
+    has_expected_return = signal.expected_return is not None
+    has_win_prob = signal.win_probability is not None
+
+    if not has_expected_return and not has_win_prob:
+        return signal.size
+
+    arr = recent_returns.dropna().values if len(recent_returns) > 0 else np.array([])
+    sigma = ewma_sigma(arr) if len(arr) >= 2 else 0.0
+
+    if has_expected_return:
+        # explicit zero uses 0.0; None would have fallen to fallback above
+        mu = float(signal.expected_return)
+        return kelly_continuous(mu=mu, sigma=sigma)
+
+    # win_probability path
+    p = float(signal.win_probability)
+    return kelly_binary(p=p, b=1.0)
 
 
 def run_backtest(
@@ -115,7 +147,9 @@ def run_backtest(
 
             if signal.action == "buy" and position == 0:
                 buy_price = bar.close * (1 + config.slippage_pct)
-                affordable = cash * signal.size / (buy_price * (1 + config.commission_pct))
+                recent_rets = ohlcv["close"].iloc[max(0, i - 60):i].pct_change().dropna()
+                resolved_size = _resolve_size(signal, recent_rets)
+                affordable = cash * resolved_size / (buy_price * (1 + config.commission_pct))
                 commission = affordable * buy_price * config.commission_pct
                 cash -= affordable * buy_price + commission
                 position = affordable

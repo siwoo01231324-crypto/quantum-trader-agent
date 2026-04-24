@@ -52,6 +52,7 @@ class PerPortfolioRisk(_Strict):
     - max_cvar_pct: Historical CVaR upper bound (§4.1 FRTB α=0.975)
     - max_corr_avg: average pairwise correlation upper bound
     - min_enb_ratio: ENB / N lower bound (§7: ENB >= 0.3·N guideline)
+    - cvar_levels: per-alpha CVaR level specs; evaluated after max_cvar_pct (independent, first-violation-wins)
 
     on_*_breach defaults chosen by rule semantics:
     - cvar proportional to order size → REDUCE can actually shrink cvar
@@ -74,6 +75,16 @@ class PerPortfolioRisk(_Strict):
         default=0.975, gt=0.0, lt=1.0,
         description="CVaR/VaR alpha. Default 0.975 cites §4.1 Basel III FRTB.",
     )
+    cvar_levels: Optional[list[tuple[float, str]]] = Field(
+        default=None,
+        description="Per-alpha CVaR level list [(alpha, label), ...]. "
+                    "Evaluated after max_cvar_pct, first-violation-wins. "
+                    "Breach threshold uses max_cvar_pct per level from snap.cvar_levels.",
+    )
+    # extreme_fear_block: block new buy orders when fear_greed_proxy < extreme_fear_threshold.
+    # Price-only signal; social/macro data intentionally excluded (patent-avoidance).
+    extreme_fear_block: Optional[bool] = None
+    extreme_fear_threshold: Optional[float] = Field(default=0.2, ge=0.0, le=1.0)
     on_cvar_breach: Action = Action.REDUCE
     on_corr_breach: Action = Action.BLOCK
     on_enb_breach: Action = Action.HALT
@@ -137,6 +148,9 @@ class Snapshot(_Strict):
     intraday_dd_pct: float = 0.0            # positive number, % drop from intraday peak
     running_dd_pct: float = 0.0
     portfolio_risk: Optional[PortfolioRiskReport] = None  # injected by periodic evaluator
+    # Price-based fear/greed proxy: current_price / rolling_max(window).
+    # Intentionally excludes social-sentiment and macro data (patent-avoidance).
+    fear_greed_proxy: Optional[float] = Field(default=None, ge=0.0, le=1.0)
 
 
 class Decision(_Strict):
@@ -209,10 +223,26 @@ def evaluate(policy: Policy, snap: Snapshot) -> Decision:
     ppr = policy.per_portfolio_risk
     rep = snap.portfolio_risk
     if ppr is not None and rep is not None:
+        # max_cvar_pct checked first (independent of cvar_levels)
         if ppr.max_cvar_pct is not None and rep.cvar_pct > ppr.max_cvar_pct:
             return Decision(action=ppr.on_cvar_breach,
                             rule_id="per_portfolio_risk.max_cvar_pct",
                             message=f"cvar {rep.cvar_pct:.4f} > {ppr.max_cvar_pct:.4f}")
+        # cvar_levels: sequential per-level check, first-violation-wins
+        # Breach threshold is ppr.max_cvar_pct applied to each level's cvar_pct in snap.
+        if (ppr.cvar_levels is not None and ppr.max_cvar_pct is not None
+                and rep.cvar_levels is not None):
+            for _alpha, label in ppr.cvar_levels:
+                level_entry = rep.cvar_levels.get(label)
+                if level_entry is None:
+                    continue
+                level_cvar = level_entry.get("cvar_pct", 0.0)
+                if level_cvar > ppr.max_cvar_pct:
+                    return Decision(
+                        action=ppr.on_cvar_breach,
+                        rule_id=f"per_portfolio_risk.cvar_levels.{label}",
+                        message=f"cvar_levels[{label}] {level_cvar:.4f} > {ppr.max_cvar_pct:.4f}",
+                    )
         if ppr.max_corr_avg is not None and rep.corr_avg > ppr.max_corr_avg:
             return Decision(action=ppr.on_corr_breach,
                             rule_id="per_portfolio_risk.max_corr_avg",
@@ -221,6 +251,17 @@ def evaluate(policy: Policy, snap: Snapshot) -> Decision:
             return Decision(action=ppr.on_enb_breach,
                             rule_id="per_portfolio_risk.min_enb_ratio",
                             message=f"enb_ratio {rep.enb_ratio:.3f} < {ppr.min_enb_ratio:.3f}")
+
+    # extreme_fear_block: price-based fear proxy gate, independent of portfolio_risk report.
+    # Blocks new buy orders only; sell orders are not gated (avoids forced liquidation during panic).
+    if ppr is not None and ppr.extreme_fear_block:
+        threshold = ppr.extreme_fear_threshold if ppr.extreme_fear_threshold is not None else 0.2
+        if snap.fear_greed_proxy is not None and snap.fear_greed_proxy < threshold:
+            if intent.side == "buy":
+                return _block(
+                    "per_portfolio_risk.extreme_fear_block",
+                    f"fear_greed_proxy {snap.fear_greed_proxy:.3f} < {threshold:.3f} (buy blocked)",
+                )
 
     # per_position
     pos = policy.per_position

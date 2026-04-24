@@ -53,6 +53,7 @@ REQUIRED_FIELDS: dict[str, list[str]] = {
     "onboarding": ["type", "id", "name"],
     "whitepaper": ["type", "id", "name", "version"],
     "work-done": ["type", "id", "name", "status"],
+    "work-plan": ["type"],  # planning docs — minimal validation
 }
 
 # 필수 필드 중 "비어 있어도 허용" 하는 필드 (빈 리스트 등).
@@ -181,7 +182,10 @@ def _strip_code(body: str) -> str:
 def check_wikilinks(notes) -> list[str]:
     warnings: list[str] = []
     known_ids = {str(fm.get("id")) for _, fm, _ in notes if fm.get("id")}
-    for path, _fm, body in notes:
+    for path, fm, body in notes:
+        # work-plan docs contain forward-references to specs not yet created — skip wikilink check
+        if fm.get("type") == "work-plan":
+            continue
         clean = _strip_code(body)
         for m in WIKILINK_RE.finditer(clean):
             target = m.group(1).strip()
@@ -246,6 +250,77 @@ def check_ttl_parses() -> list[str]:
     return warnings
 
 
+_KNOWN_LLM_IMPORTS: frozenset[str] = frozenset({
+    "anthropic", "openai", "langchain", "langchain_community",
+    "httpx.AsyncClient", "litellm",
+    "cohere", "mistralai", "google.generativeai", "vertexai",
+    "replicate", "ollama", "boto3",
+})
+
+# Files that MUST contain specific patent citation strings.
+_PATENT_CITATION_REQUIREMENTS: list[tuple[str, list[str]]] = [
+    ("src/signals/registry.py", ["US8433645B1", "differs:"]),
+    ("src/portfolio/orchestrator.py", ["KR101139626B1", "differs:"]),
+    ("src/signals/neutralize.py", ["US20140081889A1", "abandoned"]),
+    ("src/backtest/protocol.py", []),  # no patent cite required on Signal itself
+]
+
+# Keyword-tripwire over 13-entry _KNOWN_LLM_IMPORTS frozenset only;
+# `from my_llm_wrapper import classify` would pass.
+# AST-based semantic check deferred to separate follow-up issue.
+
+
+def _check_llm_delegation(root: Path) -> list[str]:
+    """Scan src/{backtest,risk,signals,portfolio}/**/*.py for top-level LLM imports.
+
+    Also enforces patent citation strings in named files.
+
+    Limitation docstring: Keyword-tripwire over 13-entry _KNOWN_LLM_IMPORTS frozenset only;
+    `from my_llm_wrapper import classify` would pass. AST-based semantic check deferred
+    to separate follow-up issue.
+    """
+    warnings: list[str] = []
+    scan_dirs = ["backtest", "risk", "signals", "portfolio"]
+
+    for subdir in scan_dirs:
+        target = root / "src" / subdir
+        if not target.exists():
+            continue
+        for py_file in sorted(target.rglob("*.py")):
+            try:
+                source = py_file.read_text(encoding="utf-8", errors="replace")
+            except Exception:
+                continue
+            for lineno, line in enumerate(source.splitlines(), 1):
+                stripped = line.strip()
+                if not (stripped.startswith("import ") or stripped.startswith("from ")):
+                    continue
+                for kw in _KNOWN_LLM_IMPORTS:
+                    if kw in stripped:
+                        rel = py_file.relative_to(root)
+                        warnings.append(
+                            f"[llm-delegation] {rel}:{lineno}: LLM import detected: {stripped!r}"
+                        )
+                        break
+
+    # Enforce patent citation strings in specific files
+    for rel_path, required_strings in _PATENT_CITATION_REQUIREMENTS:
+        target_file = root / rel_path
+        if not target_file.exists():
+            continue
+        try:
+            content = target_file.read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            continue
+        for req_str in required_strings:
+            if req_str not in content:
+                warnings.append(
+                    f"[patent-cite] {rel_path}: required citation string {req_str!r} not found"
+                )
+
+    return warnings
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="아키텍처 불변식 검증")
     parser.add_argument("--strict", action="store_true", help="위반 시 exit 1")
@@ -267,6 +342,7 @@ def main() -> int:
     all_warnings += check_shacl()
     all_warnings += check_drafts_on_main()
     all_warnings += check_forbidden_paths()
+    all_warnings += _check_llm_delegation(REPO_ROOT)
 
     if all_warnings:
         print(f"[check_invariants] {len(all_warnings)} 경고")

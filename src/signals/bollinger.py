@@ -7,7 +7,7 @@ import pandas as pd
 from .registry import register
 
 
-@register("bollinger", inputs=["close"], window=20, n_std=2.0)
+@register("bollinger", inputs=["close"], alpha_horizon_bars=5, bar_interval="1d", signal_type="mean_reversion", window=20, n_std=2.0)
 def compute_bollinger(
     close: pd.Series,
     window: int = 20,

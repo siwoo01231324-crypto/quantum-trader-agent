@@ -139,3 +139,82 @@ def test_rsi_registered_after_import():
     spec = FACTOR_REGISTRY["rsi"]
     assert spec.inputs == ["close"]
     assert spec.default_params.get("period") == 14 or spec.default_params.get("window") == 14
+
+
+def test_factorspec_has_alpha_horizon_bars_and_bar_interval():
+    """FactorSpec must expose alpha_horizon_bars and bar_interval fields (issue #76 D3)."""
+    from signals.registry import register, FACTOR_REGISTRY
+
+    @register("test_horizon", inputs=["close"], alpha_horizon_bars=5, bar_interval="1d", signal_type="momentum")
+    def _fn(close: pd.Series) -> pd.Series:
+        return close
+
+    spec = FACTOR_REGISTRY["test_horizon"]
+    assert spec.alpha_horizon_bars == 5
+    assert spec.bar_interval == "1d"
+    assert spec.signal_type == "momentum"
+
+
+def test_register_rejects_unknown_bar_interval():
+    """@register must raise ValueError at decoration time for unknown bar_interval."""
+    from signals.registry import register
+
+    with pytest.raises(ValueError, match="bar_interval"):
+        @register("bad_bar", inputs=["close"], bar_interval="2h")
+        def _fn(close: pd.Series) -> pd.Series:
+            return close
+
+
+def test_register_rejects_unknown_signal_type():
+    """@register must raise ValueError at decoration time for unknown signal_type."""
+    from signals.registry import register
+
+    with pytest.raises(ValueError, match="signal_type"):
+        @register("bad_type", inputs=["close"], signal_type="unknown_xyz")
+        def _fn(close: pd.Series) -> pd.Series:
+            return close
+
+
+def test_bar_interval_closed_vocabulary_all_valid():
+    """All 8 valid bar_interval values must be accepted."""
+    from signals.registry import register, FACTOR_REGISTRY
+
+    valid = ["1m", "5m", "15m", "30m", "1h", "4h", "1d", "1w"]
+    for interval in valid:
+        name = f"test_interval_{interval.replace('m', 'min').replace('h', 'hr').replace('d', 'day').replace('w', 'wk')}"
+        @register(name, inputs=["close"], bar_interval=interval)
+        def _fn(close: pd.Series) -> pd.Series:
+            return close
+        assert FACTOR_REGISTRY[name].bar_interval == interval
+
+
+def test_rsi_has_correct_metadata_after_import():
+    """rsi factor must have correct alpha_horizon_bars=5, bar_interval='1d', signal_type='mean_reversion'."""
+    import signals  # noqa: F401
+    from signals.registry import FACTOR_REGISTRY
+
+    spec = FACTOR_REGISTRY["rsi"]
+    assert spec.alpha_horizon_bars == 5
+    assert spec.bar_interval == "1d"
+    assert spec.signal_type == "mean_reversion"
+
+
+def test_7_factors_have_explicit_metadata():
+    """All 7 standard factors must have explicit bar_interval and signal_type after import."""
+    import signals  # noqa: F401
+    from signals.registry import FACTOR_REGISTRY
+
+    expected = {
+        "rsi": (5, "1d", "mean_reversion"),
+        "sma": (10, "1d", "trend"),
+        "sma_cross": (10, "1d", "trend"),
+        "atr": (1, "1d", "volatility"),
+        "macd": (10, "1d", "momentum"),
+        "bollinger": (5, "1d", "mean_reversion"),
+        "realized_vol": (20, "1d", "volatility"),
+    }
+    for name, (bars, interval, stype) in expected.items():
+        spec = FACTOR_REGISTRY[name]
+        assert spec.alpha_horizon_bars == bars, f"{name}: expected alpha_horizon_bars={bars}"
+        assert spec.bar_interval == interval, f"{name}: expected bar_interval={interval!r}"
+        assert spec.signal_type == stype, f"{name}: expected signal_type={stype!r}"

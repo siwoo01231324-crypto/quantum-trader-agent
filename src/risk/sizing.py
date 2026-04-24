@@ -151,6 +151,79 @@ def vol_target(
     return _clamp_unit(w)
 
 
+def consensus_kelly(
+    full_kelly: float,
+    signal_agreement: float,
+    k_base: float = 0.5,
+    k_max: float = 0.75,
+) -> float:
+    """Kelly fraction scaled by multi-signal agreement.
+
+    Effective multiplier k = k_base + signal_agreement * (k_max - k_base),
+    then delegates to fractional_kelly(full_kelly, k).
+
+    At zero agreement the position defaults to half-Kelly (conservative).
+    At full agreement it scales up to k_max (still fractional — not full Kelly).
+
+    Reference: docs/background/20-position-sizing.md §P5 (consensus Kelly).
+
+    Args:
+        full_kelly: raw Kelly fraction (e.g., from kelly_binary / kelly_continuous).
+        signal_agreement: fraction of agreeing signals in [0, 1].
+            0 = no consensus, 1 = unanimous agreement.
+        k_base: Kelly multiplier when agreement == 0. Default 0.5 (Half Kelly).
+        k_max: Kelly multiplier when agreement == 1. Default 0.75.
+
+    Returns:
+        Scaled Kelly fraction clamped to [0, 1].
+
+    Raises:
+        ValueError: signal_agreement not in [0, 1] or k_base >= k_max.
+    """
+    if not 0.0 <= signal_agreement <= 1.0:
+        raise ValueError(
+            f"signal_agreement must be in [0, 1], got {signal_agreement}"
+        )
+    if k_base >= k_max:
+        raise ValueError(
+            f"k_base must be < k_max, got {k_base} >= {k_max}"
+        )
+    effective_k = k_base + signal_agreement * (k_max - k_base)
+    return fractional_kelly(full_kelly, effective_k)
+
+
+def user_risk_vol_target(
+    risk_score: float,
+    vol_floor: float = 0.05,
+    vol_ceil: float = 0.20,
+) -> float:
+    """Map a user risk preference score to a volatility target.
+
+    Linear interpolation: vol = vol_floor + risk_score * (vol_ceil - vol_floor).
+
+    Reference: docs/background/20-position-sizing.md §R1 (risk_score parametric).
+
+    Args:
+        risk_score: user risk preference in [0, 1]. 0 = most conservative,
+            1 = most aggressive.
+        vol_floor: minimum annualised vol target (default 5%).
+        vol_ceil: maximum annualised vol target (default 20%).
+
+    Returns:
+        Annualised volatility target in [vol_floor, vol_ceil].
+
+    Raises:
+        ValueError: risk_score not in [0, 1] or vol_floor >= vol_ceil.
+    """
+    if not 0.0 <= risk_score <= 1.0:
+        raise ValueError(f"risk_score must be in [0, 1], got {risk_score}")
+    if vol_floor >= vol_ceil:
+        raise ValueError(
+            f"vol_floor must be < vol_ceil, got {vol_floor} >= {vol_ceil}"
+        )
+    return vol_floor + risk_score * (vol_ceil - vol_floor)
+
+
 def ewma_sigma(
     returns: Sequence[float] | pd.Series | np.ndarray,
     lam: float = 0.94,

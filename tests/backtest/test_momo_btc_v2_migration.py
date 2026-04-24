@@ -15,7 +15,7 @@ from typing import Literal
 from backtest.engine import BacktestConfig, run_backtest
 from backtest.protocol import Bar, Signal
 from backtest.strategies.momo_btc_v2 import MomoBtcV2
-from risk.sizing import ewma_sigma, fractional_kelly, kelly_continuous, vol_target
+from risk.sizing import consensus_kelly, ewma_sigma, fractional_kelly, kelly_continuous, vol_target
 from signals.rsi import compute_rsi, detect_divergence
 
 SizingMode = Literal["full", "half-kelly", "vol-target"]
@@ -26,7 +26,11 @@ SizingMode = Literal["full", "half-kelly", "vol-target"]
 # ---------------------------------------------------------------------------
 
 class _LegacyMomoBtcV2:
-    """마이그레이션 전 momo_btc_v2 스냅샷 — 직접 compute_rsi 호출 방식."""
+    """마이그레이션 전 momo_btc_v2 스냅샷 — 직접 compute_rsi 호출 방식.
+
+    #87 (Signal 인터페이스 확장 + consensus_kelly + confidence) 반영 후 기준.
+    현재 MomoBtcV2 와 유일한 차이: `rsi` 소스 (compute_rsi 직접 vs context 훅).
+    """
 
     RSI_PERIOD: int = 14
     LOOKBACK: int = 14
@@ -40,6 +44,10 @@ class _LegacyMomoBtcV2:
         target_annual: float = 0.20,
         periods_per_year: int = 365 * 96,
         ewma_lam: float = 0.94,
+        use_consensus_kelly: bool = False,
+        signal_agreement: float = 0.0,
+        consensus_k_base: float = 0.5,
+        consensus_k_max: float = 0.75,
     ) -> None:
         if sizing_lookback < 2:
             raise ValueError(f"sizing_lookback must be >= 2, got {sizing_lookback}")
@@ -49,9 +57,23 @@ class _LegacyMomoBtcV2:
         self.target_annual = target_annual
         self.periods_per_year = periods_per_year
         self.ewma_lam = ewma_lam
+        self.use_consensus_kelly = use_consensus_kelly
+        self.signal_agreement = signal_agreement
+        self.consensus_k_base = consensus_k_base
+        self.consensus_k_max = consensus_k_max
 
     def on_init(self, context: dict) -> None:
         pass
+
+    def _compute_confidence(
+        self,
+        div_magnitude: float,
+        atr: float,
+        bars_since_pivot: int,
+    ) -> float:
+        if atr <= 0.0:
+            return 0.0
+        return max(0.0, min(1.0, abs(div_magnitude) / atr * min(bars_since_pivot / self.LOOKBACK, 1.0)))
 
     def _entry_size(self, close: pd.Series) -> float:
         if self.sizing_mode == "full":
@@ -64,6 +86,13 @@ class _LegacyMomoBtcV2:
         if self.sizing_mode == "half-kelly":
             mu = float(returns.mean())
             full = kelly_continuous(mu=mu, sigma=sigma)
+            if self.use_consensus_kelly:
+                return consensus_kelly(
+                    full,
+                    self.signal_agreement,
+                    k_base=self.consensus_k_base,
+                    k_max=self.consensus_k_max,
+                )
             return fractional_kelly(full, k=self.kelly_k)
         if self.sizing_mode == "vol-target":
             return vol_target(
@@ -87,7 +116,27 @@ class _LegacyMomoBtcV2:
             size = self._entry_size(close)
             if size <= 0.0:
                 return Signal(action="hold", size=0.0, reason="bullish divergence (sized=0)")
-            return Signal(action="buy", size=size, reason="bullish divergence")
+
+            window = close.iloc[-(self.sizing_lookback + 1):]
+            returns = window.pct_change().dropna()
+            mu_hat = float(returns.mean()) if len(returns) >= 2 else 0.0
+
+            from signals.atr import compute_atr
+            atr_series = compute_atr(history["high"], history["low"], close)
+            atr_val = float(atr_series.iloc[-1]) if not atr_series.empty else 0.0
+            div_magnitude = float(close.iloc[-1] - close.iloc[-self.LOOKBACK - 1])
+            recent_div = div.iloc[-self.LOOKBACK:]
+            bullish_indices = [i for i, v in enumerate(recent_div) if v == "bullish"]
+            bars_since_pivot = (len(recent_div) - bullish_indices[0]) if bullish_indices else self.LOOKBACK
+            conf = self._compute_confidence(div_magnitude, atr_val, bars_since_pivot)
+
+            return Signal(
+                action="buy",
+                size=size,
+                reason="bullish divergence",
+                expected_return=mu_hat,
+                confidence=conf,
+            )
         elif latest == "bearish":
             return Signal(action="sell", size=1.0, reason="bearish divergence")
         return Signal(action="hold", size=0.0, reason="no signal")

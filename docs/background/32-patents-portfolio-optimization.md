@@ -340,3 +340,5 @@ sources:
 - International Business Machines Corporation (2023). *Hierarchical portfolio optimization using clustering and near-term quantum computers.* US11562281B2. https://patents.google.com/patent/US11562281B2/en
 - American International Group Inc / Validus Holdings Ltd (2020). *Portfolio Optimization and Evaluation Tool.* US10664914B2. https://patents.google.com/patent/US10664914B2/en
 - 우리투자증권 주식회사 (2012). *운용 프로세스에 기반한 포트폴리오 리스크 평가 방법.* KR101139626B1. https://patents.google.com/patent/KR101139626B1/en
+
+adopted in #76 with differentiated formula — see [[signal-interface]]

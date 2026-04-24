@@ -13,13 +13,20 @@ Out of scope (issue #78 will add):
 - OrderIntent emission batch + idempotency-key threading
 
 Not callable from LLM tool surface (CLAUDE.md invariant #6).
+
+Patent-avoidance: compute_fear_greed_proxy uses price-only rolling-max ratio.
+업리치 특허 R2 의 가격 컴포넌트만 단순 차용. 소셜 감성·거시경제 크롤링 요소 의도적 배제.
 """
 from __future__ import annotations
 
+import logging
+import math
 from datetime import datetime
 from typing import Optional
 
+import numpy as np
 import pandas as pd
+from scipy import stats
 
 from risk import (
     Policy,
@@ -30,6 +37,35 @@ from risk import (
     PortfolioRiskReport,
     compute_portfolio_risk_from_df,
 )
+
+logger = logging.getLogger(__name__)
+
+
+def _clamp01(x: float) -> float:
+    return max(0.0, min(1.0, x))
+
+
+def compute_fear_greed_proxy(price_history: pd.Series, window: int = 252) -> float:
+    """Price-based fear/greed proxy: current_price / rolling_max(window).
+
+    Returns a value in [0.0, 1.0] where 1.0 means current price is at its
+    rolling high (greed) and values near 0.0 indicate extreme fear.
+
+    Args:
+        price_history: pd.Series of prices (positive, most recent last).
+        window: rolling lookback period in bars. Default 252 (≈1 trading year).
+
+    Returns:
+        Float in [0.0, 1.0].
+    """
+    if price_history.empty:
+        return 0.0
+    rolling_max = price_history.rolling(window=window, min_periods=1).max()
+    latest_price = float(price_history.iloc[-1])
+    latest_max = float(rolling_max.iloc[-1])
+    if latest_max <= 0.0:
+        return 0.0
+    return float(min(latest_price / latest_max, 1.0))
 
 
 class StrategyOrchestrator:
@@ -68,6 +104,79 @@ class StrategyOrchestrator:
 
     def registered_strategies(self) -> list[str]:
         return list(self._returns.keys())
+
+    def strategy_reliability_score(self, strategy_id: str) -> float:
+        """Compute a composite reliability score in [0, 1] for a registered strategy.
+
+        Patent reference: KR101139626B1 (우리투자증권, active). differs:
+        multiplicative gate (not KR additive convex). Hard-zero at DD>=20% is
+        discontinuous indicator not recoverable by log-additive decomposition
+        without floor-truncation.
+
+        Formula:
+            reliability = convex_base * drawdown_gate
+
+            convex_base = 0.4*h(T) + 0.4*Phi(t_IR) + 0.2*(1 - CVaR_breach_rate)
+                h(T) = min(T/252, 1) * (1 if T >= 126 else 0.5)
+                t_IR = mean(r) / std(r) * sqrt(T);  T < 20 -> return 0.0 (NaN guard)
+                Phi = scipy.stats.norm.cdf
+                CVaR_breach_rate = rolling 21-day 5% CVaR breach ratio
+
+            drawdown_gate = clip01(1 - max_dd_pct / 0.20)
+
+        Returns 0.0 if strategy_id is not registered or T < 20.
+        """
+        if strategy_id not in self._returns:
+            return 0.0
+
+        r = self._returns[strategy_id].dropna()
+        T = len(r)
+
+        if T < 20:
+            return 0.0
+
+        # h(T): history weight — penalise short track records
+        h = min(T / 252.0, 1.0) * (1.0 if T >= 126 else 0.5)
+
+        # t_IR: information-ratio t-statistic
+        mu = float(r.mean())
+        sigma = float(r.std(ddof=1))
+        if sigma == 0.0:
+            t_IR = 0.0
+        else:
+            t_IR = mu / sigma * math.sqrt(T)
+        phi_t_IR = float(stats.norm.cdf(t_IR))
+
+        # CVaR breach rate: rolling 21-day 5% CVaR, fraction of days that breach it
+        window = 21
+        if T >= window + 1:
+            rolling_cvar = (
+                r.rolling(window)
+                .quantile(0.05)
+            )
+            # breach = day's return is worse than its rolling CVaR threshold
+            breach = (r < rolling_cvar).astype(float)
+            cvar_breach_rate = float(breach.iloc[window:].mean())
+        else:
+            cvar_breach_rate = 0.0
+
+        convex_base = 0.4 * h + 0.4 * phi_t_IR + 0.2 * (1.0 - cvar_breach_rate)
+
+        # Max drawdown gate: hard-zero at DD >= 20%
+        cum = (1.0 + r).cumprod()
+        rolling_max = cum.cummax()
+        drawdowns = (cum - rolling_max) / rolling_max
+        max_dd_pct = float(abs(drawdowns.min()))
+        drawdown_gate = _clamp01(1.0 - max_dd_pct / 0.20)
+
+        score = _clamp01(convex_base * drawdown_gate)
+        logger.info(
+            "portfolio.reliability strategy_id=%s score=%.3f T=%d",
+            strategy_id,
+            score,
+            T,
+        )
+        return score
 
     # ---- risk-side API -----------------------------------------------------
 

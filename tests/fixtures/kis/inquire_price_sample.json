@@ -1,0 +1,26 @@
+{
+  "_meta": {
+    "source": "KIS Open API paper (openapivts.koreainvestment.com:29443) via FHKST01010100",
+    "captured": "2026-04-24",
+    "tr_id": "FHKST01010100",
+    "path": "/uapi/domestic-stock/v1/quotations/inquire-price",
+    "symbol": "005930",
+    "name": "삼성전자",
+    "params": {
+      "FID_COND_MRKT_DIV_CODE": "J",
+      "FID_INPUT_ISCD": "005930"
+    },
+    "note": "output trimmed to valuation-relevant keys (per/pbr/eps/bps). Full response has 100+ fields."
+  },
+  "response": {
+    "rt_cd": "0",
+    "msg_cd": "MCA00000",
+    "msg1": "정상처리 되었습니다.",
+    "output": {
+      "per": "33.44",
+      "pbr": "3.43",
+      "eps": "6564.00",
+      "bps": "63997.00"
+    }
+  }
+}

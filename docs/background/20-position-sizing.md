@@ -201,6 +201,8 @@ class PositionSizer(Protocol):
 4. **거래세** — KOSPI 0.20%, KOSDAQ 0.20% ([[tax-automation]]) → 고회전 리밸런스는 비용으로 엣지 소실
 5. **가격제한폭 ±30%** ([[07-market-microstructure-basics]]) — 일 단위 ruin 확률 유한, Kelly 의 "무한 베팅 수렴" 가정 일부 깨짐
 
+관련: [[31-valuation-analysis]]
+
 ---
 
 ## 9. 체크리스트 (운영)

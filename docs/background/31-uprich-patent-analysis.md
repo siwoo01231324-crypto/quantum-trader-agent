@@ -305,3 +305,5 @@ def consensus_kelly(
 - 출원인: 이보람 (Lee Bo-ram)
 - 공개일: 2026-03-06
 - 관련 노트: [[30-market-regime-detection]], [[20-position-sizing]], [[12-validation-protocol]], [[26-point-in-time-data]]
+
+adopted in #76 with differentiated formula — see [[signal-interface]]

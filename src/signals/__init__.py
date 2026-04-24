@@ -14,6 +14,7 @@ from .atr import compute_atr
 from .macd import compute_macd
 from .bollinger import compute_bollinger
 from .realized_vol import compute_realized_vol
+from .neutralize import neutralize
 
 __all__ = [
     "DEFAULT_FACTOR_SET",
@@ -29,6 +30,7 @@ __all__ = [
     "compute_sma_cross",
     "detect_divergence",
     "list_factors",
+    "neutralize",
     "register",
     "registry",
 ]

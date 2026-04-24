@@ -1,7 +1,11 @@
 from __future__ import annotations
-from typing import Protocol, runtime_checkable
-from dataclasses import dataclass
+from typing import Optional, Protocol, runtime_checkable
+from dataclasses import dataclass, field
 import pandas as pd
+
+# INVARIANT #6: expected_return, win_probability, confidence MUST be computed by
+# deterministic code only. LLM output MUST NOT be assigned to these fields directly.
+# See CLAUDE.md invariant #6 and scripts/check_invariants.py::_check_llm_delegation.
 
 
 @dataclass
@@ -16,9 +20,14 @@ class Bar:
 
 @dataclass
 class Signal:
-    action: str  # "buy" | "sell" | "hold"
-    size: float  # fraction of equity (0.0 - 1.0)
+    action: str   # "buy" | "sell" | "hold"
+    size: float   # fraction of equity (0.0 - 1.0)
     reason: str
+    # kw-only Optional fields — backward compatible; legacy Signal(action, size, reason) unchanged.
+    # strategy_id is NOT here; pass it to register_strategy_returns(strategy_id, ...) instead.
+    expected_return: Optional[float] = field(default=None, kw_only=True)
+    win_probability: Optional[float] = field(default=None, kw_only=True)
+    confidence: Optional[float] = field(default=None, kw_only=True)
 
 
 @runtime_checkable

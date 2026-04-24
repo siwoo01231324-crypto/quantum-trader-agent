@@ -103,6 +103,7 @@ size  = vol_target(sample_std, target_annual=0.20, periods_per_year=365*96)
    - 현재 `Signal(action, size, reason)` → `expected_return`, `win_probability`, `confidence` optional 필드 추가
    - 전략이 자기 확신도·기대수익을 채우면 사이저가 그 값을 사용, 비면 fallback (현재 방식)
    - 근거: [[20-position-sizing]] §7.1 `SignalStrength(p, expected_return, sigma)` 인터페이스 제안 — 실데이터에서 "전략의 판단" 과 "사이저의 μ 추정" 방향 불일치로 win_rate 64.7%→41.7% 급락을 확인
+   - **delivered in #76** — [[signal-interface]] 참조
 2. **`risk.dsl.evaluate` 와의 end-to-end 통합**: `OrderIntent` 단계에서 sizer output 을 `per_position.max_weight_pct` 로 clamp (별도 이슈).
 3. **멀티 종목 사이징**: ERC · HRP ([[20-position-sizing]] §4·§5) — 20 종목 이상 포트폴리오가 생기는 시점에 별도 이슈.
 4. **walk-forward 검증·전략 엣지 탐색**: 별도이나 #71 (알파 팩터 파이프라인) · [[12-validation-protocol]] 의 범위.
