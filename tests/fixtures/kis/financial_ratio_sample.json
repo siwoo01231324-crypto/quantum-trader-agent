@@ -1,0 +1,59 @@
+{
+  "_meta": {
+    "source": "KIS Open API paper (openapivts.koreainvestment.com:29443) via FHKST66430300",
+    "captured": "2026-04-24",
+    "tr_id": "FHKST66430300",
+    "path": "/uapi/domestic-stock/v1/finance/financial-ratio",
+    "symbol": "005930",
+    "name": "삼성전자",
+    "params": {
+      "FID_COND_MRKT_DIV_CODE": "J",
+      "FID_INPUT_ISCD": "005930",
+      "FID_DIV_CLS_CODE": "1"
+    },
+    "note": "Truncated to 3 most-recent quarters for test fixture brevity. Live API returns ~30 quarters."
+  },
+  "response": {
+    "output": [
+      {
+        "stac_yymm": "202512",
+        "grs": "10.8800",
+        "bsop_prfi_inrt": "33.2300",
+        "ntin_inrt": "31.2200",
+        "roe_val": "10.85",
+        "eps": "6564.00",
+        "sps": "49471",
+        "bps": "63997.00",
+        "rsrv_rate": "45296.1700",
+        "lblt_rate": "29.9400"
+      },
+      {
+        "stac_yymm": "202509",
+        "grs": "6.5300",
+        "bsop_prfi_inrt": "-10.3200",
+        "ntin_inrt": "-4.2400",
+        "roe_val": "8.37",
+        "eps": "3701.00",
+        "sps": "46695",
+        "bps": "60632.00",
+        "rsrv_rate": "43418.0600",
+        "lblt_rate": "26.6400"
+      },
+      {
+        "stac_yymm": "202506",
+        "grs": "5.2900",
+        "bsop_prfi_inrt": "-33.3600",
+        "ntin_inrt": "-19.6200",
+        "roe_val": "7.95",
+        "eps": "1920.00",
+        "sps": "45568",
+        "bps": "58135.00",
+        "rsrv_rate": "42340.1900",
+        "lblt_rate": "26.3600"
+      }
+    ],
+    "rt_cd": "0",
+    "msg_cd": "MCA00000",
+    "msg1": "정상처리 되었습니다."
+  }
+}

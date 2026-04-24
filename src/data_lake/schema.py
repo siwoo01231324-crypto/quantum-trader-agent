@@ -88,6 +88,19 @@ CALENDAR_SCHEMA: Mapping[str, str] = {
     "close_ts": TS,
 }
 
+# announce_date timezone: Asia/Seoul; ingested_at timezone: UTC
+FUNDAMENTALS_PIT_SCHEMA: Mapping[str, str] = {
+    "symbol": CAT,
+    "announce_date": TS,
+    "period_end": TS,
+    "fiscal_period": CAT,
+    "metric": CAT,
+    "value": F64,
+    "unit": CAT,
+    "source": CAT,
+    "ingested_at": TS,
+}
+
 ALL_SCHEMAS: Mapping[str, Mapping[str, str]] = {
     "ohlcv": OHLCV_SCHEMA,
     "orderbook_l5": ORDERBOOK_L5_SCHEMA,
@@ -96,6 +109,7 @@ ALL_SCHEMAS: Mapping[str, Mapping[str, str]] = {
     "asset_master": ASSET_MASTER_SCHEMA,
     "corp_action": CORP_ACTION_SCHEMA,
     "calendar": CALENDAR_SCHEMA,
+    "fundamentals": FUNDAMENTALS_PIT_SCHEMA,
 }
 
 
@@ -142,5 +156,10 @@ def partition_path(table: str, *, symbol: str, ts_year: int, ts_month: int,
         return (
             f"factor/factor_set={factor_set}/year={ts_year}/"
             f"month={ts_month:02d}/symbol={symbol}/"
+        )
+    if table == "fundamentals":
+        return (
+            f"fundamentals/symbol={symbol}/"
+            f"year={ts_year}/month={ts_month:02d}/"
         )
     raise ValueError(f"no partition rule for table '{table}'")

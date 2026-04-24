@@ -1,9 +1,16 @@
 from __future__ import annotations
 
 import logging
+import time
 from decimal import Decimal
 
 import requests
+
+# KIS paper server (openapivts) occasionally returns 5xx under burst load
+# (rate limit: paper 2 req/sec, live 20 req/sec). Retry with exponential backoff
+# for transient 5xx only; 4xx / rt_cd business errors bubble up immediately.
+_RETRY_MAX_ATTEMPTS = 3
+_RETRY_BASE_DELAY = 0.4  # seconds, doubles each retry → 0.4, 0.8, 1.6
 
 from src.brokers.base import Balance, OrderAck, OrderType, PositionSide, Position
 from src.brokers.errors import BrokerError
@@ -64,21 +71,62 @@ class KISClient:
         if data.get("rt_cd") == "1":
             raise map_error(data.get("msg_cd", ""), data.get("msg1", ""))
 
+    def _request_with_retry(self, method: str, url: str, tr_id: str, **kwargs) -> dict:
+        """HTTP request with exponential-backoff retry on transient 5xx.
+
+        Retries only 5xx (server errors). 4xx errors and rt_cd business errors
+        are raised immediately — no sense retrying a malformed request.
+        """
+        last_exc: Exception | None = None
+        for attempt in range(_RETRY_MAX_ATTEMPTS):
+            try:
+                resp = requests.request(
+                    method,
+                    url,
+                    headers=self._headers(tr_id),
+                    timeout=10,
+                    **kwargs,
+                )
+                if 500 <= resp.status_code < 600:
+                    resp.raise_for_status()
+                resp.raise_for_status()
+                data = resp.json()
+                self._check_response(data)
+                return data
+            except requests.HTTPError as exc:
+                status = exc.response.status_code if exc.response is not None else 0
+                if 500 <= status < 600 and attempt < _RETRY_MAX_ATTEMPTS - 1:
+                    delay = _RETRY_BASE_DELAY * (2 ** attempt)
+                    log.warning(
+                        "KIS %s %s returned %d (attempt %d/%d), retrying in %.2fs",
+                        method, url, status, attempt + 1, _RETRY_MAX_ATTEMPTS, delay,
+                    )
+                    time.sleep(delay)
+                    last_exc = exc
+                    continue
+                raise
+            except requests.RequestException as exc:
+                # Network / timeout errors are also transient — retry
+                if attempt < _RETRY_MAX_ATTEMPTS - 1:
+                    delay = _RETRY_BASE_DELAY * (2 ** attempt)
+                    log.warning(
+                        "KIS %s %s network error (%s), retrying in %.2fs",
+                        method, url, type(exc).__name__, delay,
+                    )
+                    time.sleep(delay)
+                    last_exc = exc
+                    continue
+                raise
+        assert last_exc is not None
+        raise last_exc
+
     def _post(self, path: str, tr_id: str, body: dict) -> dict:
         url = f"{self._base_url}{path}"
-        resp = requests.post(url, json=body, headers=self._headers(tr_id), timeout=10)
-        resp.raise_for_status()
-        data = resp.json()
-        self._check_response(data)
-        return data
+        return self._request_with_retry("POST", url, tr_id, json=body)
 
     def _get(self, path: str, tr_id: str, params: dict) -> dict:
         url = f"{self._base_url}{path}"
-        resp = requests.get(url, params=params, headers=self._headers(tr_id), timeout=10)
-        resp.raise_for_status()
-        data = resp.json()
-        self._check_response(data)
-        return data
+        return self._request_with_retry("GET", url, tr_id, params=params)
 
     def get_hashkey(self, body: dict) -> str | None:
         """hashkey 생성 (비필수 — 실패해도 주문 가능)."""
