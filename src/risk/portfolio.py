@@ -40,6 +40,10 @@ class PortfolioRiskReport(BaseModel):
     alpha: float = Field(0.975, gt=0.0, lt=1.0,
                          description="Cited: 19-portfolio-risk.md §4.1 Basel III FRTB")
     ts: datetime = Field(..., description="Audit timestamp (risk-rule-dsl.md §7)")
+    cvar_levels: Optional[dict] = Field(
+        default=None,
+        description="Per-level CVaR dict from historical_cvar_levels(). Keys=label, values={alpha, cvar_pct}.",
+    )
 
 
 # ---------- pure numpy core ----------
@@ -100,6 +104,35 @@ def historical_cvar(returns: np.ndarray, alpha: float = 0.975) -> float:
     if tail.size == 0:
         return float(-q)
     return float(-tail.mean())
+
+
+_DEFAULT_CVAR_LEVELS: list[tuple[float, str]] = [
+    (0.95, "warn"),
+    (0.975, "reduce"),
+    (0.99, "halt"),
+]
+
+
+def historical_cvar_levels(
+    returns: np.ndarray,
+    levels: list[tuple[float, str]] = _DEFAULT_CVAR_LEVELS,
+) -> dict[str, dict]:
+    """Compute historical CVaR at multiple alpha levels.
+
+    Patent-avoidance: plain empirical tail-mean, no proprietary decomposition.
+
+    Args:
+        returns: 1D array of returns (positive = gain, negative = loss).
+        levels: list of (alpha, label) pairs in ascending alpha order.
+                Default: [(0.95,"warn"),(0.975,"reduce"),(0.99,"halt")].
+
+    Returns:
+        dict keyed by label, each value {"alpha": float, "cvar_pct": float}.
+    """
+    result: dict[str, dict] = {}
+    for alpha, label in levels:
+        result[label] = {"alpha": float(alpha), "cvar_pct": historical_cvar(returns, alpha)}
+    return result
 
 
 def effective_number_of_bets(weights: np.ndarray, cov: np.ndarray) -> float:

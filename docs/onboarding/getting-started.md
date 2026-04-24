@@ -217,6 +217,19 @@ GitHub Actions가 Projects API를 호출하려면 `project` 스코프가 있는 
 
 ---
 
+## 활성화 가능한 기능은 어디서 찾나?
+
+**`docs/specs/feature-catalog.md`** — 프로젝트의 **모든 opt-in 기능** 단일 색인.
+- 분야별 (Risk · Sizing · Universe · Strategy · Signals ...) 분류
+- 활성화 방법 (YAML 키 or 함수 시그니처) + 기본값 + 테스트 파일 명시
+- 새 기능 머지 시 **반드시 이 카탈로그에 행 추가** (갱신 누락 시 리뷰어 차단)
+
+**Risk DSL 상세**: `docs/specs/risk-rule-dsl.md` §8.1 — YAML 스키마 전체.
+
+**정책 예시**: `policies/{conservative,neutral,aggressive}.yaml` 하단 주석 블록 참조.
+
+---
+
 ## 커맨드 상세 레퍼런스
 
 | 커맨드 | 전체 이름 | 위치 |

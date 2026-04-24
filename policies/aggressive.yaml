@@ -17,6 +17,15 @@ per_portfolio:
   max_net_exposure_krw: 300_000_000
   max_leverage: 3.0
 
+# Optional #87 extensions — see docs/specs/risk-rule-dsl.md §8.1
+# per_portfolio_risk:
+#   max_cvar_pct: 0.15
+#   cvar_levels:
+#     - [0.95, warn]
+#     - [0.975, reduce]
+#     - [0.99, halt]
+#   extreme_fear_block: false        # aggressive — 공포장 매수 허용
+
 per_position:
   max_weight_pct: 20.0
   max_qty: 5000

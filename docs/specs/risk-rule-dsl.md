@@ -46,11 +46,19 @@ per_portfolio:                   # 계좌 전체 (주문 흐름 제약)
   max_net_exposure_krw: 50_000_000
   max_leverage: 1.5              # gross / equity
 
-per_portfolio_risk:              # 포트폴리오 상태 (주기 평가, #70)
+per_portfolio_risk:              # 포트폴리오 상태 (주기 평가, #70 / #87)
   max_cvar_pct: 0.08             # Historical CVaR(α) 상한, positive loss fraction
   max_corr_avg: 0.80             # 평균 pairwise 상관 상한
   min_enb_ratio: 0.3             # ENB/N 하한 (19-portfolio-risk §7)
   alpha: 0.975                   # CVaR/VaR α (Basel III FRTB)
+  # --- #87 특허 차용 확장 (모두 Optional, 기본값 None = 비활성) ---
+  cvar_levels:                   # 다중 α CVaR 계층 (#87 P5). max_cvar_pct 이후 순차 평가, first-violation-wins
+    - [0.95, warn]               # [alpha, label] — snap.cvar_levels[label].cvar_pct 가 max_cvar_pct 초과 시 on_cvar_breach 발동
+    - [0.975, reduce]
+    - [0.99, halt]
+  extreme_fear_block: true       # 극단 공포 구간 신규 매수 차단 (#87 P4)
+  extreme_fear_threshold: 0.2    # snap.fear_greed_proxy < threshold & intent.side=="buy" → BLOCK
+  # stability_grade_min: D       # (out-of-scope for #87, follow-up: StabilityGrade DSL 배선)
   on_cvar_breach: reduce         # CVaR∝주문크기 → REDUCE
   on_corr_breach: block          # state → 신규만 BLOCK
   on_enb_breach: halt            # 구조 문제 → 사람 개입 필요
@@ -126,6 +134,8 @@ Snapshot(account, position, intent_order, daily_pnl, ...)
 - `per_portfolio_risk.max_cvar_pct` — Historical CVaR(α=0.975) 상한, 기본 action `REDUCE`
 - `per_portfolio_risk.max_corr_avg` — 평균 pairwise ρ 상한, 기본 action `BLOCK`
 - `per_portfolio_risk.min_enb_ratio` — ENB/N 하한 ([[19-portfolio-risk]] §7), 기본 action `HALT`
+- `per_portfolio_risk.cvar_levels.{warn|reduce|halt|...}` — 다중 α 계층 CVaR (#87 P5), label 은 사용자 지정, action 은 `on_cvar_breach` 공유
+- `per_portfolio_risk.extreme_fear_block` — `snap.fear_greed_proxy < threshold` 에서 buy 차단 (#87 P4), 기본 action `BLOCK`
 - `per_position.max_qty`, `per_position.max_weight_pct`
 - `sector_limits.<sector>`
 - `drawdown.max_intraday_dd_pct`, `drawdown.max_running_dd_pct`
@@ -133,7 +143,22 @@ Snapshot(account, position, intent_order, daily_pnl, ...)
 ## 8. 로드맵
 - v1: per_trade/day/portfolio/position + sector_limits + drawdown.
 - **v2 (delivered #70)**: 포트폴리오 레벨 CVaR·평균 ρ·ENB — `per_portfolio_risk` 블록, `Snapshot.portfolio_risk` 주입, `src/risk/portfolio.py` 순수함수.
+- **v2.1 (delivered #87)**: 특허 차용 확장 — `cvar_levels` 다중 α 계층 + `extreme_fear_block` (가격 기반 `fear_greed_proxy`) + `consensus_kelly`·`user_risk_vol_target` 사이저 옵션 + `equal_risk_contribution_convex`·`hrp_with_clustering` 포트폴리오 최적화 + `StabilityGrade` A~F 등급 (DSL 배선은 후속 이슈).
 - v3: 변동성 기반 동적 한도 (ATR×k 등) · 시간대별 한도 · 팩터 노출 ([[19-portfolio-risk]] §5).
+
+## 8.1 #87 확장 상세 (모두 Optional, 기본값 None = 비활성 — 기존 정책 회귀 0)
+
+| 필드 / 함수 | 위치 | 활성화 방법 | 테스트 파일 |
+|---|---|---|---|
+| `PerPortfolioRisk.cvar_levels` | `src/risk/dsl.py` | YAML `per_portfolio_risk.cvar_levels: [[α, label], ...]` | `tests/test_cvar_levels.py` |
+| `PortfolioRiskReport.cvar_levels` | `src/risk/portfolio.py` | `historical_cvar_levels(returns, levels)` → `PortfolioRiskReport(..., cvar_levels=...)` | `tests/test_cvar_levels.py` |
+| `Snapshot.fear_greed_proxy` | `src/risk/dsl.py` | orchestrator 가 `compute_fear_greed_proxy(price)` 호출해 `Snapshot(..., fear_greed_proxy=x)` 주입 | `tests/test_fear_greed_proxy.py` |
+| `PerPortfolioRisk.extreme_fear_block` + `extreme_fear_threshold` | `src/risk/dsl.py` | YAML `per_portfolio_risk.extreme_fear_block: true` (+ optional threshold, 기본 0.2) | `tests/test_fear_greed_proxy.py` |
+| `user_risk_vol_target(risk_score, vol_floor, vol_ceil)` | `src/risk/sizing.py` | 전략 구현에서 `vol_target()` 대신 호출 | `tests/test_sizing_user_risk.py` |
+| `consensus_kelly(full_kelly, signal_agreement, k_base, k_max)` | `src/risk/sizing.py` | `MomoBtcV2(sizing_mode="half-kelly", use_consensus_kelly=True, signal_agreement=x)` | `tests/test_consensus_kelly.py` |
+| `equal_risk_contribution_convex(cov, target_contrib)` | `src/risk/position_sizer.py` | 포트폴리오 사이저 경로에서 직접 호출 | `tests/test_position_sizer_erc.py` |
+| `hrp_with_clustering(returns, k_clusters)` | `src/risk/position_sizer.py` | k_clusters=None 이면 단일 HRP fallback | `tests/test_position_sizer_hrp.py` |
+| `StabilityGrade.grade(mcap, vol, dev)` | `src/universe/stability_grade.py` | pure function (DSL 배선 후속 이슈) | `tests/test_stability_grade.py` |
 
 ## 9. 관련 노트
 

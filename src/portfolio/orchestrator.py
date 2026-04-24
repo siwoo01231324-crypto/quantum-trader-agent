@@ -13,6 +13,9 @@ Out of scope (issue #78 will add):
 - OrderIntent emission batch + idempotency-key threading
 
 Not callable from LLM tool surface (CLAUDE.md invariant #6).
+
+Patent-avoidance: compute_fear_greed_proxy uses price-only rolling-max ratio.
+업리치 특허 R2 의 가격 컴포넌트만 단순 차용. 소셜 감성·거시경제 크롤링 요소 의도적 배제.
 """
 from __future__ import annotations
 
@@ -40,6 +43,29 @@ logger = logging.getLogger(__name__)
 
 def _clamp01(x: float) -> float:
     return max(0.0, min(1.0, x))
+
+
+def compute_fear_greed_proxy(price_history: pd.Series, window: int = 252) -> float:
+    """Price-based fear/greed proxy: current_price / rolling_max(window).
+
+    Returns a value in [0.0, 1.0] where 1.0 means current price is at its
+    rolling high (greed) and values near 0.0 indicate extreme fear.
+
+    Args:
+        price_history: pd.Series of prices (positive, most recent last).
+        window: rolling lookback period in bars. Default 252 (≈1 trading year).
+
+    Returns:
+        Float in [0.0, 1.0].
+    """
+    if price_history.empty:
+        return 0.0
+    rolling_max = price_history.rolling(window=window, min_periods=1).max()
+    latest_price = float(price_history.iloc[-1])
+    latest_max = float(rolling_max.iloc[-1])
+    if latest_max <= 0.0:
+        return 0.0
+    return float(min(latest_price / latest_max, 1.0))
 
 
 class _SyncStrategyOrchestrator:
