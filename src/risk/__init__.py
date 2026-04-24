@@ -26,6 +26,8 @@ from .sizing import (
     fractional_kelly,
     vol_target,
     ewma_sigma,
+    user_risk_vol_target,
+    consensus_kelly,
 )
 from .portfolio import (
     PortfolioRiskReport,
@@ -42,9 +44,9 @@ __all__ = [
     "Policy", "PerTrade", "PerDay", "PerPortfolio", "PerPortfolioRisk",
     "PerPosition", "SectorLimit", "Drawdown", "Snapshot", "Order", "Decision",
     "Action", "load_policy", "evaluate",
-    # Sizing (#69)
+    # Sizing (#69, #87)
     "kelly_binary", "kelly_continuous", "fractional_kelly",
-    "vol_target", "ewma_sigma",
+    "vol_target", "ewma_sigma", "user_risk_vol_target", "consensus_kelly",
     # Portfolio (#70)
     "PortfolioRiskReport", "ShortSampleWarning",
     "shrinkage_covariance", "historical_cvar",

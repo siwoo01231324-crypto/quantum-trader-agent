@@ -128,6 +128,7 @@ quantum-trader-agent/
 ## 핵심 문서 링크
 
 - 기능 명세 + AC → `docs/specs/`
+- **활성화 가능한 기능 색인 → `docs/specs/feature-catalog.md`** (모든 opt-in 기능 단일 카탈로그)
 - 배경·리서치·외부 참고 → `docs/background/`
 - 작업 내역 → `docs/work/active/` · `docs/work/done/`
 - 운영 런북 → `docs/runbooks/`
