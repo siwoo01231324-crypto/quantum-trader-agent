@@ -117,3 +117,21 @@ class MarketMultiples(BaseModel):
         if v is None or v == "":
             return None
         return Decimal(str(v))
+
+
+class KISDailyBar(BaseModel):
+    """Single daily OHLCV bar from KIS FHKST03010100."""
+    date: str           # "YYYYMMDD" from stck_bsop_date
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: float
+    trade_amt: float    # acml_tr_pbmn — accumulated trade amount (KRW)
+
+    @field_validator("open", "high", "low", "close", "volume", "trade_amt", mode="before")
+    @classmethod
+    def _coerce_float(cls, v: Any) -> Any:
+        if v is None or v == "":
+            return 0.0
+        return float(str(v))
