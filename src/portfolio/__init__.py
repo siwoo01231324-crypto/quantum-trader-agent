@@ -1,10 +1,14 @@
 """Portfolio layer — strategy aggregation, risk gating, and order evaluation.
 
-This is the single assembly point where individual strategy outputs meet the
-portfolio-level risk module (src/risk/). Full multi-strategy async execution
-is tracked under issue #78; this module provides the stable interface that
-#78 will elaborate.
-"""
-from .orchestrator import StrategyOrchestrator
+Public API (frozen for #79/#80):
+- AsyncStrategyOrchestrator: multi-strategy async tick driver (added in T2/#78)
+- OrderIntent: immutable order intent dataclass
 
-__all__ = ["StrategyOrchestrator"]
+_SyncStrategyOrchestrator is private (composition backend).
+StrategyOrchestrator is the backward-compat alias for #70 tests.
+"""
+from ._async_orchestrator import AsyncStrategyOrchestrator
+from .order_intent import OrderIntent
+from .orchestrator import _SyncStrategyOrchestrator, StrategyOrchestrator
+
+__all__ = ["AsyncStrategyOrchestrator", "OrderIntent"]

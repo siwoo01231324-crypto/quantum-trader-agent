@@ -72,6 +72,7 @@ flowchart LR
 | 저장 | `TickStore` | 원시 tick·bar 보관, 시점 재생(replay) 지원 | `append(bar)`, `read(range, symbol)` |
 | 저장 | `FeatureStore` | 피처 계산 캐시, 학습·추론 일관성(point-in-time) | `get(symbol, ts)`, `materialize(spec)` |
 | 신호 | `StrategyEngine` | 전략 실행, `Signal{side, strength, ttl}` 생성 | `on_bar(ctx) -> Signal[]` |
+| 신호 | `orchestrator` | 멀티전략 비동기 실행, quarantine, OrderIntent 배치 emit | `run_bar(ts, snapshot) -> list[OrderIntent]` (#78) |
 | 신호 | `PositionSizer` | 자본·변동성 기반 수량 산출 | `size(signal, portfolio) -> qty` |
 | 리스크 | `RiskManager` | 사전(pre-trade)·사후(post-trade) 한도, DD·VaR·노출 | `check(order)->Decision`, `on_fill(fill)` |
 | 실행 | `OMS` | 주문 상태머신(NEW→ACK→PARTIAL→FILLED/CANCELED) | `submit(order)`, `cancel(id)`, `state(id)` |

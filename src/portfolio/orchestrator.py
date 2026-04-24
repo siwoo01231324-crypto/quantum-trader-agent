@@ -68,12 +68,15 @@ def compute_fear_greed_proxy(price_history: pd.Series, window: int = 252) -> flo
     return float(min(latest_price / latest_max, 1.0))
 
 
-class StrategyOrchestrator:
+class _SyncStrategyOrchestrator:
     """Synchronous stub. Aggregates strategy returns, gates orders via risk DSL.
+
+    Private — consumed by AsyncStrategyOrchestrator via composition (D1).
+    Direct instantiation is discouraged; use AsyncStrategyOrchestrator instead.
 
     Typical usage::
 
-        orch = StrategyOrchestrator(policy)
+        orch = _SyncStrategyOrchestrator(policy)
         orch.register_strategy_returns("momo_btc_v2", ret_series_a)
         orch.register_strategy_returns("meanrev_pairs", ret_series_b)
         orch.refresh_portfolio_risk(ts=now)
@@ -229,3 +232,7 @@ class StrategyOrchestrator:
             **snap_extras,
         )
         return evaluate(self._policy, snap)
+
+
+# Backward-compat alias — #70 tests import StrategyOrchestrator directly.
+StrategyOrchestrator = _SyncStrategyOrchestrator
