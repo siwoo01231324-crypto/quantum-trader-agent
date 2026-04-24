@@ -6,7 +6,7 @@ import pandas as pd
 from .registry import register
 
 
-@register("macd", inputs=["close"], fast=12, slow=26, signal=9)
+@register("macd", inputs=["close"], alpha_horizon_bars=10, bar_interval="1d", signal_type="momentum", fast=12, slow=26, signal=9)
 def compute_macd(
     close: pd.Series,
     fast: int = 12,

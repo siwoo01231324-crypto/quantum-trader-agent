@@ -7,13 +7,13 @@ import pandas as pd
 from .registry import register
 
 
-@register("sma", inputs=["close"], window=20)
+@register("sma", inputs=["close"], alpha_horizon_bars=10, bar_interval="1d", signal_type="trend", window=20)
 def compute_sma(close: pd.Series, window: int = 20) -> pd.Series:
     """Rolling arithmetic mean. First `window-1` bars are NaN."""
     return close.rolling(window).mean()
 
 
-@register("sma_cross", inputs=["close"], short_window=20, long_window=60)
+@register("sma_cross", inputs=["close"], alpha_horizon_bars=10, bar_interval="1d", signal_type="trend", short_window=20, long_window=60)
 def compute_sma_cross(
     close: pd.Series,
     short_window: int = 20,

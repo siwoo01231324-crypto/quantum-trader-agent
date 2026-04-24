@@ -318,3 +318,5 @@ sources:
 - AlphaForge — 포뮬레익 알파 팩터 동적 조합 프레임워크: https://arxiv.org/html/2406.18394v1
 - 동적 가중치 기반 복합 ML 주식 선택 전략: https://arxiv.org/html/2508.18592v1
 - IC 기반 팩터 가중치 실무 접근: https://insight.factset.com/a-practical-approach-to-weighting-signals
+
+adopted in #76 with differentiated formula — see [[signal-interface]]

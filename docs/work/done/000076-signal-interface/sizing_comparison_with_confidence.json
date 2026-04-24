@@ -1,0 +1,16 @@
+{
+  "win_rate_baseline": 0.2857142857142857,
+  "win_rate_with_confidence": 0.2857142857142857,
+  "trade_count_baseline": 228,
+  "trade_count_with_confidence": 228,
+  "sharpe_baseline": -1.215580964654328,
+  "sharpe_with_confidence": -1.215580964654328,
+  "reason_if_regressed": "",
+  "_meta": {
+    "baseline_mode": "baseline",
+    "confidence_mode": "with_confidence",
+    "bars": 35040,
+    "start": "2025-04-01 00:00:00",
+    "end": "2026-03-31 23:45:00"
+  }
+}

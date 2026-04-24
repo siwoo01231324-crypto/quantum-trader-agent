@@ -7,7 +7,7 @@ import pandas as pd
 from .registry import register
 
 
-@register("atr", inputs=["high", "low", "close"], window=14)
+@register("atr", inputs=["high", "low", "close"], alpha_horizon_bars=1, bar_interval="1d", signal_type="volatility", window=14)
 def compute_atr(
     high: pd.Series,
     low: pd.Series,

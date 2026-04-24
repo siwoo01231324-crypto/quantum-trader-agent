@@ -1,12 +1,26 @@
-"""Factor registry: name -> callable mapping with signature-validated dispatch."""
+"""Factor registry: name -> callable mapping with signature-validated dispatch.
+
+Patent reference: US8433645B1 (Portware — alpha-signal-based execution optimization) — active.
+US8433645B1 differs: we externalize bar_interval and alpha_horizon_bars as FactorSpec metadata
+declared at registration time. Portware embeds timing in the execution engine internals.
+Our use is for alpha-horizon auditing and reproducibility, not execution optimization.
+"""
 from __future__ import annotations
 
 import inspect
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 
 
 DEFAULT_FACTOR_SET: str = "v1"
+
+_VALID_BAR_INTERVALS: frozenset[str] = frozenset(
+    {"1m", "5m", "15m", "30m", "1h", "4h", "1d", "1w"}
+)
+
+_VALID_SIGNAL_TYPES: frozenset[str] = frozenset(
+    {"momentum", "mean_reversion", "volatility", "trend", "breakout", "event", "value", "vol", "unknown"}
+)
 
 
 @dataclass
@@ -15,18 +29,47 @@ class FactorSpec:
     func: Callable[..., Any]
     inputs: list[str]
     default_params: dict[str, Any] = field(default_factory=dict)
+    # Explicit alpha-horizon metadata (US8433645B1 differs: externalized, not engine-embedded)
+    alpha_horizon_bars: int = 1
+    bar_interval: str = "1d"
+    signal_type: str = "momentum"
 
 
 FACTOR_REGISTRY: dict[str, FactorSpec] = {}
 
 
-def register(name: str, *, inputs: list[str], **defaults: Any) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+def register(
+    name: str,
+    *,
+    inputs: list[str],
+    alpha_horizon_bars: int = 1,
+    bar_interval: str = "1d",
+    signal_type: str = "momentum",
+    **defaults: Any,
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Decorator: @register("rsi", inputs=["close"], period=14).
 
     Validates at registration time that every entry in `inputs` appears in the
     decorated function's signature. Extra parameters (hyperparameters like
     `window`) are allowed but not required to match `inputs`.
+
+    bar_interval must be one of: {"1m","5m","15m","30m","1h","4h","1d","1w"}.
+    Unknown values raise ValueError immediately at decoration time.
+
+    signal_type must be one of: {"momentum","mean_reversion","volatility","trend",
+    "breakout","event","value","vol","unknown"}.
     """
+    if bar_interval not in _VALID_BAR_INTERVALS:
+        raise ValueError(
+            f"factor {name!r}: bar_interval={bar_interval!r} not in closed vocabulary "
+            f"{sorted(_VALID_BAR_INTERVALS)}"
+        )
+    if signal_type not in _VALID_SIGNAL_TYPES:
+        raise ValueError(
+            f"factor {name!r}: signal_type={signal_type!r} not in closed vocabulary "
+            f"{sorted(_VALID_SIGNAL_TYPES)}"
+        )
+
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         if name in FACTOR_REGISTRY:
             raise ValueError(f"factor already registered: {name!r}")
@@ -45,6 +88,9 @@ def register(name: str, *, inputs: list[str], **defaults: Any) -> Callable[[Call
             func=func,
             inputs=list(inputs),
             default_params=dict(defaults),
+            alpha_horizon_bars=alpha_horizon_bars,
+            bar_interval=bar_interval,
+            signal_type=signal_type,
         )
         return func
 
