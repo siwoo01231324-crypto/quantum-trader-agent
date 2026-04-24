@@ -3,12 +3,15 @@
 Fetches historical OHLCV candle data from Binance klines endpoint with
 pagination (1000 candles/request), rate-limit retry, and hive-partitioned
 Parquet output.
+
+Also provides fetch_kis_daily_ohlcv for KRX/KIS daily bars.
 """
 from __future__ import annotations
 
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pandas as pd
 import pyarrow as pa
@@ -16,6 +19,11 @@ import pyarrow.parquet as pq
 import requests
 
 from data_lake import OHLCV_SCHEMA, validate_schema, partition_path
+from src.brokers.kis.rest import KISClient
+from src.brokers.kis.price_client import fetch_daily_ohlcv_raw
+
+if TYPE_CHECKING:
+    from src.brokers.kis.auth import KISAuth
 
 BINANCE_KLINES_URL = "https://api.binance.com/api/v3/klines"
 
@@ -184,3 +192,79 @@ def save_ohlcv_parquet(
         written.append(out_path)
 
     return written
+
+
+def fetch_kis_daily_ohlcv(
+    symbol: str,
+    start: str,
+    end: str,
+    *,
+    auth: "KISAuth",
+    app_key: str,
+    app_secret: str,
+    cano: str,
+    acnt_prdt_cd: str,
+    paper: bool = True,
+) -> pd.DataFrame:
+    """Fetch KIS daily OHLCV bars and return a DataFrame matching OHLCV_SCHEMA.
+
+    Parameters
+    ----------
+    symbol:        KRX stock code (6 digits), e.g. "005930".
+    start:         ISO date string "YYYY-MM-DD".
+    end:           ISO date string "YYYY-MM-DD".
+    auth:          KISAuth instance.
+    app_key/app_secret/cano/acnt_prdt_cd: KIS API credentials.
+    paper:         True = paper (openapivts), False = live.
+
+    Returns
+    -------
+    pd.DataFrame with columns matching OHLCV_SCHEMA. Empty DataFrame (with
+    correct columns) if no data is available.
+    """
+    # Convert ISO dates to YYYYMMDD for KIS API
+    start_yyyymmdd = start.replace("-", "")
+    end_yyyymmdd = end.replace("-", "")
+
+    client = KISClient(
+        auth=auth,
+        app_key=app_key,
+        app_secret=app_secret,
+        cano=cano,
+        acnt_prdt_cd=acnt_prdt_cd,
+        paper=paper,
+    )
+
+    bars = fetch_daily_ohlcv_raw(client, symbol, start_yyyymmdd, end_yyyymmdd)
+
+    if not bars:
+        return pd.DataFrame(columns=list(OHLCV_SCHEMA.keys()))
+
+    now = datetime.now(tz=timezone.utc)
+    records = []
+    for bar in bars:
+        # Parse YYYYMMDD date as midnight KST (UTC+9) → UTC
+        try:
+            ts = pd.Timestamp(
+                f"{bar.date[:4]}-{bar.date[4:6]}-{bar.date[6:8]} 15:30:00",
+                tz="Asia/Seoul",
+            ).tz_convert("UTC")
+        except Exception:
+            ts = pd.Timestamp(bar.date, tz="UTC")
+
+        records.append({
+            "symbol": symbol,
+            "ts": ts,
+            "freq": "1d",
+            "open": float(bar.open),
+            "high": float(bar.high),
+            "low": float(bar.low),
+            "close": float(bar.close),
+            "volume": float(bar.volume),
+            "vwap": float(bar.trade_amt) / float(bar.volume) if bar.volume != 0.0 else 0.0,
+            "trade_count": 0,
+            "source": "kis",
+            "ingested_at": pd.Timestamp(now),
+        })
+
+    return pd.DataFrame(records)
