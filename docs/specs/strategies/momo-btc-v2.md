@@ -35,6 +35,12 @@ BTC 무기한 선물 15분봉 기준 모멘텀 전략. 진입 신호로 [[rsi-di
 ## 청산
 - 반대 divergence 발생, 또는 [[max-drawdown-5pct]] halt 시. 매도 시 항상 전량(size=1.0).
 
+## 훅 소비 (#81)
+
+- `required_factors: ClassVar[list[str]] = ["rsi"]` — 엔진이 바마다 `context["factors"]["rsi"]` 에 Wilder RSI (period=14) 를 선계산하여 주입.
+- `detect_divergence` 는 팩터가 아닌 **신호 해석기** (입력으로 RSI 시리즈를 받음). 레지스트리 미등록 유지, 전략 `on_bar` 내부에서 직접 호출.
+- `compute_rsi` 직접 호출은 제거됨 (마이그레이션 #81). RSI 계산은 엔진 책임.
+
 ## 관련 노트
 
 - [[13-feature-alpha-catalog]] — RSI 계산 로직·룩어헤드 방지 규칙

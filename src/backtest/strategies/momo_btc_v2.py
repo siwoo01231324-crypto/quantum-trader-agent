@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import ClassVar, Literal
 
 import pandas as pd
 
 from backtest.protocol import Bar, Signal, Strategy
 from risk.sizing import ewma_sigma, fractional_kelly, kelly_continuous, vol_target
-from signals.rsi import compute_rsi, detect_divergence
+from signals.rsi import detect_divergence
 
 SizingMode = Literal["full", "half-kelly", "vol-target"]
 
@@ -27,6 +27,7 @@ class MomoBtcV2:
     to [0, 1] there; final policy-level clamps are the risk DSL's job.
     """
 
+    required_factors: ClassVar[list[str]] = ["rsi"]
     RSI_PERIOD: int = 14
     LOOKBACK: int = 14
 
@@ -83,7 +84,7 @@ class MomoBtcV2:
             return Signal(action="hold", size=0.0, reason="warmup")
 
         close = history["close"]
-        rsi = compute_rsi(close, self.RSI_PERIOD)
+        rsi = context["factors"]["rsi"]
         div = detect_divergence(close, rsi, self.LOOKBACK)
 
         latest = div.iloc[-1]

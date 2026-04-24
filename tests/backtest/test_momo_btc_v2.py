@@ -72,7 +72,8 @@ def test_buy_on_bullish_divergence():
     idx = bullish_indices[0]
     history = ohlcv.iloc[: idx + 1]
     bar = _make_bar(history["close"].iloc[-1])
-    signal = strategy.on_bar(bar, history, {})
+    context = {"factors": {"rsi": rsi.iloc[: idx + 1]}}
+    signal = strategy.on_bar(bar, history, context)
     assert signal.action == "buy", f"Expected 'buy', got '{signal.action}'"
     assert signal.size == 1.0
 
@@ -95,7 +96,8 @@ def test_sell_on_bearish_divergence():
     idx = bearish_indices[0]
     history = ohlcv.iloc[: idx + 1]
     bar = _make_bar(history["close"].iloc[-1])
-    signal = strategy.on_bar(bar, history, {})
+    context = {"factors": {"rsi": rsi.iloc[: idx + 1]}}
+    signal = strategy.on_bar(bar, history, context)
     assert signal.action == "sell", f"Expected 'sell', got '{signal.action}'"
     assert signal.size == 1.0
 
@@ -122,9 +124,10 @@ def test_hold_when_no_divergence():
     # Use the full history
     history = ohlcv
     bar = _make_bar(float(closes.iloc[-1]))
-    signal = strategy.on_bar(bar, history, {})
-
     rsi = compute_rsi(closes, strategy.RSI_PERIOD)
+    context = {"factors": {"rsi": rsi}}
+    signal = strategy.on_bar(bar, history, context)
+
     div = detect_divergence(closes, rsi, strategy.LOOKBACK)
     latest_div = div.iloc[-1]
 
