@@ -17,6 +17,21 @@ per_portfolio:
   max_net_exposure_krw: 30_000_000
   max_leverage: 1.0
 
+# ---------------------------------------------------------------------------
+# Optional #87 patent-derived extensions (all opt-in, default disabled).
+# Full docs: docs/specs/risk-rule-dsl.md §8.1
+# Uncomment to activate.
+# ---------------------------------------------------------------------------
+# per_portfolio_risk:
+#   max_cvar_pct: 0.05
+#   cvar_levels:                     # 다중 α 계층 — warn 먼저 울리고 halt 로
+#     - [0.95, warn]
+#     - [0.975, reduce]
+#     - [0.99, halt]
+#   extreme_fear_block: true         # 극단 공포 구간 buy 차단
+#   extreme_fear_threshold: 0.2      # snap.fear_greed_proxy < 0.2 에서 발동
+#   on_cvar_breach: reduce
+
 per_position:
   max_weight_pct: 5.0
   max_qty: 200

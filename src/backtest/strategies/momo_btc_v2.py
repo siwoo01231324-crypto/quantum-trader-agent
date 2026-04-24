@@ -6,7 +6,7 @@ from typing import Literal
 import pandas as pd
 
 from backtest.protocol import Bar, Signal, Strategy
-from risk.sizing import ewma_sigma, fractional_kelly, kelly_continuous, vol_target
+from risk.sizing import consensus_kelly, ewma_sigma, fractional_kelly, kelly_continuous, vol_target
 from signals.rsi import compute_rsi, detect_divergence
 
 SizingMode = Literal["full", "half-kelly", "vol-target"]
@@ -26,6 +26,16 @@ class MomoBtcV2:
 
     Sizing math lives in `risk.sizing` (pure functions, no LLM) and is clamped
     to [0, 1] there; final policy-level clamps are the risk DSL's job.
+
+    #87 PATENT-DERIVED OPTIONS (all opt-in, default disabled):
+      `use_consensus_kelly` — When True and `sizing_mode="half-kelly"`, the k
+        multiplier is linearly scaled between `consensus_k_base` (0.0 agreement)
+        and `consensus_k_max` (1.0 agreement). Caller supplies `signal_agreement`
+        ∈ [0, 1] representing indicator alignment. See risk.sizing.consensus_kelly
+        and tests/test_consensus_kelly.py. Default False → fractional_kelly(full, kelly_k).
+
+    See docs/specs/risk-rule-dsl.md §8.1 for the full catalog of #87 options,
+    including DSL-level extensions (cvar_levels, extreme_fear_block).
     """
 
     RSI_PERIOD: int = 14
@@ -40,6 +50,10 @@ class MomoBtcV2:
         target_annual: float = 0.20,          # crypto default, see docs/background/20-position-sizing.md §8
         periods_per_year: int = 365 * 96,     # 15m bars per year for BTC perp (no session breaks)
         ewma_lam: float = 0.94,               # RiskMetrics 1996
+        use_consensus_kelly: bool = False,
+        signal_agreement: float = 0.0,
+        consensus_k_base: float = 0.5,
+        consensus_k_max: float = 0.75,
     ) -> None:
         if sizing_lookback < 2:
             raise ValueError(f"sizing_lookback must be >= 2, got {sizing_lookback}")
@@ -49,6 +63,10 @@ class MomoBtcV2:
         self.target_annual = target_annual
         self.periods_per_year = periods_per_year
         self.ewma_lam = ewma_lam
+        self.use_consensus_kelly = use_consensus_kelly
+        self.signal_agreement = signal_agreement
+        self.consensus_k_base = consensus_k_base
+        self.consensus_k_max = consensus_k_max
 
     def on_init(self, context: dict) -> None:
         pass
@@ -81,6 +99,13 @@ class MomoBtcV2:
         if self.sizing_mode == "half-kelly":
             mu = float(returns.mean())
             full = kelly_continuous(mu=mu, sigma=sigma)
+            if self.use_consensus_kelly:
+                return consensus_kelly(
+                    full,
+                    self.signal_agreement,
+                    k_base=self.consensus_k_base,
+                    k_max=self.consensus_k_max,
+                )
             return fractional_kelly(full, k=self.kelly_k)
 
         if self.sizing_mode == "vol-target":

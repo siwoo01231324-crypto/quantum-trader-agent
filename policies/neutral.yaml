@@ -17,6 +17,16 @@ per_portfolio:
   max_net_exposure_krw: 100_000_000
   max_leverage: 1.5
 
+# Optional #87 extensions — see docs/specs/risk-rule-dsl.md §8.1
+# per_portfolio_risk:
+#   max_cvar_pct: 0.08
+#   cvar_levels:
+#     - [0.95, warn]
+#     - [0.975, reduce]
+#     - [0.99, halt]
+#   extreme_fear_block: true
+#   extreme_fear_threshold: 0.2
+
 per_position:
   max_weight_pct: 10.0
   max_qty: 1000
