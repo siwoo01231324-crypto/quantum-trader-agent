@@ -40,3 +40,12 @@ class Strategy(Protocol):
     # src/backtest/.ai.md; kept off the Protocol so isinstance() stays permissive.
     def on_init(self, context: dict) -> None: ...
     def on_bar(self, bar: Bar, history: pd.DataFrame, context: dict) -> Signal: ...
+
+
+class AsyncStrategy(Protocol):
+    """Async variant of Strategy for use with AsyncStrategyOrchestrator (#78).
+
+    Frozen interface — consumed by #79 (Signal Router) and #80 (Broker Executor).
+    engine.py continues to use the sync Strategy Protocol unchanged.
+    """
+    async def on_bar(self, ctx: object) -> "Signal | None": ...
