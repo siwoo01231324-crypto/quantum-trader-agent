@@ -4,7 +4,7 @@ import numpy as np
 from .registry import register
 
 
-@register("rsi", inputs=["close"], period=14)
+@register("rsi", inputs=["close"], alpha_horizon_bars=5, bar_interval="1d", signal_type="mean_reversion", period=14)
 def compute_rsi(close: pd.Series, period: int = 14) -> pd.Series:
     """Wilder-smoothed RSI using true Wilder smoothing (SMMA).
 

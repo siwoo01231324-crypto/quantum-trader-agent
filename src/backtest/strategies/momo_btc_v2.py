@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Literal
 
 import pandas as pd
@@ -52,6 +53,20 @@ class MomoBtcV2:
     def on_init(self, context: dict) -> None:
         pass
 
+    def _compute_confidence(
+        self,
+        div_magnitude: float,
+        atr: float,
+        bars_since_pivot: int,
+    ) -> float:
+        """Confidence score for a bullish divergence signal.
+
+        Formula: clip01(|div_magnitude| / atr * min(bars_since_pivot / LOOKBACK, 1))
+        """
+        if atr <= 0.0:
+            return 0.0
+        return max(0.0, min(1.0, abs(div_magnitude) / atr * min(bars_since_pivot / self.LOOKBACK, 1.0)))
+
     def _entry_size(self, close: pd.Series) -> float:
         if self.sizing_mode == "full":
             return 1.0
@@ -91,7 +106,30 @@ class MomoBtcV2:
             size = self._entry_size(close)
             if size <= 0.0:
                 return Signal(action="hold", size=0.0, reason="bullish divergence (sized=0)")
-            return Signal(action="buy", size=size, reason="bullish divergence")
+
+            # Compute μ̂ from recent returns
+            window = close.iloc[-(self.sizing_lookback + 1):]
+            returns = window.pct_change().dropna()
+            mu_hat = float(returns.mean()) if len(returns) >= 2 else 0.0
+
+            # Compute confidence from divergence magnitude, ATR, bars since pivot
+            from signals.atr import compute_atr
+            atr_series = compute_atr(history["high"], history["low"], close)
+            atr_val = float(atr_series.iloc[-1]) if not atr_series.empty else 0.0
+            div_magnitude = float(close.iloc[-1] - close.iloc[-self.LOOKBACK - 1])
+            # bars_since_pivot: count bars since last non-bullish in window
+            recent_div = div.iloc[-self.LOOKBACK:]
+            bullish_indices = [i for i, v in enumerate(recent_div) if v == "bullish"]
+            bars_since_pivot = (len(recent_div) - bullish_indices[0]) if bullish_indices else self.LOOKBACK
+            conf = self._compute_confidence(div_magnitude, atr_val, bars_since_pivot)
+
+            return Signal(
+                action="buy",
+                size=size,
+                reason="bullish divergence",
+                expected_return=mu_hat,
+                confidence=conf,
+            )
         elif latest == "bearish":
             return Signal(action="sell", size=1.0, reason="bearish divergence")
         return Signal(action="hold", size=0.0, reason="no signal")
