@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 import pandas as pd
 import numpy as np
@@ -47,6 +49,22 @@ def run_backtest(
         if unknown:
             raise KeyError(f"strategy requires unregistered factors: {unknown}")
 
+    precomputed_factors: dict[str, pd.Series | pd.DataFrame] = {}
+    if required_factors:
+        from signals.registry import FACTOR_REGISTRY, compute
+
+        non_causal = [n for n in required_factors if not FACTOR_REGISTRY[n].causal]
+        if non_causal:
+            raise ValueError(
+                f"non-causal factors cannot use precompute path: {non_causal}. "
+                "register with causal=False is not supported by engine batch path."
+            )
+
+        for name in required_factors:
+            spec = FACTOR_REGISTRY[name]
+            kwargs = {col: ohlcv[col] for col in spec.inputs if col in ohlcv.columns}
+            precomputed_factors[name] = compute(name, **kwargs, **spec.default_params)
+
     strategy.on_init({})
 
     for i in range(len(ohlcv)):
@@ -89,13 +107,9 @@ def run_backtest(
             history = ohlcv.iloc[:i+1]
             context: dict = {}
             if required_factors:
-                from signals.registry import FACTOR_REGISTRY, compute
-
                 factors: dict[str, pd.Series | pd.DataFrame] = {}
                 for name in required_factors:
-                    spec = FACTOR_REGISTRY[name]
-                    kwargs = {col: history[col] for col in spec.inputs if col in history.columns}
-                    factors[name] = compute(name, **kwargs, **spec.default_params)
+                    factors[name] = precomputed_factors[name].iloc[:i+1]
                 context["factors"] = factors
             signal = strategy.on_bar(bar, history, context)
 

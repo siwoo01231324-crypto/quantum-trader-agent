@@ -15,12 +15,13 @@ class FactorSpec:
     func: Callable[..., Any]
     inputs: list[str]
     default_params: dict[str, Any] = field(default_factory=dict)
+    causal: bool = True
 
 
 FACTOR_REGISTRY: dict[str, FactorSpec] = {}
 
 
-def register(name: str, *, inputs: list[str], **defaults: Any) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+def register(name: str, *, inputs: list[str], causal: bool = True, **defaults: Any) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Decorator: @register("rsi", inputs=["close"], period=14).
 
     Validates at registration time that every entry in `inputs` appears in the
@@ -45,6 +46,7 @@ def register(name: str, *, inputs: list[str], **defaults: Any) -> Callable[[Call
             func=func,
             inputs=list(inputs),
             default_params=dict(defaults),
+            causal=causal,
         )
         return func
 
