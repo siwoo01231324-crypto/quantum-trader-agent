@@ -4,6 +4,7 @@ version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
     "cryptography>=42,<46",
+    "httpx>=0.27",
     "pandas>=2.1",
     "numpy>=1.26",
     "pyarrow>=14.0",
@@ -14,15 +15,24 @@ dependencies = [
     "scikit-learn>=1.4",
     "scipy>=1.10",
     "websocket-client>=1.7,<2.0",
+    "websockets>=12",
+    "prometheus-client>=0.20",
 ]
 
 [project.optional-dependencies]
 dev = [
     "freezegun",
-    "pandas-ta",
     "pytest>=8.0",
+    "pytest-asyncio>=0.23",
     "pytest-cov",
+    "respx>=0.21",
     "responses>=0.25",
+]
+# pandas-ta is a Python <=3.10 only optional cross-check dep used by tests/signals/.
+# Tests skip when not installed (pytest.mark.skipif). Install manually if you want
+# to run pandas-ta cross-check tests on a Python <=3.10 environment.
+ta-crosscheck = [
+    "pandas-ta",
 ]
 
 [tool.pytest.ini_options]
@@ -33,3 +43,12 @@ markers = [
     "slow: long-running benchmarks (default skipped; run with -m slow)",
 ]
 addopts = "-m 'not integration and not slow'"
+asyncio_mode = "auto"
+
+[tool.coverage.run]
+# 본 이슈 (#73) broker async 마이그레이션의 coverage 게이트는 broker adapter 한정.
+# 데이터 fetcher / 외부 보조 모듈은 별도 이슈 (#79 등) 의 책임.
+omit = [
+    "src/brokers/kis/fundamentals_client.py",  # KIS 재무 데이터 fetcher (data_lake 소비)
+    "src/brokers/kis/price_client.py",         # KIS 일봉 OHLCV fetcher (#79 카탈로그용)
+]

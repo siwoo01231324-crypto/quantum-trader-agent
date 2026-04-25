@@ -1,0 +1,11 @@
+{
+  "sync": {
+    "scenario": "rest_throughput_sync",
+    "n_requests": 200,
+    "total_s": 1.5916,
+    "req_per_s": 125.66,
+    "p50_ms": 202.37,
+    "p95_ms": 375.929,
+    "p99_ms": 462.352
+  }
+}
