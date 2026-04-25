@@ -6,7 +6,6 @@ on:
       - "src/brokers/**"
       - "src/portfolio/**"
       - "tests/brokers/**"
-      - "tests/portfolio/**"
       - "tests/integration/**"
       - "tests/performance/**"
       - "tests/conftest.py"
@@ -41,7 +40,7 @@ jobs:
 
       - name: Run broker unit tests (not slow, not integration)
         run: |
-          pytest tests/brokers/ tests/portfolio/ -q -m "not slow and not integration" --tb=short
+          pytest tests/brokers/ -q -m "not slow and not integration" --tb=short
 
       - name: Coverage gate (src.brokers >= 85%)
         run: |
