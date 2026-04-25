@@ -4,12 +4,14 @@ Fetches historical OHLCV candle data from Binance klines endpoint with
 pagination (1000 candles/request), rate-limit retry, and hive-partitioned
 Parquet output.
 
-Also provides fetch_kis_daily_ohlcv for KRX/KIS daily bars.
+Also provides fetch_kis_daily_ohlcv for KRX/KIS daily bars and
+fetch_kis_intraday_ohlcv for KRX/KIS intraday minute bars.
 """
 from __future__ import annotations
 
+import logging
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -20,10 +22,13 @@ import requests
 
 from data_lake import OHLCV_SCHEMA, validate_schema, partition_path
 from src.brokers.kis.rest import KISClient
-from src.brokers.kis.price_client import fetch_daily_ohlcv_raw
+from src.brokers.kis.price_client import fetch_daily_ohlcv_raw, fetch_intraday_ohlcv_raw
+from src.universe.krx_calendar import is_krx_holiday, KST
 
 if TYPE_CHECKING:
     from src.brokers.kis.auth import KISAuth
+
+log = logging.getLogger(__name__)
 
 BINANCE_KLINES_URL = "https://api.binance.com/api/v3/klines"
 
@@ -268,3 +273,98 @@ def fetch_kis_daily_ohlcv(
         })
 
     return pd.DataFrame(records)
+
+
+def fetch_kis_intraday_ohlcv(
+    symbol: str,
+    start: str,
+    end: str,
+    interval: str = "15",
+    *,
+    auth: "KISAuth",
+    app_key: str,
+    app_secret: str,
+    cano: str,
+    acnt_prdt_cd: str,
+    paper: bool = True,
+) -> pd.DataFrame:
+    """Fetch KIS intraday minute OHLCV bars and return a DataFrame matching OHLCV_SCHEMA.
+
+    Parameters
+    ----------
+    symbol:        KRX stock code (6 digits), e.g. "005930".
+    start:         ISO date string "YYYY-MM-DD".
+    end:           ISO date string "YYYY-MM-DD".
+    interval:      Bar interval in minutes: "1"|"3"|"5"|"10"|"15"|"30"|"60". Default "15".
+    auth:          KISAuth instance.
+    app_key/app_secret/cano/acnt_prdt_cd: KIS API credentials.
+    paper:         True = paper (openapivts), False = live.
+
+    Returns
+    -------
+    pd.DataFrame with columns matching OHLCV_SCHEMA. Empty DataFrame (with
+    correct columns) if no data is available.
+
+    Notes
+    -----
+    KIS intraday API only supports data within the last 30 days. Dates older
+    than 30 days from today are skipped with a warning log (no exception raised).
+    """
+    client = KISClient(
+        auth=auth,
+        app_key=app_key,
+        app_secret=app_secret,
+        cano=cano,
+        acnt_prdt_cd=acnt_prdt_cd,
+        paper=paper,
+    )
+
+    today = datetime.now(KST).date()
+    cutoff = today - timedelta(days=30)
+
+    trading_days = [
+        d.date()
+        for d in pd.bdate_range(start, end)
+        if not is_krx_holiday(d.date())
+    ]
+
+    now = datetime.now(tz=timezone.utc)
+    all_records: list[dict] = []
+    first_call = True
+
+    for d in trading_days:
+        if d < cutoff:
+            log.warning("KIS intraday >30d limit, skipping %s", d)
+            continue
+
+        if not first_call:
+            time.sleep(0.5)
+        first_call = False
+
+        bars = fetch_intraday_ohlcv_raw(client, symbol, d.strftime("%Y%m%d"), interval=interval)
+
+        for bar in bars:
+            ts = pd.Timestamp(
+                f"{bar.date[:4]}-{bar.date[4:6]}-{bar.date[6:8]}"
+                f" {bar.time[:2]}:{bar.time[2:4]}:{bar.time[4:6]}",
+                tz="Asia/Seoul",
+            ).tz_convert("UTC")
+            all_records.append({
+                "symbol": symbol,
+                "ts": ts,
+                "freq": f"{interval}m",
+                "open": float(bar.open),
+                "high": float(bar.high),
+                "low": float(bar.low),
+                "close": float(bar.close),
+                "volume": float(bar.volume),
+                "vwap": bar.trade_amt / bar.volume if bar.volume > 0 else 0.0,
+                "trade_count": 0,
+                "source": "kis",
+                "ingested_at": pd.Timestamp(now),
+            })
+
+    if not all_records:
+        return pd.DataFrame(columns=list(OHLCV_SCHEMA.keys()))
+
+    return pd.DataFrame(all_records)

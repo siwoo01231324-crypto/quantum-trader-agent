@@ -42,3 +42,4 @@ TR_ID_STABILITY_RATIO    = "FHKST66430600"  # /finance/stability-ratio     — c
 
 TR_ID_INQUIRE_PRICE      = "FHKST01010100"  # /quotations/inquire-price    — PER/PBR/EPS/BPS (market multiples)
 TR_ID_DAILY_PRICE        = "FHKST03010100"  # /quotations/inquire-daily-itemchartprice — daily OHLCV bars
+TR_ID_INTRADAY_PRICE     = "FHKST03010200"  # /quotations/inquire-time-itemchartprice — intraday minute bars

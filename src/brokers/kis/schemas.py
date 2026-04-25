@@ -135,3 +135,22 @@ class KISDailyBar(BaseModel):
         if v is None or v == "":
             return 0.0
         return float(str(v))
+
+
+class KISIntradayBar(BaseModel):
+    """Single intraday OHLCV bar from KIS FHKST03010200."""
+    date: str       # "YYYYMMDD" from stck_bsop_date
+    time: str       # "HHMMSS"   from stck_cntg_hour
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: float
+    trade_amt: float  # acml_tr_pbmn — accumulated trade amount (KRW)
+
+    @field_validator("open", "high", "low", "close", "volume", "trade_amt", mode="before")
+    @classmethod
+    def _coerce_float(cls, v: Any) -> Any:
+        if v is None or v == "":
+            return 0.0
+        return float(str(v))
