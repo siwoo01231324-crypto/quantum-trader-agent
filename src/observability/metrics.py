@@ -18,6 +18,10 @@ METRIC_NAMES = [
     "qta_strategy_signal_total",
     "qta_risk_breach_total",
     "qta_open_orders",
+    "qta_broker_fill_queue_overflow_total",
+    "qta_broker_ws_reconnect_total",
+    "qta_broker_keepalive_failure_total",
+    "qta_broker_request_latency_seconds",
 ]
 
 
@@ -89,6 +93,31 @@ class Metrics:
             "qta_open_orders",
             "Current open order count",
             labelnames=("broker", "symbol"),
+            registry=self.registry,
+        )
+        self.broker_fill_queue_overflow_total = Counter(
+            "qta_broker_fill_queue_overflow_total",
+            "Fill queue overflow events by broker and overflow policy",
+            labelnames=("broker", "policy"),
+            registry=self.registry,
+        )
+        self.broker_ws_reconnect_total = Counter(
+            "qta_broker_ws_reconnect_total",
+            "WebSocket reconnect attempts by broker and reason",
+            labelnames=("broker", "reason"),
+            registry=self.registry,
+        )
+        self.broker_keepalive_failure_total = Counter(
+            "qta_broker_keepalive_failure_total",
+            "listenKey keepalive failures by broker",
+            labelnames=("broker",),
+            registry=self.registry,
+        )
+        self.broker_request_latency_seconds = Histogram(
+            "qta_broker_request_latency_seconds",
+            "Broker REST request latency in seconds",
+            labelnames=("broker", "method", "endpoint"),
+            buckets=(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5),
             registry=self.registry,
         )
 

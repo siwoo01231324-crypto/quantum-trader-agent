@@ -21,6 +21,7 @@ from risk import (
     evaluate,
     PortfolioRiskReport,
 )
+from src.brokers.base import AsyncBrokerAdapter
 from .orchestrator import _SyncStrategyOrchestrator
 from .order_intent import OrderIntent
 from .sizing import resolve_size
@@ -41,9 +42,11 @@ class AsyncStrategyOrchestrator:
         *,
         refresh_every_n_bars: int | None = None,
         min_reliability: float = 0.0,
+        broker: AsyncBrokerAdapter | None = None,
     ) -> None:
         self._sync = _SyncStrategyOrchestrator(policy)
         self._policy = policy
+        self._broker: AsyncBrokerAdapter | None = broker
         self._strategies: dict[str, object] = {}
         self._recent_returns: dict[str, pd.Series] = {}
         self._quarantined: set[str] = set()

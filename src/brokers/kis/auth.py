@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -54,6 +55,9 @@ class KISAuth:
         self._expires_at: datetime | None = None
         self._last_issued_at: float = 0.0  # monotonic
 
+        # async concurrent refresh 직렬화 (background task 도입 금지, lazy refresh 구조 유지)
+        self._async_lock: asyncio.Lock | None = None
+
         self._load_cache()
 
     # ------------------------------------------------------------------
@@ -67,6 +71,21 @@ class KISAuth:
         if not self._access_token:
             raise AuthError("KIS access token unavailable")
         return self._access_token
+
+    async def get_token_async(self) -> str:
+        """async 경로용 get_token. asyncio.Lock 으로 concurrent refresh 직렬화.
+
+        lazy refresh 구조는 sync get_token 과 동일하게 유지.
+        background task / 선행 갱신 루프 도입 금지.
+        """
+        if self._async_lock is None:
+            self._async_lock = asyncio.Lock()
+        async with self._async_lock:
+            if self._should_renew():
+                self._issue_token()
+            if not self._access_token:
+                raise AuthError("KIS access token unavailable")
+            return self._access_token
 
     # ------------------------------------------------------------------
     # Internal

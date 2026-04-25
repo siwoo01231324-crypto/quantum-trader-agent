@@ -47,3 +47,15 @@ class TimestampError(BrokerError):
 
 class UnknownError(BrokerError):
     """Unexpected response or unknown error code from the exchange."""
+
+
+class BrokerClosedError(BrokerError):
+    """Adapter is closing/closed; new orders are rejected."""
+
+
+class ListenKeyExpiredError(BrokerError):
+    """Binance listenKey expired; fill stream must be restarted."""
+
+
+class WSDisconnectedError(BrokerError):
+    """WebSocket connection dropped unexpectedly."""

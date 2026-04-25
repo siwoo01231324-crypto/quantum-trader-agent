@@ -1,0 +1,11 @@
+{
+  "scenario1": {
+    "scenario": "rest_throughput_async",
+    "n_requests": 200,
+    "total_s": 0.1353,
+    "req_per_s": 1477.94,
+    "p50_ms": 0.637,
+    "p95_ms": 0.813,
+    "p99_ms": 0.968
+  }
+}
