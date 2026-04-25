@@ -1,0 +1,13 @@
+strategies:
+  - id: momo-btc-v2
+    class: backtest.strategies.momo_btc_v2.MomoBtcV2
+    kwargs:
+      sizing_mode: full
+
+  - id: momo-btc-v2-meta
+    class: backtest.strategies.momo_btc_v2.MomoBtcV2
+    kwargs:
+      sizing_mode: full
+      metalabeler:
+        load_path: models/momo-btc-v2/latest/
+      metalabeler_threshold: 0.5

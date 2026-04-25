@@ -174,13 +174,36 @@ class MetaLabeler:
         return dir_path
 
     @classmethod
-    def load(cls, dir_path: Path) -> "MetaLabeler":
-        """Load a saved MetaLabeler from ``dir_path``."""
+    def load(cls, dir_path: Path, _is_alias: bool = False) -> "MetaLabeler":
+        """Load a saved MetaLabeler from ``dir_path``.
+
+        If ``dir_path`` contains a ``pointer.json`` but no ``model.lgbm``,
+        resolves one hop via ``pointer["active"]`` (alias directory).
+        Only 1-hop alias chains are permitted.
+        """
         import json
         import lightgbm as lgb
 
         dir_path = Path(dir_path)
+        pointer_path = dir_path / "pointer.json"
         model_path = dir_path / "model.lgbm"
+
+        if pointer_path.exists() and not model_path.exists():
+            pointer = json.loads(pointer_path.read_text())
+            if "active" not in pointer:
+                raise KeyError(f"pointer.json in {dir_path} has no 'active' key")
+            active = pointer["active"]
+            target = dir_path.parent / active
+            if target.resolve() == dir_path.resolve():
+                raise ValueError(
+                    f"pointer.json in {dir_path} points to itself (active={active!r})"
+                )
+            if _is_alias:
+                raise ValueError(
+                    f"Chained alias detected: {dir_path} → {target}. Only 1-hop aliases are permitted."
+                )
+            return cls.load(target, _is_alias=True)
+
         manifest_path = dir_path / "manifest.json"
 
         if not model_path.exists():
