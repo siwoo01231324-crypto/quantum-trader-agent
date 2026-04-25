@@ -21,12 +21,17 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "freezegun",
-    "pandas-ta",
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
     "pytest-cov",
     "respx>=0.21",
     "responses>=0.25",
+]
+# pandas-ta is a Python <=3.10 only optional cross-check dep used by tests/signals/.
+# Tests skip when not installed (pytest.mark.skipif). Install manually if you want
+# to run pandas-ta cross-check tests on a Python <=3.10 environment.
+ta-crosscheck = [
+    "pandas-ta",
 ]
 
 [tool.pytest.ini_options]
