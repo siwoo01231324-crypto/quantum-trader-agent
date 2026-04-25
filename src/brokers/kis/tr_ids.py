@@ -41,3 +41,4 @@ TR_ID_OTHER_MAJOR_RATIOS = "FHKST66430500"  # /finance/other-major-ratios  — E
 TR_ID_STABILITY_RATIO    = "FHKST66430600"  # /finance/stability-ratio     — current/quick ratio
 
 TR_ID_INQUIRE_PRICE      = "FHKST01010100"  # /quotations/inquire-price    — PER/PBR/EPS/BPS (market multiples)
+TR_ID_DAILY_PRICE        = "FHKST03010100"  # /quotations/inquire-daily-itemchartprice — daily OHLCV bars
