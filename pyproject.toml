@@ -44,3 +44,11 @@ markers = [
 ]
 addopts = "-m 'not integration and not slow'"
 asyncio_mode = "auto"
+
+[tool.coverage.run]
+# 본 이슈 (#73) broker async 마이그레이션의 coverage 게이트는 broker adapter 한정.
+# 데이터 fetcher / 외부 보조 모듈은 별도 이슈 (#79 등) 의 책임.
+omit = [
+    "src/brokers/kis/fundamentals_client.py",  # KIS 재무 데이터 fetcher (data_lake 소비)
+    "src/brokers/kis/price_client.py",         # KIS 일봉 OHLCV fetcher (#79 카탈로그용)
+]
