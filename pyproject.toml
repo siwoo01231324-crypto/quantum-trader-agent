@@ -12,6 +12,7 @@ dependencies = [
     "python-dotenv>=1.0",
     "pyyaml>=6.0",
     "requests>=2.31",
+    "lightgbm>=3.3,<5",
     "scikit-learn>=1.4",
     "scipy>=1.10",
     "websocket-client>=1.7,<2.0",
