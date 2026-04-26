@@ -129,6 +129,10 @@
 
 ---
 
+**후속**: #94 메타라벨러 프로덕션 활성화 (오케스트레이터 주입 + A/B 등록) — `configs/orchestrator/production.yaml` 로 on/off 동시 등록.
+
+---
+
 ## 재실행 방법
 
 ```bash

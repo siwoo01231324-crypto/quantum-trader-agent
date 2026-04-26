@@ -8,7 +8,8 @@
 lake/
 
 # ML 모델 아티팩트 — 실 아티팩트는 별도 모델 레지스트리/CI 로 관리 (#85, #94, #95)
-models/
+models/*
+!models/README.md
 
 # 환경 변수
 .env
