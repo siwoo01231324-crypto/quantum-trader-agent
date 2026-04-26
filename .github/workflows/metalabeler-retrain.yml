@@ -15,6 +15,9 @@ env:
   # Both project root (for `from src.xxx` imports) and src/ (for top-level
   # `from data_lake.xxx` etc) — covers all in-process and subprocess invocations.
   PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/src
+  # Unbuffered stdout/stderr so CI shows real-time progress (otherwise hangs
+  # appear silent until the script finishes).
+  PYTHONUNBUFFERED: "1"
 
 jobs:
   retrain:
