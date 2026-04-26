@@ -25,10 +25,12 @@ import pandas as pd
 WORKTREE = Path(__file__).resolve().parent.parent
 REPORT_PATH = WORKTREE / "docs/work/active/000085-meta-labeler-lightgbm/02_implementation.md"
 
-# Ensure src/ is importable when this script is run directly.
+# Ensure both project root (for `from src.xxx` transitive imports) and src/
+# (for top-level `from ml.xxx` / `from backtest.xxx`) are importable.
 _SRC = WORKTREE / "src"
-if str(_SRC) not in sys.path:
-    sys.path.insert(0, str(_SRC))
+for _p in (str(WORKTREE), str(_SRC)):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 
 # ---------------------------------------------------------------------------
