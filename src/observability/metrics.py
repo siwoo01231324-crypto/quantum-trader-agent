@@ -31,6 +31,19 @@ METRIC_NAMES = [
     "qta_paper_drawdown_ratio",
     "qta_paper_fee_usdt_total",
     "qta_wal_write_error_total",
+    # Phase 2 KIS paper-specific (#105)
+    "qta_paper_pnl_krw",
+    "qta_paper_equity_krw",
+    "qta_kis_token_ttl_seconds",
+    "qta_kis_partial_fill_total",
+    "qta_paper_kis_tracking_error",
+    "qta_broker_rate_limit_hit_total",
+    "qta_kis_fill_missing_total",
+    # qta_orders_placed_total: NEW ack count (order accepted by exchange)
+    # qta_orders_filled_total: FILLED confirmed count (execution complete)
+    # NOTE: qta_orders_total (existing) covers all ack types (NEW/FILLED/CANCELED/etc.)
+    "qta_orders_placed_total",
+    "qta_orders_filled_total",
 ]
 
 
@@ -174,6 +187,64 @@ class Metrics:
             "qta_wal_write_error_total",
             "WAL write failure count by error type (#80)",
             labelnames=("error_type",),
+            registry=self.registry,
+        )
+        # Phase 2 KIS paper-specific (#105)
+        self.paper_pnl_krw = Gauge(
+            "qta_paper_pnl_krw",
+            "Paper PnL in KRW (realized + unrealized) (#105)",
+            labelnames=("strategy",),
+            registry=self.registry,
+        )
+        self.paper_equity_krw = Gauge(
+            "qta_paper_equity_krw",
+            "Paper total equity (cash + unrealized) in KRW (#105)",
+            labelnames=("strategy",),
+            registry=self.registry,
+        )
+        self.kis_token_ttl_seconds = Gauge(
+            "qta_kis_token_ttl_seconds",
+            "KIS OAuth token remaining TTL in seconds (#105)",
+            labelnames=("paper",),
+            registry=self.registry,
+        )
+        self.kis_partial_fill_total = Counter(
+            "qta_kis_partial_fill_total",
+            "KIS partial fill events (#105)",
+            labelnames=("strategy",),
+            registry=self.registry,
+        )
+        self.paper_kis_tracking_error = Gauge(
+            "qta_paper_kis_tracking_error",
+            "Paper vs KIS live tracking error (basis points) (#105)",
+            labelnames=("strategy",),
+            registry=self.registry,
+        )
+        self.broker_rate_limit_hit_total = Counter(
+            "qta_broker_rate_limit_hit_total",
+            "Broker rate-limit hits by broker and scope (#105)",
+            labelnames=("broker", "scope"),
+            registry=self.registry,
+        )
+        self.kis_fill_missing_total = Counter(
+            "qta_kis_fill_missing_total",
+            "KIS fill events with missing order mapping (#105)",
+            labelnames=("strategy",),
+            registry=self.registry,
+        )
+        # orders_placed_total: NEW ack count (order accepted by exchange)
+        # orders_filled_total: FILLED confirmed count (execution complete)
+        # orders_total (existing): all ack types (NEW/FILLED/CANCELED/etc.)
+        self.orders_placed_total = Counter(
+            "qta_orders_placed_total",
+            "Orders accepted by exchange (NEW ack) — AC3 1차 (#105)",
+            labelnames=("strategy", "status"),
+            registry=self.registry,
+        )
+        self.orders_filled_total = Counter(
+            "qta_orders_filled_total",
+            "Orders fully filled (FILLED confirmed) — AC3 최종 (#105)",
+            labelnames=("strategy",),
             registry=self.registry,
         )
 

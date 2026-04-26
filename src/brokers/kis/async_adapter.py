@@ -185,7 +185,10 @@ class KISAsyncAdapter:
         resp = await self._client.get_balance()
         balances = []
         for summary in resp.output2:
-            dnca_tot_amt = summary.get("DNCA_TOT_AMT", "0")
+            # KIS pydantic schema deserializes to lowercase field names (dnca_tot_amt).
+            # Accept both cases for forward-compat with raw dict consumers.
+            d = dict(summary)
+            dnca_tot_amt = d.get("dnca_tot_amt", d.get("DNCA_TOT_AMT", "0")) or "0"
             balances.append(
                 Balance(
                     asset="KRW",
