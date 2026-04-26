@@ -246,6 +246,72 @@ def test_public_api_exposes_only_async():
     assert "StrategyOrchestrator" not in __all__
 
 
+def test_momo_kis_v1_register_and_refresh(policy, loop):
+    """MomoKisV1 register_strategy + register_strategy_returns + refresh_portfolio_risk returns report."""
+    import pandas as pd
+    from backtest.strategies.momo_kis_v1 import MomoKisV1
+
+    orch = AsyncStrategyOrchestrator(policy)
+    strategy = MomoKisV1()
+    orch.register_strategy("momo_kis_v1", strategy)
+
+    # Need >= 2 strategies for refresh_portfolio_risk to return non-None
+    from backtest.strategies.momo_kis_v1 import MomoKisV1 as MomoKisV1b
+    strategy2 = MomoKisV1b()
+    orch.register_strategy("momo_kis_v1_b", strategy2)
+
+    # mock daily returns Series (10 days)
+    idx = pd.date_range("2026-04-01", periods=10, freq="D")
+    returns = pd.Series([0.01, -0.005, 0.008, -0.003, 0.012, 0.002, -0.007, 0.005, 0.003, -0.001], index=idx)
+    returns2 = pd.Series([-0.002, 0.003, -0.001, 0.006, -0.004, 0.009, 0.001, -0.003, 0.007, 0.002], index=idx)
+    orch.register_strategy_returns("momo_kis_v1", returns)
+    orch.register_strategy_returns("momo_kis_v1_b", returns2)
+
+    report = orch.refresh_portfolio_risk()
+    assert report is not None
+
+
+def test_momo_kis_v1_run_bar_trading_hours(policy, loop):
+    """run_bar during KRX trading hours → signal processed; outside hours → empty list."""
+    import pandas as pd
+    import numpy as np
+    from unittest.mock import patch
+    from backtest.strategies.momo_kis_v1 import MomoKisV1
+    from universe.krx_calendar import KST
+
+    orch = AsyncStrategyOrchestrator(policy)
+    strategy = MomoKisV1()
+    orch.register_strategy("momo_kis_v1", strategy)
+
+    history = pd.DataFrame({
+        "open": np.full(100, 60000.0),
+        "high": np.full(100, 60100.0),
+        "low": np.full(100, 59900.0),
+        "close": np.linspace(60000.0, 61000.0, 100),
+        "volume": np.full(100, 50000.0),
+    })
+
+    # Outside trading hours (16:00 KST) → strategy returns "not my bar" → hold → no intents
+    ts_out = pd.Timestamp(2026, 4, 22, 16, 0, 0, tzinfo=KST)
+    snap = {"symbol": "005930", "price": 61000.0, "equity_krw": 1_000_000, "history": history}
+    intents_out = _run_in_loop(loop, orch.run_bar(ts=ts_out, market_snapshot=snap))
+    assert intents_out == []
+
+    # Inside trading hours (10:00 KST) — bullish divergence patched → may produce intent
+    ts_in = pd.Timestamp(2026, 4, 22, 10, 0, 0, tzinfo=KST)
+    bullish_series = pd.Series(["none"] * 100)
+    bullish_series.iloc[-1] = "bullish"
+    with patch("backtest.strategies.momo_kis_v1.detect_divergence", return_value=bullish_series):
+        snap_in = {"symbol": "005930", "price": 61000.0, "equity_krw": 1_000_000, "history": history}
+        ctx_factors = {"rsi": pd.Series(np.full(100, 50.0))}
+        # run_bar builds ctx without factors key — strategy falls back to empty rsi.
+        # The signal may be "bullish divergence (sized=0)" or "buy" depending on returns.
+        # We only assert no exception and the call completes.
+        intents_in = _run_in_loop(loop, orch.run_bar(ts=ts_in, market_snapshot=snap_in))
+        # intents_in is a list (possibly empty if sized=0 → hold); no exception is the key assertion.
+        assert isinstance(intents_in, list)
+
+
 def test_run_bar_latency_p99(policy):
     """p99 latency < 50ms for run_bar with 5 mock sync strategies.
 
