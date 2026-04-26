@@ -237,24 +237,47 @@ def main() -> int:
                          "--output-md", str(output_dir / "bench_report.md")]
             if not args.synthetic:
                 bench_cmd += ["--data-path", str(args.lake_dir)]
-            result = subprocess.run(
+            # Stream bench output to our stdout in real-time so CI shows
+            # progress (capture_output blocks until subprocess finishes,
+            # making slow backtests look like silent hangs).
+            print("[bench] starting subprocess (streaming output)...", flush=True)
+            proc = subprocess.Popen(
                 bench_cmd,
                 cwd=str(WORKTREE),
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
                 text=True,
+                bufsize=1,
             )
+            captured: list[str] = []
+            try:
+                assert proc.stdout is not None
+                for line in proc.stdout:
+                    print(f"  [bench] {line}", end="", flush=True)
+                    captured.append(line)
+                proc.wait(timeout=900)  # 15 min hard cap
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
+                post_train_failure = True
+                failure_log_parts.append("[STEP 3 - bench TIMEOUT (>15 min)]")
+                print("[bench] TIMEOUT — killed", flush=True)
+
+            bench_stdout = "".join(captured)
+            # Wrap into a "result" shape so existing code below stays simple.
+            class _R:
+                returncode = proc.returncode if proc.returncode is not None else 1
+                stdout = bench_stdout
+                stderr = ""
+            result = _R()
             # bench exit codes: 0=AC4 PASS, 2=AC4 FAIL (verdict, expected),
             #   1=environment failure (real failure to surface).
-            print(f"[bench] exit={result.returncode}")
-            if result.stdout:
-                print(f"[bench stdout]\n{result.stdout}", file=sys.stderr)
-            if result.stderr:
-                print(f"[bench stderr]\n{result.stderr}", file=sys.stderr)
+            print(f"[bench] exit={result.returncode}", flush=True)
             if result.returncode == 1:
                 post_train_failure = True
                 failure_log_parts.append(
                     f"[STEP 3 - bench environment FAILED (exit 1)]\n"
-                    f"stdout: {result.stdout}\nstderr: {result.stderr}"
+                    f"stdout: {result.stdout}"
                 )
             else:
                 # Parse bench stdout for "ON Sharpe: <val>" so drift_detector can compare.
