@@ -379,6 +379,34 @@ def main() -> int:
         failure_log="\n\n".join(failure_log_parts) if failure_log_parts else None,
     )
 
+    # --- Step 8: always-on completion notification ---
+    try:
+        if output_dir is None or post_train_failure:
+            level = "critical"
+            title_prefix = "❌ 학습 실패"
+        elif drift_report is not None and drift_report.triggered:
+            level = "warn"
+            title_prefix = "⚠️ 드리프트 감지"
+        else:
+            level = "info"
+            title_prefix = "✅ 학습 완료"
+
+        cv_acc = cv_report.get("mean_accuracy") if cv_report else None
+        drift_status = drift_report.reason if drift_report else "n/a"
+        notify(
+            level,
+            f"{title_prefix}: {args.strategy_id} ({date_str})",
+            body=(
+                f"CV accuracy: {cv_acc:.4f}\n" if cv_acc is not None else ""
+            ) + f"Drift: {drift_status}",
+            fields={
+                "output_dir": str(output_dir) if output_dir else "n/a",
+                "post_train_failure": str(post_train_failure),
+            },
+        )
+    except Exception:
+        print(f"[warn] completion notification failed:\n{traceback.format_exc()}", file=sys.stderr)
+
     # --- Exit code ---
     if output_dir is None or post_train_failure:
         return 1
