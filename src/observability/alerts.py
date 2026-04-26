@@ -52,4 +52,11 @@ def notify(
         sent = True
 
     if not sent:
-        print(f"[ALERT {level}] {title}\n {body}")
+        msg = f"[ALERT {level}] {title}\n {body}"
+        # Windows consoles default to cp949/cp1252 and choke on emoji.
+        # Encode/replace to whatever stdout supports.
+        try:
+            print(msg)
+        except UnicodeEncodeError:
+            enc = sys.stdout.encoding or "ascii"
+            print(msg.encode(enc, errors="replace").decode(enc, errors="replace"))
