@@ -22,6 +22,15 @@ METRIC_NAMES = [
     "qta_broker_ws_reconnect_total",
     "qta_broker_keepalive_failure_total",
     "qta_broker_request_latency_seconds",
+    # Phase 1 paper-specific (#80)
+    "qta_paper_fills_total",
+    "qta_paper_pnl_usdt",
+    "qta_paper_position_qty",
+    "qta_paper_equity_usdt",
+    "qta_paper_order_ack_latency_ms",
+    "qta_paper_drawdown_ratio",
+    "qta_paper_fee_usdt_total",
+    "qta_wal_write_error_total",
 ]
 
 
@@ -118,6 +127,53 @@ class Metrics:
             "Broker REST request latency in seconds",
             labelnames=("broker", "method", "endpoint"),
             buckets=(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5),
+            registry=self.registry,
+        )
+        # Phase 1 paper-specific (#80)
+        self.paper_fills_total = Counter(
+            "qta_paper_fills_total",
+            "Paper broker fill events (#80)",
+            labelnames=("strategy", "symbol", "side"),
+            registry=self.registry,
+        )
+        self.paper_pnl_usdt = Gauge(
+            "qta_paper_pnl_usdt",
+            "Paper PnL in USDT (realized + unrealized) (#80)",
+            labelnames=("strategy",),
+            registry=self.registry,
+        )
+        self.paper_position_qty = Gauge(
+            "qta_paper_position_qty",
+            "Paper position quantity by symbol (#80)",
+            labelnames=("strategy", "symbol"),
+            registry=self.registry,
+        )
+        self.paper_equity_usdt = Gauge(
+            "qta_paper_equity_usdt",
+            "Paper total equity (cash + unrealized) in USDT (#80)",
+            registry=self.registry,
+        )
+        self.paper_order_ack_latency_ms = Histogram(
+            "qta_paper_order_ack_latency_ms",
+            "Paper order submit-to-ack latency in milliseconds (#80)",
+            buckets=(1, 5, 10, 25, 50, 100, 250, 500, 1000),
+            registry=self.registry,
+        )
+        self.paper_drawdown_ratio = Gauge(
+            "qta_paper_drawdown_ratio",
+            "Paper current drawdown ratio (peak-relative, negative) (#80)",
+            registry=self.registry,
+        )
+        self.paper_fee_usdt_total = Counter(
+            "qta_paper_fee_usdt_total",
+            "Paper cumulative fees paid in USDT (#80)",
+            labelnames=("symbol", "fee_type"),
+            registry=self.registry,
+        )
+        self.wal_write_error_total = Counter(
+            "qta_wal_write_error_total",
+            "WAL write failure count by error type (#80)",
+            labelnames=("error_type",),
             registry=self.registry,
         )
 
