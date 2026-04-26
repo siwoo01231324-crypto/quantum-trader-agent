@@ -407,9 +407,9 @@ def main() -> int:
         if cv_acc is not None:
             std_str = f" ± {cv_std:.4f}" if cv_std is not None else ""
             fold_str = f" ({n_folds} folds)" if n_folds else ""
-            body_lines.append(f"  CV accuracy: {cv_acc:.4f}{std_str}{fold_str}")
-            ac_gate = "✅ PASS" if cv_acc >= 0.55 else "⚠️ WARN (<0.55)"
-            body_lines.append(f"  AC gate: {ac_gate}")
+            body_lines.append(f"  CV accuracy(정답률): {cv_acc:.4f}{std_str}{fold_str}")
+            ac_gate = "✅ PASS" if cv_acc >= 0.55 else "⚠️ WARN"
+            body_lines.append(f"  AC gate(합격선 ≥55%): {ac_gate}")
         if bench_result and "on" in bench_result:
             on_sharpe = bench_result["on"].get("sharpe")
             off_sharpe = bench_result.get("off", {}).get("sharpe")
@@ -417,10 +417,10 @@ def main() -> int:
                 delta = on_sharpe - off_sharpe
                 arrow = "↑" if delta > 0 else "↓"
                 body_lines.append(
-                    f"  Sharpe: OFF {off_sharpe:+.3f} → ON {on_sharpe:+.3f} ({arrow}{abs(delta):.3f})"
+                    f"  Sharpe(위험조정수익률): OFF {off_sharpe:+.3f} → ON {on_sharpe:+.3f} ({arrow}{abs(delta):.3f})"
                 )
             elif on_sharpe is not None:
-                body_lines.append(f"  Sharpe (ON): {on_sharpe:+.3f}")
+                body_lines.append(f"  Sharpe(위험조정수익률, ON): {on_sharpe:+.3f}")
 
         body_lines.append("")
         body_lines.append("🔍 드리프트")
