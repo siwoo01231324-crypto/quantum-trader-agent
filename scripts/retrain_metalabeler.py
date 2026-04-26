@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -384,26 +385,60 @@ def main() -> int:
         if output_dir is None or post_train_failure:
             level = "critical"
             title_prefix = "❌ 학습 실패"
+            recommendation = "GH Actions 로그 확인 → 재실행 필요"
         elif drift_report is not None and drift_report.triggered:
             level = "warn"
             title_prefix = "⚠️ 드리프트 감지"
+            recommendation = "수동 검토 → 모델 보류 (latest.json 미갱신)"
         else:
             level = "info"
             title_prefix = "✅ 학습 완료"
+            recommendation = "latest.json 자동 갱신, 다음 학습까지 운영 지속"
 
         cv_acc = cv_report.get("mean_accuracy") if cv_report else None
-        drift_status = drift_report.reason if drift_report else "n/a"
-        notify(
-            level,
-            f"{title_prefix}: {args.strategy_id} ({date_str})",
-            body=(
-                f"CV accuracy: {cv_acc:.4f}\n" if cv_acc is not None else ""
-            ) + f"Drift: {drift_status}",
-            fields={
-                "output_dir": str(output_dir) if output_dir else "n/a",
-                "post_train_failure": str(post_train_failure),
-            },
-        )
+        cv_std = cv_report.get("std_accuracy") if cv_report else None
+        n_folds = cv_report.get("n_folds") if cv_report else None
+
+        body_lines: list[str] = []
+        body_lines.append(f"전략: {args.strategy_id} | 심볼: {args.symbol} {args.interval}")
+        body_lines.append(f"버전: {date_str} ({now.isoformat(timespec='minutes').replace('+00:00','Z')})")
+        body_lines.append("")
+        body_lines.append("📊 학습 결과")
+        if cv_acc is not None:
+            std_str = f" ± {cv_std:.4f}" if cv_std is not None else ""
+            fold_str = f" ({n_folds} folds)" if n_folds else ""
+            body_lines.append(f"  CV accuracy: {cv_acc:.4f}{std_str}{fold_str}")
+            ac_gate = "✅ PASS" if cv_acc >= 0.55 else "⚠️ WARN (<0.55)"
+            body_lines.append(f"  AC gate: {ac_gate}")
+        if bench_result and "on" in bench_result:
+            on_sharpe = bench_result["on"].get("sharpe")
+            off_sharpe = bench_result.get("off", {}).get("sharpe")
+            if on_sharpe is not None and off_sharpe is not None:
+                delta = on_sharpe - off_sharpe
+                arrow = "↑" if delta > 0 else "↓"
+                body_lines.append(
+                    f"  Sharpe: OFF {off_sharpe:+.3f} → ON {on_sharpe:+.3f} ({arrow}{abs(delta):.3f})"
+                )
+            elif on_sharpe is not None:
+                body_lines.append(f"  Sharpe (ON): {on_sharpe:+.3f}")
+
+        body_lines.append("")
+        body_lines.append("🔍 드리프트")
+        body_lines.append(f"  {drift_report.reason if drift_report else 'n/a'}")
+
+        body_lines.append("")
+        body_lines.append("👉 권고")
+        body_lines.append(f"  {recommendation}")
+
+        fields: dict[str, str] = {}
+        if output_dir is not None:
+            fields["artifact"] = str(output_dir).split("models/", 1)[-1] if "models/" in str(output_dir) else str(output_dir)
+        run_id = os.environ.get("GITHUB_RUN_ID", "")
+        repo = os.environ.get("GITHUB_REPOSITORY", "")
+        if run_id and repo:
+            fields["GH run"] = f"https://github.com/{repo}/actions/runs/{run_id}"
+
+        notify(level, f"{title_prefix}: {args.strategy_id}", body="\n".join(body_lines), fields=fields)
     except Exception:
         print(f"[warn] completion notification failed:\n{traceback.format_exc()}", file=sys.stderr)
 
