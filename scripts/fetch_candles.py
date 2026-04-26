@@ -17,7 +17,9 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+_ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(_ROOT))           # for "from src.xxx" imports inside data_lake.fetcher
+sys.path.insert(0, str(_ROOT / "src"))   # for top-level "data_lake.xxx" import below
 
 from data_lake.fetcher import fetch_binance_klines, save_ohlcv_parquet
 
