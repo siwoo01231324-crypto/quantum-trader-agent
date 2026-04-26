@@ -232,18 +232,23 @@ def main() -> int:
         try:
             bench_out = output_dir / "bench_result.json"
             bench_script = WORKTREE / "scripts/bench_metalabeler_btc.py"
+            bench_cmd = [sys.executable, str(bench_script),
+                         "--model-path", str(output_dir),
+                         "--output-md", str(output_dir / "bench_report.md")]
+            if not args.synthetic:
+                bench_cmd += ["--data-path", str(args.lake_dir)]
             result = subprocess.run(
-                [sys.executable, str(bench_script),
-                 "--model-path", str(output_dir),
-                 "--output-md", str(output_dir / "bench_report.md")],
+                bench_cmd,
                 cwd=str(WORKTREE),
                 capture_output=True,
                 text=True,
             )
-            if result.returncode != 0:
+            # bench exit codes: 0=AC4 PASS, 2=AC4 FAIL (verdict, expected),
+            #   1=environment failure (real failure to surface).
+            if result.returncode == 1:
                 post_train_failure = True
                 failure_log_parts.append(
-                    f"[STEP 3 - bench FAILED (exit {result.returncode})]\n"
+                    f"[STEP 3 - bench environment FAILED (exit 1)]\n"
                     f"stdout: {result.stdout}\nstderr: {result.stderr}"
                 )
             else:
