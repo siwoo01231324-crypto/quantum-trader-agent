@@ -124,7 +124,42 @@ strategy = MomoBtcV2(metalabeler=MetaLabeler.load(model_dir), metalabeler_thresh
 
 on_bar 내부 훅 포인트: Signal 생성 직전에서 `win_probability` 임계값 미달 시 `action="hold"` 반환.
 
-## 8. 실패 모드 · 롤백 기준
+## 8. 주간 재학습
+
+매주 월요일 00:00 UTC GitHub Actions cron (`metalabeler-retrain.yml`)이 자동으로 다음 절차를 실행한다.
+
+1. `scripts/fetch_candles.py` — 최근 13개월 OHLCV 수집
+2. `scripts/retrain_metalabeler.py` — `src/ml/retrain_pipeline` 경유 재학습
+   - 신규 아티팩트 저장 경로: `models/<strategy_id>/<YYYYMMDD>/`
+   - 이전 아티팩트는 보존 (덮어쓰지 않음)
+3. `src/ml/drift_detector.compare(prev, new, bench)` — 드리프트 판정
+   - `accuracy_delta ≥ 0.05` OR `sharpe_delta ≥ 0.3` → `DriftReport.triggered=True` → Slack/Telegram 알림
+4. drift 없음 → `models/<strategy_id>/latest.json` 자동 갱신
+5. 실패 시 `models/<strategy_id>/retrain_logs/<YYYYMMDD>.md` 에 traceback + "retry 필요" 기록 (GHA artifact 로 보존)
+
+**exit code:** `0`=정상, `2`=drift 감지(workflow success 유지), `1`=치명적 실패(workflow fail)
+
+### latest.json 정책
+
+파일 위치: `models/<strategy_id>/latest.json` (gitignore 영향 없는 경로)
+
+```json
+{
+  "version": "20260501",
+  "trained_at": "2026-05-01T00:00:00Z",
+  "git_sha": "abc1234",
+  "cv_mean_accuracy": 0.512,
+  "drift_triggered": false,
+  "approved": true
+}
+```
+
+- `drift_triggered=False` 일 때만 자동 갱신. drift 발생 시 latest 보존 + 알림만.
+- 첫 학습(prev 없음)은 drift skip → 자동 등록.
+- cross-platform 호환(심볼릭 링크 미사용) + git-trackable.
+- 프로덕션 live 어댑터의 모델 경로 자동 갱신은 **별도 이슈(out of scope)**.
+
+## 9. 실패 모드 · 롤백 기준
 
 | 상황 | 대응 |
 |------|------|
