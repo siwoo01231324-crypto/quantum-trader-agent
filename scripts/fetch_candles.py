@@ -21,7 +21,11 @@ _ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(_ROOT))           # for "from src.xxx" imports inside data_lake.fetcher
 sys.path.insert(0, str(_ROOT / "src"))   # for top-level "data_lake.xxx" import below
 
-from data_lake.fetcher import fetch_binance_klines, save_ohlcv_parquet
+from data_lake.fetcher import (
+    fetch_binance_klines,
+    fetch_binance_vision_klines,
+    save_ohlcv_parquet,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -37,6 +41,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--start", default=default_start, help=f"Start date ISO (default: {default_start})")
     parser.add_argument("--end", default=default_end, help=f"End date ISO (default: {default_end})")
     parser.add_argument("--output-dir", default="lake/", help="Output directory (default: lake/)")
+    parser.add_argument(
+        "--source",
+        choices=["binance-api", "binance-vision"],
+        default="binance-api",
+        help="Data source. Use 'binance-vision' (S3 dump) when api.binance.com is geo-blocked (e.g. GitHub-hosted runners return 451).",
+    )
     return parser
 
 
@@ -45,9 +55,10 @@ def main() -> None:
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
-    print(f"Fetching {args.symbol} {args.interval} from {args.start} to {args.end} -> {output_dir}")
+    print(f"Fetching {args.symbol} {args.interval} from {args.start} to {args.end} -> {output_dir} (source={args.source})")
 
-    df = fetch_binance_klines(
+    fetch_fn = fetch_binance_vision_klines if args.source == "binance-vision" else fetch_binance_klines
+    df = fetch_fn(
         symbol=args.symbol,
         interval=args.interval,
         start=args.start,

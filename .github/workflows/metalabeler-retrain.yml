@@ -38,13 +38,14 @@ jobs:
           echo "end=$END" >> $GITHUB_OUTPUT
           echo "yyyymmdd=$YYYYMMDD" >> $GITHUB_OUTPUT
 
-      - name: Fetch candle data
+      - name: Fetch candle data (Binance Vision — bypass api.binance.com geo-block)
         run: |
           python scripts/fetch_candles.py \
             --symbol BTCUSDT \
             --interval 15m \
             --start ${{ steps.dates.outputs.start }} \
             --end ${{ steps.dates.outputs.end }} \
+            --source binance-vision \
             --output-dir lake/
 
       - name: Download previous manifest (first run allowed to fail)
