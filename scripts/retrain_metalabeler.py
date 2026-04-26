@@ -245,6 +245,11 @@ def main() -> int:
             )
             # bench exit codes: 0=AC4 PASS, 2=AC4 FAIL (verdict, expected),
             #   1=environment failure (real failure to surface).
+            print(f"[bench] exit={result.returncode}")
+            if result.stdout:
+                print(f"[bench stdout]\n{result.stdout}", file=sys.stderr)
+            if result.stderr:
+                print(f"[bench stderr]\n{result.stderr}", file=sys.stderr)
             if result.returncode == 1:
                 post_train_failure = True
                 failure_log_parts.append(
