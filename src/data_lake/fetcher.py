@@ -31,6 +31,7 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 BINANCE_KLINES_URL = "https://api.binance.com/api/v3/klines"
+BINANCE_FUTURES_KLINES_URL = "https://fapi.binance.com/fapi/v1/klines"
 
 _LIMIT = 1000  # max candles per request
 _SLEEP_BETWEEN = 0.5  # seconds between paginated requests
@@ -38,8 +39,19 @@ _MAX_RETRIES = 3  # max retries on 429
 _RETRY_BASE = 1.0  # base seconds for exponential backoff
 
 
-def _parse_klines(raw: list, *, symbol: str, interval: str, now: datetime) -> list[dict]:
-    """Convert raw Binance kline rows to OHLCV_SCHEMA dicts."""
+def _parse_klines(
+    raw: list,
+    *,
+    symbol: str,
+    interval: str,
+    now: datetime,
+    source_label: str = "binance",
+) -> list[dict]:
+    """Convert raw Binance kline rows to OHLCV_SCHEMA dicts.
+
+    ``source_label`` distinguishes Spot ("binance") vs Futures USDT-M
+    ("binance_futures") in the lake schema.
+    """
     records = []
     for row in raw:
         open_time_ms = int(row[0])
@@ -58,7 +70,7 @@ def _parse_klines(raw: list, *, symbol: str, interval: str, now: datetime) -> li
             "volume": volume,
             "vwap": vwap,
             "trade_count": int(row[8]),
-            "source": "binance",
+            "source": source_label,
             "ingested_at": pd.Timestamp(now),
         })
     return records
@@ -81,24 +93,19 @@ def _get_with_retry(url: str, params: dict) -> list:
     return []  # unreachable
 
 
-def fetch_binance_klines(
+def _paginate_binance_klines(
+    *,
+    base_url: str,
     symbol: str,
     interval: str,
     start: str,
     end: str,
+    source_label: str,
 ) -> pd.DataFrame:
-    """Fetch candles from Binance REST API with pagination and rate limiting.
+    """Shared pagination loop for Binance klines (Spot + Futures USDT-M).
 
-    Parameters
-    ----------
-    symbol:   e.g. "BTCUSDT"
-    interval: e.g. "15m", "1h"
-    start:    ISO date string e.g. "2025-04-01"
-    end:      ISO date string e.g. "2026-04-01"
-
-    Returns
-    -------
-    pd.DataFrame with columns matching OHLCV_SCHEMA.
+    Same wire protocol on both endpoints (same row schema, same query params,
+    same 1000-row page limit). Only ``base_url`` and ``source_label`` differ.
     """
     start_dt = datetime.fromisoformat(start).replace(tzinfo=timezone.utc)
     end_dt = datetime.fromisoformat(end).replace(tzinfo=timezone.utc)
@@ -117,11 +124,13 @@ def fetch_binance_klines(
             "endTime": end_ms,
             "limit": _LIMIT,
         }
-        raw = _get_with_retry(BINANCE_KLINES_URL, params)
+        raw = _get_with_retry(base_url, params)
         if not raw:
             break
 
-        records = _parse_klines(raw, symbol=symbol, interval=interval, now=now)
+        records = _parse_klines(
+            raw, symbol=symbol, interval=interval, now=now, source_label=source_label,
+        )
         all_records.extend(records)
 
         if len(raw) < _LIMIT:
@@ -140,8 +149,70 @@ def fetch_binance_klines(
     if not all_records:
         return pd.DataFrame(columns=list(OHLCV_SCHEMA.keys()))
 
-    df = pd.DataFrame(all_records)
-    return df
+    return pd.DataFrame(all_records)
+
+
+def fetch_binance_klines(
+    symbol: str,
+    interval: str,
+    start: str,
+    end: str,
+) -> pd.DataFrame:
+    """Fetch Spot candles from Binance REST API with pagination and rate limiting.
+
+    Parameters
+    ----------
+    symbol:   e.g. "BTCUSDT"
+    interval: e.g. "15m", "1h"
+    start:    ISO date string e.g. "2025-04-01"
+    end:      ISO date string e.g. "2026-04-01"
+
+    Returns
+    -------
+    pd.DataFrame with columns matching OHLCV_SCHEMA. ``source="binance"``.
+    """
+    return _paginate_binance_klines(
+        base_url=BINANCE_KLINES_URL,
+        symbol=symbol,
+        interval=interval,
+        start=start,
+        end=end,
+        source_label="binance",
+    )
+
+
+def fetch_binance_futures_klines(
+    symbol: str,
+    interval: str,
+    start: str,
+    end: str,
+) -> pd.DataFrame:
+    """Fetch Binance USDT-M Futures candles (public ``fapi/v1/klines``).
+
+    Same wire schema as Spot — only the endpoint and the ``source`` label differ.
+    Used by #80 Phase E ``shadow_report.py --compare-backtest`` (data_source =
+    ``"binance_futures_usdtm"``) for Sharpe parity validation against
+    Phase 1 Shadow Paper runs.
+
+    Parameters
+    ----------
+    symbol:   e.g. "BTCUSDT", "ETHUSDT", "SOLUSDT"
+    interval: e.g. "1m", "15m", "1h"
+    start:    ISO date string e.g. "2026-04-01"
+    end:      ISO date string e.g. "2026-04-26"
+
+    Returns
+    -------
+    pd.DataFrame with columns matching OHLCV_SCHEMA. ``source="binance_futures"``.
+    """
+    return _paginate_binance_klines(
+        base_url=BINANCE_FUTURES_KLINES_URL,
+        symbol=symbol,
+        interval=interval,
+        start=start,
+        end=end,
+        source_label="binance_futures",
+    )
 
 
 def save_ohlcv_parquet(
