@@ -195,6 +195,13 @@ def main() -> int:
     parser.add_argument("--model-path", type=Path, default=None, help="Trained MetaLabeler dir path")
     parser.add_argument("--threshold", type=float, default=0.5)
     parser.add_argument("--output-md", type=Path, default=REPORT_PATH)
+    parser.add_argument(
+        "--data-start",
+        type=str,
+        default=None,
+        help="Subset OHLCV to bars at or after this ISO date (e.g. 2025-10-26). "
+             "Used in CI to limit backtest to recent N months for speed.",
+    )
     args = parser.parse_args()
 
     # --- check imports ---
@@ -229,6 +236,10 @@ def main() -> int:
                 ohlcv = ohlcv.set_index("ts").sort_index()
             ohlcv = ohlcv[~ohlcv.index.duplicated(keep="first")]
             data_info = f"{args.data_path} lake ({len(ohlcv)} bars from {len(shards)} shards)"
+            if args.data_start:
+                cutoff = pd.Timestamp(args.data_start, tz="UTC")
+                ohlcv = ohlcv[ohlcv.index >= cutoff]
+                data_info += f", filtered to >={args.data_start} ({len(ohlcv)} bars)"
         elif suffix in (".parquet",):
             ohlcv = pd.read_parquet(args.data_path)
             if "ts" in ohlcv.columns:
