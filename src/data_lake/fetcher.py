@@ -9,8 +9,10 @@ fetch_kis_intraday_ohlcv for KRX/KIS intraday minute bars.
 """
 from __future__ import annotations
 
+import io
 import logging
 import time
+import zipfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -32,6 +34,7 @@ log = logging.getLogger(__name__)
 
 BINANCE_KLINES_URL = "https://api.binance.com/api/v3/klines"
 BINANCE_FUTURES_KLINES_URL = "https://fapi.binance.com/fapi/v1/klines"
+BINANCE_VISION_BASE = "https://data.binance.vision/data/spot/monthly/klines"
 
 _LIMIT = 1000  # max candles per request
 _SLEEP_BETWEEN = 0.5  # seconds between paginated requests
@@ -213,6 +216,74 @@ def fetch_binance_futures_klines(
         end=end,
         source_label="binance_futures",
     )
+
+
+def fetch_binance_vision_klines(
+    symbol: str,
+    interval: str,
+    start: str,
+    end: str,
+) -> pd.DataFrame:
+    """Fetch klines from Binance Vision public S3 dump (no geo-block, no rate limits).
+
+    Binance Vision publishes monthly OHLCV zips at:
+        https://data.binance.vision/data/spot/monthly/klines/{SYMBOL}/{INTERVAL}/{SYMBOL}-{INTERVAL}-{YYYY}-{MM}.zip
+
+    Each zip contains a single CSV with columns matching the REST API response order.
+    Use this in CI environments where api.binance.com returns 451 (e.g. GitHub-hosted runners).
+
+    The current month may not be published yet — partial data is silently skipped.
+    """
+    start_dt = datetime.fromisoformat(start).replace(tzinfo=timezone.utc)
+    end_dt = datetime.fromisoformat(end).replace(tzinfo=timezone.utc)
+    now = datetime.now(tz=timezone.utc)
+
+    months: list[tuple[int, int]] = []
+    cur = datetime(start_dt.year, start_dt.month, 1, tzinfo=timezone.utc)
+    while cur <= end_dt:
+        months.append((cur.year, cur.month))
+        cur = datetime(cur.year + 1, 1, 1, tzinfo=timezone.utc) if cur.month == 12 \
+            else datetime(cur.year, cur.month + 1, 1, tzinfo=timezone.utc)
+
+    all_records: list[dict] = []
+    for year, month in months:
+        fname = f"{symbol}-{interval}-{year:04d}-{month:02d}"
+        url = f"{BINANCE_VISION_BASE}/{symbol}/{interval}/{fname}.zip"
+        resp = requests.get(url, timeout=60)
+        if resp.status_code == 404:
+            # Month not yet published (typically the current month) — skip.
+            continue
+        resp.raise_for_status()
+
+        with zipfile.ZipFile(io.BytesIO(resp.content)) as zf:
+            with zf.open(f"{fname}.csv") as f:
+                df = pd.read_csv(f, header=None, names=[
+                    "open_time", "open", "high", "low", "close", "volume",
+                    "close_time", "quote_asset_volume", "number_of_trades",
+                    "taker_buy_base_volume", "taker_buy_quote_volume", "ignore",
+                ])
+        # Newer Binance Vision dumps (post-2025) use microsecond timestamps;
+        # older dumps use milliseconds. Normalize to ms before _parse_klines.
+        # ms for year 2030 ≈ 1.9e12; μs for year 2025 ≈ 1.7e15.
+        if not df.empty and df["open_time"].iloc[0] > 1e14:
+            df["open_time"] = df["open_time"] // 1000
+            df["close_time"] = df["close_time"] // 1000
+
+        # Convert each row to OHLCV_SCHEMA dict via _parse_klines (expects list-of-list).
+        raw = df[[
+            "open_time", "open", "high", "low", "close", "volume",
+            "close_time", "quote_asset_volume", "number_of_trades",
+            "taker_buy_base_volume", "taker_buy_quote_volume", "ignore",
+        ]].values.tolist()
+        records = _parse_klines(raw, symbol=symbol, interval=interval, now=now)
+        # Filter to [start, end] window since we pulled whole months.
+        for rec in records:
+            if start_dt <= rec["ts"].to_pydatetime() <= end_dt:
+                all_records.append(rec)
+
+    if not all_records:
+        return pd.DataFrame(columns=list(OHLCV_SCHEMA.keys()))
+    return pd.DataFrame(all_records)
 
 
 def save_ohlcv_parquet(
