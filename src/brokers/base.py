@@ -56,6 +56,7 @@ class OrderAck:
     ts: datetime
     qty: Decimal | None = None
     price: Decimal | None = None
+    reject_reason: str | None = None  # WAL_WRITE_FAIL, KILL_SWITCH 등
 
 
 @dataclass
