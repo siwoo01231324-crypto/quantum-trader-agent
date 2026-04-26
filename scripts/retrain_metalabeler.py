@@ -237,6 +237,12 @@ def main() -> int:
                          "--output-md", str(output_dir / "bench_report.md")]
             if not args.synthetic:
                 bench_cmd += ["--data-path", str(args.lake_dir)]
+                # Limit bench to last 6 months for CI tractability (~9K bars
+                # vs 35K). Drift detection still meaningful: recent regime
+                # change is more relevant than aggregate over 13 months.
+                from datetime import timedelta as _td
+                bench_start = (datetime.now(timezone.utc) - _td(days=180)).strftime("%Y-%m-%d")
+                bench_cmd += ["--data-start", bench_start]
             # Stream bench output to our stdout in real-time so CI shows
             # progress (capture_output blocks until subprocess finishes,
             # making slow backtests look like silent hangs).
@@ -255,12 +261,12 @@ def main() -> int:
                 for line in proc.stdout:
                     print(f"  [bench] {line}", end="", flush=True)
                     captured.append(line)
-                proc.wait(timeout=900)  # 15 min hard cap
+                proc.wait(timeout=1500)  # 25 min hard cap
             except subprocess.TimeoutExpired:
                 proc.kill()
                 proc.wait()
                 post_train_failure = True
-                failure_log_parts.append("[STEP 3 - bench TIMEOUT (>15 min)]")
+                failure_log_parts.append("[STEP 3 - bench TIMEOUT (>25 min)]")
                 print("[bench] TIMEOUT — killed", flush=True)
 
             bench_stdout = "".join(captured)

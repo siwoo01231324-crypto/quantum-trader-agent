@@ -71,16 +71,15 @@ jobs:
           if [ -f prev-artifact/manifest.json ]; then
             PREV_MANIFEST="--prev-manifest prev-artifact/manifest.json"
           fi
-          # NOTE: --bench omitted in CI — 35K bars × 2 backtests takes 10~15
-          # min on ubuntu-latest 2 vCPU. Drift detection uses CV accuracy
-          # delta only. Run bench manually with `python scripts/bench_metalabeler_btc.py
-          # --model-path <dir> --data-path lake/` for on/off Sharpe analysis.
+          # --bench: retrain script auto-limits bench to last 6 months
+          # (~9K bars × 2 = ~6 min on ubuntu-latest, vs 15+ min for full 13mo).
           python scripts/retrain_metalabeler.py \
             --strategy-id ${{ env.STRATEGY_ID }} \
             --lake-dir lake/ \
             --symbol BTCUSDT \
             --interval 15m \
-            $PREV_MANIFEST
+            $PREV_MANIFEST \
+            --bench
           EXIT_CODE=$?
           if [ $EXIT_CODE -eq 1 ]; then
             exit 1
