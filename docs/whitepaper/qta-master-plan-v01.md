@@ -449,7 +449,80 @@ orchestrator.register_strategy_returns(strategy_id, daily_returns_series)
 
 ### §5-6. 추가 후보
 
-[[momo-vol-filtered]] 외 단타 카탈로그 (#99 — VWMA100 단타) 가 설계 단계. KRX 15분봉 대상.
+[[momo-vol-filtered]] 외 단타 카탈로그 (#99 — VWMA100 단타) 가 research+factorial 설계 단계. **자산은 크립토(BTC/ETH on Binance + 알트코인)**, 시간 단위 1분/5분/15분. 상세 — §5-7.
+
+### §5-7. 월 10% 목표 검증의 핵심 입력 — VWMA 단타 카탈로그 (#99)
+
+> 사용자 지정 최종 목표 월 10% (§1-10) 의 첫 번째 구체 증거 자료. 단 1인 사례·survivor bias 한계 — 사전 등록 factorial 실험으로 통계 보정 후 #119 평가에 입력.
+
+#### §5-7-1. 배경 — 단일 트레이더 사례
+
+전업 단타 트레이더 "이랑이" (유튜브 "새로운 부자TV") 의 누적 70-80억 수익 사례. **VWMA100 적용 후 월 수익 3억 → 13억 (4배 증가)** 본인 주장. 1인 표본의 한계는 §5-7-5 에 명시.
+
+| 자산군 | 시장 | 시간 단위 |
+|--------|------|----------|
+| BTC / ETH / 알트코인 | Binance + 업비트 | 1분 / 5분 / 15분 |
+
+#### §5-7-2. 8가지 기법 카탈로그
+
+| # | 기법 | 핵심 |
+|---|------|------|
+| 1 | VWMA100 (거래량 가중 이동평균) | 종가 아닌 체결량 가중. 영상 주장 "제1비법" |
+| 2 | 멀티TF 프랙탈 | 1시간/일봉 정배열 + 5분/15분 매수 |
+| 3 | 이평선 자석 (Mean Reversion) | z-score 기반 카운터 — #79 mean-rev 차별 |
+| 4 | EMA 경로 예측 | slope·curvature·ETA-to-cross 자동화 features |
+| 5 | Turning-Point Only (R:R 1:6) | 기대 +7% / 손절 -1% — P(win) > 14% 필수 |
+| 6 | 상대강도 (UBAI 대비) | Jegadeesh & Titman (1993) cross-sectional momentum |
+| 7 | 시간대 게이트 | 10:30-11:00 매수 금지·주말 회피 |
+| 8 | POC + 호가창 OBI/OFI | Order Book / Order Flow Imbalance + Microprice |
+
+#### §5-7-3. 사전 등록 8-variant Factorial 실험 (HARKing 차단)
+
+전부 같은 Purged K-Fold (k=5, embargo=24h) CV split 에서 일괄 실행. **사후 추가 금지** — 첫 백테스트 실행 전 확정.
+
+| ID | 구성 |
+|----|------|
+| A | VWMA100 cross 단독 (baseline) |
+| B | A + EMA slope > 0 |
+| C | A + 멀티TF alignment |
+| D | A + 시간대 게이트 |
+| E | A + UBAI 상대강도 |
+| F | A + POC 거리 |
+| G | A + 호가 OBI/OFI/microprice |
+| H | A + B + C + D + E + F + G (full stack) |
+
+#### §5-7-4. 다중 검정 보정 — Deflated Sharpe Ratio
+
+8 variant 동시 검정의 false discovery 위험 차단. López de Prado (2014) Deflated Sharpe Ratio (DSR) 적용 — 시행 횟수 보정된 Sharpe.
+
+| 항목 | 기준 |
+|------|------|
+| 편입 조건 | DSR > 1.0 && OOS MDD < 25% |
+| 기각 시 | research 노트에 negative result 증거 보존 (HARKing 차단) |
+| 데이터 | BTC/ETH 2020-01 ~ 2025-12, Binance 1m OHLCV + L2 tick |
+
+#### §5-7-5. #119 (월 10% 평가) 와의 관계
+
+| 항목 | #99 의 역할 |
+|------|-----------|
+| 월 10% 가능성 직접 증거 | 영상 주장 "월 4배" 의 통계 보정 검증 결과 — #119 평가 핵심 입력 |
+| 카탈로그 다양화 | 현재 5종 + vwma-cross-v1 = 6종 |
+| Microstructure features | OBI/OFI/microprice 는 §4 신규 — 다른 전략에도 활용 |
+| Phase 0 → Phase 1 다리 | 백테스트 결과 양호 시 메타라벨러 ON 즉시 검증 |
+
+> **한계 명시**: 1인 표본 + 영상 자료 + 본인 주장 — 객관 검증 미완료. survivor bias·표본 편향 가능성. 통계 보정·OOS 검증·메타라벨러 ON 후에만 실거래 후보 진입.
+
+#### §5-7-6. 신규 feature 모듈 7종 (#99 AC)
+
+| 모듈 | 내용 |
+|------|------|
+| `src/features/vwma.py` | VWMA 계산 (주기·윈도우 파라미터화) |
+| `src/features/ma_projection.py` | EMA slope·curvature·projection |
+| `src/features/multi_tf.py` | 상위 TF alignment check |
+| `src/features/time_of_day.py` | 시간대 게이트 |
+| `src/features/cross_sectional_rs.py` | UBAI 대비 RS |
+| `src/features/poc.py` | Point of Control 거리 |
+| `src/features/orderbook_flow.py` | OBI / OFI / microprice / depth decay / Hawkes intensity |
 
 ---
 
