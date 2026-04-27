@@ -1,6 +1,6 @@
 """Forward EMA projection features.
 
-Reference: ``docs/background/37-multi-tf-fractal-trading.md`` §4.4.
+Reference: ``docs/background/41-multi-tf-fractal-trading.md`` §4.4.
 
 Computes EMA slope, curvature, and a forward extrapolation of the EMA
 to a horizon of ``N`` bars. The features are causal (they only use the

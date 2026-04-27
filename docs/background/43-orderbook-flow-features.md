@@ -1,6 +1,6 @@
 ---
 type: research
-id: 39-orderbook-flow-features
+id: 43-orderbook-flow-features
 name: "Orderbook Flow Features — OBI / OFI / Microprice / Hawkes intensity"
 sources:
   - "출처: https://youtu.be/j_0FRRgYYN8 (이랑이 인터뷰, 새로운 부자TV, 2026-01)"
@@ -223,9 +223,9 @@ Variant H = full stack 9 features (G 포함)
 
 ## 관련 노트
 - [[iranyi-vwma-2026-04-27]] — 영상 원문
-- [[36-vwma-volume-weighted-ma]] — Variant A baseline
-- [[37-multi-tf-fractal-trading]] — multi-TF 보완
-- [[38-cross-sectional-momentum-crypto]] — RS 필터 (Variant E)
+- [[40-vwma-volume-weighted-ma]] — Variant A baseline
+- [[41-multi-tf-fractal-trading]] — multi-TF 보완
+- [[42-cross-sectional-momentum-crypto]] — RS 필터 (Variant E)
 - [[12-validation-protocol]] — 검증 SOP
 - [[13-feature-alpha-catalog]] — feature catalog 차원 비교
 

@@ -97,10 +97,10 @@
 
 ### Research (선행)
 - [x] Research 노트 4건 작성 (`docs/background/` 선검색 완료 — VWMA/이랑이 직접 매칭 0건, gap 정당성 확인)
-  - [x] `docs/background/36-vwma-volume-weighted-ma.md` (ID 35 점유로 36~39 시프트, /plan 합의)
-  - [x] `docs/background/37-multi-tf-fractal-trading.md`
-  - [x] `docs/background/38-cross-sectional-momentum-crypto.md`
-  - [x] `docs/background/39-orderbook-flow-features.md`
+  - [x] `docs/background/40-vwma-volume-weighted-ma.md` (ID 35 점유로 36~39 시프트, /plan 합의)
+  - [x] `docs/background/41-multi-tf-fractal-trading.md`
+  - [x] `docs/background/42-cross-sectional-momentum-crypto.md`
+  - [x] `docs/background/43-orderbook-flow-features.md`
 - [x] 원본 영상 전사 `docs/research/raw/iranyi-vwma-2026-04-27.md` (737 라인 + 8 기법 매핑)
 - [x] 5년 BTC/ETH 1m 실데이터 fetch (`lake/ohlcv/freq=1m/year={2020..2025}`, 283 MB, .gitignore)
 

@@ -133,7 +133,7 @@ status: negative-result
 
 ## 관련 노트
 - 영상 원본: [[iranyi-vwma-2026-04-27]]
-- Research: [[36-vwma-volume-weighted-ma]] · [[37-multi-tf-fractal-trading]] · [[38-cross-sectional-momentum-crypto]] · [[39-orderbook-flow-features]]
+- Research: [[40-vwma-volume-weighted-ma]] · [[41-multi-tf-fractal-trading]] · [[42-cross-sectional-momentum-crypto]] · [[43-orderbook-flow-features]]
 - 검증 인프라: `src/ml/validation/` + `src/ml/cv.py` (PurgedKFold #85)
 - Feature 모듈: `src/features/`
 - Bench: `scripts/bench_iranyi_variants.py` (5년 SOP run)

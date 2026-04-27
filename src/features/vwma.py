@@ -1,6 +1,6 @@
 """Volume-Weighted Moving Average (VWMA).
 
-Reference: ``docs/background/36-vwma-volume-weighted-ma.md``.
+Reference: ``docs/background/40-vwma-volume-weighted-ma.md``.
 
 VWMA_t(w) = sum(close[t-w+1:t+1] * volume[t-w+1:t+1])
             / sum(volume[t-w+1:t+1])

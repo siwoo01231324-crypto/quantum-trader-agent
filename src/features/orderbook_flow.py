@@ -1,6 +1,6 @@
 """Order-book flow features.
 
-Reference: ``docs/background/39-orderbook-flow-features.md``.
+Reference: ``docs/background/43-orderbook-flow-features.md``.
 
 Implements:
     - OBI (Order Book Imbalance, top-of-book)

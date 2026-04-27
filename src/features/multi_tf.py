@@ -1,6 +1,6 @@
 """Multi-timeframe alignment.
 
-Reference: ``docs/background/37-multi-tf-fractal-trading.md`` §4.1.
+Reference: ``docs/background/41-multi-tf-fractal-trading.md`` §4.1.
 
 Resamples 1-minute close/volume to a higher timeframe, computes VWMA on
 the higher timeframe, and asserts that the higher-TF close exceeds its

@@ -1,6 +1,6 @@
 """Cross-sectional relative strength + UBAI benchmark.
 
-Reference: ``docs/background/38-cross-sectional-momentum-crypto.md``.
+Reference: ``docs/background/42-cross-sectional-momentum-crypto.md``.
 
 UBAI (업비트 알트코인 인덱스) is computed as a market-cap weighted
 daily index over the top 20 KRW-pair altcoins on Upbit, excluding BTC

@@ -48,10 +48,10 @@ PR-1: Research 노트 + Validation 인프라, PR-2: Feature 모듈, PR-3: Bench 
 
 | 신규 ID | 파일명 | 주제 |
 |---------|--------|------|
-| 36 | `36-vwma-volume-weighted-ma.md` | VWMA 이론 + AFML Ch.2 information-driven bars 연결 |
-| 37 | `37-multi-tf-fractal-trading.md` | 프랙탈 멀티프레임 이론 + self-similarity |
-| 38 | `38-cross-sectional-momentum-crypto.md` | Jegadeesh-Titman 모멘텀 + 크립토 RS |
-| 39 | `39-orderbook-flow-features.md` | OBI/OFI/microprice 이론 + 실증 |
+| 36 | `40-vwma-volume-weighted-ma.md` | VWMA 이론 + AFML Ch.2 information-driven bars 연결 |
+| 37 | `41-multi-tf-fractal-trading.md` | 프랙탈 멀티프레임 이론 + self-similarity |
+| 38 | `42-cross-sectional-momentum-crypto.md` | Jegadeesh-Titman 모멘텀 + 크립토 RS |
+| 39 | `43-orderbook-flow-features.md` | OBI/OFI/microprice 이론 + 실증 |
 
 ## 구현 계획
 
@@ -62,10 +62,10 @@ PR-1: Research 노트 + Validation 인프라, PR-2: Feature 모듈, PR-3: Bench 
 **목적**: 실험에 사용할 기법의 학술적/이론적 근거를 문서화. 볼트 연결 + 출처 명시.
 
 **생성 파일**:
-- `docs/background/36-vwma-volume-weighted-ma.md`
-- `docs/background/37-multi-tf-fractal-trading.md`
-- `docs/background/38-cross-sectional-momentum-crypto.md`
-- `docs/background/39-orderbook-flow-features.md`
+- `docs/background/40-vwma-volume-weighted-ma.md`
+- `docs/background/41-multi-tf-fractal-trading.md`
+- `docs/background/42-cross-sectional-momentum-crypto.md`
+- `docs/background/43-orderbook-flow-features.md`
 
 **선행 단계**: 없음 (첫 단계)
 
@@ -73,7 +73,7 @@ PR-1: Research 노트 + Validation 인프라, PR-2: Feature 모듈, PR-3: Bench 
 ```yaml
 ---
 type: research
-id: 36-vwma-volume-weighted-ma
+id: 40-vwma-volume-weighted-ma
 name: "VWMA (Volume-Weighted Moving Average) -- 이론과 적용"
 created: 2026-04-27
 tags: [vwma, volume, moving-average, information-driven-bars]

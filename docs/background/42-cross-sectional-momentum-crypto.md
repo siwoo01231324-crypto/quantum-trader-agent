@@ -1,6 +1,6 @@
 ---
 type: research
-id: 38-cross-sectional-momentum-crypto
+id: 42-cross-sectional-momentum-crypto
 name: "Cross-Sectional Momentum in Crypto — UBAI 기반 상대강도 필터"
 sources:
   - "출처: https://youtu.be/j_0FRRgYYN8 (이랑이 인터뷰, 새로운 부자TV, 2026-01)"
@@ -24,7 +24,7 @@ sources:
 | 핵심 논문 | Jegadeesh & Titman (1993) | Moskowitz, Ooi, Pedersen (2012) |
 | 응용 | Long-short ranking strategy | Trend-following |
 
-본 이슈는 **Cross-sectional** 에 초점 (Variant E). Time-series momentum 은 [[36-vwma-volume-weighted-ma]] 의 VWMA cross 가 부분적으로 흡수.
+본 이슈는 **Cross-sectional** 에 초점 (Variant E). Time-series momentum 은 [[40-vwma-volume-weighted-ma]] 의 VWMA cross 가 부분적으로 흡수.
 
 ## 2. Jegadeesh & Titman (1993) — 모멘텀의 기원
 
@@ -131,8 +131,8 @@ Liu et al. (2022) 도 인정: bear market 에서 momentum 효과 감소. [[30-ma
 
 ## 관련 노트
 - [[iranyi-vwma-2026-04-27]] — 영상 원문
-- [[36-vwma-volume-weighted-ma]] — Variant A baseline
-- [[37-multi-tf-fractal-trading]] — 멀티프레임 alignment
+- [[40-vwma-volume-weighted-ma]] — Variant A baseline
+- [[41-multi-tf-fractal-trading]] — 멀티프레임 alignment
 - [[12-validation-protocol]] — 검증 SOP
 - [[13-feature-alpha-catalog]] — 한국 주식 momentum factor (12-1M, monthly horizon — 본 이슈와 차원 다름)
 - [[30-market-regime-detection]] — regime 의존성 보완

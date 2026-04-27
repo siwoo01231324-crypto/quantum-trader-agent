@@ -1,6 +1,6 @@
 ---
 type: research
-id: 37-multi-tf-fractal-trading
+id: 41-multi-tf-fractal-trading
 name: "Multi-Timeframe Fractal Trading — 멀티프레임 자기유사성과 자석 이론"
 sources:
   - "출처: https://youtu.be/j_0FRRgYYN8 (이랑이 인터뷰, 새로운 부자TV, 2026-01)"
@@ -122,13 +122,13 @@ FMH (Peters 1994) 자체는 입증 가능한 가설보다는 **메타이론** (a
 ## 6. 본 프로젝트 활용 (Variant C)
 
 - **`src/features/multi_tf.py::multi_tf_alignment(close_1m, volume_1m, higher_tf="1h", vwma_window=100)`** — 상위 TF VWMA100 정배열 boolean
-- 의존: `vwma()` from [[36-vwma-volume-weighted-ma]]
+- 의존: `vwma()` from [[40-vwma-volume-weighted-ma]]
 - Variant C = A (vwma_cross) + multi_tf_alignment AND-gate
 - 검증: lookahead 없음 단위 테스트 + 1m → 1h 매핑에서 60번째 1m bar 가 첫 1h bar 에 포함되지 않는지 검증
 
 ## 관련 노트
 - [[iranyi-vwma-2026-04-27]] — 영상 원문 전사
-- [[36-vwma-volume-weighted-ma]] — 자매 노트, VWMA 본체
+- [[40-vwma-volume-weighted-ma]] — 자매 노트, VWMA 본체
 - [[12-validation-protocol]] — multi-TF 시 lookahead 가드 SOP
 - [[30-market-regime-detection]] — Hurst / regime 관련
 - [[13-feature-alpha-catalog]] — 멀티프레임 momentum 차원 비교

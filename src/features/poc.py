@@ -1,6 +1,6 @@
 """Rolling Point of Control (POC) — volume-profile features.
 
-Reference: ``docs/background/39-orderbook-flow-features.md``.
+Reference: ``docs/background/43-orderbook-flow-features.md``.
 
 For each bar, build a histogram of volume against price over the
 previous ``window`` bars, then locate the price bin with the maximum

@@ -1,6 +1,6 @@
 """Time-of-day / day-of-week trading gate.
 
-Reference: ``docs/background/38-cross-sectional-momentum-crypto.md`` §6.
+Reference: ``docs/background/42-cross-sectional-momentum-crypto.md`` §6.
 
 Variant D parameter freeze (issue #99 comment 4322461471):
 ``time_gate(blocked_hours=[((10, 30), (11, 0))], block_weekends=True,
