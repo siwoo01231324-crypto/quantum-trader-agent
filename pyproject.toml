@@ -43,8 +43,9 @@ pythonpath = ["src", "."]
 markers = [
     "integration: requires network/secrets (default skipped)",
     "slow: long-running benchmarks (default skipped; run with -m slow)",
+    "e2e_kis_paper: KIS paper account E2E tests (nightly only, requires real KIS paper credentials)",
 ]
-addopts = "-m 'not integration and not slow'"
+addopts = "-m 'not integration and not slow and not e2e_kis_paper'"
 asyncio_mode = "auto"
 
 [tool.coverage.run]

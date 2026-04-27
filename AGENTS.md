@@ -128,6 +128,7 @@ quantum-trader-agent/
 ## 핵심 문서 링크
 
 - 기능 명세 + AC → `docs/specs/`
+- **마스터 기획서 (백서) v0.1 → `docs/whitepaper/qta-master-plan-v01.md`** ([[qta-master-plan-v01]]) — 시스템 전체 end-to-end 단일 source-of-truth
 - **활성화 가능한 기능 색인 → `docs/specs/feature-catalog.md`** (모든 opt-in 기능 단일 카탈로그)
 - 배경·리서치·외부 참고 → `docs/background/`
 - 작업 내역 → `docs/work/active/` · `docs/work/done/`

@@ -82,6 +82,15 @@ def _iter_md_with_fm(frontmatter_mod) -> list[tuple[Path, dict, str]]:
     for md in sorted(DOCS_DIR.rglob("*.md")):
         if ".obsidian" in md.parts:
             continue
+        # CLAUDE.md 불변식: .ai.md·dashboards·schemas·ontology 는 스키마 검증 제외.
+        if md.name == ".ai.md":
+            continue
+        if "dashboards" in md.parts:
+            continue
+        if "schemas" in md.parts:
+            continue
+        if "ontology" in md.parts:
+            continue
         # `.draft.md` 는 LLM 에이전트가 생성한 초안 — 스키마 검증에서 제외.
         # (파일명이 `.draft.md` 로 끝나는 경우)
         if md.name.endswith(".draft.md"):
