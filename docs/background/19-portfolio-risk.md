@@ -175,6 +175,7 @@ factor_limits:
    - [ ] 팩터 노출 회귀 + `factor_limits` YAML 확장 (본 노트 §5)
    - [ ] CVaR 최적화 기반 동적 리밸런스 (Rockafellar-Uryasev LP, 월 1회)
    - [ ] EVT tail 보조 추정 (§4.2)
+   - [ ] **Sleeve allocation (multi-PM 구조, #119 권고)** — 자본을 보수 core / 공격 satellite / experimental 슬리브로 분할, sleeve 별 독립 Policy + kill switch 격리. `[[risk-rule-dsl]]` v3 의 `sleeve_id` 필드와 1:1 매핑. ENB·CVaR 는 sleeve 통합 기준으로 측정 (sleeve 별 합산이 아닌 portfolio-level). 출처: Citadel/Millennium multi-PM, AQR Style Premia.
 
 ## 7. 체크리스트 (운영)
 

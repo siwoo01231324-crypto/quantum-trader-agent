@@ -10,8 +10,9 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
-from typing import Optional
+from typing import Literal, Optional
 
+from src.brokers.async_router import AsyncOrderRouter
 from src.execution.base import MarketState, Tick as ExecTick
 from src.execution.mock_matching import MockMatchingEngine
 from src.execution.paper_broker import PaperBroker
@@ -36,6 +37,8 @@ class ShadowConfig:
     production_yaml: Path = field(default_factory=lambda: Path("configs/orchestrator/production.yaml"))
     policy: object = None
     max_iterations: int | None = None  # None=infinite (실 운영), 정수=테스트용 종료 조건
+    # Phase 2 broker mode (#105). Default "paper-only" preserves Phase 1 behaviour.
+    broker_mode: Literal["paper-only", "kis-paper-shadow", "kis-paper"] = "paper-only"
 
 
 def _load_orchestrator(config: ShadowConfig, broker: PaperBroker) -> AsyncStrategyOrchestrator:
@@ -69,6 +72,34 @@ def _load_orchestrator(config: ShadowConfig, broker: PaperBroker) -> AsyncStrate
         )
     # Fallback: 빈 orchestrator
     return AsyncStrategyOrchestrator(policy=config.policy, broker=broker)
+
+
+def _build_router(
+    broker_mode: str,
+    kill_switch: KillSwitch,
+    metrics: Metrics,
+    paper_broker: PaperBroker,
+    kis_adapter=None,
+):
+    """Return the active broker/router for the given broker_mode.
+
+    broker_mode == "paper-only"       → PaperBroker directly (Phase 1 regression 0)
+    broker_mode == "kis-paper"        → AsyncOrderRouter(active=KIS adapter)
+    broker_mode == "kis-paper-shadow" → AsyncOrderRouter(active=KIS, fallback swap to PaperBroker)
+    """
+    if broker_mode == "paper-only":
+        return paper_broker
+    if broker_mode in ("kis-paper", "kis-paper-shadow"):
+        if kis_adapter is None:
+            raise ValueError(
+                f"broker_mode='{broker_mode}' requires kis_adapter to be provided"
+            )
+        return AsyncOrderRouter(
+            active=kis_adapter,
+            kill_switch=kill_switch,
+            metrics=metrics,
+        )
+    raise ValueError(f"Unknown broker_mode: '{broker_mode}'")
 
 
 def _tick_to_market_state(tick: Tick) -> MarketState:
@@ -107,6 +138,7 @@ async def run_shadow_loop(
     feed: MarketDataFeed | None = None,
     metrics: Metrics | None = None,
     kill_switch: KillSwitch | None = None,
+    kis_adapter=None,
 ) -> None:
     """Phase 1 Shadow Live Loop.
 
@@ -134,11 +166,14 @@ async def run_shadow_loop(
     try:
         wal = WAL(config.wal_path)
         matching_engine = MockMatchingEngine()
-        broker = PaperBroker(
+        paper_broker = PaperBroker(
             wal=wal, kill_switch=kill_switch,
             matching_engine=matching_engine, initial_balance=config.initial_balance,
         )
-        orchestrator = _load_orchestrator(config, broker)
+        router = _build_router(
+            config.broker_mode, kill_switch, metrics, paper_broker, kis_adapter
+        )
+        orchestrator = _load_orchestrator(config, paper_broker)
 
         if feed is None:
             feed = BinancePublicFeed(config.symbols)
@@ -171,14 +206,15 @@ async def run_shadow_loop(
                     tick = await asyncio.wait_for(tick_queue.get(), timeout=1.0)
                 except asyncio.TimeoutError:
                     continue
-                broker.update_market(_tick_to_market_state(tick))
+                ms = _tick_to_market_state(tick)
+                paper_broker.update_market(ms)
                 ts = datetime.fromisoformat(tick.ts)
                 snapshot = _tick_to_market_snapshot(tick)
                 intents = await orchestrator.run_bar(ts, snapshot)
                 if intents:
                     await execute_intents(
-                        intents, broker=broker, kill_switch=kill_switch,
-                        wal=wal, metrics=metrics,
+                        intents, broker=router, kill_switch=kill_switch,
+                        wal=wal, metrics=metrics, market_state=ms,
                     )
                 iter_count += 1
                 if config.max_iterations is not None and iter_count >= config.max_iterations:
