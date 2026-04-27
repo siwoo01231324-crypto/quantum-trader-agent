@@ -176,6 +176,20 @@ Python 구현: `pypfopt.HRPOpt`, `riskfolio-lib` 공식 제공.
 
 제약 순서는 **리스크 하한에서 상한으로** 흐른다 — 수학적 최적해가 정책 한도를 초과하면 정책이 이긴다.
 
+### 7.1.5 Sleeve allocation 사이징 (#119, multi-PM 구조)
+
+자본을 보수 core / 공격 satellite / experimental 슬리브로 분할 운영하는 경우 (Citadel/Millennium multi-PM 표준), 사이징은 **sleeve 별로 독립적**으로 실행된다.
+
+```
+Sleeve A (core, 70%) → 위 4단계 사이징 (보수 정책)
+Sleeve B (satellite, 20%) → 위 4단계 사이징 (공격 정책: Half Kelly + L=3, 단일 전략 집중)
+Sleeve C (experimental, 10%) → Phase 1 = Sleeve A 와 동일, Phase 3 격상 시 Sleeve B 와 동일
+```
+
+각 sleeve 의 `account.equity` 는 `total_equity × sleeve_weight` 로 분할 주입. `[[risk-rule-dsl]]` v3 `sleeve_id` 필드로 정책을 구분, sleeve 별 kill switch 격리. **sleeve 통합 리스크는 `[[19-portfolio-risk]]` ENB·CVaR 가 portfolio-level 로 측정** (sleeve 별 합산이 아님).
+
+상세 시나리오·통합 metrics: [[36-monthly-10pct-feasibility]] §6 (d).
+
 ### 7.1 PositionSizer 모듈 인터페이스 (제안)
 
 ```python
