@@ -5,6 +5,7 @@ Responsibilities mirrored from router.py:
   - metric emit (orders_total, orders_placed_total)
   - swap_active (env flag + cancel_all_open + snapshot)
   - health_check → trip kill switch on DOWN
+  - cost-based dynamic routing via ExecutionCostEstimator
 
 New responsibility vs sync router:
   - optional KisRateLimiter integration (paper/live mode)
@@ -17,12 +18,17 @@ import os
 
 from src.brokers.base import AsyncBrokerAdapter, HealthStatus, OrderAck, OrderRequest, Position
 from src.brokers.kis.rate_limiter import KisRateLimiter
+from src.brokers.router import ExecutionCostEstimator
 from src.observability.metrics import Metrics
 from src.ops.kill_switch import KillSwitch, KillSwitchTripped
 
 
 class AsyncOrderRouter:
-    """Routes orders to the active async broker, enforcing kill switch and health gates."""
+    """Routes orders to the active async broker, enforcing kill switch and health gates.
+
+    When multiple brokers are registered via `register_broker()`, place_order()
+    automatically selects the lowest-cost broker based on ExecutionCostEstimator scores.
+    """
 
     def __init__(
         self,
@@ -30,23 +36,43 @@ class AsyncOrderRouter:
         kill_switch: KillSwitch | None = None,
         metrics: Metrics | None = None,
         rate_limiter: KisRateLimiter | None = None,
+        cost_estimator: ExecutionCostEstimator | None = None,
     ) -> None:
         self.active = active
         self._ks = kill_switch or KillSwitch()
         self._metrics = metrics
         self._rate_limiter = rate_limiter
+        self._cost_estimator = cost_estimator or ExecutionCostEstimator()
+        self._brokers: dict[str, AsyncBrokerAdapter] = {active.name: active}
+
+    # ── broker registry ───────────────────────────────────────────────────────
+
+    def register_broker(self, broker: AsyncBrokerAdapter) -> None:
+        """Register an additional broker candidate for cost-based routing."""
+        self._brokers[broker.name] = broker
+
+    def _select_broker(self, force_broker: str | None) -> AsyncBrokerAdapter:
+        if force_broker is not None:
+            if force_broker not in self._brokers:
+                raise KeyError(f"force_broker '{force_broker}' not registered")
+            return self._brokers[force_broker]
+        if len(self._brokers) <= 1:
+            return self.active
+        best_name = self._cost_estimator.best_broker(list(self._brokers.keys()))
+        return self._brokers[best_name]
 
     # ── order operations ──────────────────────────────────────────────────────
 
-    async def place_order(self, req: OrderRequest) -> OrderAck:
+    async def place_order(self, req: OrderRequest, *, force_broker: str | None = None) -> OrderAck:
         self._ks.assert_allow_order(liquidation=req.emergency_exit)
         if self._rate_limiter is not None:
             await self._rate_limiter.acquire()
-        ack = await self.active.place_order(req)
+        broker = self._select_broker(force_broker)
+        ack = await broker.place_order(req)
         if self._metrics:
             self._metrics.orders_total.labels(
                 strategy="unknown",
-                broker=self.active.name,
+                broker=broker.name,
                 side=req.side.value,
                 status=ack.status,
             ).inc()
@@ -123,6 +149,7 @@ class AsyncOrderRouter:
             await self.active.cancel_all_open()  # type: ignore[attr-defined]
 
         self.active = new_broker
+        self._brokers[new_broker.name] = new_broker
         return snapshot
 
     async def aclose(self) -> None:
