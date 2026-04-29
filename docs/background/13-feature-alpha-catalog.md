@@ -52,6 +52,8 @@ sources: []
 - **VWAP** (intraday, 한국 시장 9:00–15:30 기준 anchored)
 - **MFI(14)** (가격+거래량 RSI)
 - **체결강도 = 매수체결량 / 매도체결량** (KRX 호가 데이터 필요)
+- **CVD** (Cumulative Volume Delta) — aggTrade taker-side 누적 델타. Kyle (1985) λ 의 정량적 구현. Binance aggTrade 필수, KIS 불가. 상세: [[37-orderflow-microstructure-signals]] §2.5 (#145)
+- **VPIN** (Volume-Synchronized Probability of Informed Trading) — Easley, López de Prado, O'Hara (2012). 독성 플로우 게이트용. Binance aggTrade + BVC 필수. 상세: [[37-orderflow-microstructure-signals]] §2.6 (#145)
 
 ## 2. 팩터 카테고리 (4종) — 한국 시장 적용 주의점
 
