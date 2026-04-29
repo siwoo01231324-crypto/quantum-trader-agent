@@ -73,39 +73,38 @@ class TestSinglePage:
 # ---------------------------------------------------------------------------
 
 class TestPagination:
-    def test_two_pages_concatenated_and_ctx_token_passed(self):
+    def test_two_pages_concatenated_via_time_pagination(self):
+        """KIS FHKST03010200 has no token-based pagination — pages are obtained
+        by reducing FID_INPUT_HOUR_1 to one minute before the previous page's
+        earliest bar. tr_cont is None on real responses."""
         client = _make_client()
 
+        # Page 1: bars 15:30 down to 11:00 (5 bars, newest first)
         page1_rows = [_intraday_row("20260425", f"{h:02d}3000") for h in range(15, 10, -1)]
+        # Page 2: bars 10:00 down to 09:00 (2 bars, newest first)
         page2_rows = [_intraday_row("20260425", f"{h:02d}0000") for h in range(10, 8, -1)]
 
-        page1_response = {
-            "rt_cd": "0",
-            "output2": page1_rows,
-            "tr_cont": "M",
-            "ctx_area_fk100": "FK_TOKEN_1",
-            "ctx_area_nk100": "NK_TOKEN_1",
-        }
-        page2_response = {
-            "rt_cd": "0",
-            "output2": page2_rows,
-            "tr_cont": "",
-            "ctx_area_fk100": "",
-            "ctx_area_nk100": "",
-        }
+        page1_response = {"rt_cd": "0", "output2": page1_rows, "tr_cont": None}
+        page2_response = {"rt_cd": "0", "output2": page2_rows, "tr_cont": None}
 
         client._get.side_effect = [page1_response, page2_response]
 
         with patch("src.brokers.kis.price_client.time"):
-            result = fetch_intraday_ohlcv_raw(client, "005930", "20260425")
+            result = fetch_intraday_ohlcv_raw(client, "005930", "20260425", end_hhmmss="153000")
 
         assert len(result) == len(page1_rows) + len(page2_rows)
         assert client._get.call_count == 2
 
-        # Second call must carry continuation tokens
+        # First call queries from 15:30:00
+        first_call_params = client._get.call_args_list[0][0][2]
+        assert first_call_params.get("FID_INPUT_HOUR_1") == "153000"
+
+        # Page 1's earliest bar is 11:30:00, so next page starts 1 minute before: 11:29:00
         second_call_params = client._get.call_args_list[1][0][2]
-        assert second_call_params.get("CTX_AREA_FK100") == "FK_TOKEN_1"
-        assert second_call_params.get("CTX_AREA_NK100") == "NK_TOKEN_1"
+        assert second_call_params.get("FID_INPUT_HOUR_1") == "112900"
+        # No ctx tokens are sent — KIS doesn't use them for intraday
+        assert "CTX_AREA_FK100" not in second_call_params
+        assert "CTX_AREA_NK100" not in second_call_params
 
 
 # ---------------------------------------------------------------------------
@@ -164,14 +163,16 @@ class TestRateLimitRetrySuccess:
             "ctx_area_nk100": "",
         }
 
-        # Two 429s then success
-        client._get.side_effect = [http_error_429, http_error_429, success_response]
+        # Two 429s then success, then an empty page to terminate the time-pagination loop
+        empty_response = {"rt_cd": "0", "output2": [], "tr_cont": None}
+        client._get.side_effect = [http_error_429, http_error_429, success_response, empty_response]
 
         with patch("src.brokers.kis.price_client.time") as mock_time:
             result = fetch_intraday_ohlcv_raw(client, "005930", "20260425")
 
         assert len(result) == 1
-        assert client._get.call_count == 3
+        # 2 retries + 1 success on page 1 + 1 empty on page 2 = 4 calls
+        assert client._get.call_count == 4
         assert mock_time.sleep.call_count >= 2
 
 
@@ -203,21 +204,11 @@ class TestSleepBetweenPages:
     def test_rate_limit_sleep_called_between_pages(self):
         client = _make_client()
 
-        page1 = {
-            "rt_cd": "0",
-            "output2": [_intraday_row("20260425", "150000")],
-            "tr_cont": "M",
-            "ctx_area_fk100": "FK",
-            "ctx_area_nk100": "NK",
-        }
-        page2 = {
-            "rt_cd": "0",
-            "output2": [_intraday_row("20260425", "093000")],
-            "tr_cont": "",
-            "ctx_area_fk100": "",
-            "ctx_area_nk100": "",
-        }
-        client._get.side_effect = [page1, page2]
+        # Page 1: 15:00 (one bar). Page 2: 09:30 (terminal — earliest is 09:30 > 09:00, but next call returns empty).
+        page1 = {"rt_cd": "0", "output2": [_intraday_row("20260425", "150000")], "tr_cont": None}
+        page2 = {"rt_cd": "0", "output2": [_intraday_row("20260425", "093000")], "tr_cont": None}
+        page3_empty = {"rt_cd": "0", "output2": [], "tr_cont": None}
+        client._get.side_effect = [page1, page2, page3_empty]
 
         sleep_calls = []
         with patch("src.brokers.kis.price_client.time") as mock_time:

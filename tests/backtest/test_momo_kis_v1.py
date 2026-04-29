@@ -148,3 +148,26 @@ def test_bullish_buy_bearish_sell():
         sig = _run(s.on_bar(ctx))
         assert sig.action == "sell"
         assert sig.size == 1.0
+
+
+# ---------------------------------------------------------------------------
+# interval_min parameter tests
+# ---------------------------------------------------------------------------
+
+def test_momo_kis_v1_interval_min_1():
+    """interval_min=1: 09:01:00 KST → True, 09:01:30 KST → False."""
+    s = MomoKisV1(interval_min=1)
+    # 09:01:00 KST — any minute boundary is valid for 1m interval
+    ts_true = _kst_ts(2026, 4, 22, 9, 1, 0)
+    assert s._is_my_bar_boundary(ts_true) is True
+    # 09:01:30 KST — non-zero seconds → False
+    ts_false = _kst_ts(2026, 4, 22, 9, 1, 30)
+    assert s._is_my_bar_boundary(ts_false) is False
+
+
+def test_momo_kis_v1_default_interval_min_15():
+    """No args → interval_min == 15, 09:15:00 KST boundary → True."""
+    s = MomoKisV1()
+    assert s.interval_min == 15
+    ts = _kst_ts(2026, 4, 22, 9, 15, 0)
+    assert s._is_my_bar_boundary(ts) is True
