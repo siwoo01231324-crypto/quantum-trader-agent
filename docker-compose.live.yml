@@ -1,0 +1,111 @@
+# Issue #133 Phase 2 KIS 모의계좌 4주 운영 컨테이너 구성 (로컬 PC + Docker Desktop).
+#
+# 기존 docker-compose.yml (prometheus/grafana monitoring stack, Phase 1) 과 분리된 운영 전용 파일.
+# Phase 2 결정: prometheus/grafana 미설치, Telegram + 파일 로그만 (1인 운영, ARM 미가용 폴백).
+#
+# 3 service:
+#   live-daemon       - scripts/live_run.py (KIS 모의계좌 + AsyncOrderRouter)
+#   report-cron       - scripts/cron_loop.sh (KST 16:00 일일 리포트 + Telegram 요약)
+#   telegram-notifier - scripts/telegram_alert.py --watch (WAL tail kill-switch/mode_switched 알림)
+#
+# 사용법 (워크트리 root 에서):
+#   docker compose -f docker-compose.live.yml build
+#   docker compose -f docker-compose.live.yml up -d
+#   docker compose -f docker-compose.live.yml logs -f live-daemon
+#   docker compose -f docker-compose.live.yml ps
+#   docker compose -f docker-compose.live.yml down            # graceful stop (WAL flush)
+#
+# .env 위치: ../../.env (main repo 의 .env 직접 참조 — 사용자가 한 곳만 관리).
+# 필수 변수 (전체 목록은 docs/work/active/000133-phase2-operation/SECRETS.md):
+#   HANTOO_FAKE_API_KEY, HANTOO_FAKE_SECRET_API_KEY, HANTOO_FAKE_CREDIT_NUMBER
+#   TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+#   (선택) MAX_ORDERS=30  - 첫 1주 보수 운영 (default 30, 풀 운영 시 환경변수 재정의)
+
+services:
+  live-daemon:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: qta-phase2:latest
+    container_name: qta-live-daemon
+    command:
+      - "scripts/live_run.py"
+      - "--broker=kis-paper-shadow"
+      - "--symbols=005930,035720,000660"  # 삼전 + 카카오 + SK하이닉스 (#133 결정)
+      - "--duration=4w"
+      - "--max-orders=${MAX_ORDERS:-30}"
+      - "--auto-fallback"
+      - "--schedule=krx"
+      - "--log-dir=/data/logs"
+    env_file:
+      - ../../.env
+    environment:
+      TZ: Asia/Seoul
+      KIS_PAPER: "true"
+      KIS_FILL_MISSING_HALT_THRESHOLD: "${KIS_FILL_MISSING_HALT_THRESHOLD:-1}"
+    volumes:
+      - ./data/logs:/data/logs
+      - ./data/state:/app/.omc/state  # token cache + process lock
+    restart: unless-stopped
+    healthcheck:
+      # ProcessLock 파일 존재 = daemon alive
+      test: ["CMD-SHELL", "find /data/logs -name '.live_loop.lock' | grep -q ."]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  report-cron:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: qta-phase2:latest
+    container_name: qta-report-cron
+    entrypoint: ["/bin/bash", "/app/scripts/cron_loop.sh"]
+    env_file:
+      - ../../.env
+    environment:
+      TZ: Asia/Seoul
+      LOG_DIR: /data/logs
+      REPORTS_DIR: /data/reports
+      REPORT_HOUR_KST: "16"  # KRX 마감 30분 후
+    volumes:
+      - ./data/logs:/data/logs:ro
+      - ./data/reports:/data/reports
+    restart: unless-stopped
+    depends_on:
+      - live-daemon
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  telegram-notifier:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: qta-phase2:latest
+    container_name: qta-telegram-notifier
+    entrypoint:
+      - "python"
+      - "/app/scripts/telegram_alert.py"
+      - "--watch=/data/logs"
+    env_file:
+      - ../../.env
+    environment:
+      TZ: Asia/Seoul
+    volumes:
+      - ./data/logs:/data/logs:ro
+    restart: unless-stopped
+    depends_on:
+      - live-daemon
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+# Named volumes 미사용 - bind mount 로 호스트 ./data/ 직접 inspect 가능 (운영 일지 작성 시).
