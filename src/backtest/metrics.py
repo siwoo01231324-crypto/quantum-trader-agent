@@ -40,6 +40,14 @@ def compute_win_rate(trades: list[dict]) -> float:
     return sum(1 for p in pnls if p > 0) / len(pnls)
 
 
+def compute_avg_is_bps(trades: list[dict]) -> float:
+    """Average realized IS in bps across trades that carry 'is_realized_bps'."""
+    vals = [t["is_realized_bps"] for t in trades if "is_realized_bps" in t]
+    if not vals:
+        return float("nan")
+    return float(np.mean(vals))
+
+
 def compute_all_metrics(equity_curve: pd.Series, trades: list[dict]) -> dict:
     return {
         "sharpe": compute_sharpe(equity_curve),
@@ -47,4 +55,5 @@ def compute_all_metrics(equity_curve: pd.Series, trades: list[dict]) -> dict:
         "total_return": compute_total_return(equity_curve),
         "trades": len(trades),  # KEY: 'trades' not 'trade_count' for doc_agent compat
         "win_rate": compute_win_rate(trades),
+        "avg_is_bps": compute_avg_is_bps(trades),
     }
