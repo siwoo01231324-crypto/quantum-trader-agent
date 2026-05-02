@@ -44,6 +44,8 @@ METRIC_NAMES = [
     # NOTE: qta_orders_total (existing) covers all ack types (NEW/FILLED/CANCELED/etc.)
     "qta_orders_placed_total",
     "qta_orders_filled_total",
+    # Watchdog (#120)
+    "qta_portfolio_risk_watchdog_state",
 ]
 
 
@@ -245,6 +247,12 @@ class Metrics:
             "qta_orders_filled_total",
             "Orders fully filled (FILLED confirmed) — AC3 최종 (#105)",
             labelnames=("strategy",),
+            registry=self.registry,
+        )
+        # Watchdog (#120): 1 = stale/silent, 0 = healthy
+        self.portfolio_risk_watchdog_state = Gauge(
+            "qta_portfolio_risk_watchdog_state",
+            "Portfolio risk evaluator watchdog state (1=stale/silent, 0=healthy) (#120)",
             registry=self.registry,
         )
 
