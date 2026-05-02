@@ -1,0 +1,38 @@
+# Walk-forward 재학습 윈도우 + 자동 롤백 설정
+# #122: 4종 윈도우 비교 결과 기반 권고값 적용
+# 변경 시 scripts/compare_walkforward_windows.py 재실행 후 검증
+
+windows:
+  # 각 자산군별 권고 rolling train window (일 단위)
+  btc:
+    recommended_days: 30       # walk-forward 비교 결과 BTC 권고 (Sharpe/안정성 균형)
+    candidates: [7, 14, 30, 90]
+    mode: rolling              # expanding | rolling
+    test_window_days: 7        # OOS 검증 구간
+    step_days: 7               # fold 이동 보폭
+    min_train_samples: 200     # 최소 학습 이벤트 수
+  krx:
+    recommended_days: 14       # KRX 는 장세 전환 빠름 → 단기 권고
+    candidates: [7, 14, 30, 90]
+    mode: rolling
+    test_window_days: 5
+    step_days: 5
+    min_train_samples: 100
+
+rollback:
+  # 자동 롤백 트리거 임계값
+  # AC #122: 현행 -2%p Sharpe 실측 검증 → false positive/negative 최소화 권고값
+  accuracy_delta_threshold: 0.05   # CV accuracy 하락 임계 (prev - new >= 0.05 → 롤백)
+  sharpe_delta_threshold: 0.20     # Sharpe 하락 임계 (prev - new >= 0.20 → 롤백)
+
+  # 롤백 false positive/negative 분석 결과 (합성 데이터 시뮬레이션)
+  # - threshold=0.02 (이슈 언급값): false positive rate 높음 (노이즈 민감)
+  # - threshold=0.20 (현행 drift_detector): 안정적, 권고 유지
+  # - threshold=0.30 (기존 코드값): 너무 보수적, 실제 드리프트 놓침
+  recommended_sharpe_threshold: 0.20
+  recommended_accuracy_threshold: 0.05
+
+schedule:
+  # #95 파이프라인 연동 (retrain_metalabeler.py)
+  btc_interval_days: 30      # BTC 재학습 주기 (권고 윈도우와 일치)
+  krx_interval_days: 14      # KRX 재학습 주기
