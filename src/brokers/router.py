@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+from collections import defaultdict, deque
+from decimal import Decimal
 from typing import Callable
 
 from src.brokers.base import (
@@ -12,28 +14,95 @@ from src.brokers.types import BrokerFill
 from src.ops.kill_switch import KillSwitch, KillSwitchTripped
 
 
+class ExecutionCostEstimator:
+    """Estimates per-broker execution cost from recent fills.
+
+    Score = mean(slippage_ratio) + mean(fee_ratio), where:
+      slippage_ratio = (fill.price - mid_price) / mid_price  (signed; positive = paid)
+      fee_ratio      = fill.fee / (fill.qty * fill.price)
+
+    Lower score → cheaper broker.
+    """
+
+    def __init__(self, window: int = 50) -> None:
+        self._window = window
+        # broker_name -> deque of (slippage_ratio, fee_ratio) tuples
+        self._samples: dict[str, deque[tuple[Decimal, Decimal]]] = defaultdict(
+            lambda: deque(maxlen=self._window)
+        )
+
+    def record_fill(self, broker_name: str, fill: BrokerFill, mid_price: Decimal) -> None:
+        if mid_price <= 0:
+            return
+        notional = fill.qty * fill.price
+        if notional <= 0:
+            return
+        slippage = (fill.price - mid_price) / mid_price
+        fee_ratio = fill.fee / notional
+        self._samples[broker_name].append((slippage, fee_ratio))
+
+    def cost_score(self, broker_name: str) -> Decimal:
+        samples = self._samples.get(broker_name)
+        if not samples:
+            return Decimal("0")
+        n = Decimal(len(samples))
+        total_slip = sum(s for s, _ in samples)
+        total_fee = sum(f for _, f in samples)
+        return (total_slip + total_fee) / n
+
+    def best_broker(self, broker_names: list[str]) -> str:
+        return min(broker_names, key=lambda n: self.cost_score(n))
+
+
 class OrderRouter:
-    """Routes orders to the active broker, enforcing kill switch and health gates."""
+    """Routes orders to the active broker, enforcing kill switch and health gates.
+
+    When multiple brokers are registered via `register_broker()`, place_order()
+    automatically selects the lowest-cost broker based on ExecutionCostEstimator scores.
+    Strategies may override routing with `req.algo_params["force_broker"]` (if present
+    on the request; ignored for plain OrderRequest which has no algo_params field).
+    """
 
     def __init__(
         self,
         active: BrokerAdapter,
         kill_switch: KillSwitch | None = None,
         metrics=None,
+        cost_estimator: ExecutionCostEstimator | None = None,
     ) -> None:
         self.active = active
         self._ks = kill_switch or KillSwitch()
         self._metrics = metrics
+        self._cost_estimator = cost_estimator or ExecutionCostEstimator()
+        # registry: name -> broker (active is always included)
+        self._brokers: dict[str, BrokerAdapter] = {active.name: active}
+
+    # ── broker registry ───────────────────────────────────────────────────────
+
+    def register_broker(self, broker: BrokerAdapter) -> None:
+        """Register an additional broker candidate for cost-based routing."""
+        self._brokers[broker.name] = broker
+
+    def _select_broker(self, force_broker: str | None) -> BrokerAdapter:
+        if force_broker is not None:
+            if force_broker not in self._brokers:
+                raise KeyError(f"force_broker '{force_broker}' not registered")
+            return self._brokers[force_broker]
+        if len(self._brokers) <= 1:
+            return self.active
+        best_name = self._cost_estimator.best_broker(list(self._brokers.keys()))
+        return self._brokers[best_name]
 
     # ── order operations ──────────────────────────────────────────────────────
 
-    def place_order(self, req: OrderRequest) -> OrderAck:
+    def place_order(self, req: OrderRequest, *, force_broker: str | None = None) -> OrderAck:
         self._ks.assert_allow_order(liquidation=req.emergency_exit)
-        ack = self.active.place_order(req)
+        broker = self._select_broker(force_broker)
+        ack = broker.place_order(req)
         if self._metrics:
             self._metrics.orders_total.labels(
                 strategy="unknown",
-                broker=self.active.name,
+                broker=broker.name,
                 side=req.side.value,
                 status=ack.status,
             ).inc()
@@ -110,4 +179,5 @@ class OrderRouter:
             self.active.cancel_all_open()  # type: ignore[attr-defined]
 
         self.active = new_broker
+        self._brokers[new_broker.name] = new_broker
         return snapshot

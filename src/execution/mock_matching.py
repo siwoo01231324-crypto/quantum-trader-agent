@@ -23,6 +23,35 @@ class SlippageModel(Protocol):
 
 
 @dataclass
+class SquareRootImpact:
+    """Market-impact slippage model: I = sign * k * sigma * mid * sqrt(qty / ADV).
+
+    Parameters
+    ----------
+    k:     impact constant (dimensionless), default 1.0
+    sigma: volatility estimate (fraction of price), default 0.01 (1%)
+
+    Returns a signed Decimal price delta: positive for BUY, negative for SELL.
+    When ADV == 0 the impact is zero to avoid division by zero.
+    """
+
+    k: Decimal = field(default_factory=lambda: Decimal("1.0"))
+    sigma: Decimal = field(default_factory=lambda: Decimal("0.01"))
+
+    def estimate(
+        self, *, side: Side, qty: Decimal, mid: Decimal, market: MarketState
+    ) -> Decimal:
+        adv = market.adv
+        if adv == 0.0:
+            return Decimal("0")
+
+        participation = float(qty) / adv
+        impact_magnitude = self.k * self.sigma * mid * Decimal(str(math.sqrt(participation)))
+        sign = Decimal("1") if side == Side.BUY else Decimal("-1")
+        return sign * impact_magnitude
+
+
+@dataclass
 class MockMatchingEngine:
     """Phase 1 paper-trading matching engine.
 
@@ -134,6 +163,13 @@ class MockMatchingEngine:
         else:
             return []
 
+        # SquareRootImpact 적용 (master, #109)
+        if self.slippage_model is not None:
+            fill_price = fill_price + self.slippage_model.estimate(
+                side=order.side, qty=order.qty, mid=mid, market=market
+            )
+
+        # partial_fill 분기 (#110)
         if not self.partial_fill_enabled:
             return [self._make_fill(order, order.qty, fill_price)]
 
