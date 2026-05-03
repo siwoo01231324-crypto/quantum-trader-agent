@@ -18,7 +18,27 @@
 import sys
 from pathlib import Path
 
+from PyInstaller.utils.hooks import collect_dynamic_libs, collect_data_files
+
 block_cipher = None
+
+# Native DLL/.so + package data for libs that PyInstaller misses.
+# pyarrow: arrow.dll/parquet.dll (DLL load failed without these)
+# lightgbm: lib_lightgbm.dll
+# scipy: many .pyd helpers
+# sklearn: precompiled extensions
+_native_binaries = (
+    collect_dynamic_libs("pyarrow")
+    + collect_dynamic_libs("lightgbm")
+    + collect_dynamic_libs("scipy")
+    + collect_dynamic_libs("sklearn")
+    + collect_dynamic_libs("numpy")
+    + collect_dynamic_libs("pandas")
+)
+_native_datas = (
+    collect_data_files("pyarrow")
+    + collect_data_files("lightgbm")
+)
 
 # ---------------------------------------------------------------------------
 # Analysis
@@ -26,11 +46,12 @@ block_cipher = None
 a = Analysis(
     ["scripts/live_run.py"],
     pathex=["."],
-    binaries=[],
+    binaries=_native_binaries,
     datas=[
         # Default config shipped inside the EXE so users can run without a
         # separate clone.  Actual secrets (API keys) are NEVER bundled.
         ("configs", "configs"),
+        *_native_datas,
     ],
     hiddenimports=[
         # --- asyncio / event loop ---
