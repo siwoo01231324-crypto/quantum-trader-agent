@@ -1,0 +1,188 @@
+{
+  "schema_version": "swing-strategy-99/v3",
+  "issue": 99,
+  "iteration": 3,
+  "data_source": "lake::BTCUSDT@4h",
+  "symbol": "BTCUSDT",
+  "timeframe": "4h",
+  "start": "2020-01-01 00:00:00+00:00",
+  "end": "2025-12-31 00:00:00+00:00",
+  "n_bars": 13147,
+  "has_funding_data": true,
+  "git_commit": "ad896410bdffbf2ef1db24ca7ddfd1b0f4a4fa82",
+  "variant_registry": {
+    "S2": {
+      "fn": "s2_donchian",
+      "params": {
+        "entry_lookback": 20,
+        "exit_lookback": 10
+      }
+    },
+    "S2a": {
+      "fn": "s2_donchian_atr_stop",
+      "params": {
+        "entry_lookback": 20,
+        "exit_lookback": 10,
+        "atr_period": 14,
+        "atr_multiplier": 2.0
+      }
+    },
+    "S2b": {
+      "fn": "s2_donchian_hard_rr",
+      "params": {
+        "entry_lookback": 20,
+        "exit_lookback": 10,
+        "stop_pct": 0.01,
+        "tp_pct": 0.07
+      }
+    },
+    "S2c": {
+      "fn": "s2_donchian_voltarget",
+      "params": {
+        "entry_lookback": 20,
+        "exit_lookback": 10,
+        "vol_target": 0.15,
+        "vol_lookback": 60
+      }
+    },
+    "S4": {
+      "fn": "s4_funding_carry",
+      "params": {
+        "threshold_neg": -5e-05
+      }
+    },
+    "S4a": {
+      "fn": "s4_funding_both",
+      "params": {
+        "threshold_pos": 0.0005,
+        "threshold_neg": -5e-05
+      }
+    },
+    "S6v2": {
+      "fn": "ensemble_s2a_s3_s4",
+      "params": {}
+    }
+  },
+  "variant_registry_sha256": "6b73ca1e372132bc9059bfcbfa861d28aa1cde9d451aedc25a10e80e544507ca",
+  "cv": {
+    "n_splits": 5,
+    "embargo_frac": 0.01,
+    "split_hash": "58eb1d69134672321e793a89254c7f94dfd6b2cc8bb4bfb04aeb708d0228d8e9"
+  },
+  "fee_round_trip": 0.0008,
+  "gate": {
+    "dsr_min": 0.95,
+    "pbo_max": 0.2,
+    "oos_mdd_max": 0.25,
+    "monthly_hit_rate_min": 0.5
+  },
+  "variants": [
+    {
+      "variant_id": "S2",
+      "status": "ok",
+      "n_trades": 602,
+      "sharpe": 0.5806539036313302,
+      "sortino": 0.6767088469286837,
+      "mdd": -0.6316849626911669,
+      "calmar": 0.38638535960459075,
+      "avg_rr": 1.4624720350476972,
+      "turnover": 0.045789710099858334,
+      "monthly_hit_rate": 0.5138888888888888,
+      "skew": 0.9722383578107714,
+      "kurtosis_excess": 9.615072833271856
+    },
+    {
+      "variant_id": "S2a",
+      "status": "ok",
+      "n_trades": 616,
+      "sharpe": 0.5959978634674675,
+      "sortino": 0.7039747571736861,
+      "mdd": -0.5839005973128637,
+      "calmar": 0.4206668903633104,
+      "avg_rr": 1.4963500081395975,
+      "turnover": 0.04685463818396076,
+      "monthly_hit_rate": 0.4722222222222222,
+      "skew": 1.1230525879268745,
+      "kurtosis_excess": 10.009761509605518
+    },
+    {
+      "variant_id": "S2b",
+      "status": "ok",
+      "n_trades": 912,
+      "sharpe": 0.09696460345742537,
+      "sortino": 0.10940023995989442,
+      "mdd": -0.6734803218460212,
+      "calmar": 0.04614475856721758,
+      "avg_rr": 1.4750053251390967,
+      "turnover": 0.06937039271500134,
+      "monthly_hit_rate": 0.3888888888888889,
+      "skew": 0.7899133409827851,
+      "kurtosis_excess": 10.338859298934867
+    },
+    {
+      "variant_id": "S2c",
+      "status": "ok",
+      "n_trades": 602,
+      "sharpe": 0.8140241823887031,
+      "sortino": 1.0349918615083051,
+      "mdd": -0.18691231679505826,
+      "calmar": 0.5095827229384229,
+      "avg_rr": 1.5602108595183473,
+      "turnover": 0.01707139426791483,
+      "monthly_hit_rate": 0.5138888888888888,
+      "skew": 1.5291385734169372,
+      "kurtosis_excess": 11.950906241009275
+    },
+    {
+      "variant_id": "S4",
+      "status": "ok",
+      "n_trades": 300,
+      "sharpe": 0.9612569846335586,
+      "sortino": 0.5128668796028505,
+      "mdd": -0.1705087128116779,
+      "calmar": 0.9048204906755662,
+      "avg_rr": 1.836416354213533,
+      "turnover": 0.02282074669588207,
+      "monthly_hit_rate": 0.2916666666666667,
+      "skew": 4.299055651107187,
+      "kurtosis_excess": 74.39780272196383
+    },
+    {
+      "variant_id": "S4a",
+      "status": "ok",
+      "n_trades": 439,
+      "sharpe": 0.6755557170915419,
+      "sortino": 0.39316282920696777,
+      "mdd": -0.39897007387846717,
+      "calmar": 0.42470278058016603,
+      "avg_rr": 1.4387072912601941,
+      "turnover": 0.033394993912734594,
+      "monthly_hit_rate": 0.3888888888888889,
+      "skew": 1.7184920371318912,
+      "kurtosis_excess": 47.847605766125085
+    },
+    {
+      "variant_id": "S6v2",
+      "status": "ok",
+      "n_trades": 158,
+      "sharpe": 0.543441353068545,
+      "sortino": 0.24445873348462843,
+      "mdd": -0.1748118516724969,
+      "calmar": 0.5076356236492384,
+      "avg_rr": 1.9545195057521731,
+      "turnover": 0.01201885411367146,
+      "monthly_hit_rate": 0.18055555555555555,
+      "skew": 5.129505614915266,
+      "kurtosis_excess": 118.44527561680978
+    }
+  ],
+  "scoring": {
+    "dsr": 0.9999999999999994,
+    "pbo": 0.779020979020979,
+    "dsr_n_trials": 7,
+    "winning_variant": "S4",
+    "gate_passed": false,
+    "gate_reason": "PBO=0.779020979020979 > 0.2; monthly_hit_rate=0.2916666666666667 < 0.5"
+  },
+  "timestamp": "2026-05-03T14:03:42.664780+00:00"
+}
