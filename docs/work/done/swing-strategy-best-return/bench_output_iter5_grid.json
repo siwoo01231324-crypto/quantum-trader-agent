@@ -1,0 +1,1482 @@
+{
+  "schema_version": "swing-strategy-99/v5-grid",
+  "issue": 99,
+  "iteration": 5,
+  "test_type": "parameter_stability_grid",
+  "strategy": "W1 (S2c Donchian + vol-target)",
+  "data_source": "lake::BTCUSDT@4h",
+  "symbol": "BTCUSDT",
+  "timeframe": "4h",
+  "start": "2020-01-01 00:00:00+00:00",
+  "end": "2025-12-31 00:00:00+00:00",
+  "n_bars": 13147,
+  "git_commit": "ad896410bdffbf2ef1db24ca7ddfd1b0f4a4fa82",
+  "param_grid": {
+    "entry_lookback": [
+      10,
+      20,
+      30
+    ],
+    "exit_lookback": [
+      5,
+      10,
+      20
+    ],
+    "vol_target": [
+      0.1,
+      0.15,
+      0.2
+    ],
+    "vol_lookback": [
+      10,
+      20,
+      30
+    ]
+  },
+  "param_grid_sha256": "2bab0ee1e1735a20353fa6c99d978af4c3fdb98d8184804f20db888e7d7c8e7d",
+  "n_combinations": 81,
+  "n_valid": 81,
+  "fee_round_trip": 0.0008,
+  "distribution": {
+    "sharpe": {
+      "mean": 0.6946773565402415,
+      "std": 0.2669114989452465,
+      "min": 0.18482247367829036,
+      "max": 1.263123722183225,
+      "q25": 0.48284159841716773,
+      "median": 0.6777499063610555,
+      "q75": 0.8793306616577006,
+      "iqr": 0.39648906324053285,
+      "pct_within_1_5_iqr": 1.0,
+      "cv": 0.3842236923837099
+    },
+    "mdd": {
+      "mean": -0.19601053444880923,
+      "std": 0.06788660898246526,
+      "min": -0.3513021951400549,
+      "max": -0.08698691340165476,
+      "q25": -0.24413854911622146,
+      "median": -0.1904995447569805,
+      "q75": -0.14977637394029797,
+      "iqr": 0.09436217517592349,
+      "pct_within_1_5_iqr": 1.0,
+      "cv": 0.34634163502163584
+    },
+    "monthly_hit_rate": {
+      "mean": 0.5087448559670782,
+      "std": 0.029170340744487714,
+      "min": 0.4583333333333333,
+      "max": 0.5833333333333334,
+      "q25": 0.4861111111111111,
+      "median": 0.5,
+      "q75": 0.5277777777777778,
+      "iqr": 0.041666666666666685,
+      "pct_within_1_5_iqr": 1.0,
+      "cv": 0.05733785885468566
+    }
+  },
+  "robustness": {
+    "verdict": "MODERATE",
+    "reason": "Sharpe CV=0.384 between 0.3-0.5",
+    "sharpe_cv": 0.3842236923837099,
+    "gate_pass_count": 41,
+    "gate_pass_pct": 0.5061728395061729
+  },
+  "best_combo": {
+    "params": {
+      "entry_lookback": 30,
+      "exit_lookback": 20,
+      "vol_lookback": 30,
+      "vol_target": 0.1
+    },
+    "status": "ok",
+    "n_trades": 317,
+    "sharpe": 1.263123722183225,
+    "sortino": 1.5429400816032568,
+    "mdd": -0.10870028679830457,
+    "calmar": 0.9817960241270852,
+    "monthly_hit_rate": 0.5277777777777778,
+    "skew": 1.180940778984168,
+    "kurtosis_excess": 9.617001893772475
+  },
+  "all_combos": [
+    {
+      "params": {
+        "entry_lookback": 10,
+        "exit_lookback": 5,
+        "vol_lookback": 10,
+        "vol_target": 0.1
+      },
+      "status": "ok",
+      "n_trades": 1172,
+      "sharpe": 0.18482247367829036,
+      "sortino": 0.28513916333379274,
+      "mdd": -0.15180474539115596,
+      "calmar": 0.11845258491725719,
+      "monthly_hit_rate": 0.5,
+      "skew": 2.052643980661546,
+      "kurtosis_excess": 12.35610006233184
+    },
+    {
+      "params": {
+        "entry_lookback": 10,
+        "exit_lookback": 5,
+        "vol_lookback": 10,
+        "vol_target": 0.15
+      },
+      "status": "ok",
+      "n_trades": 1172,
+      "sharpe": 0.26529568266960213,
+      "sortino": 0.42004868234278925,
+      "mdd": -0.18664265914806943,
+      "calmar": 0.20304725354709138,
+      "monthly_hit_rate": 0.5,
+      "skew": 2.0874162934317972,
+      "kurtosis_excess": 12.097951494971937
+    },
+    {
+      "params": {
+        "entry_lookback": 10,
+        "exit_lookback": 5,
+        "vol_lookback": 10,
+        "vol_target": 0.2
+      },
+      "status": "ok",
+      "n_trades": 1172,
+      "sharpe": 0.3116478712585846,
+      "sortino": 0.49724451590924895,
+      "mdd": -0.23759447500549014,
+      "calmar": 0.24249344207963636,
+      "monthly_hit_rate": 0.5,
+      "skew": 2.076624269752213,
+      "kurtosis_excess": 12.193190650968667
+    },
+    {
+      "params": {
+        "entry_lookback": 10,
+        "exit_lookback": 5,
+        "vol_lookback": 20,
+        "vol_target": 0.1
+      },
+      "status": "ok",
+      "n_trades": 1172,
+      "sharpe": 0.25155466830978906,
+      "sortino": 0.3800603153245169,
+      "mdd": -0.14508262411490547,
+      "calmar": 0.14354421697751218,
+      "monthly_hit_rate": 0.4861111111111111,
+      "skew": 1.7281151244565691,
+      "kurtosis_excess": 9.658719756947338
+    },
+    {
+      "params": {
+        "entry_lookback": 10,
+        "exit_lookback": 5,
+        "vol_lookback": 20,
+        "vol_target": 0.15
+      },
+      "status": "ok",
+      "n_trades": 1172,
+      "sharpe": 0.2709631257729801,
+      "sortino": 0.4120469437328929,
+      "mdd": -0.19492254904259065,
+      "calmar": 0.1721289790819653,
+      "monthly_hit_rate": 0.4861111111111111,
+      "skew": 1.7177275115281583,
+      "kurtosis_excess": 9.326223332069574
+    },
+    {
+      "params": {
+        "entry_lookback": 10,
+        "exit_lookback": 5,
+        "vol_lookback": 20,
+        "vol_target": 0.2
+      },
+      "status": "ok",
+      "n_trades": 1172,
+      "sharpe": 0.27835262939181754,
+      "sortino": 0.4231684261933717,
+      "mdd": -0.24683755003614893,
+      "calmar": 0.18505417248230327,
+      "monthly_hit_rate": 0.4861111111111111,
+      "skew": 1.7013744499302943,
+      "kurtosis_excess": 9.258693852851895
+    },
+    {
+      "params": {
+        "entry_lookback": 10,
+        "exit_lookback": 5,
+        "vol_lookback": 30,
+        "vol_target": 0.1
+      },
+      "status": "ok",
+      "n_trades": 1172,
+      "sharpe": 0.36895018707326316,
+      "sortino": 0.5591972188416856,
+      "mdd": -0.1062991082960335,
+      "calmar": 0.2749993459631012,
+      "monthly_hit_rate": 0.4861111111111111,
+      "skew": 1.7873075051182468,
+      "kurtosis_excess": 10.487773082779825
+    },
+    {
+      "params": {
+        "entry_lookback": 10,
+        "exit_lookback": 5,
+        "vol_lookback": 30,
+        "vol_target": 0.15
+      },
+      "status": "ok",
+      "n_trades": 1172,
+      "sharpe": 0.37426547871922117,
+      "sortino": 0.5676800969771686,
+      "mdd": -0.15718979757859053,
+      "calmar": 0.2847969772689093,
+      "monthly_hit_rate": 0.4861111111111111,
+      "skew": 1.7922201963409843,
+      "kurtosis_excess": 10.520745090112833
+    },
+    {
+      "params": {
+        "entry_lookback": 10,
+        "exit_lookback": 5,
+        "vol_lookback": 30,
+        "vol_target": 0.2
+      },
+      "status": "ok",
+      "n_trades": 1172,
+      "sharpe": 0.40202008996730615,
+      "sortino": 0.6136822197737626,
+      "mdd": -0.20390517891279925,
+      "calmar": 0.3152406466569436,
+      "monthly_hit_rate": 0.4861111111111111,
+      "skew": 1.8068831063727595,
+      "kurtosis_excess": 10.485129096627084
+    },
+    {
+      "params": {
+        "entry_lookback": 10,
+        "exit_lookback": 10,
+        "vol_lookback": 10,
+        "vol_target": 0.1
+      },
+      "status": "ok",
+      "n_trades": 822,
+      "sharpe": 0.4451231649370067,
+      "sortino": 0.6772407725416255,
+      "mdd": -0.20832796667330566,
+      "calmar": 0.2356753618833117,
+      "monthly_hit_rate": 0.5555555555555556,
+      "skew": 1.500430489361815,
+      "kurtosis_excess": 8.215842598844151
+    },
+    {
+      "params": {
+        "entry_lookback": 10,
+        "exit_lookback": 10,
+        "vol_lookback": 10,
+        "vol_target": 0.15
+      },
+      "status": "ok",
+      "n_trades": 822,
+      "sharpe": 0.4991865599411147,
+      "sortino": 0.7627503025035638,
+      "mdd": -0.2711215888554449,
+      "calmar": 0.30145582912661256,
+      "monthly_hit_rate": 0.5833333333333334,
+      "skew": 1.4669557566006157,
+      "kurtosis_excess": 8.007672751739253
+    },
+    {
+      "params": {
+        "entry_lookback": 10,
+        "exit_lookback": 10,
+        "vol_lookback": 10,
+        "vol_target": 0.2
+      },
+      "status": "ok",
+      "n_trades": 822,
+      "sharpe": 0.5459567349894279,
+      "sortino": 0.8338698066771492,
+      "mdd": -0.34649730053177075,
+      "calmar": 0.3375290066919023,
+      "monthly_hit_rate": 0.5694444444444444,
+      "skew": 1.4434288789688587,
+      "kurtosis_excess": 8.084036844109669
+    },
+    {
+      "params": {
+        "entry_lookback": 10,
+        "exit_lookback": 10,
+        "vol_lookback": 20,
+        "vol_target": 0.1
+      },
+      "status": "ok",
+      "n_trades": 822,
+      "sharpe": 0.45957899464692764,
+      "sortino": 0.6547897404506915,
+      "mdd": -0.1924238195121719,
+      "calmar": 0.22523623754879854,
+      "monthly_hit_rate": 0.5277777777777778,
+      "skew": 1.0413773971719336,
+      "kurtosis_excess": 6.572139283442907
+    },
+    {
+      "params": {
+        "entry_lookback": 10,
+        "exit_lookback": 10,
+        "vol_lookback": 20,
+        "vol_target": 0.15
+      },
+      "status": "ok",
+      "n_trades": 822,
+      "sharpe": 0.4736942633046845,
+      "sortino": 0.6757590957149572,
+      "mdd": -0.2628826079786174,
+      "calmar": 0.2558410416279245,
+      "monthly_hit_rate": 0.5277777777777778,
+      "skew": 1.0179872887018153,
+      "kurtosis_excess": 6.331882309664503
+    },
+    {
+      "params": {
+        "entry_lookback": 10,
+        "exit_lookback": 10,
+        "vol_lookback": 20,
+        "vol_target": 0.2
+      },
+      "status": "ok",
+      "n_trades": 822,
+      "sharpe": 0.48284159841716773,
+      "sortino": 0.6870339226689103,
+      "mdd": -0.3334980646546012,
+      "calmar": 0.2741189791682762,
+      "monthly_hit_rate": 0.5277777777777778,
+      "skew": 0.9942372440945031,
+      "kurtosis_excess": 6.298119000365598
+    },
+    {
+      "params": {
+        "entry_lookback": 10,
+        "exit_lookback": 10,
+        "vol_lookback": 30,
+        "vol_target": 0.1
+      },
+      "status": "ok",
+      "n_trades": 822,
+      "sharpe": 0.6216101934203839,
+      "sortino": 0.8949861882940041,
+      "mdd": -0.14977637394029797,
+      "calmar": 0.3740285410095626,
+      "monthly_hit_rate": 0.5833333333333334,
+      "skew": 1.114390429386315,
+      "kurtosis_excess": 7.147241239876663
+    },
+    {
+      "params": {
+        "entry_lookback": 10,
+        "exit_lookback": 10,
+        "vol_lookback": 30,
+        "vol_target": 0.15
+      },
+      "status": "ok",
+      "n_trades": 822,
+      "sharpe": 0.6277414165709776,
+      "sortino": 0.9041079138161833,
+      "mdd": -0.2167103455227739,
+      "calmar": 0.39675190046192915,
+      "monthly_hit_rate": 0.5833333333333334,
+      "skew": 1.1171072393086867,
+      "kurtosis_excess": 7.17045325671243
+    },
+    {
+      "params": {
+        "entry_lookback": 10,
+        "exit_lookback": 10,
+        "vol_lookback": 30,
+        "vol_target": 0.2
+      },
+      "status": "ok",
+      "n_trades": 822,
+      "sharpe": 0.6424213462917243,
+      "sortino": 0.9269265271217729,
+      "mdd": -0.2751950706473004,
+      "calmar": 0.42987731028410825,
+      "monthly_hit_rate": 0.5833333333333334,
+      "skew": 1.1158696697675026,
+      "kurtosis_excess": 7.144019703898246
+    },
+    {
+      "params": {
+        "entry_lookback": 10,
+        "exit_lookback": 20,
+        "vol_lookback": 10,
+        "vol_target": 0.1
+      },
+      "status": "ok",
+      "n_trades": 543,
+      "sharpe": 0.7410849455817999,
+      "sortino": 1.137558539040068,
+      "mdd": -0.20854838713676516,
+      "calmar": 0.45011838378175467,
+      "monthly_hit_rate": 0.5138888888888888,
+      "skew": 1.1235925404813965,
+      "kurtosis_excess": 5.815685503426766
+    },
+    {
+      "params": {
+        "entry_lookback": 10,
+        "exit_lookback": 20,
+        "vol_lookback": 10,
+        "vol_target": 0.15
+      },
+      "status": "ok",
+      "n_trades": 543,
+      "sharpe": 0.7856240601718075,
+      "sortino": 1.219015600062198,
+      "mdd": -0.2775956045333198,
+      "calmar": 0.5350703732929212,
+      "monthly_hit_rate": 0.5277777777777778,
+      "skew": 1.1233081897911825,
+      "kurtosis_excess": 5.655265921327396
+    },
+    {
+      "params": {
+        "entry_lookback": 10,
+        "exit_lookback": 20,
+        "vol_lookback": 10,
+        "vol_target": 0.2
+      },
+      "status": "ok",
+      "n_trades": 543,
+      "sharpe": 0.8377561182603156,
+      "sortino": 1.302168026667803,
+      "mdd": -0.3513021951400549,
+      "calmar": 0.5946953776929035,
+      "monthly_hit_rate": 0.5416666666666666,
+      "skew": 1.1093497354163633,
+      "kurtosis_excess": 5.719321937590553
+    },
+    {
+      "params": {
+        "entry_lookback": 10,
+        "exit_lookback": 20,
+        "vol_lookback": 20,
+        "vol_target": 0.1
+      },
+      "status": "ok",
+      "n_trades": 543,
+      "sharpe": 0.7960323457752426,
+      "sortino": 1.195618228088514,
+      "mdd": -0.190496784196998,
+      "calmar": 0.4419208303112529,
+      "monthly_hit_rate": 0.5277777777777778,
+      "skew": 0.8956904943972959,
+      "kurtosis_excess": 4.874336949070544
+    },
+    {
+      "params": {
+        "entry_lookback": 10,
+        "exit_lookback": 20,
+        "vol_lookback": 20,
+        "vol_target": 0.15
+      },
+      "status": "ok",
+      "n_trades": 543,
+      "sharpe": 0.8062500626490051,
+      "sortino": 1.2113344615405373,
+      "mdd": -0.267296987117981,
+      "calmar": 0.48507701671653647,
+      "monthly_hit_rate": 0.5277777777777778,
+      "skew": 0.8760132802551859,
+      "kurtosis_excess": 4.721372258951654
+    },
+    {
+      "params": {
+        "entry_lookback": 10,
+        "exit_lookback": 20,
+        "vol_lookback": 20,
+        "vol_target": 0.2
+      },
+      "status": "ok",
+      "n_trades": 543,
+      "sharpe": 0.8098888256772815,
+      "sortino": 1.2123757502342696,
+      "mdd": -0.34306138456749347,
+      "calmar": 0.5099794770425913,
+      "monthly_hit_rate": 0.5277777777777778,
+      "skew": 0.8488438210683603,
+      "kurtosis_excess": 4.684946064045696
+    },
+    {
+      "params": {
+        "entry_lookback": 10,
+        "exit_lookback": 20,
+        "vol_lookback": 30,
+        "vol_target": 0.1
+      },
+      "status": "ok",
+      "n_trades": 543,
+      "sharpe": 0.9496515391125887,
+      "sortino": 1.4179076256277823,
+      "mdd": -0.16764925338532288,
+      "calmar": 0.5696089486361823,
+      "monthly_hit_rate": 0.5277777777777778,
+      "skew": 0.8752736799615186,
+      "kurtosis_excess": 5.101035064056679
+    },
+    {
+      "params": {
+        "entry_lookback": 10,
+        "exit_lookback": 20,
+        "vol_lookback": 30,
+        "vol_target": 0.15
+      },
+      "status": "ok",
+      "n_trades": 543,
+      "sharpe": 0.9480899676466253,
+      "sortino": 1.415295327998374,
+      "mdd": -0.24413854911622146,
+      "calmar": 0.5987352803679087,
+      "monthly_hit_rate": 0.5277777777777778,
+      "skew": 0.8769297638602308,
+      "kurtosis_excess": 5.121886978386358
+    },
+    {
+      "params": {
+        "entry_lookback": 10,
+        "exit_lookback": 20,
+        "vol_lookback": 30,
+        "vol_target": 0.2
+      },
+      "status": "ok",
+      "n_trades": 543,
+      "sharpe": 0.9551352510169208,
+      "sortino": 1.4276976832632624,
+      "mdd": -0.3144781265217468,
+      "calmar": 0.6354488530390506,
+      "monthly_hit_rate": 0.5277777777777778,
+      "skew": 0.8755332874751621,
+      "kurtosis_excess": 5.104821322626505
+    },
+    {
+      "params": {
+        "entry_lookback": 20,
+        "exit_lookback": 5,
+        "vol_lookback": 10,
+        "vol_target": 0.1
+      },
+      "status": "ok",
+      "n_trades": 840,
+      "sharpe": 0.3665976270957708,
+      "sortino": 0.49791042917831374,
+      "mdd": -0.11647786721249087,
+      "calmar": 0.26293480918289097,
+      "monthly_hit_rate": 0.5,
+      "skew": 2.5719095261600993,
+      "kurtosis_excess": 18.766959254929915
+    },
+    {
+      "params": {
+        "entry_lookback": 20,
+        "exit_lookback": 5,
+        "vol_lookback": 10,
+        "vol_target": 0.15
+      },
+      "status": "ok",
+      "n_trades": 840,
+      "sharpe": 0.3849602666822161,
+      "sortino": 0.5233352670368523,
+      "mdd": -0.1554919006074852,
+      "calmar": 0.30510086966019156,
+      "monthly_hit_rate": 0.5,
+      "skew": 2.4725728137391436,
+      "kurtosis_excess": 17.90449213346896
+    },
+    {
+      "params": {
+        "entry_lookback": 20,
+        "exit_lookback": 5,
+        "vol_lookback": 10,
+        "vol_target": 0.2
+      },
+      "status": "ok",
+      "n_trades": 840,
+      "sharpe": 0.3960761860977052,
+      "sortino": 0.5381186801037198,
+      "mdd": -0.2214457916564161,
+      "calmar": 0.2855600664436307,
+      "monthly_hit_rate": 0.5,
+      "skew": 2.417234229447306,
+      "kurtosis_excess": 18.002874877461412
+    },
+    {
+      "params": {
+        "entry_lookback": 20,
+        "exit_lookback": 5,
+        "vol_lookback": 20,
+        "vol_target": 0.1
+      },
+      "status": "ok",
+      "n_trades": 840,
+      "sharpe": 0.36653609205308807,
+      "sortino": 0.47512016722211065,
+      "mdd": -0.13146594651280952,
+      "calmar": 0.20572417000135465,
+      "monthly_hit_rate": 0.4722222222222222,
+      "skew": 1.9923608026056627,
+      "kurtosis_excess": 13.711533772428197
+    },
+    {
+      "params": {
+        "entry_lookback": 20,
+        "exit_lookback": 5,
+        "vol_lookback": 20,
+        "vol_target": 0.15
+      },
+      "status": "ok",
+      "n_trades": 840,
+      "sharpe": 0.3801444629730793,
+      "sortino": 0.4923802716306328,
+      "mdd": -0.19230897519031087,
+      "calmar": 0.2183551295992322,
+      "monthly_hit_rate": 0.4861111111111111,
+      "skew": 1.9413740535051516,
+      "kurtosis_excess": 13.199682858462293
+    },
+    {
+      "params": {
+        "entry_lookback": 20,
+        "exit_lookback": 5,
+        "vol_lookback": 20,
+        "vol_target": 0.2
+      },
+      "status": "ok",
+      "n_trades": 840,
+      "sharpe": 0.38916792725041627,
+      "sortino": 0.5025975797385184,
+      "mdd": -0.24974995598130056,
+      "calmar": 0.22834134935238878,
+      "monthly_hit_rate": 0.4861111111111111,
+      "skew": 1.9085464117841702,
+      "kurtosis_excess": 13.049723209130534
+    },
+    {
+      "params": {
+        "entry_lookback": 20,
+        "exit_lookback": 5,
+        "vol_lookback": 30,
+        "vol_target": 0.1
+      },
+      "status": "ok",
+      "n_trades": 840,
+      "sharpe": 0.4650093707040742,
+      "sortino": 0.6085173813728859,
+      "mdd": -0.11069408009112225,
+      "calmar": 0.29486238524981373,
+      "monthly_hit_rate": 0.4861111111111111,
+      "skew": 2.1066510673284835,
+      "kurtosis_excess": 15.160286893998691
+    },
+    {
+      "params": {
+        "entry_lookback": 20,
+        "exit_lookback": 5,
+        "vol_lookback": 30,
+        "vol_target": 0.15
+      },
+      "status": "ok",
+      "n_trades": 840,
+      "sharpe": 0.47296152022074095,
+      "sortino": 0.6192503755425531,
+      "mdd": -0.1628933300842944,
+      "calmar": 0.3079672554968452,
+      "monthly_hit_rate": 0.4861111111111111,
+      "skew": 2.111100270663901,
+      "kurtosis_excess": 15.205470112774432
+    },
+    {
+      "params": {
+        "entry_lookback": 20,
+        "exit_lookback": 5,
+        "vol_lookback": 30,
+        "vol_target": 0.2
+      },
+      "status": "ok",
+      "n_trades": 840,
+      "sharpe": 0.5028712887424596,
+      "sortino": 0.6617215273607455,
+      "mdd": -0.21300247215967583,
+      "calmar": 0.33494703596657627,
+      "monthly_hit_rate": 0.4861111111111111,
+      "skew": 2.121272730801466,
+      "kurtosis_excess": 15.109951663227204
+    },
+    {
+      "params": {
+        "entry_lookback": 20,
+        "exit_lookback": 10,
+        "vol_lookback": 10,
+        "vol_target": 0.1
+      },
+      "status": "ok",
+      "n_trades": 600,
+      "sharpe": 0.5887955741867332,
+      "sortino": 0.7873660368285657,
+      "mdd": -0.13766586495573707,
+      "calmar": 0.4142199751281177,
+      "monthly_hit_rate": 0.4722222222222222,
+      "skew": 1.8506145095891489,
+      "kurtosis_excess": 12.416276991745956
+    },
+    {
+      "params": {
+        "entry_lookback": 20,
+        "exit_lookback": 10,
+        "vol_lookback": 10,
+        "vol_target": 0.15
+      },
+      "status": "ok",
+      "n_trades": 600,
+      "sharpe": 0.6037614834675369,
+      "sortino": 0.8027753154526731,
+      "mdd": -0.19759983227483957,
+      "calmar": 0.44021363956927606,
+      "monthly_hit_rate": 0.4722222222222222,
+      "skew": 1.747141104125514,
+      "kurtosis_excess": 11.848212602319105
+    },
+    {
+      "params": {
+        "entry_lookback": 20,
+        "exit_lookback": 10,
+        "vol_lookback": 10,
+        "vol_target": 0.2
+      },
+      "status": "ok",
+      "n_trades": 600,
+      "sharpe": 0.6190107715931893,
+      "sortino": 0.8164949504963925,
+      "mdd": -0.2698852828468794,
+      "calmar": 0.432410787951168,
+      "monthly_hit_rate": 0.4722222222222222,
+      "skew": 1.6869204265993258,
+      "kurtosis_excess": 11.94953148757893
+    },
+    {
+      "params": {
+        "entry_lookback": 20,
+        "exit_lookback": 10,
+        "vol_lookback": 20,
+        "vol_target": 0.1
+      },
+      "status": "ok",
+      "n_trades": 600,
+      "sharpe": 0.5512887141151754,
+      "sortino": 0.6753503921880409,
+      "mdd": -0.16053183298873752,
+      "calmar": 0.2921254950439415,
+      "monthly_hit_rate": 0.4722222222222222,
+      "skew": 1.1704554429365832,
+      "kurtosis_excess": 9.414240472075367
+    },
+    {
+      "params": {
+        "entry_lookback": 20,
+        "exit_lookback": 10,
+        "vol_lookback": 20,
+        "vol_target": 0.15
+      },
+      "status": "ok",
+      "n_trades": 600,
+      "sharpe": 0.5602360326504763,
+      "sortino": 0.6842051855815374,
+      "mdd": -0.22835834827482593,
+      "calmar": 0.3143631252023698,
+      "monthly_hit_rate": 0.4722222222222222,
+      "skew": 1.121243369332353,
+      "kurtosis_excess": 9.10881814850012
+    },
+    {
+      "params": {
+        "entry_lookback": 20,
+        "exit_lookback": 10,
+        "vol_lookback": 20,
+        "vol_target": 0.2
+      },
+      "status": "ok",
+      "n_trades": 600,
+      "sharpe": 0.5736889004734028,
+      "sortino": 0.6980296464366973,
+      "mdd": -0.2910580387902145,
+      "calmar": 0.3369089007902985,
+      "monthly_hit_rate": 0.4583333333333333,
+      "skew": 1.0881977079177372,
+      "kurtosis_excess": 9.078373986929147
+    },
+    {
+      "params": {
+        "entry_lookback": 20,
+        "exit_lookback": 10,
+        "vol_lookback": 30,
+        "vol_target": 0.1
+      },
+      "status": "ok",
+      "n_trades": 600,
+      "sharpe": 0.668620572913442,
+      "sortino": 0.8281603366455257,
+      "mdd": -0.14035628853366333,
+      "calmar": 0.38545246787514686,
+      "monthly_hit_rate": 0.5,
+      "skew": 1.2628010889926604,
+      "kurtosis_excess": 10.247231557152375
+    },
+    {
+      "params": {
+        "entry_lookback": 20,
+        "exit_lookback": 10,
+        "vol_lookback": 30,
+        "vol_target": 0.15
+      },
+      "status": "ok",
+      "n_trades": 600,
+      "sharpe": 0.6777499063610555,
+      "sortino": 0.8396559236925902,
+      "mdd": -0.20327245918359138,
+      "calmar": 0.4098691228390699,
+      "monthly_hit_rate": 0.5,
+      "skew": 1.2653154452698903,
+      "kurtosis_excess": 10.280348992989179
+    },
+    {
+      "params": {
+        "entry_lookback": 20,
+        "exit_lookback": 10,
+        "vol_lookback": 30,
+        "vol_target": 0.2
+      },
+      "status": "ok",
+      "n_trades": 600,
+      "sharpe": 0.6967465485920814,
+      "sortino": 0.863868819806659,
+      "mdd": -0.2599117916569864,
+      "calmar": 0.4427303273305208,
+      "monthly_hit_rate": 0.5138888888888888,
+      "skew": 1.2588903258039432,
+      "kurtosis_excess": 10.234269394346722
+    },
+    {
+      "params": {
+        "entry_lookback": 20,
+        "exit_lookback": 20,
+        "vol_lookback": 10,
+        "vol_target": 0.1
+      },
+      "status": "ok",
+      "n_trades": 405,
+      "sharpe": 0.8793306616577006,
+      "sortino": 1.2169298004727338,
+      "mdd": -0.1648305050304898,
+      "calmar": 0.6014950051103384,
+      "monthly_hit_rate": 0.4861111111111111,
+      "skew": 1.26790427809972,
+      "kurtosis_excess": 7.793787047378069
+    },
+    {
+      "params": {
+        "entry_lookback": 20,
+        "exit_lookback": 20,
+        "vol_lookback": 10,
+        "vol_target": 0.15
+      },
+      "status": "ok",
+      "n_trades": 405,
+      "sharpe": 0.9008642786302835,
+      "sortino": 1.2489347885492916,
+      "mdd": -0.23898018773380958,
+      "calmar": 0.6368135580167628,
+      "monthly_hit_rate": 0.4861111111111111,
+      "skew": 1.2286362841172613,
+      "kurtosis_excess": 7.504362194753658
+    },
+    {
+      "params": {
+        "entry_lookback": 20,
+        "exit_lookback": 20,
+        "vol_lookback": 10,
+        "vol_target": 0.2
+      },
+      "status": "ok",
+      "n_trades": 405,
+      "sharpe": 0.9410575140406056,
+      "sortino": 1.3049333428536514,
+      "mdd": -0.30816267664217045,
+      "calmar": 0.6803896129737456,
+      "monthly_hit_rate": 0.5277777777777778,
+      "skew": 1.2117445941735017,
+      "kurtosis_excess": 7.64882260973286
+    },
+    {
+      "params": {
+        "entry_lookback": 20,
+        "exit_lookback": 20,
+        "vol_lookback": 20,
+        "vol_target": 0.1
+      },
+      "status": "ok",
+      "n_trades": 405,
+      "sharpe": 0.903234465124196,
+      "sortino": 1.2077259753710765,
+      "mdd": -0.18577036377471268,
+      "calmar": 0.4676079802955162,
+      "monthly_hit_rate": 0.5,
+      "skew": 0.9602618227883372,
+      "kurtosis_excess": 6.532212838643852
+    },
+    {
+      "params": {
+        "entry_lookback": 20,
+        "exit_lookback": 20,
+        "vol_lookback": 20,
+        "vol_target": 0.15
+      },
+      "status": "ok",
+      "n_trades": 405,
+      "sharpe": 0.9106430848885017,
+      "sortino": 1.213806840709618,
+      "mdd": -0.26343992194259336,
+      "calmar": 0.5056174636936539,
+      "monthly_hit_rate": 0.5,
+      "skew": 0.9219759652898374,
+      "kurtosis_excess": 6.340943163282323
+    },
+    {
+      "params": {
+        "entry_lookback": 20,
+        "exit_lookback": 20,
+        "vol_lookback": 20,
+        "vol_target": 0.2
+      },
+      "status": "ok",
+      "n_trades": 405,
+      "sharpe": 0.9230450434268588,
+      "sortino": 1.225098659403077,
+      "mdd": -0.3342762451500617,
+      "calmar": 0.5428087474297427,
+      "monthly_hit_rate": 0.5,
+      "skew": 0.8862547891463843,
+      "kurtosis_excess": 6.296659345143204
+    },
+    {
+      "params": {
+        "entry_lookback": 20,
+        "exit_lookback": 20,
+        "vol_lookback": 30,
+        "vol_target": 0.1
+      },
+      "status": "ok",
+      "n_trades": 405,
+      "sharpe": 1.0427198267032818,
+      "sortino": 1.3861972233529998,
+      "mdd": -0.1719122923036186,
+      "calmar": 0.5539566393899951,
+      "monthly_hit_rate": 0.5138888888888888,
+      "skew": 0.9617680814206798,
+      "kurtosis_excess": 7.009021755827429
+    },
+    {
+      "params": {
+        "entry_lookback": 20,
+        "exit_lookback": 20,
+        "vol_lookback": 30,
+        "vol_target": 0.15
+      },
+      "status": "ok",
+      "n_trades": 405,
+      "sharpe": 1.0447793888430361,
+      "sortino": 1.388509558085642,
+      "mdd": -0.24844292587100447,
+      "calmar": 0.5889432373177781,
+      "monthly_hit_rate": 0.5138888888888888,
+      "skew": 0.9624946842211567,
+      "kurtosis_excess": 7.036746531789947
+    },
+    {
+      "params": {
+        "entry_lookback": 20,
+        "exit_lookback": 20,
+        "vol_lookback": 30,
+        "vol_target": 0.2
+      },
+      "status": "ok",
+      "n_trades": 405,
+      "sharpe": 1.0531148490550293,
+      "sortino": 1.400095581779535,
+      "mdd": -0.3183394433899037,
+      "calmar": 0.6284406451761181,
+      "monthly_hit_rate": 0.5138888888888888,
+      "skew": 0.9559351479565228,
+      "kurtosis_excess": 7.0022219960556145
+    },
+    {
+      "params": {
+        "entry_lookback": 30,
+        "exit_lookback": 5,
+        "vol_lookback": 10,
+        "vol_target": 0.1
+      },
+      "status": "ok",
+      "n_trades": 666,
+      "sharpe": 0.5693304857127638,
+      "sortino": 0.7046506203570163,
+      "mdd": -0.08802346159111851,
+      "calmar": 0.492980846685952,
+      "monthly_hit_rate": 0.5,
+      "skew": 2.9585611369369054,
+      "kurtosis_excess": 24.783333654043464
+    },
+    {
+      "params": {
+        "entry_lookback": 30,
+        "exit_lookback": 5,
+        "vol_lookback": 10,
+        "vol_target": 0.15
+      },
+      "status": "ok",
+      "n_trades": 666,
+      "sharpe": 0.568848245690874,
+      "sortino": 0.700314236663909,
+      "mdd": -0.126675125782574,
+      "calmar": 0.5066526944942159,
+      "monthly_hit_rate": 0.4861111111111111,
+      "skew": 2.836163677539841,
+      "kurtosis_excess": 23.875394658182135
+    },
+    {
+      "params": {
+        "entry_lookback": 30,
+        "exit_lookback": 5,
+        "vol_lookback": 10,
+        "vol_target": 0.2
+      },
+      "status": "ok",
+      "n_trades": 666,
+      "sharpe": 0.5687306071784343,
+      "sortino": 0.698044338221466,
+      "mdd": -0.17041799050079565,
+      "calmar": 0.49037423556730086,
+      "monthly_hit_rate": 0.4861111111111111,
+      "skew": 2.7789977076186547,
+      "kurtosis_excess": 24.098655858418194
+    },
+    {
+      "params": {
+        "entry_lookback": 30,
+        "exit_lookback": 5,
+        "vol_lookback": 20,
+        "vol_target": 0.1
+      },
+      "status": "ok",
+      "n_trades": 666,
+      "sharpe": 0.6161339225218974,
+      "sortino": 0.7288242250905115,
+      "mdd": -0.10133588669218951,
+      "calmar": 0.41307026532924895,
+      "monthly_hit_rate": 0.5,
+      "skew": 2.2623349189965105,
+      "kurtosis_excess": 17.108010164201378
+    },
+    {
+      "params": {
+        "entry_lookback": 30,
+        "exit_lookback": 5,
+        "vol_lookback": 20,
+        "vol_target": 0.15
+      },
+      "status": "ok",
+      "n_trades": 666,
+      "sharpe": 0.6187500974032454,
+      "sortino": 0.729570124069808,
+      "mdd": -0.14899666414067636,
+      "calmar": 0.42527799800384514,
+      "monthly_hit_rate": 0.5,
+      "skew": 2.227729600902834,
+      "kurtosis_excess": 16.9030061759834
+    },
+    {
+      "params": {
+        "entry_lookback": 30,
+        "exit_lookback": 5,
+        "vol_lookback": 20,
+        "vol_target": 0.2
+      },
+      "status": "ok",
+      "n_trades": 666,
+      "sharpe": 0.6233024970316765,
+      "sortino": 0.7342949905617315,
+      "mdd": -0.19537341776851191,
+      "calmar": 0.4365882357181173,
+      "monthly_hit_rate": 0.5,
+      "skew": 2.227568119780139,
+      "kurtosis_excess": 17.052299103965016
+    },
+    {
+      "params": {
+        "entry_lookback": 30,
+        "exit_lookback": 5,
+        "vol_lookback": 30,
+        "vol_target": 0.1
+      },
+      "status": "ok",
+      "n_trades": 666,
+      "sharpe": 0.6777994832862746,
+      "sortino": 0.8155175097080527,
+      "mdd": -0.08698691340165476,
+      "calmar": 0.5121941473963244,
+      "monthly_hit_rate": 0.4583333333333333,
+      "skew": 2.4663712513254055,
+      "kurtosis_excess": 19.38945619449056
+    },
+    {
+      "params": {
+        "entry_lookback": 30,
+        "exit_lookback": 5,
+        "vol_lookback": 30,
+        "vol_target": 0.15
+      },
+      "status": "ok",
+      "n_trades": 666,
+      "sharpe": 0.683503810421766,
+      "sortino": 0.8227094592455378,
+      "mdd": -0.1288308544960216,
+      "calmar": 0.5288319493577956,
+      "monthly_hit_rate": 0.4583333333333333,
+      "skew": 2.4697983284408043,
+      "kurtosis_excess": 19.41626685859438
+    },
+    {
+      "params": {
+        "entry_lookback": 30,
+        "exit_lookback": 5,
+        "vol_lookback": 30,
+        "vol_target": 0.2
+      },
+      "status": "ok",
+      "n_trades": 666,
+      "sharpe": 0.7130692402022591,
+      "sortino": 0.8639199937684142,
+      "mdd": -0.16955175812850465,
+      "calmar": 0.5632309497985463,
+      "monthly_hit_rate": 0.4583333333333333,
+      "skew": 2.4824705139572494,
+      "kurtosis_excess": 19.189545760985805
+    },
+    {
+      "params": {
+        "entry_lookback": 30,
+        "exit_lookback": 10,
+        "vol_lookback": 10,
+        "vol_target": 0.1
+      },
+      "status": "ok",
+      "n_trades": 478,
+      "sharpe": 0.7306081146119393,
+      "sortino": 0.8940956850568896,
+      "mdd": -0.10750836868234193,
+      "calmar": 0.5958951612164383,
+      "monthly_hit_rate": 0.5138888888888888,
+      "skew": 2.170100411942554,
+      "kurtosis_excess": 16.587052646872582
+    },
+    {
+      "params": {
+        "entry_lookback": 30,
+        "exit_lookback": 10,
+        "vol_lookback": 10,
+        "vol_target": 0.15
+      },
+      "status": "ok",
+      "n_trades": 478,
+      "sharpe": 0.7376008297503739,
+      "sortino": 0.896609925818851,
+      "mdd": -0.15170806768817868,
+      "calmar": 0.6344291136306635,
+      "monthly_hit_rate": 0.5,
+      "skew": 2.0584359753991253,
+      "kurtosis_excess": 15.989191314383884
+    },
+    {
+      "params": {
+        "entry_lookback": 30,
+        "exit_lookback": 10,
+        "vol_lookback": 10,
+        "vol_target": 0.2
+      },
+      "status": "ok",
+      "n_trades": 478,
+      "sharpe": 0.7384033257030465,
+      "sortino": 0.8913536262282103,
+      "mdd": -0.19518585935578447,
+      "calmar": 0.6472427771773697,
+      "monthly_hit_rate": 0.5,
+      "skew": 2.0013783632860425,
+      "kurtosis_excess": 16.17338162599746
+    },
+    {
+      "params": {
+        "entry_lookback": 30,
+        "exit_lookback": 10,
+        "vol_lookback": 20,
+        "vol_target": 0.1
+      },
+      "status": "ok",
+      "n_trades": 478,
+      "sharpe": 0.765708189383033,
+      "sortino": 0.8583820265492894,
+      "mdd": -0.10616671103671294,
+      "calmar": 0.5614531890459725,
+      "monthly_hit_rate": 0.5,
+      "skew": 1.3876240831347153,
+      "kurtosis_excess": 12.235908812905674
+    },
+    {
+      "params": {
+        "entry_lookback": 30,
+        "exit_lookback": 10,
+        "vol_lookback": 20,
+        "vol_target": 0.15
+      },
+      "status": "ok",
+      "n_trades": 478,
+      "sharpe": 0.7624458671157947,
+      "sortino": 0.851112613403979,
+      "mdd": -0.15003926403441836,
+      "calmar": 0.5991070788301041,
+      "monthly_hit_rate": 0.5,
+      "skew": 1.3510663497570679,
+      "kurtosis_excess": 12.104730133528406
+    },
+    {
+      "params": {
+        "entry_lookback": 30,
+        "exit_lookback": 10,
+        "vol_lookback": 20,
+        "vol_target": 0.2
+      },
+      "status": "ok",
+      "n_trades": 478,
+      "sharpe": 0.7631488108754229,
+      "sortino": 0.8498551611446943,
+      "mdd": -0.1904995447569805,
+      "calmar": 0.633512773258005,
+      "monthly_hit_rate": 0.5,
+      "skew": 1.3403796920033064,
+      "kurtosis_excess": 12.240609680680816
+    },
+    {
+      "params": {
+        "entry_lookback": 30,
+        "exit_lookback": 10,
+        "vol_lookback": 30,
+        "vol_target": 0.1
+      },
+      "status": "ok",
+      "n_trades": 478,
+      "sharpe": 0.8581303746820919,
+      "sortino": 0.9685172286212904,
+      "mdd": -0.09375631718368083,
+      "calmar": 0.6884078346120752,
+      "monthly_hit_rate": 0.5138888888888888,
+      "skew": 1.5071528489187045,
+      "kurtosis_excess": 13.54771350666222
+    },
+    {
+      "params": {
+        "entry_lookback": 30,
+        "exit_lookback": 10,
+        "vol_lookback": 30,
+        "vol_target": 0.15
+      },
+      "status": "ok",
+      "n_trades": 478,
+      "sharpe": 0.8635832986077063,
+      "sortino": 0.9746847524378492,
+      "mdd": -0.13649036673072357,
+      "calmar": 0.7251346962121941,
+      "monthly_hit_rate": 0.5138888888888888,
+      "skew": 1.5089020038665657,
+      "kurtosis_excess": 13.566011729483847
+    },
+    {
+      "params": {
+        "entry_lookback": 30,
+        "exit_lookback": 10,
+        "vol_lookback": 30,
+        "vol_target": 0.2
+      },
+      "status": "ok",
+      "n_trades": 478,
+      "sharpe": 0.8746576319655277,
+      "sortino": 0.9881144207486573,
+      "mdd": -0.17453282531161518,
+      "calmar": 0.7742890076457694,
+      "monthly_hit_rate": 0.5138888888888888,
+      "skew": 1.5000079433239033,
+      "kurtosis_excess": 13.426066809001185
+    },
+    {
+      "params": {
+        "entry_lookback": 30,
+        "exit_lookback": 20,
+        "vol_lookback": 10,
+        "vol_target": 0.1
+      },
+      "status": "ok",
+      "n_trades": 317,
+      "sharpe": 1.0801543646215257,
+      "sortino": 1.3897341922566913,
+      "mdd": -0.10961376211219165,
+      "calmar": 1.0056516981257955,
+      "monthly_hit_rate": 0.5277777777777778,
+      "skew": 1.553563065466922,
+      "kurtosis_excess": 10.627494103621121
+    },
+    {
+      "params": {
+        "entry_lookback": 30,
+        "exit_lookback": 20,
+        "vol_lookback": 10,
+        "vol_target": 0.15
+      },
+      "status": "ok",
+      "n_trades": 317,
+      "sharpe": 1.0981208006180665,
+      "sortino": 1.4124977154255174,
+      "mdd": -0.15663420766072367,
+      "calmar": 1.0757845501678962,
+      "monthly_hit_rate": 0.5277777777777778,
+      "skew": 1.4996470787249774,
+      "kurtosis_excess": 10.370048369614604
+    },
+    {
+      "params": {
+        "entry_lookback": 30,
+        "exit_lookback": 20,
+        "vol_lookback": 10,
+        "vol_target": 0.2
+      },
+      "status": "ok",
+      "n_trades": 317,
+      "sharpe": 1.123372510248433,
+      "sortino": 1.444878426644446,
+      "mdd": -0.192632487019473,
+      "calmar": 1.18395052613878,
+      "monthly_hit_rate": 0.5555555555555556,
+      "skew": 1.4757494774812994,
+      "kurtosis_excess": 10.576969200927536
+    },
+    {
+      "params": {
+        "entry_lookback": 30,
+        "exit_lookback": 20,
+        "vol_lookback": 20,
+        "vol_target": 0.1
+      },
+      "status": "ok",
+      "n_trades": 317,
+      "sharpe": 1.1548804920538034,
+      "sortino": 1.4226810576197368,
+      "mdd": -0.11712588634562693,
+      "calmar": 0.8680284543910987,
+      "monthly_hit_rate": 0.5416666666666666,
+      "skew": 1.1485725624014513,
+      "kurtosis_excess": 8.74668935769613
+    },
+    {
+      "params": {
+        "entry_lookback": 30,
+        "exit_lookback": 20,
+        "vol_lookback": 20,
+        "vol_target": 0.15
+      },
+      "status": "ok",
+      "n_trades": 317,
+      "sharpe": 1.1492657227249332,
+      "sortino": 1.409898803395831,
+      "mdd": -0.16636023659298171,
+      "calmar": 0.9296826962908288,
+      "monthly_hit_rate": 0.5416666666666666,
+      "skew": 1.121527729163075,
+      "kurtosis_excess": 8.68957740546329
+    },
+    {
+      "params": {
+        "entry_lookback": 30,
+        "exit_lookback": 20,
+        "vol_lookback": 20,
+        "vol_target": 0.2
+      },
+      "status": "ok",
+      "n_trades": 317,
+      "sharpe": 1.144461766309913,
+      "sortino": 1.4007018341909614,
+      "mdd": -0.21352775692780357,
+      "calmar": 0.9758976638274889,
+      "monthly_hit_rate": 0.5416666666666666,
+      "skew": 1.107830216345216,
+      "kurtosis_excess": 8.75648964978743
+    },
+    {
+      "params": {
+        "entry_lookback": 30,
+        "exit_lookback": 20,
+        "vol_lookback": 30,
+        "vol_target": 0.1
+      },
+      "status": "ok",
+      "n_trades": 317,
+      "sharpe": 1.263123722183225,
+      "sortino": 1.5429400816032568,
+      "mdd": -0.10870028679830457,
+      "calmar": 0.9817960241270852,
+      "monthly_hit_rate": 0.5277777777777778,
+      "skew": 1.180940778984168,
+      "kurtosis_excess": 9.617001893772475
+    },
+    {
+      "params": {
+        "entry_lookback": 30,
+        "exit_lookback": 20,
+        "vol_lookback": 30,
+        "vol_target": 0.15
+      },
+      "status": "ok",
+      "n_trades": 317,
+      "sharpe": 1.2612676840530719,
+      "sortino": 1.539922788562826,
+      "mdd": -0.15855187768904588,
+      "calmar": 1.0337128486886076,
+      "monthly_hit_rate": 0.5277777777777778,
+      "skew": 1.1811933930218328,
+      "kurtosis_excess": 9.640591882675132
+    },
+    {
+      "params": {
+        "entry_lookback": 30,
+        "exit_lookback": 20,
+        "vol_lookback": 30,
+        "vol_target": 0.2
+      },
+      "status": "ok",
+      "n_trades": 317,
+      "sharpe": 1.2619120310084682,
+      "sortino": 1.5416767677405792,
+      "mdd": -0.20402367352719464,
+      "calmar": 1.0937969833003738,
+      "monthly_hit_rate": 0.5277777777777778,
+      "skew": 1.1732090764493237,
+      "kurtosis_excess": 9.546429030084731
+    }
+  ],
+  "timestamp": "2026-05-03T14:23:07.596845+00:00"
+}

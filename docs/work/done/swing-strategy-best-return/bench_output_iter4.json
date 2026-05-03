@@ -1,0 +1,106 @@
+{
+  "schema_version": "swing-strategy-99/v4",
+  "issue": 99,
+  "iteration": 4,
+  "data_source": "lake::BTCUSDT@4h",
+  "symbol": "BTCUSDT",
+  "timeframe": "4h",
+  "start": "2020-01-01 00:00:00+00:00",
+  "end": "2025-12-31 00:00:00+00:00",
+  "n_bars": 13147,
+  "has_funding_data": true,
+  "git_commit": "ad896410bdffbf2ef1db24ca7ddfd1b0f4a4fa82",
+  "variant_registry": {
+    "W1": {
+      "fn": "s2_donchian_voltarget",
+      "params": {
+        "entry_lookback": 20,
+        "exit_lookback": 10,
+        "vol_target": 0.15,
+        "vol_lookback": 60
+      }
+    },
+    "W2": {
+      "fn": "s4_funding_carry",
+      "params": {
+        "threshold_neg": -5e-05
+      }
+    },
+    "W3": {
+      "fn": "s2c_x_s4_composite",
+      "params": {
+        "entry_lookback": 20,
+        "exit_lookback": 10,
+        "threshold_neg": -5e-05,
+        "vol_target": 0.15,
+        "vol_lookback": 60
+      }
+    }
+  },
+  "variant_registry_sha256": "6d7346e1114204c16ed4e4ccdd3646fc59ecc75410458c89e47065af080d89d4",
+  "cv": {
+    "n_splits": 5,
+    "embargo_frac": 0.01,
+    "split_hash": "58eb1d69134672321e793a89254c7f94dfd6b2cc8bb4bfb04aeb708d0228d8e9"
+  },
+  "fee_round_trip": 0.0008,
+  "gate": {
+    "dsr_min": 0.95,
+    "pbo_max": 0.2,
+    "oos_mdd_max": 0.25,
+    "monthly_hit_rate_min": 0.5
+  },
+  "variants": [
+    {
+      "variant_id": "W1",
+      "status": "ok",
+      "n_trades": 602,
+      "sharpe": 0.8140241823887031,
+      "sortino": 1.0349918615083051,
+      "mdd": -0.18691231679505826,
+      "calmar": 0.5095827229384229,
+      "avg_rr": 1.5602108595183473,
+      "turnover": 0.01707139426791483,
+      "monthly_hit_rate": 0.5138888888888888,
+      "skew": 1.5291385734169372,
+      "kurtosis_excess": 11.950906241009275
+    },
+    {
+      "variant_id": "W2",
+      "status": "ok",
+      "n_trades": 300,
+      "sharpe": 0.9612569846335586,
+      "sortino": 0.5128668796028505,
+      "mdd": -0.1705087128116779,
+      "calmar": 0.9048204906755662,
+      "avg_rr": 1.836416354213533,
+      "turnover": 0.02282074669588207,
+      "monthly_hit_rate": 0.2916666666666667,
+      "skew": 4.299055651107187,
+      "kurtosis_excess": 74.39780272196383
+    },
+    {
+      "variant_id": "W3",
+      "status": "ok",
+      "n_trades": 122,
+      "sharpe": 0.17419970520025008,
+      "sortino": 0.06205738600764076,
+      "mdd": -0.04041979190534861,
+      "calmar": 0.08682626316111595,
+      "avg_rr": 1.995610751816374,
+      "turnover": 0.0028919954510269277,
+      "monthly_hit_rate": 0.125,
+      "skew": 10.20586551609766,
+      "kurtosis_excess": 318.05168840574225
+    }
+  ],
+  "scoring": {
+    "dsr": 0.9999999999999999,
+    "pbo": 0.7142857142857143,
+    "dsr_n_trials": 3,
+    "winning_variant": "W2",
+    "gate_passed": false,
+    "gate_reason": "PBO=0.7142857142857143 > 0.2; monthly_hit_rate=0.2916666666666667 < 0.5"
+  },
+  "timestamp": "2026-05-03T14:14:02.265956+00:00"
+}

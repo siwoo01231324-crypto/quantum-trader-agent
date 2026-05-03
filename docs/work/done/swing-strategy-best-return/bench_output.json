@@ -1,0 +1,161 @@
+{
+  "schema_version": "swing-strategy-99/v1",
+  "issue": 99,
+  "data_source": "lake::BTCUSDT@4h",
+  "symbol": "BTCUSDT",
+  "timeframe": "4h",
+  "eth_symbol": "ETHUSDT",
+  "start": "2020-01-01 00:00:00+00:00",
+  "end": "2025-12-31 00:00:00+00:00",
+  "n_bars": 13147,
+  "git_commit": "ad896410bdffbf2ef1db24ca7ddfd1b0f4a4fa82",
+  "variant_registry": {
+    "S1": {
+      "fn": "s1_tsmom",
+      "params": {
+        "lookback": 6
+      }
+    },
+    "S2": {
+      "fn": "s2_donchian",
+      "params": {
+        "entry_lookback": 20,
+        "exit_lookback": 10
+      }
+    },
+    "S3": {
+      "fn": "s3_ema_pullback",
+      "params": {
+        "ema_trend": 200,
+        "rsi_lookback": 14,
+        "rsi_threshold": 30.0
+      }
+    },
+    "S4": {
+      "fn": "s4_funding_carry",
+      "params": {
+        "threshold_neg": -5e-05
+      }
+    },
+    "S5": {
+      "fn": "s5_pairs",
+      "params": {
+        "lookback": 60,
+        "z_entry": 2.0,
+        "z_exit": 0.5
+      }
+    },
+    "S6": {
+      "fn": "ensemble_s1_s2_s3",
+      "params": {}
+    }
+  },
+  "variant_registry_sha256": "584233587ce3f253e7567453a27a065efb127999188a72e12fbaedad9dbd2038",
+  "cv": {
+    "n_splits": 5,
+    "embargo_frac": 0.01,
+    "split_hash": "58eb1d69134672321e793a89254c7f94dfd6b2cc8bb4bfb04aeb708d0228d8e9"
+  },
+  "fee_round_trip": 0.0008,
+  "gate": {
+    "dsr_min": 0.95,
+    "pbo_max": 0.2,
+    "oos_mdd_max": 0.25,
+    "monthly_hit_rate_min": 0.5
+  },
+  "variants": [
+    {
+      "variant_id": "S1",
+      "status": "ok",
+      "n_trades": 2703,
+      "sharpe": -0.466111616756048,
+      "sortino": -0.6662008752671447,
+      "mdd": -0.928730715059469,
+      "calmar": -0.19562130870769173,
+      "avg_rr": 1.3844599275538754,
+      "turnover": 0.20559950347691935,
+      "monthly_hit_rate": 0.3888888888888889,
+      "skew": 0.7281738668125715,
+      "kurtosis_excess": 7.506282167558882
+    },
+    {
+      "variant_id": "S2",
+      "status": "ok",
+      "n_trades": 602,
+      "sharpe": 0.5806539036313302,
+      "sortino": 0.6767088469286837,
+      "mdd": -0.6316849626911669,
+      "calmar": 0.38638535960459075,
+      "avg_rr": 1.4624720350476972,
+      "turnover": 0.045789710099858334,
+      "monthly_hit_rate": 0.5138888888888888,
+      "skew": 0.9722383578107714,
+      "kurtosis_excess": 9.615072833271856
+    },
+    {
+      "variant_id": "S3",
+      "status": "ok",
+      "n_trades": 42,
+      "sharpe": 0.47260565759940915,
+      "sortino": 0.17202364928533495,
+      "mdd": -0.39244929996794464,
+      "calmar": 0.2573502671882343,
+      "avg_rr": 1.1498105155501155,
+      "turnover": 0.003194668593541702,
+      "monthly_hit_rate": 0.09722222222222222,
+      "skew": 0.09840589477493591,
+      "kurtosis_excess": 77.11858438064542
+    },
+    {
+      "variant_id": "S4",
+      "status": "DATA_UNAVAILABLE",
+      "n_trades": 0,
+      "sharpe": null,
+      "sortino": null,
+      "mdd": null,
+      "calmar": null,
+      "avg_rr": null,
+      "turnover": null,
+      "monthly_hit_rate": null,
+      "skew": null,
+      "kurtosis_excess": null
+    },
+    {
+      "variant_id": "S5",
+      "status": "ok",
+      "n_trades": 420,
+      "sharpe": -0.3551904006498313,
+      "sortino": -0.40065159177694076,
+      "mdd": -0.850175686301496,
+      "calmar": -0.17372107104308968,
+      "avg_rr": 1.1535483486614069,
+      "turnover": 0.03194633895912027,
+      "monthly_hit_rate": 0.3611111111111111,
+      "skew": 0.7715090206211817,
+      "kurtosis_excess": 14.088925037543898
+    },
+    {
+      "variant_id": "S6",
+      "status": "ok",
+      "n_trades": 1300,
+      "sharpe": 0.0023292493044343296,
+      "sortino": 0.002689870278480228,
+      "mdd": -0.7717419292471923,
+      "calmar": 0.0010583438170319913,
+      "avg_rr": 1.4223382617030547,
+      "turnover": 0.0988835025637934,
+      "monthly_hit_rate": 0.4166666666666667,
+      "skew": 1.0756340437346714,
+      "kurtosis_excess": 11.850242861731374
+    }
+  ],
+  "scoring": {
+    "dsr": 0.7848561562935765,
+    "pbo": 0.31041181041181043,
+    "dsr_n_trials": 5,
+    "winning_variant": "S2",
+    "gate_passed": false,
+    "gate_reason": "DSR=0.7848561562935765 < 0.95; PBO=0.31041181041181043 > 0.2; MDD=-0.6317 < -0.25"
+  },
+  "timestamp": "2026-05-01T09:39:33.224308+00:00"
+}
