@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -232,19 +233,58 @@ def main() -> int:
         try:
             bench_out = output_dir / "bench_result.json"
             bench_script = WORKTREE / "scripts/bench_metalabeler_btc.py"
-            result = subprocess.run(
-                [sys.executable, str(bench_script),
-                 "--model-path", str(output_dir),
-                 "--output-md", str(output_dir / "bench_report.md")],
+            bench_cmd = [sys.executable, str(bench_script),
+                         "--model-path", str(output_dir),
+                         "--output-md", str(output_dir / "bench_report.md")]
+            if not args.synthetic:
+                bench_cmd += ["--data-path", str(args.lake_dir)]
+                # Limit bench to last 6 months for CI tractability (~9K bars
+                # vs 35K). Drift detection still meaningful: recent regime
+                # change is more relevant than aggregate over 13 months.
+                from datetime import timedelta as _td
+                bench_start = (datetime.now(timezone.utc) - _td(days=180)).strftime("%Y-%m-%d")
+                bench_cmd += ["--data-start", bench_start]
+            # Stream bench output to our stdout in real-time so CI shows
+            # progress (capture_output blocks until subprocess finishes,
+            # making slow backtests look like silent hangs).
+            print("[bench] starting subprocess (streaming output)...", flush=True)
+            proc = subprocess.Popen(
+                bench_cmd,
                 cwd=str(WORKTREE),
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
                 text=True,
+                bufsize=1,
             )
-            if result.returncode != 0:
+            captured: list[str] = []
+            try:
+                assert proc.stdout is not None
+                for line in proc.stdout:
+                    print(f"  [bench] {line}", end="", flush=True)
+                    captured.append(line)
+                proc.wait(timeout=1500)  # 25 min hard cap
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
+                post_train_failure = True
+                failure_log_parts.append("[STEP 3 - bench TIMEOUT (>25 min)]")
+                print("[bench] TIMEOUT — killed", flush=True)
+
+            bench_stdout = "".join(captured)
+            # Wrap into a "result" shape so existing code below stays simple.
+            class _R:
+                returncode = proc.returncode if proc.returncode is not None else 1
+                stdout = bench_stdout
+                stderr = ""
+            result = _R()
+            # bench exit codes: 0=AC4 PASS, 2=AC4 FAIL (verdict, expected),
+            #   1=environment failure (real failure to surface).
+            print(f"[bench] exit={result.returncode}", flush=True)
+            if result.returncode == 1:
                 post_train_failure = True
                 failure_log_parts.append(
-                    f"[STEP 3 - bench FAILED (exit {result.returncode})]\n"
-                    f"stdout: {result.stdout}\nstderr: {result.stderr}"
+                    f"[STEP 3 - bench environment FAILED (exit 1)]\n"
+                    f"stdout: {result.stdout}"
                 )
             else:
                 # Parse bench stdout for "ON Sharpe: <val>" so drift_detector can compare.
@@ -339,6 +379,68 @@ def main() -> int:
         bench_result=bench_result,
         failure_log="\n\n".join(failure_log_parts) if failure_log_parts else None,
     )
+
+    # --- Step 8: always-on completion notification ---
+    try:
+        if output_dir is None or post_train_failure:
+            level = "critical"
+            title_prefix = "❌ 학습 실패"
+            recommendation = "GH Actions 로그 확인 → 재실행 필요"
+        elif drift_report is not None and drift_report.triggered:
+            level = "warn"
+            title_prefix = "⚠️ 드리프트 감지"
+            recommendation = "수동 검토 → 모델 보류 (latest.json 미갱신)"
+        else:
+            level = "info"
+            title_prefix = "✅ 학습 완료"
+            recommendation = "latest.json 자동 갱신, 다음 학습까지 운영 지속"
+
+        cv_acc = cv_report.get("mean_accuracy") if cv_report else None
+        cv_std = cv_report.get("std_accuracy") if cv_report else None
+        n_folds = cv_report.get("n_folds") if cv_report else None
+
+        body_lines: list[str] = []
+        body_lines.append(f"전략: {args.strategy_id} | 심볼: {args.symbol} {args.interval}")
+        body_lines.append(f"버전: {date_str} ({now.isoformat(timespec='minutes').replace('+00:00','Z')})")
+        body_lines.append("")
+        body_lines.append("📊 학습 결과")
+        if cv_acc is not None:
+            std_str = f" ± {cv_std:.4f}" if cv_std is not None else ""
+            fold_str = f" ({n_folds} folds)" if n_folds else ""
+            body_lines.append(f"  CV accuracy(정답률): {cv_acc:.4f}{std_str}{fold_str}")
+            ac_gate = "✅ PASS" if cv_acc >= 0.55 else "⚠️ WARN"
+            body_lines.append(f"  AC gate(합격선 ≥55%): {ac_gate}")
+        if bench_result and "on" in bench_result:
+            on_sharpe = bench_result["on"].get("sharpe")
+            off_sharpe = bench_result.get("off", {}).get("sharpe")
+            if on_sharpe is not None and off_sharpe is not None:
+                delta = on_sharpe - off_sharpe
+                arrow = "↑" if delta > 0 else "↓"
+                body_lines.append(
+                    f"  Sharpe(위험조정수익률): OFF {off_sharpe:+.3f} → ON {on_sharpe:+.3f} ({arrow}{abs(delta):.3f})"
+                )
+            elif on_sharpe is not None:
+                body_lines.append(f"  Sharpe(위험조정수익률, ON): {on_sharpe:+.3f}")
+
+        body_lines.append("")
+        body_lines.append("🔍 드리프트")
+        body_lines.append(f"  {drift_report.reason if drift_report else 'n/a'}")
+
+        body_lines.append("")
+        body_lines.append("👉 권고")
+        body_lines.append(f"  {recommendation}")
+
+        fields: dict[str, str] = {}
+        if output_dir is not None:
+            fields["artifact"] = str(output_dir).split("models/", 1)[-1] if "models/" in str(output_dir) else str(output_dir)
+        run_id = os.environ.get("GITHUB_RUN_ID", "")
+        repo = os.environ.get("GITHUB_REPOSITORY", "")
+        if run_id and repo:
+            fields["GH run"] = f"https://github.com/{repo}/actions/runs/{run_id}"
+
+        notify(level, f"{title_prefix}: {args.strategy_id}", body="\n".join(body_lines), fields=fields)
+    except Exception:
+        print(f"[warn] completion notification failed:\n{traceback.format_exc()}", file=sys.stderr)
 
     # --- Exit code ---
     if output_dir is None or post_train_failure:
