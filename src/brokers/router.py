@@ -10,6 +10,7 @@ from src.brokers.base import (
     HealthStatus, MarginType, Closeable,
 )
 from src.brokers.errors import BrokerStartupError
+from src.brokers.is_estimator import MarketSnapshot, pre_flight_is_estimate
 from src.brokers.types import BrokerFill
 from src.ops.kill_switch import KillSwitch, KillSwitchTripped
 
@@ -95,9 +96,26 @@ class OrderRouter:
 
     # ── order operations ──────────────────────────────────────────────────────
 
-    def place_order(self, req: OrderRequest, *, force_broker: str | None = None) -> OrderAck:
+    def place_order(
+        self,
+        req: OrderRequest,
+        *,
+        force_broker: str | None = None,
+        market_snap: MarketSnapshot | None = None,
+    ) -> OrderAck:
         self._ks.assert_allow_order(liquidation=req.emergency_exit)
         broker = self._select_broker(force_broker)
+        if self._metrics and market_snap is not None:
+            is_est = pre_flight_is_estimate(
+                symbol=req.symbol,
+                side=req.side,
+                qty=float(req.qty),
+                snap=market_snap,
+            )
+            self._metrics.is_estimate_bps.labels(
+                broker=broker.name,
+                symbol=req.symbol,
+            ).observe(is_est)
         ack = broker.place_order(req)
         if self._metrics:
             self._metrics.orders_total.labels(

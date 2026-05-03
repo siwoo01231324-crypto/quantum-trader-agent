@@ -44,6 +44,10 @@ METRIC_NAMES = [
     # NOTE: qta_orders_total (existing) covers all ack types (NEW/FILLED/CANCELED/etc.)
     "qta_orders_placed_total",
     "qta_orders_filled_total",
+    # IS / TCA metrics (#114)
+    "qta_is_estimate_bps",
+    "qta_is_realized_bps",
+    "qta_is_prediction_error_bps",
     # Watchdog (#120)
     "qta_portfolio_risk_watchdog_state",
 ]
@@ -247,6 +251,28 @@ class Metrics:
             "qta_orders_filled_total",
             "Orders fully filled (FILLED confirmed) — AC3 최종 (#105)",
             labelnames=("strategy",),
+            registry=self.registry,
+        )
+        # IS / TCA metrics (#114)
+        self.is_estimate_bps = Histogram(
+            "qta_is_estimate_bps",
+            "Pre-flight Implementation Shortfall estimate in basis points (#114)",
+            labelnames=("broker", "symbol"),
+            buckets=(1, 2, 5, 10, 20, 50, 100, 200, 500),
+            registry=self.registry,
+        )
+        self.is_realized_bps = Histogram(
+            "qta_is_realized_bps",
+            "Realized Implementation Shortfall in basis points post-fill (#114)",
+            labelnames=("broker", "symbol"),
+            buckets=(-500, -100, -50, -20, -10, -5, -2, 0, 2, 5, 10, 20, 50, 100, 200, 500),
+            registry=self.registry,
+        )
+        self.is_prediction_error_bps = Histogram(
+            "qta_is_prediction_error_bps",
+            "IS prediction error (realized - estimate) in basis points (#114)",
+            labelnames=("broker", "symbol"),
+            buckets=(-200, -100, -50, -20, -10, 0, 10, 20, 50, 100, 200),
             registry=self.registry,
         )
         # Watchdog (#120): 1 = stale/silent, 0 = healthy
