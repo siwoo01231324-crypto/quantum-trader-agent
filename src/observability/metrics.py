@@ -48,6 +48,8 @@ METRIC_NAMES = [
     "qta_is_estimate_bps",
     "qta_is_realized_bps",
     "qta_is_prediction_error_bps",
+    # Watchdog (#120)
+    "qta_portfolio_risk_watchdog_state",
 ]
 
 
@@ -271,6 +273,12 @@ class Metrics:
             "IS prediction error (realized - estimate) in basis points (#114)",
             labelnames=("broker", "symbol"),
             buckets=(-200, -100, -50, -20, -10, 0, 10, 20, 50, 100, 200),
+            registry=self.registry,
+        )
+        # Watchdog (#120): 1 = stale/silent, 0 = healthy
+        self.portfolio_risk_watchdog_state = Gauge(
+            "qta_portfolio_risk_watchdog_state",
+            "Portfolio risk evaluator watchdog state (1=stale/silent, 0=healthy) (#120)",
             registry=self.registry,
         )
 

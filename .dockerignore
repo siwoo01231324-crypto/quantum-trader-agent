@@ -1,0 +1,56 @@
+# 빌드 컨텍스트 축소 — 이미지에 들어가지 않아야 할 항목.
+
+# Git
+.git
+.gitignore
+.github
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.coverage
+htmlcov
+.tox
+.venv
+venv
+env
+
+# Test 산출물
+.pytest_cache
+test-results
+playwright-report
+tests/fixtures
+
+# Data & secrets — 실제 값 절대 이미지 포함 금지
+.env
+.env.*
+!.env.example
+*.wal
+*.jsonl.bak
+data
+.omc/state
+.omc/logs
+
+# IDE / OS
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+
+# Build/CI artifacts
+dist
+build
+*.egg-info
+
+# Worktree leftovers
+.worktree
+
+# Docs (런타임 불필요)
+docs
+*.md
+!README.md
