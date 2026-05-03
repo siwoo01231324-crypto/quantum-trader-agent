@@ -145,6 +145,21 @@ Snapshot(account, position, intent_order, daily_pnl, ...)
 - **v2 (delivered #70)**: 포트폴리오 레벨 CVaR·평균 ρ·ENB — `per_portfolio_risk` 블록, `Snapshot.portfolio_risk` 주입, `src/risk/portfolio.py` 순수함수.
 - **v2.1 (delivered #87)**: 특허 차용 확장 — `cvar_levels` 다중 α 계층 + `extreme_fear_block` (가격 기반 `fear_greed_proxy`) + `consensus_kelly`·`user_risk_vol_target` 사이저 옵션 + `equal_risk_contribution_convex`·`hrp_with_clustering` 포트폴리오 최적화 + `StabilityGrade` A~F 등급 (DSL 배선은 후속 이슈).
 - v3: 변동성 기반 동적 한도 (ATR×k 등) · 시간대별 한도 · 팩터 노출 ([[19-portfolio-risk]] §5).
+- **v3.1 (사용자 결정 의존, #119 권고)**: **Sleeve allocation 확장** — multi-PM 구조를 위해 정책 파일에 `sleeve_id` 필드 추가, sleeve 별 독립 `Policy` 인스턴스 (예: `core.yaml` / `satellite.yaml` / `experimental.yaml`), sleeve 별 kill switch 격리. orchestrator 는 `dict[sleeve_id, Policy]` 형태로 sleeve 별 평가 분기. sleeve 통합 리스크 (ENB·CVaR) 는 portfolio-level 로 측정 — sleeve 별 합산이 아님. [[19-portfolio-risk]] §6 v3 로드맵 참조. **선결 조건**: 사용자가 [[36-monthly-10pct-feasibility]] §7 에서 옵션 (d) Sleeve allocation 채택.
+
+```yaml
+# v3.1 예시 — sleeve 별 정책 (별도 파일 권장)
+policy_version: 3
+sleeve_id: aggressive_satellite  # 신규 v3.1
+name: satellite_momo_vol_filtered
+parent_policy: aggressive        # 선택, fallback 정책
+allowed_strategies: [momo-vol-filtered]   # sleeve 격리: 다른 전략 거부
+per_portfolio:
+  max_leverage: 3.0              # sleeve 한정 L=3 허용
+drawdown:
+  max_running_dd_pct: 65.0       # sleeve B 한정 -65% 허용 (portfolio level 은 별도)
+  on_breach: halt_sleeve         # sleeve 격리 halt — 다른 sleeve 영향 없음
+```
 
 ## 8.1 #87 확장 상세 (모두 Optional, 기본값 None = 비활성 — 기존 정책 회귀 0)
 
