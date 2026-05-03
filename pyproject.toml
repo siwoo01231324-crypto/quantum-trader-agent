@@ -30,6 +30,8 @@ dev = [
     "respx>=0.21",
     "responses>=0.25",
     "pytz",
+    "python-frontmatter",
+    "rdflib",
 ]
 # pandas-ta is a Python <=3.10 only optional cross-check dep used by tests/signals/.
 # Tests skip when not installed (pytest.mark.skipif). Install manually if you want
