@@ -1,8 +1,8 @@
 ---
-type: work-active
+type: work-done
 id: 000132-test-coverage
 issue: 132
-title: "테스트 커버리지 지표 + 3계층 전략"
+name: "테스트 커버리지 지표 + 3계층 전략"
 status: in_progress
 ---
 

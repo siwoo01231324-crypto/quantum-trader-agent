@@ -2,6 +2,7 @@
 type: runbook
 id: test-coverage-sop
 name: "테스트 커버리지 SOP — 3계층 전략"
+severity: warn
 ---
 
 # 테스트 커버리지 SOP — 3계층 전략
