@@ -29,13 +29,18 @@ def test_phase0_aborts_cleanly_without_patent_notes():
     # Verify the invariants script exists
     assert INVARIANTS_SCRIPT.exists(), f"check_invariants.py not found at {INVARIANTS_SCRIPT}"
 
-    # Run with --strict in the actual worktree — should PASS (citations are present)
+    # Run with --strict in the actual worktree — should PASS (citations are present).
+    # encoding="utf-8" + errors="replace" 강제: Windows default cp949 가 한글 출력 못 읽어
+    # subprocess reader thread crash → hang → spurious timeout 발생 (#133 디버깅 중 발견).
+    # invariants 자체 실행은 ~3초.
     result = subprocess.run(
         [sys.executable, str(INVARIANTS_SCRIPT), "--strict"],
         cwd=str(ROOT),
         capture_output=True,
         text=True,
-        timeout=30,
+        encoding="utf-8",
+        errors="replace",
+        timeout=60,
     )
     # The normal run should pass (all citations present)
     assert result.returncode == 0, (

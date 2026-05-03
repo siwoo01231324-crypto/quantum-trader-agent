@@ -31,7 +31,6 @@ class MomoKisV1:
     SYMBOL_DEFAULT = "005930"
     RSI_PERIOD = 14
     LOOKBACK = 14
-    INTERVAL_MIN = 15
 
     def __init__(
         self,
@@ -43,6 +42,7 @@ class MomoKisV1:
         target_annual: float = 0.15,
         periods_per_year: int = 26 * 252,
         ewma_lam: float = 0.94,
+        interval_min: int = 15,
     ) -> None:
         if sizing_lookback < 2:
             raise ValueError(f"sizing_lookback must be >= 2, got {sizing_lookback}")
@@ -53,6 +53,7 @@ class MomoKisV1:
         self.target_annual = target_annual
         self.periods_per_year = periods_per_year
         self.ewma_lam = ewma_lam
+        self.interval_min = interval_min
 
     def _is_my_bar_boundary(self, ts: pd.Timestamp) -> bool:
         """Return True only for valid KRX 15m bar boundaries in KST."""
@@ -67,7 +68,7 @@ class MomoKisV1:
         t = ts_kst.time()
         if not (time(9, 0) <= t <= time(15, 30)):
             return False
-        return (t.minute % self.INTERVAL_MIN == 0) and t.second == 0
+        return (t.minute % self.interval_min == 0) and t.second == 0
 
     def _entry_size(self, close: pd.Series) -> float:
         window = close.iloc[-(self.sizing_lookback + 1):]

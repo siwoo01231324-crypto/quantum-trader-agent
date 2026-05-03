@@ -198,6 +198,88 @@ def run_cv(X: pd.DataFrame, y: pd.Series, t1: pd.Series, n_splits: int = 5, emba
 
 
 # ---------------------------------------------------------------------------
+# Extended CV (adds y_prob + PR-AUC per fold; original run_cv UNCHANGED)
+# ---------------------------------------------------------------------------
+
+def run_cv_extended(
+    X: pd.DataFrame,
+    y: pd.Series,
+    t1: pd.Series,
+    n_splits: int = 5,
+    embargo: float = 0.01,
+) -> dict:
+    """Like run_cv but also collects raw probabilities and PR-AUC per fold.
+
+    Original ``run_cv`` is preserved unchanged (BTC regression guard).
+    This function adds ``y_true``, ``y_prob``, and ``pr_auc`` to each fold dict.
+
+    Returns
+    -------
+    dict with keys:
+        mean_accuracy, std_accuracy, n_folds, embargo_frac, mean_pr_auc,
+        folds: list[dict] — each dict contains
+            {fold, train, test, y_true, y_prob, accuracy, pr_auc}
+            or {fold, skipped, train, test} for skipped folds.
+    """
+    from ml.scoring import pr_auc_score  # noqa: PLC0415
+
+    if len(X) == 0:
+        return {
+            "mean_accuracy": 0.0,
+            "std_accuracy": 0.0,
+            "n_folds": 0,
+            "embargo_frac": embargo,
+            "mean_pr_auc": 0.0,
+            "folds": [],
+        }
+
+    cv = PurgedKFold(n_splits=n_splits, embargo_frac=embargo)
+    accuracies: list[float] = []
+    pr_aucs: list[float] = []
+    fold_info: list[dict] = []
+
+    for fold_idx, (train_idx, test_idx) in enumerate(cv.split(X, t1)):
+        if len(train_idx) < 50 or len(test_idx) < 5:
+            fold_info.append({"fold": fold_idx, "skipped": True, "train": len(train_idx), "test": len(test_idx)})
+            continue
+        X_tr = X.iloc[train_idx]; y_tr = y.iloc[train_idx]
+        X_te = X.iloc[test_idx]; y_te = y.iloc[test_idx]
+        ml = MetaLabeler()
+        ml.fit(X_tr, y_tr)
+        # Store raw probabilities BEFORE threshold
+        y_prob = ml.win_probability(X_te)
+        preds = (y_prob >= 0.5).astype(int)
+        acc = float((preds == y_te.values).mean())
+        y_true_arr = y_te.values.astype(int)
+        pauc = pr_auc_score(y_true_arr, y_prob)
+        accuracies.append(acc)
+        pr_aucs.append(pauc)
+        fold_info.append({
+            "fold": fold_idx,
+            "train": len(train_idx),
+            "test": len(test_idx),
+            "y_true": y_true_arr,
+            "y_prob": y_prob,
+            "accuracy": acc,
+            "pr_auc": pauc,
+        })
+        print(f"  fold {fold_idx}: train={len(train_idx)}, test={len(test_idx)}, acc={acc:.4f}, pr_auc={pauc:.4f}")
+
+    mean_acc = float(np.mean(accuracies)) if accuracies else 0.0
+    std_acc = float(np.std(accuracies)) if accuracies else 0.0
+    mean_pr_auc = float(np.mean(pr_aucs)) if pr_aucs else 0.0
+    print(f"[cv_extended] mean_accuracy={mean_acc:.4f} ± {std_acc:.4f}, mean_pr_auc={mean_pr_auc:.4f}")
+    return {
+        "mean_accuracy": mean_acc,
+        "std_accuracy": std_acc,
+        "n_folds": len(accuracies),
+        "embargo_frac": embargo,
+        "mean_pr_auc": mean_pr_auc,
+        "folds": fold_info,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Artifact dataclass + train_and_save
 # ---------------------------------------------------------------------------
 

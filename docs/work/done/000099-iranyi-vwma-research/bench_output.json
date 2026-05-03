@@ -1,0 +1,190 @@
+{
+  "schema_version": "iranyi-vwma-99/v1",
+  "issue": 99,
+  "data_source": "lake::BTCUSDT@1h",
+  "symbol": "BTCUSDT",
+  "timeframe": "1h",
+  "benchmark_symbol": "ETHUSDT",
+  "start": "2020-01-01 00:00:00+00:00",
+  "end": "2025-12-31 00:00:00+00:00",
+  "n_bars": 52585,
+  "git_commit": "7c8e215c0fc90e0875402169b960f88f4e2b9f3b",
+  "variant_registry": {
+    "A": [
+      "vwma_cross"
+    ],
+    "B": [
+      "vwma_cross",
+      "ema_slope"
+    ],
+    "C": [
+      "vwma_cross",
+      "multi_tf"
+    ],
+    "D": [
+      "vwma_cross",
+      "time_gate"
+    ],
+    "E": [
+      "vwma_cross",
+      "cross_sectional_rs"
+    ],
+    "F": [
+      "vwma_cross",
+      "poc_distance"
+    ],
+    "G": [
+      "vwma_cross",
+      "obi",
+      "ofi",
+      "microprice_gap"
+    ],
+    "H": [
+      "vwma_cross",
+      "ema_slope",
+      "multi_tf",
+      "time_gate",
+      "cross_sectional_rs",
+      "poc_distance",
+      "obi",
+      "ofi",
+      "microprice_gap"
+    ]
+  },
+  "variant_registry_sha256": "b8f7c1e8cfe2d941382bac3f329804d5484108b88952f47215f96db07d4b5c0f",
+  "cv": {
+    "n_splits": 5,
+    "embargo_frac": 0.01,
+    "split_hash": "3d6d388ed3dab5d4f60f4bc9adf19717f0b828f74fa11fac3ff547551cf7c559"
+  },
+  "fee_round_trip": 0.0008,
+  "gate": {
+    "dsr_min": 0.95,
+    "pbo_max": 0.2,
+    "oos_mdd_max": 0.25,
+    "monthly_hit_rate_min": 0.5
+  },
+  "variants": [
+    {
+      "variant_id": "A",
+      "status": "ok",
+      "n_trades": 2665,
+      "sharpe": 0.04616065965925834,
+      "sortino": 0.0709811221264774,
+      "mdd": -0.8226191800136982,
+      "calmar": 0.020272794176755145,
+      "avg_rr": 1.367809925879256,
+      "turnover": 0.050679851668726815,
+      "monthly_hit_rate": 0.4305555555555556,
+      "skew": 1.0340077002071113,
+      "kurtosis_excess": 6.711430223235761
+    },
+    {
+      "variant_id": "B",
+      "status": "ok",
+      "n_trades": 1345,
+      "sharpe": 0.3464992975059829,
+      "sortino": 0.4212862623524575,
+      "mdd": -0.5988363321103379,
+      "calmar": 0.16487349729841852,
+      "avg_rr": 1.4051789550391018,
+      "turnover": 0.025577636208044117,
+      "monthly_hit_rate": 0.4027777777777778,
+      "skew": 1.170197062163635,
+      "kurtosis_excess": 11.712162066004101
+    },
+    {
+      "variant_id": "C",
+      "status": "ok",
+      "n_trades": 2665,
+      "sharpe": 0.04616065965925834,
+      "sortino": 0.0709811221264774,
+      "mdd": -0.8226191800136982,
+      "calmar": 0.020272794176755145,
+      "avg_rr": 1.367809925879256,
+      "turnover": 0.050679851668726815,
+      "monthly_hit_rate": 0.4305555555555556,
+      "skew": 1.0340077002071113,
+      "kurtosis_excess": 6.711430223235761
+    },
+    {
+      "variant_id": "D",
+      "status": "ok",
+      "n_trades": 2037,
+      "sharpe": -0.061930888999388686,
+      "sortino": -0.08536902013345689,
+      "mdd": -0.8126987791955136,
+      "calmar": -0.024299205834455367,
+      "avg_rr": 1.3350443424514566,
+      "turnover": 0.03873728249500808,
+      "monthly_hit_rate": 0.3888888888888889,
+      "skew": 1.190912379178845,
+      "kurtosis_excess": 9.70417391201454
+    },
+    {
+      "variant_id": "E",
+      "status": "ok",
+      "n_trades": 1194,
+      "sharpe": -1.2786954166812665,
+      "sortino": -1.222354895229147,
+      "mdd": -0.9033351302835118,
+      "calmar": -0.2295420630335588,
+      "avg_rr": 1.5916726052060222,
+      "turnover": 0.022706094893981173,
+      "monthly_hit_rate": 0.19444444444444445,
+      "skew": 2.0339046521893547,
+      "kurtosis_excess": 29.933916783926925
+    },
+    {
+      "variant_id": "F",
+      "status": "ok",
+      "n_trades": 1358,
+      "sharpe": -0.15967863775593574,
+      "sortino": -0.18778430732613635,
+      "mdd": -0.7278842122121754,
+      "calmar": -0.051314670958890744,
+      "avg_rr": 1.4509928293570682,
+      "turnover": 0.02582485499667205,
+      "monthly_hit_rate": 0.3888888888888889,
+      "skew": 1.7709725388860094,
+      "kurtosis_excess": 18.935638459995005
+    },
+    {
+      "variant_id": "G",
+      "status": "DATA_UNAVAILABLE",
+      "n_trades": 0,
+      "sharpe": null,
+      "sortino": null,
+      "mdd": null,
+      "calmar": null,
+      "avg_rr": null,
+      "turnover": null,
+      "monthly_hit_rate": null,
+      "skew": null,
+      "kurtosis_excess": null
+    },
+    {
+      "variant_id": "H",
+      "status": "DATA_UNAVAILABLE",
+      "n_trades": 0,
+      "sharpe": null,
+      "sortino": null,
+      "mdd": null,
+      "calmar": null,
+      "avg_rr": null,
+      "turnover": null,
+      "monthly_hit_rate": null,
+      "skew": null,
+      "kurtosis_excess": null
+    }
+  ],
+  "scoring": {
+    "dsr": 0.0,
+    "pbo": 0.2562548562548563,
+    "dsr_n_trials": 6,
+    "winning_variant": "B",
+    "gate_passed": false,
+    "gate_reason": "DSR=0.0 < 0.95; PBO=0.2562548562548563 > 0.2; MDD=-0.5988 < -0.25; monthly_hit_rate=0.4027777777777778 < 0.5"
+  },
+  "timestamp": "2026-04-27T09:47:34.124356+00:00"
+}

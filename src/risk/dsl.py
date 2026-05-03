@@ -84,7 +84,7 @@ class PerPortfolioRisk(_Strict):
     # extreme_fear_block: block new buy orders when fear_greed_proxy < extreme_fear_threshold.
     # Price-only signal; social/macro data intentionally excluded (patent-avoidance).
     extreme_fear_block: Optional[bool] = None
-    extreme_fear_threshold: Optional[float] = Field(default=0.2, ge=0.0, le=1.0)
+    extreme_fear_threshold: Optional[float] = Field(default=0.75, ge=0.0, le=1.0)
     on_cvar_breach: Action = Action.REDUCE
     on_corr_breach: Action = Action.BLOCK
     on_enb_breach: Action = Action.HALT
