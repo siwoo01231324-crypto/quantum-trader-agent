@@ -32,6 +32,8 @@ dev = [
     "pytz",
     "python-frontmatter",
     "rdflib",
+    "fastapi",
+    "starlette",
 ]
 # pandas-ta is a Python <=3.10 only optional cross-check dep used by tests/signals/.
 # Tests skip when not installed (pytest.mark.skipif). Install manually if you want
