@@ -10,6 +10,11 @@ on:
   push:
     branches: [master]
 
+permissions:
+  contents: read
+  pull-requests: write   # orgoro/coverage PR comment 권한
+  checks: write
+
 jobs:
   # -----------------------------------------------------------------------
   # Layer 1: Unit tests + full coverage report
@@ -78,6 +83,7 @@ jobs:
 
       - name: Coverage PR comment
         if: github.event_name == 'pull_request'
+        continue-on-error: true   # 권한 fail 해도 unit-coverage job 자체 통과
         uses: orgoro/coverage@v3.2
         with:
           coverageFile: coverage.xml
