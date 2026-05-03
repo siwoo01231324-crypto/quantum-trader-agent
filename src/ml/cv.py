@@ -104,3 +104,105 @@ class PurgedKFold:
             )
 
             yield train_idx, test_idx
+
+
+class TimeBlockGroupKFold:
+    """Time-block CV that groups ALL symbols in a timestamp block into test fold.
+
+    Unlike PurgedKFold (row-based fold boundaries), this splits on unique
+    timestamps so that multi-symbol data is always split at time boundaries —
+    no symbol leaks a future timestamp into the training set.
+
+    Supports both single DatetimeIndex and MultiIndex(timestamp, symbol).
+
+    Parameters
+    ----------
+    n_splits:
+        Number of time-block folds (>= 2).
+    embargo_frac:
+        Fraction of unique timestamps to embargo after each test fold (>= 0).
+    """
+
+    def __init__(self, n_splits: int = 5, embargo_frac: float = 0.01) -> None:
+        if n_splits < 2:
+            raise ValueError(f"n_splits must be >= 2, got {n_splits}")
+        if embargo_frac < 0:
+            raise ValueError(f"embargo_frac must be >= 0, got {embargo_frac}")
+        self.n_splits = n_splits
+        self.embargo_frac = embargo_frac
+
+    def split(
+        self,
+        X: pd.DataFrame,
+        t1: pd.Series,
+    ) -> Iterator[tuple[np.ndarray, np.ndarray]]:
+        """Yield (train_indices, test_indices) split by time blocks.
+
+        All rows sharing a timestamp in the test block go to the test fold.
+        Purge and embargo are applied to the remaining rows.
+
+        Parameters
+        ----------
+        X:
+            Feature DataFrame. Index must be DatetimeIndex or
+            MultiIndex with DatetimeIndex as level 0.
+        t1:
+            Label-completion timestamps indexed identically to X.
+
+        Yields
+        ------
+        tuple[np.ndarray, np.ndarray]
+            (train_idx, test_idx) integer position arrays.
+        """
+        if isinstance(X.index, pd.MultiIndex):
+            timestamps = X.index.get_level_values(0)
+        else:
+            timestamps = X.index
+
+        if not pd.api.types.is_datetime64_any_dtype(timestamps):
+            raise ValueError("X must have a DatetimeIndex (or MultiIndex level-0 datetime)")
+
+        unique_times = timestamps.unique().sort_values()
+        n_times = len(unique_times)
+        block_size = n_times // self.n_splits
+        embargo_n = int(np.ceil(n_times * self.embargo_frac))
+
+        n = len(X)
+        indices = np.arange(n)
+        ts_array = timestamps.to_numpy()
+
+        for k in range(self.n_splits):
+            t_start = k * block_size
+            t_end = (t_start + block_size) if k < self.n_splits - 1 else n_times
+            test_times = set(unique_times[t_start:t_end])
+
+            test_entry_min = unique_times[t_start]
+            test_entry_max = unique_times[t_end - 1]
+
+            test_mask = np.array([ts_array[i] in test_times for i in range(n)])
+            test_idx = indices[test_mask]
+
+            # Embargo: exclude unique_times immediately after test block
+            embargo_end_idx = min(t_end + embargo_n, n_times)
+            embargo_times = set(unique_times[t_end:embargo_end_idx])
+
+            train_mask = ~test_mask
+            for i in indices:
+                if not train_mask[i]:
+                    continue
+                ts_i = ts_array[i]
+                # Purge: label window overlaps test fold
+                if t1.iloc[i] >= test_entry_min and ts_i <= test_entry_max:
+                    train_mask[i] = False
+                    continue
+                # Embargo
+                if ts_i in embargo_times:
+                    train_mask[i] = False
+
+            train_idx = indices[train_mask]
+
+            assert len(np.intersect1d(train_idx, test_idx)) == 0, (
+                "TimeBlockGroupKFold invariant violated: train ∩ test ≠ ∅"
+            )
+
+            yield train_idx, test_idx
