@@ -145,9 +145,9 @@ def test_per_portfolio_risk_extreme_fear_block_default_none():
 
 
 def test_per_portfolio_risk_extreme_fear_threshold_default():
-    """extreme_fear_threshold default is 0.2."""
+    """extreme_fear_threshold default is 0.75 (#121: 실증 보정값)."""
     ppr = PerPortfolioRisk(extreme_fear_block=True)
-    assert ppr.extreme_fear_threshold == pytest.approx(0.2)
+    assert ppr.extreme_fear_threshold == pytest.approx(0.75)
 
 
 def test_extreme_fear_block_dsl_buy_blocked():
