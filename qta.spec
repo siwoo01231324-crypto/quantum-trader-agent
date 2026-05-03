@@ -22,22 +22,20 @@ from PyInstaller.utils.hooks import collect_dynamic_libs, collect_data_files
 
 block_cipher = None
 
-# Native DLL/.so + package data for libs that PyInstaller misses.
-# pyarrow: arrow.dll/parquet.dll (DLL load failed without these)
-# lightgbm: lib_lightgbm.dll
-# scipy: many .pyd helpers
-# sklearn: precompiled extensions
+# Native DLL/.so for libs that PyInstaller misses.
+# pyarrow 는 EXE 에서 제외 — Apache Arrow C++ runtime DLL 의존성 너무 깊고
+# (arrow.dll, arrow_python.dll, parquet.dll 등) PyInstaller 가 다 잡지 못함.
+# sklearn.utils.fixes 가 try/except 로 pyarrow import — 없어도 sklearn 정상 동작.
+# data_lake/fetcher.py 의 parquet 저장은 EXE live 매매에 필수 아님 (백테스트만).
 _native_binaries = (
-    collect_dynamic_libs("pyarrow")
-    + collect_dynamic_libs("lightgbm")
+    collect_dynamic_libs("lightgbm")
     + collect_dynamic_libs("scipy")
     + collect_dynamic_libs("sklearn")
     + collect_dynamic_libs("numpy")
     + collect_dynamic_libs("pandas")
 )
 _native_datas = (
-    collect_data_files("pyarrow")
-    + collect_data_files("lightgbm")
+    collect_data_files("lightgbm")
 )
 
 # ---------------------------------------------------------------------------
@@ -90,8 +88,7 @@ a = Analysis(
         "numpy",
         "numpy.core._methods",
         "numpy.lib.format",
-        "pyarrow",
-        "pyarrow.pandas_compat",
+        # pyarrow 제거 — EXE bundling 에서 DLL load failed (위 _native_binaries 주석 참조)
         "lightgbm",
         "lightgbm.basic",
         "lightgbm.sklearn",
@@ -174,6 +171,10 @@ a = Analysis(
         "jupyter",
         "matplotlib",
         "tkinter",
+        # pyarrow — Apache Arrow C++ runtime DLL load failure in EXE.
+        # sklearn.utils.fixes 의 try/except 로 우아한 fallback 동작.
+        # data_lake/fetcher 의 parquet 은 EXE live 매매 경로에 필수 아님.
+        "pyarrow",
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
