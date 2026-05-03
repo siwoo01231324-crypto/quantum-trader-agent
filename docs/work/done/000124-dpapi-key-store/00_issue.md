@@ -1,7 +1,7 @@
 ---
 id: 000124-dpapi-key-store
-title: "DPAPI 기반 API 키 저장소 + 키 회전 UI"
-type: work
+name: "DPAPI 기반 API 키 저장소 + 키 회전 UI"
+type: work-done
 status: in_progress
 issue: 124
 ---
