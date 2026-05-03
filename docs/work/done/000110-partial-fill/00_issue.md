@@ -1,7 +1,8 @@
 ---
 id: 000110-partial-fill
-type: work-active
-title: "feat: Partial fill 지원 (MockMatchingEngine partial_fill_enabled=True)"
+type: work-done
+name: "feat: Partial fill 지원 (MockMatchingEngine partial_fill_enabled=True)"
+status: in_progress
 issue: 110
 ---
 
