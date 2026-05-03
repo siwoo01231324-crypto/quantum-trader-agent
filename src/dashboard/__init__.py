@@ -1,0 +1,1 @@
+"""FastAPI local dashboard package."""

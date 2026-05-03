@@ -165,6 +165,9 @@ def main() -> int:
                         help="Run bench_metalabeler_btc.py after training")
     parser.add_argument("--synthetic", action="store_true",
                         help="Use synthetic OHLCV data (for testing/e2e without real lake)")
+    parser.add_argument("--walkforward-config", type=Path,
+                        default=WORKTREE / "configs" / "walkforward.yaml",
+                        help="configs/walkforward.yaml 경로 — 롤백 임계 로드 (#122)")
     args = parser.parse_args()
 
     now = datetime.now(timezone.utc)
@@ -313,6 +316,7 @@ def main() -> int:
             prev_manifest_path=args.prev_manifest,
             new_manifest_path=output_dir / "manifest.json",
             bench_path=bench_path,
+            config_path=args.walkforward_config if args.walkforward_config.exists() else None,
         )
         print(f"[drift] triggered={drift_report.triggered}, reason={drift_report.reason}")
     except Exception:

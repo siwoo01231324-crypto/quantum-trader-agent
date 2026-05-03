@@ -109,6 +109,23 @@ tags: [discoverability]
 - `required_factors: list[str]` 를 Strategy 클래스에 선언 → 엔진이 precompute 후 `context["factors"][name]` 주입.
 - **성능 주의**: 현재 엔진 precompute 는 O(N²) — 70k bar 외삽 ~13h. follow-up #81 에서 incremental 해결 전까지 프로덕션 전략에서 `required_factors` 훅 사용 금지.
 
+### 5.1 오더플로우·ICT 시그널 사전 등록 (#145 — 구현은 후속 이슈)
+
+> 본 섹션은 **research 단계 사전 등록**이다. 코드 구현·테스트·배선은 후속 이슈에서 수행한다. 학술 근거 및 데이터 요건 상세는 `docs/background/37-orderflow-microstructure-signals.md` 참조.
+
+| 팩터 슬롯 | 예정 파일 | 학술 근거 | 데이터 요건 | Sleeve B 역할 | 구현 이슈 |
+|-----------|----------|----------|------------|--------------|----------|
+| `cvd_divergence` (CVD 다이버전스) | `src/signals/cvd.py` | Kyle (1985) λ, Cont et al. (2014) OFI | Binance aggTrade (`m` 필드 필수) | 추세 확인/반전 필터 | TBD (후속) |
+| `vpin` (Volume-sync. Prob. of Informed Trading) | `src/signals/vpin.py` | Easley, López de Prado, O'Hara (2012) | Binance aggTrade + BVC 분류기 | 독성 플로우 게이트 (꼬리 손실 방어) | TBD (후속) |
+| `liq_sweep_reversal` (유동성 스윕 역진입) | `src/signals/liq_sweep.py` | Osler (2003) FX 스탑 클러스터 실증 | OHLCV + 거래량 (기존 인프라) | 저상관 단기 반전 알파 | TBD (후속) |
+| `order_block_level` (오더 블록 지지/저항) | `src/signals/order_block.py` | Easley & O'Hara (1992) 순차 거래 모델 | OHLCV + 거래량 | 기관 누적 레벨 참조 | TBD (후속) |
+| `fvg_fill` (FVG 채움 시그널) | `src/signals/fvg.py` | Roll (1984) 비드-애스크 바운스 (간접) | OHLCV (3봉) | 단기 평균회귀 필터 | TBD (후속) |
+
+**중요 제약**:
+- CVD, VPIN 은 Binance aggTrade fetcher 신규 구현 선행 필요. KIS 환경에서 CVD 불가, VPIN 근사만 가능.
+- 학술 근거 낮은 팩터(FVG, Order Block, Breaker) 는 단독 신호 금지 — CVD/VPIN 확인 + [[35-meta-labeling-lopez-de-prado]] 2단계 구조 결합 필수.
+- 전 팩터 `lag(1)` 디폴트 강제 (룩어헤드 방지, [[12-validation-protocol]] §2).
+
 ---
 
 ## 6. 활성화 흐름 요약

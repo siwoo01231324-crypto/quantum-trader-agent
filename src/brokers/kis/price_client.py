@@ -167,38 +167,39 @@ def fetch_intraday_ohlcv_raw(
     *,
     end_hhmmss: str = "153000",
 ) -> list[KISIntradayBar]:
-    """Fetch intraday minute OHLCV bars from KIS for a single KRX symbol and date.
+    """Fetch intraday minute OHLCV bars from KIS for a single KRX symbol on TODAY.
 
-    KIS FHKST03010200 returns up to 30 bars newest-first per page, starting from
-    end_hhmmss going backwards. Pagination via CTX_AREA_FK100/NK100 continues until
-    bar time drops below 09:00 or no more rows are returned.
+    KIS FHKST03010200 returns up to 30 bars newest-first per page from
+    `end_hhmmss` going backwards. The `target_date` parameter is accepted for
+    backward-compat but ignored by the API (intraday endpoint is current-day only).
+    Pagination is performed by progressively reducing `FID_INPUT_HOUR_1` to one
+    minute before the earliest bar of the previous page, until 09:00 KST.
 
     Parameters
     ----------
     client:      Configured KISClient instance.
     symbol:      KRX stock code (6 digits), e.g. "005930".
-    target_date: Date "YYYYMMDD" — KIS intraday API is single-day only.
+    target_date: Accepted for compat; KIS intraday API only returns today's bars.
     interval:    Bar interval in minutes: "1"|"3"|"5"|"10"|"15"|"30"|"60". Default "15".
-    end_hhmmss:  Query end time "HHMMSS" (API returns bars backwards from this time).
+    end_hhmmss:  Initial query end time "HHMMSS" (API returns bars backwards from this).
 
     Returns
     -------
     list[KISIntradayBar], chronological order (oldest first). Empty list if no data.
     """
     all_bars: list[KISIntradayBar] = []
-    fk_token = ""
-    nk_token = ""
+    seen_keys: set[tuple[str, str]] = set()
+    end_time = end_hhmmss
+    market_open = "090000"
     first_call = True
 
     while True:
         params: dict[str, str] = {
             "FID_COND_MRKT_DIV_CODE": "J",
             "FID_INPUT_ISCD": symbol,
-            "FID_INPUT_HOUR_1": end_hhmmss,
+            "FID_INPUT_HOUR_1": end_time,
             "FID_PW_DATA_INCU_YN": "N",
             "FID_ETC_CLS_CODE": "",
-            "CTX_AREA_FK100": fk_token,
-            "CTX_AREA_NK100": nk_token,
         }
 
         if not first_call:
@@ -211,7 +212,9 @@ def fetch_intraday_ohlcv_raw(
         if not rows:
             break
 
-        stop_pagination = False
+        added_count = 0
+        earliest_time: str | None = None
+
         for row in rows:
             if not isinstance(row, dict):
                 continue
@@ -219,32 +222,43 @@ def fetch_intraday_ohlcv_raw(
             time_val = row.get("stck_cntg_hour", "")
             if not date_val or not time_val:
                 continue
-            # Stop when we've gone before market open (09:00:00)
-            if time_val < "090000":
-                stop_pagination = True
-                break
+            if time_val < market_open:
+                continue
+            key = (date_val, time_val)
+            if key in seen_keys:
+                continue
+            seen_keys.add(key)
             bar = KISIntradayBar(
                 date=date_val,
                 time=time_val,
                 open=row.get("stck_oprc", "0"),
                 high=row.get("stck_hgpr", "0"),
                 low=row.get("stck_lwpr", "0"),
-                close=row.get("stck_clpr", "0"),
-                volume=row.get("acml_vol", "0"),
+                # KIS FHKST03010200 returns current price as stck_prpr (no stck_clpr).
+                close=row.get("stck_clpr") or row.get("stck_prpr", "0"),
+                # Per-bar volume is cntg_vol (체결 거래량), not acml_vol (누적).
+                volume=row.get("cntg_vol") or row.get("acml_vol", "0"),
                 trade_amt=row.get("acml_tr_pbmn", "0"),
             )
             all_bars.append(bar)
+            added_count += 1
+            if earliest_time is None or time_val < earliest_time:
+                earliest_time = time_val
 
-        if stop_pagination:
+        if added_count == 0 or earliest_time is None or earliest_time <= market_open:
             break
 
-        tr_cont = data.get("tr_cont", "")
-        if tr_cont in ("F", "M"):
-            fk_token = data.get("ctx_area_fk100", "")
-            nk_token = data.get("ctx_area_nk100", "")
-        else:
+        # Compute next end_time = earliest_time - 1 minute
+        h = int(earliest_time[:2])
+        m = int(earliest_time[2:4])
+        m -= 1
+        if m < 0:
+            m = 59
+            h -= 1
+        if h < 9:
             break
+        end_time = f"{h:02d}{m:02d}00"
 
     # KIS returns newest-first; reverse to chronological
-    all_bars.reverse()
+    all_bars.sort(key=lambda b: (b.date, b.time))
     return all_bars
