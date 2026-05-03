@@ -94,23 +94,28 @@ jobs:
           }
           Write-Host "PASS: ${sizeMB} MB < 200 MB"
 
-      # AC3: cold-start latency target — informational only in PoC
-      # PyInstaller bundled exe cold start typically 5-15s due to dep unpacking.
-      # PoC 단계: 30s 임계, fail-safe (informational). 후속 PR 에서 frozen builds + 임계 강화.
-      - name: Measure startup latency (informational, target 30s)
+      # AC3: cold-start latency + EXE actually runs (fail-blocking)
+      - name: Measure startup latency + verify EXE runs
         shell: pwsh
-        continue-on-error: true
         timeout-minutes: 2
         run: |
           $sw = [System.Diagnostics.Stopwatch]::StartNew()
-          & dist\qta.exe --help 2>&1 | Out-Null
+          $output = & dist\qta.exe --help 2>&1
+          $exitCode = $LASTEXITCODE
           $sw.Stop()
           $elapsed = [math]::Round($sw.Elapsed.TotalSeconds, 2)
-          Write-Host "Cold-start latency: ${elapsed}s"
+          Write-Host "Cold-start latency: ${elapsed}s, exit=$exitCode"
+          Write-Host "---OUTPUT---"
+          Write-Output $output
+          Write-Host "---END---"
+          if ($exitCode -ne 0) {
+            Write-Error "FAIL: qta.exe --help exited with code $exitCode (likely DLL/import error)"
+            exit 1
+          }
           if ($sw.Elapsed.TotalSeconds -gt 30) {
-            Write-Warning "WARN: startup latency ${elapsed}s exceeds 30s target (PoC informational)"
+            Write-Warning "WARN: startup latency ${elapsed}s exceeds 30s target"
           } else {
-            Write-Host "PASS: ${elapsed}s < 30s"
+            Write-Host "PASS: ${elapsed}s < 30s and EXE runs"
           }
 
       # AC5 (partial): Windows Defender on-runner scan
