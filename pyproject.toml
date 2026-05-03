@@ -44,14 +44,31 @@ markers = [
     "integration: requires network/secrets (default skipped)",
     "slow: long-running benchmarks (default skipped; run with -m slow)",
     "e2e_kis_paper: KIS paper account E2E tests (nightly only, requires real KIS paper credentials)",
+    "unit: fast isolated unit tests with no I/O (layer 1)",
+    "backtest: backtest simulation tests — deterministic but may be slow (layer 3)",
 ]
 addopts = "-m 'not integration and not slow and not e2e_kis_paper'"
 asyncio_mode = "auto"
 
 [tool.coverage.run]
-# 본 이슈 (#73) broker async 마이그레이션의 coverage 게이트는 broker adapter 한정.
-# 데이터 fetcher / 외부 보조 모듈은 별도 이슈 (#79 등) 의 책임.
+source = ["src"]
 omit = [
-    "src/brokers/kis/fundamentals_client.py",  # KIS 재무 데이터 fetcher (data_lake 소비)
-    "src/brokers/kis/price_client.py",         # KIS 일봉 OHLCV fetcher (#79 카탈로그용)
+    "src/brokers/kis/fundamentals_client.py",
+    "src/brokers/kis/price_client.py",
+    "src/**/migrations/**",
+    "src/**/__main__.py",
 ]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "\\.\\.\\.",
+    "if __name__ == .__main__.:",
+]
+show_missing = true
+skip_covered = false
+
+[tool.coverage.html]
+directory = "htmlcov"
