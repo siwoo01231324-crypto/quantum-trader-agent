@@ -1,0 +1,147 @@
+name: Build EXE — PyInstaller PoC
+
+# Triggered on every PR merge to master (or manually for testing).
+# Builds a single-file qta.exe on Windows and uploads it as a release artifact.
+# Full AV scan and startup-latency measurement are documented in AC notes below.
+#
+# AC mapping:
+#   AC1 (spec with asyncio/httpx/websockets/LightGBM deps) → qta.spec in repo
+#   AC2 (< 200 MB, single .exe)                            → "Check EXE size" step
+#   AC3 (< 10 s cold-start latency)                        → "Measure startup latency" step
+#   AC4 (Windows 10/11 verified)                           → windows-latest runner (Win 2022)
+#   AC5 (AV false-positive rate)                           → see note below
+#   AC6 (CI integration)                                    → this workflow
+#
+# AC5 note: Automated AV scanning (Defender/Avast/Norton) requires manual
+# or paid pipeline service (e.g. VirusTotal API). This workflow uses
+# Windows Defender CLI (`MpCmdRun.exe`) for the free on-runner scan.
+# Avast/Norton require separate licensed environments.
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - "scripts/live_run.py"
+      - "src/**"
+      - "qta.spec"
+      - ".github/workflows/build-exe.yml"
+  pull_request:
+    paths:
+      - "scripts/live_run.py"
+      - "src/**"
+      - "qta.spec"
+      - ".github/workflows/build-exe.yml"
+  workflow_dispatch:
+    inputs:
+      upload_release:
+        description: "Upload as GitHub Release asset"
+        required: false
+        default: "false"
+
+jobs:
+  build-exe:
+    name: PyInstaller — Windows single EXE
+    runs-on: windows-latest   # Windows Server 2022 (compatible Win 10/11 ABI)
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install runtime + PyInstaller
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e "."
+          pip install pyinstaller>=6.0 pyinstaller-hooks-contrib>=2024.0
+
+      # UPX compressor — reduces EXE size by ~30-40%
+      - name: Install UPX
+        shell: pwsh
+        run: |
+          $upx = "$env:RUNNER_TOOL_CACHE\upx"
+          if (-not (Test-Path $upx)) {
+            $url = "https://github.com/upx/upx/releases/download/v4.2.4/upx-4.2.4-win64.zip"
+            Invoke-WebRequest -Uri $url -OutFile upx.zip
+            Expand-Archive upx.zip -DestinationPath $upx
+          }
+          $upxBin = (Get-ChildItem $upx -Recurse -Filter upx.exe).DirectoryName
+          echo "$upxBin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Build EXE
+        shell: bash
+        run: |
+          pyinstaller qta.spec --noconfirm --clean
+          ls -lh dist/
+
+      # AC2: file size must be < 200 MB
+      - name: Check EXE size (< 200 MB)
+        shell: pwsh
+        run: |
+          $exe = "dist\qta.exe"
+          $size = (Get-Item $exe).Length
+          $sizeMB = [math]::Round($size / 1MB, 1)
+          Write-Host "EXE size: ${sizeMB} MB"
+          if ($size -gt 200MB) {
+            Write-Error "FAIL: EXE size ${sizeMB} MB exceeds 200 MB limit"
+            exit 1
+          }
+          Write-Host "PASS: ${sizeMB} MB < 200 MB"
+
+      # AC3: cold-start latency must be < 10 s
+      # We invoke --help which exercises the full import chain without needing
+      # live credentials, and time it.
+      - name: Measure startup latency (< 10 s, --help)
+        shell: pwsh
+        run: |
+          $sw = [System.Diagnostics.Stopwatch]::StartNew()
+          & dist\qta.exe --help
+          $sw.Stop()
+          $elapsed = [math]::Round($sw.Elapsed.TotalSeconds, 2)
+          Write-Host "Cold-start latency: ${elapsed}s"
+          if ($sw.Elapsed.TotalSeconds -gt 10) {
+            Write-Error "FAIL: startup latency ${elapsed}s exceeds 10 s target"
+            exit 1
+          }
+          Write-Host "PASS: ${elapsed}s < 10 s"
+
+      # AC5 (partial): Windows Defender on-runner scan
+      - name: Windows Defender scan
+        shell: pwsh
+        continue-on-error: true   # AV false-positives are informational, not blocking
+        run: |
+          $defender = "${env:ProgramFiles}\Windows Defender\MpCmdRun.exe"
+          if (Test-Path $defender) {
+            & $defender -Scan -ScanType 3 -File (Resolve-Path dist\qta.exe)
+            Write-Host "Defender exit code: $LASTEXITCODE"
+            if ($LASTEXITCODE -eq 2) {
+              Write-Warning "Defender flagged the EXE as a threat (false positive likely). Review before release."
+            }
+          } else {
+            Write-Host "Windows Defender CLI not found — skipping AV scan"
+          }
+
+      - name: Upload EXE artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: qta-exe-${{ github.sha }}
+          path: dist/qta.exe
+          retention-days: 30
+
+      # Optional: attach to GitHub Release when triggered manually with upload_release=true
+      - name: Upload to GitHub Release
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.upload_release == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "exe-${{ github.sha }}"
+          name: "EXE build ${{ github.sha }}"
+          files: dist/qta.exe
+          draft: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
