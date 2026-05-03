@@ -1,0 +1,33 @@
+name: Whitepaper Progress Auto-Update
+
+on:
+  schedule:
+    - cron: '0 0 * * 1'  # 매주 월요일 00:00 UTC
+  workflow_dispatch: {}
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run progress table updater
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python scripts/update_progress_table.py
+      - name: Create PR if changes
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "chore: 진척도 표 자동 갱신 (#139)"
+          title: "chore: 진척도 표 자동 갱신 (백서 §11-3)"
+          body: |
+            scripts/update_progress_table.py 자동 실행 결과.
+            sentinel 마커 사이 영역만 교체됨.
+          branch: chore/auto-progress-update
+          delete-branch: true
