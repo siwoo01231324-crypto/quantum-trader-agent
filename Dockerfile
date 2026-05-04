@@ -26,6 +26,7 @@ RUN pip install --no-cache-dir --upgrade pip \
 # Source code (changes most often → last layer).
 COPY src ./src
 COPY scripts ./scripts
+COPY configs ./configs
 
 # Runtime config
 ENV PYTHONPATH=/app/src:/app \

@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Any, Callable, Literal, Optional
 
 from src.brokers.async_router import AsyncOrderRouter
 from src.execution.base import MarketState, Tick as ExecTick
@@ -19,7 +19,8 @@ from src.execution.paper_broker import PaperBroker
 from src.live.executor import execute_intents
 from src.live.feed import MarketDataFeed, BinancePublicFeed
 from src.live.process_lock import ProcessLock
-from src.live.types import Tick
+from src.live.snapshot_builder import SnapshotBuilder, SnapshotBuilderConfig, is_krx_symbol
+from src.live.types import Tick, WALEvent
 from src.live.wal import WAL
 from src.observability.metrics import Metrics
 from src.ops.kill_switch import KillSwitch
@@ -39,6 +40,18 @@ class ShadowConfig:
     max_iterations: int | None = None  # None=infinite (실 운영), 정수=테스트용 종료 조건
     # Phase 2 broker mode (#105). Default "paper-only" preserves Phase 1 behaviour.
     broker_mode: Literal["paper-only", "kis-paper-shadow", "kis-paper"] = "paper-only"
+    # Phase 2 feed mode (#177).
+    #   "auto"   — KIS REST polling for any 6-digit KRX symbol; Binance WS otherwise
+    #   "binance" / "kis" / "mock" — explicit override
+    feed_mode: Literal["auto", "binance", "kis", "mock"] = "auto"
+    # Optional KIS REST client for snapshot warmup + KISMarketFeed; supplied by
+    # caller (live_run.py builds via KISClient(...)). None disables warmup.
+    kis_client: Any | None = None
+    # Optional WAL observer (#181 timeline broker / metrics tap).
+    wal_observer: Callable[[WALEvent], None] | None = None
+    # Mock-mode feed payload (deterministic smoke tests, --feed mock).
+    mock_ticks: list[Tick] | None = None
+    snapshot_builder_config: SnapshotBuilderConfig | None = None
 
 
 def _load_orchestrator(config: ShadowConfig, broker: PaperBroker) -> AsyncStrategyOrchestrator:
@@ -47,10 +60,23 @@ def _load_orchestrator(config: ShadowConfig, broker: PaperBroker) -> AsyncStrate
     #94 머지 후 본 함수가 load_orchestrator_from_yaml 사용으로 전환됨.
     fallback: 빈 orchestrator 생성, 명시적 warning 로그.
     """
+    # `risk.dsl.evaluate` 가 attribute 접근을 하므로 policy=None 으로 들어오면
+    # AttributeError 가 발생한다. None 인 경우 모든 옵션 None 인 permissive
+    # 기본 Policy 를 주입 (#177 EXE smoke + 단위 테스트 호환).
+    if config.policy is None:
+        from risk.dsl import Policy
+        config.policy = Policy(policy_version=1, name="default")
+
     if config.production_yaml.exists():
         try:
             from src.portfolio.config_loader import load_orchestrator_from_yaml
-            orch = load_orchestrator_from_yaml(config.production_yaml, policy=config.policy)
+            # on_metalabeler_missing="skip": 모델 아티팩트 부재 시 해당 strategy entry 만
+            # skip + warning, 나머지 5전략은 정상 로드 (#177).
+            orch = load_orchestrator_from_yaml(
+                config.production_yaml,
+                policy=config.policy,
+                on_metalabeler_missing="skip",
+            )
             logger.info("Loaded orchestrator from %s", config.production_yaml)
             return orch
         except ImportError as err:
@@ -58,11 +84,10 @@ def _load_orchestrator(config: ShadowConfig, broker: PaperBroker) -> AsyncStrate
                 "production.yaml exists but config_loader missing (#94 not merged): %s. "
                 "Falling back to empty orchestrator.", err,
             )
-        except (RuntimeError, FileNotFoundError, OSError) as err:
-            # 메타라벨러 모델 등 의존 자원 부재 → fallback (Phase 1 운영자가 모델 학습 후 활성화)
+        except (FileNotFoundError, OSError) as err:
+            # YAML 자체 읽기 실패 — 알 수 없는 파일 시스템 오류
             logger.warning(
-                "production.yaml load failed (likely missing model artifact): %s. "
-                "Falling back to empty orchestrator. Train metalabeler first.", err,
+                "production.yaml read failed: %s. Falling back to empty orchestrator.", err,
             )
     else:
         logger.warning(
@@ -100,6 +125,30 @@ def _build_router(
             metrics=metrics,
         )
     raise ValueError(f"Unknown broker_mode: '{broker_mode}'")
+
+
+def _select_feed(config: ShadowConfig) -> MarketDataFeed:
+    """Select the live feed based on `config.feed_mode` and symbol shape.
+
+    Auto policy: any 6-digit KRX symbol present → KISMarketFeed for the KRX
+    subset (Binance feed is not invoked for KRX). Mixed-symbol setups should
+    pass `feed=...` explicitly to `run_shadow_loop` instead.
+    """
+    mode = config.feed_mode
+    if mode == "mock":
+        from src.live.feed_kis import MockReplayFeed
+        # gap_sec 작은 값 — drop-oldest 큐(maxsize=1) 가 producer 폭주를 흡수
+        # 못 해서 consumer 가 max_iterations 도달 전에 producer 완료 → FIRST_COMPLETED
+        # 로 루프가 조기 종료되는 문제 방지 (#177 smoke 결정성).
+        return MockReplayFeed(config.mock_ticks or [], gap_sec=0.02)
+    if mode == "kis" or (mode == "auto" and any(is_krx_symbol(s) for s in config.symbols)):
+        from src.live.feed_kis import KISMarketFeed
+        if config.kis_client is None:
+            raise ValueError(
+                "feed_mode=kis (or auto with KRX symbols) requires ShadowConfig.kis_client"
+            )
+        return KISMarketFeed(config.symbols, config.kis_client)
+    return BinancePublicFeed(config.symbols)
 
 
 def _tick_to_market_state(tick: Tick) -> MarketState:
@@ -164,7 +213,7 @@ async def run_shadow_loop(
     lock = ProcessLock(config.lock_path)
     lock.acquire()
     try:
-        wal = WAL(config.wal_path)
+        wal = WAL(config.wal_path, observer=config.wal_observer)
         matching_engine = MockMatchingEngine()
         paper_broker = PaperBroker(
             wal=wal, kill_switch=kill_switch,
@@ -175,8 +224,15 @@ async def run_shadow_loop(
         )
         orchestrator = _load_orchestrator(config, paper_broker)
 
+        snapshot_builder = SnapshotBuilder(
+            config.symbols,
+            kis_client=config.kis_client,
+            config=config.snapshot_builder_config,
+        )
+        await snapshot_builder.warmup()
+
         if feed is None:
-            feed = BinancePublicFeed(config.symbols)
+            feed = _select_feed(config)
             await feed.connect()
             await feed.subscribe(config.symbols)
 
@@ -209,9 +265,31 @@ async def run_shadow_loop(
                 ms = _tick_to_market_state(tick)
                 paper_broker.update_market(ms)
                 ts = datetime.fromisoformat(tick.ts)
-                snapshot = _tick_to_market_snapshot(tick)
+                snapshot = snapshot_builder.build_snapshot(tick)
                 intents = await orchestrator.run_bar(ts, snapshot)
                 if intents:
+                    # Emit timeline `signal_emitted` events ahead of order
+                    # placement so the dashboard / WAL audit trail captures
+                    # strategy-level decisions even when risk gating later
+                    # blocks the order (#177 + #181).
+                    for intent in intents:
+                        try:
+                            wal.write(WALEvent(
+                                ts=datetime.now(timezone.utc).isoformat(),
+                                event_type="signal_emitted",
+                                payload={
+                                    "strategy_id": intent.strategy_id,
+                                    "symbol": intent.symbol,
+                                    "side": intent.side,
+                                    "qty": str(intent.qty),
+                                    "reason": intent.reason,
+                                },
+                            ))
+                        except Exception as wal_err:
+                            logger.warning(
+                                "wal.signal_emitted_write_failed strategy_id=%s error=%s",
+                                intent.strategy_id, wal_err,
+                            )
                     await execute_intents(
                         intents, broker=router, kill_switch=kill_switch,
                         wal=wal, metrics=metrics, market_state=ms,

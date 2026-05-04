@@ -88,6 +88,13 @@ class MomoKisV1:
             return Signal(action="hold", size=0.0, reason="not my bar")
 
         snap = ctx["market_snapshot"]
+        # Cross-asset gate (#177). When the live loop multiplexes KRX + crypto
+        # symbols in one orchestrator, this 005930-tuned strategy must opt out
+        # for any other ticker. Missing snap["symbol"] keeps legacy unit tests
+        # working (they exercise the strategy with hand-built ctx).
+        snap_symbol = snap.get("symbol")
+        if snap_symbol is not None and snap_symbol != self.symbol:
+            return Signal(action="hold", size=0.0, reason="symbol_mismatch")
         history: pd.DataFrame | None = snap.get("history")
         rsi: pd.Series = ctx.get("factors", {}).get("rsi", pd.Series(dtype=float))
 

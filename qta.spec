@@ -43,7 +43,9 @@ _native_datas = (
 # ---------------------------------------------------------------------------
 a = Analysis(
     ["scripts/live_run.py"],
-    pathex=["."],
+    # `src` 를 pathex 에 포함해야 `_async_orchestrator.py` 의 `from risk import ...`
+    # 등 src/ 하위 패키지가 top-level 로 import 되는 코드가 EXE 안에서 동작 (#177).
+    pathex=[".", "src"],
     binaries=_native_binaries,
     datas=[
         # Default config shipped inside the EXE so users can run without a
@@ -125,32 +127,109 @@ a = Analysis(
         "prometheus_client.metrics",
         "prometheus_client.registry",
 
+        # --- dashboard / web (#177, #181) ---
+        "fastapi",
+        "starlette",
+        "starlette.websockets",
+        "starlette.routing",
+        "uvicorn",
+        "uvicorn.config",
+        "uvicorn.server",
+        "uvicorn.loops",
+        "uvicorn.loops.asyncio",
+        "uvicorn.protocols",
+        "uvicorn.protocols.http",
+        "uvicorn.protocols.http.h11_impl",
+        "uvicorn.protocols.websockets",
+        "uvicorn.protocols.websockets.wsproto_impl",
+        "uvicorn.protocols.websockets.websockets_impl",
+        "uvicorn.lifespan",
+        "uvicorn.lifespan.on",
+        "h11",
+        "wsproto",
+
         # --- utilities ---
         "yaml",
         "dotenv",
         "filelock",
         "requests",
         "requests.adapters",
+        "pytz",
 
-        # --- project internal (dynamic imports in loop/broker) ---
+        # --- project internal (dynamic imports in loop/broker/dashboard) ---
         "src",
         "src.live",
         "src.live.loop",
+        "src.live.feed",
+        "src.live.feed_kis",
+        "src.live.snapshot_builder",
+        "src.live.wal",
         "src.brokers",
         "src.brokers.kis",
         "src.brokers.kis.async_adapter",
+        "src.brokers.kis.price_client",
+        "src.brokers.kis.rest",
+        "src.brokers.kis.auth",
         "src.brokers.config",
+        "src.dashboard",
+        "src.dashboard.app",
+        "src.dashboard.timeline_broker",
+        "src.dashboard.timeline_events",
         "src.execution",
         "src.portfolio",
+        "src.portfolio.config_loader",
+        "src.portfolio._strategy_adapter",
         "src.risk",
         "src.signals",
+        "src.signals.rsi",
         "src.ml",
         "src.observability",
+        "src.observability.metrics",
         "src.ops",
         "src.data_lake",
         "src.backtest",
+        "src.backtest.strategies",
+        "src.backtest.strategies.momo_btc_v2",
+        "src.backtest.strategies.momo_vol_filtered",
+        "src.backtest.strategies.meanrev_pairs",
+        "src.backtest.strategies.breakout_donchian",
+        "src.backtest.strategies.momo_kis_v1",
+        # Bare-name aliases — production.yaml uses dotted import paths like
+        # `backtest.strategies.momo_btc_v2.MomoBtcV2` (no `src.` prefix), and
+        # `_async_orchestrator.py` does `from risk import ...`. PyInstaller's
+        # static analyser only sees the `src.X` form via hiddenimports, so we
+        # must register the bare aliases too — otherwise importlib at runtime
+        # raises ModuleNotFoundError (#177).
+        "backtest",
+        "backtest.strategies",
+        "backtest.strategies.momo_btc_v2",
+        "backtest.strategies.momo_vol_filtered",
+        "backtest.strategies.meanrev_pairs",
+        "backtest.strategies.breakout_donchian",
+        "backtest.strategies.momo_kis_v1",
+        "backtest.protocol",
+        "portfolio",
+        "portfolio.config_loader",
+        "portfolio._strategy_adapter",
+        "portfolio._async_orchestrator",
+        "risk",
+        "risk.dsl",
+        "risk.sizing",
+        "risk.portfolio",
+        "signals",
+        "signals.rsi",
+        "ml",
+        "ml.meta_labeler",
+        "live",
+        "live.types",
+        "universe",
+        "universe.krx_calendar",
+        "execution",
+        "observability",
+        "observability.metrics",
         "src.features",
         "src.universe",
+        "src.universe.krx_calendar",
         "src.tax",
     ],
     hookspath=[],
@@ -175,6 +254,22 @@ a = Analysis(
         # sklearn.utils.fixes 의 try/except 로 우아한 fallback 동작.
         # data_lake/fetcher 의 parquet 은 EXE live 매매 경로에 필수 아님.
         "pyarrow",
+        # torch — PyInstaller analysis 중 torch._load_dll_libraries 가 Windows
+        # access violation 으로 hang. qta runtime 은 torch 직접 사용 안 함
+        # (lightgbm 만 ML). transformers/sentence-transformers/일부 dev tool 이
+        # transitive 로 끌어와서 분석을 멈춰버림 (#177).
+        "torch",
+        "torchvision",
+        "torchaudio",
+        # 같은 이유로 다른 무거운 ML 프레임워크도 명시 제외 — 우리는 lightgbm 만 쓴다.
+        "tensorflow",
+        "tensorflow_intel",
+        "tensorflow_io",
+        "tensorboard",
+        "jax",
+        "jaxlib",
+        "transformers",
+        "sentence_transformers",
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,

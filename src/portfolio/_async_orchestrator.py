@@ -95,11 +95,16 @@ class AsyncStrategyOrchestrator:
             and (strategies is None or sid in strategies)
         ]
 
+        # Surface `factors` at ctx top-level (#177) so AsyncStrategies that read
+        # `ctx["factors"][...]` (e.g. MomoKisV1 → ctx["factors"]["rsi"]) see
+        # the precomputed series populated by SnapshotBuilder. Falls back to
+        # empty dict for callers that don't supply factors.
+        _factors = (market_snapshot or {}).get("factors", {}) if isinstance(market_snapshot, dict) else {}
         tasks = []
         sids = []
         for sid in targets:
             strategy = self._strategies[sid]
-            ctx = {"ts": ts, "market_snapshot": market_snapshot}
+            ctx = {"ts": ts, "market_snapshot": market_snapshot, "factors": _factors}
             if inspect.iscoroutinefunction(strategy.on_bar):
                 task = asyncio.create_task(strategy.on_bar(ctx))
             else:
