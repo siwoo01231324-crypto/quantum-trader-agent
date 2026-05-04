@@ -19,6 +19,7 @@ dependencies = [
     "websockets>=12",
     "prometheus-client>=0.20",
     "filelock>=3.13",
+    "hmmlearn>=0.3,<1",
 ]
 
 [project.optional-dependencies]
