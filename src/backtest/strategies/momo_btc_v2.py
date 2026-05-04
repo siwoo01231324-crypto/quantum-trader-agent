@@ -53,6 +53,7 @@ class MomoBtcV2:
     def __init__(
         self,
         *,
+        symbol: str = "BTCUSDT",              # cross-asset gate (#177)
         sizing_mode: SizingMode = "full",
         sizing_lookback: int = 60,
         kelly_k: float = 0.5,
@@ -68,6 +69,7 @@ class MomoBtcV2:
     ) -> None:
         if sizing_lookback < 2:
             raise ValueError(f"sizing_lookback must be >= 2, got {sizing_lookback}")
+        self.symbol = symbol
         self.sizing_mode: SizingMode = sizing_mode
         self.sizing_lookback = sizing_lookback
         self.kelly_k = kelly_k
@@ -154,6 +156,14 @@ class MomoBtcV2:
         }])
 
     def on_bar(self, bar: Bar, history: pd.DataFrame, context: dict) -> Signal:
+        # Cross-asset gate (#177). _StrategyAdapter injects the live snapshot's
+        # symbol into context so this BTC-tuned strategy stays out of KRX
+        # tickers when both are registered in the same orchestrator. Treats
+        # missing context["symbol"] as opt-in (legacy unit tests / engine).
+        ctx_symbol = context.get("symbol")
+        if ctx_symbol is not None and ctx_symbol != self.symbol:
+            return Signal(action="hold", size=0.0, reason="symbol_mismatch")
+
         min_bars = self.RSI_PERIOD + self.LOOKBACK * 2 + 1
         if len(history) < min_bars:
             return Signal(action="hold", size=0.0, reason="warmup")

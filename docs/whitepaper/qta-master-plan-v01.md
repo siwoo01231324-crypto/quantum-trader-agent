@@ -820,6 +820,24 @@ KRX 단일가·VI·서킷브레이커 자식 주문 대기 큐 정책: `WAIT` / 
 
 > 단일 프로세스는 PC 절전·네트워크 단절 시 매매 중단. Phase 3+ Binance 서버측 OCO 사전 등록 + KIS 조건부 주문으로 PC 다운 시 포지션 보호.
 
+#### §10-2-1. production.yaml 위치 (#177)
+
+| 경로 | 역할 |
+|------|------|
+| `configs/orchestrator/production.yaml` | 5전략 카탈로그 + 메타라벨러(opt-in) 등록. EXE 빌드 시 `qta.spec` 의 `datas=[("configs", "configs")]` 로 번들에 동봉됨 |
+| `qta.exe --production-yaml /path/to/custom.yaml` | 사용자가 외부 YAML 로 override (실험·릴리즈 비교용) |
+| `src.live.loop._load_orchestrator` | `on_metalabeler_missing="skip"` 로 호출 — 모델 아티팩트 부재 시 해당 entry 만 skip + warning, 나머지 5전략은 정상 등록 |
+| `src.portfolio.config_loader.load_orchestrator_from_yaml` | YAML→ AsyncStrategyOrchestrator 빌더. async strategy 는 직접 등록, sync 는 `_StrategyAdapter` 경유 |
+
+**메타라벨러(#85) 활성화 절차** (운영자 전용):
+```bash
+python scripts/train_metalabeler_btc.py --output-dir models/momo-btc-v2
+python scripts/promote_metalabeler.py --strategy momo-btc-v2 --version <ts>
+# production.yaml 의 `momo-btc-v2-meta` 블록 uncomment 후 EXE 재시작
+```
+
+**리스크 임계** 는 본 파일이 아니라 별도 정책 YAML 에서 로드된다 (`docs/specs/risk-rule-dsl.md`, §7-2 보수 정책). production.yaml 은 전략 카탈로그만 담는다.
+
 ### §10-3. API 키 저장
 
 | 항목 | 내용 |

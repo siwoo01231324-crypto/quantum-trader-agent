@@ -5,8 +5,10 @@ Not callable from LLM tool surface (CLAUDE.md invariant #6).
 from __future__ import annotations
 
 import importlib
+import inspect
+import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import pandas as pd
 import yaml
@@ -14,6 +16,12 @@ import yaml
 from portfolio._async_orchestrator import AsyncStrategyOrchestrator
 from portfolio._strategy_adapter import _StrategyAdapter
 from risk.dsl import Policy
+
+logger = logging.getLogger(__name__)
+
+
+class _MetalabelerArtifactMissing(Exception):
+    """Raised internally when MetaLabeler.load fails so caller can choose skip vs raise."""
 
 
 def _import_class(dotted: str) -> type:
@@ -31,7 +39,12 @@ def _import_class(dotted: str) -> type:
 
 
 def _resolve_kwargs(raw_kwargs: dict[str, Any], yaml_dir: Path) -> dict[str, Any]:
-    """Resolve special kwargs — metalabeler.load_path → MetaLabeler instance."""
+    """Resolve special kwargs — metalabeler.load_path → MetaLabeler instance.
+
+    Raises _MetalabelerArtifactMissing when MetaLabeler.load fails (artifact
+    file missing, manifest malformed, etc). Outer loop decides skip vs raise
+    based on the on_metalabeler_missing policy.
+    """
     kwargs = dict(raw_kwargs)
     if "metalabeler" in kwargs:
         meta_cfg = kwargs["metalabeler"]
@@ -46,7 +59,7 @@ def _resolve_kwargs(raw_kwargs: dict[str, Any], yaml_dir: Path) -> dict[str, Any
         try:
             kwargs["metalabeler"] = MetaLabeler.load(load_path)
         except Exception as exc:
-            raise RuntimeError(
+            raise _MetalabelerArtifactMissing(
                 f"MetaLabeler.load({load_path}) failed: {exc}"
             ) from exc
     return kwargs
@@ -55,8 +68,24 @@ def _resolve_kwargs(raw_kwargs: dict[str, Any], yaml_dir: Path) -> dict[str, Any
 def load_orchestrator_from_yaml(
     path: Path,
     policy: Policy,
+    *,
+    on_metalabeler_missing: Literal["raise", "skip"] = "raise",
 ) -> AsyncStrategyOrchestrator:
     """Parse *path* and return a fully registered AsyncStrategyOrchestrator.
+
+    Parameters
+    ----------
+    on_metalabeler_missing : {"raise", "skip"}, default "raise"
+        Behaviour when a strategy entry references a metalabeler artifact that
+        is missing or malformed.
+
+        - ``"raise"`` (default, preserves #94 fail-fast contract): translates
+          the internal artifact-missing signal into a ``RuntimeError``. Used by
+          tests and CI that demand fully-loaded orchestrators.
+        - ``"skip"``: log a warning, drop only the affected entry, continue
+          loading the remaining strategies. Used by ``src.live.loop`` so that
+          a missing model file does not zero-out the entire orchestrator
+          (#177 EXE-on-fresh-machine path).
 
     Raises
     ------
@@ -65,13 +94,13 @@ def load_orchestrator_from_yaml(
     ImportError
         Unknown class string.
     RuntimeError
-        MetaLabeler.load failure (fail-fast, no silent fallback).
+        MetaLabeler.load failure when ``on_metalabeler_missing="raise"``.
     """
     path = Path(path)
     with path.open("r", encoding="utf-8") as fh:
         config = yaml.safe_load(fh)
 
-    entries = config.get("strategies", [])
+    entries = config.get("strategies", []) or []
     seen_ids: set[str] = set()
 
     orch = AsyncStrategyOrchestrator(policy)
@@ -87,10 +116,26 @@ def load_orchestrator_from_yaml(
 
         cls = _import_class(entry["class"])
         raw_kwargs: dict[str, Any] = entry.get("kwargs", {}) or {}
-        kwargs = _resolve_kwargs(raw_kwargs, path.parent)
+        try:
+            kwargs = _resolve_kwargs(raw_kwargs, path.parent)
+        except _MetalabelerArtifactMissing as exc:
+            if on_metalabeler_missing == "skip":
+                logger.warning(
+                    "config_loader.metalabeler_artifact_missing strategy_id=%s "
+                    "skipping entry. Detail: %s",
+                    sid, exc,
+                )
+                continue
+            raise RuntimeError(str(exc)) from exc
 
         strategy = cls(**kwargs)
-        orch.register_strategy(sid, _StrategyAdapter(strategy))
+        # Async strategies (#78 AsyncStrategy Protocol) have a coroutine on_bar
+        # accepting ctx directly; skip the legacy sync adapter for those so the
+        # orchestrator forwards ctx["market_snapshot"] unmodified.
+        if inspect.iscoroutinefunction(getattr(strategy, "on_bar", None)):
+            orch.register_strategy(sid, strategy)
+        else:
+            orch.register_strategy(sid, _StrategyAdapter(strategy))
         orch.register_strategy_returns(sid, pd.Series(dtype=float))
 
     return orch
