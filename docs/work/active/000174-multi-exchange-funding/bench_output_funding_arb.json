@@ -1,0 +1,114 @@
+{
+  "registry_sha256": "e42137eb826b5792be070e30a27b3f6264c8b79ebc02227bc6ae3a32a5bccbd7",
+  "symbol": "BTCUSDT",
+  "start": "2020-09-01",
+  "end": "2025-12-31",
+  "param_matrix": {
+    "F0": {
+      "threshold_neg": -5e-05
+    },
+    "F1": {
+      "threshold_neg": -5e-05
+    },
+    "F2": {
+      "spread_threshold": 1e-05
+    },
+    "F3": {
+      "spread_threshold": 1e-05
+    },
+    "F4": {
+      "spread_threshold": 1e-05
+    },
+    "F5": {
+      "w0": 0.4,
+      "w2": 0.4,
+      "w4": 0.2,
+      "threshold_neg": -5e-05,
+      "spread_threshold": 1e-05
+    }
+  },
+  "results": [
+    {
+      "variant_id": "F0",
+      "params": {
+        "threshold_neg": -5e-05
+      },
+      "n_bars": 5841,
+      "n_signals": 246,
+      "data_available": true,
+      "sharpe": null,
+      "mdd": null,
+      "monthly_hit_rate": null,
+      "note": "SKELETON \u2014 run after 5y funding data fetch"
+    },
+    {
+      "variant_id": "F1",
+      "params": {
+        "threshold_neg": -5e-05
+      },
+      "n_bars": 5841,
+      "n_signals": 246,
+      "data_available": true,
+      "sharpe": null,
+      "mdd": null,
+      "monthly_hit_rate": null,
+      "note": "SKELETON \u2014 run after 5y funding data fetch"
+    },
+    {
+      "variant_id": "F2",
+      "params": {
+        "spread_threshold": 1e-05
+      },
+      "n_bars": 5841,
+      "n_signals": 0,
+      "data_available": true,
+      "sharpe": null,
+      "mdd": null,
+      "monthly_hit_rate": null,
+      "note": "SKELETON \u2014 run after 5y funding data fetch"
+    },
+    {
+      "variant_id": "F3",
+      "params": {
+        "spread_threshold": 1e-05
+      },
+      "n_bars": 5841,
+      "n_signals": 156,
+      "data_available": true,
+      "sharpe": null,
+      "mdd": null,
+      "monthly_hit_rate": null,
+      "note": "SKELETON \u2014 run after 5y funding data fetch"
+    },
+    {
+      "variant_id": "F4",
+      "params": {
+        "spread_threshold": 1e-05
+      },
+      "n_bars": 5841,
+      "n_signals": 0,
+      "data_available": true,
+      "sharpe": null,
+      "mdd": null,
+      "monthly_hit_rate": null,
+      "note": "SKELETON \u2014 run after 5y funding data fetch"
+    },
+    {
+      "variant_id": "F5",
+      "params": {
+        "w0": 0.4,
+        "w2": 0.4,
+        "w4": 0.2,
+        "threshold_neg": -5e-05,
+        "spread_threshold": 1e-05
+      },
+      "n_bars": 5841,
+      "n_signals": 0,
+      "data_available": true,
+      "sharpe": null,
+      "mdd": null,
+      "monthly_hit_rate": null,
+      "note": "SKELETON \u2014 run after 5y funding data fetch"
+    }
+  ]
+}

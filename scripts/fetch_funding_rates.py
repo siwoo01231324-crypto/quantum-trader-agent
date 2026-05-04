@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fetch historical Binance Futures funding rate data.
+"""Fetch historical funding rate data from Binance, OKX, and Bybit.
 
 Binance USDT-M perpetual funding rate endpoint:
     GET https://fapi.binance.com/fapi/v1/fundingRate
@@ -9,13 +9,40 @@ Rate: every 8h (00:00, 08:00, 16:00 UTC). ~1095 rows/year.
 5 years (2020-09 to 2025-12) ~ 5475 rows ~ 6 requests.
 
 Usage:
+    # Binance only (default, backward-compatible)
     python scripts/fetch_funding_rates.py \
         --symbols BTCUSDT \
         --start 2020-09-01 --end 2025-12-31 \
         --output-dir lake/
 
-Output:
-    lake/funding_rate/symbol=BTCUSDT/part-0.parquet
+    # OKX (symbol format: BTC-USDT-SWAP)
+    python scripts/fetch_funding_rates.py \
+        --exchange okx \
+        --symbols BTC-USDT-SWAP \
+        --start 2020-09-01 --end 2025-12-31 \
+        --output-dir lake/
+
+    # Bybit
+    python scripts/fetch_funding_rates.py \
+        --exchange bybit \
+        --symbols BTCUSDT \
+        --start 2020-09-01 --end 2025-12-31 \
+        --output-dir lake/
+
+    # All three exchanges at once
+    python scripts/fetch_funding_rates.py \
+        --exchange binance,okx,bybit \
+        --symbols BTCUSDT \
+        --start 2020-09-01 --end 2025-12-31 \
+        --output-dir lake/
+
+Output (exchange-partitioned, issue #174):
+    lake/funding_rate/exchange=binance/symbol=BTCUSDT/part-0.parquet
+    lake/funding_rate/exchange=okx/symbol=BTC-USDT-SWAP/part-0.parquet
+    lake/funding_rate/exchange=bybit/symbol=BTCUSDT/part-0.parquet
+
+Legacy output (binance-only, backward-compatible):
+    lake/funding_rate/symbol=BTCUSDT/part-0.parquet  (still written when --exchange binance)
 """
 from __future__ import annotations
 
@@ -144,11 +171,17 @@ def save_funding_parquet(
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Fetch Binance Futures funding rate history.",
+        description="Fetch funding rate history from Binance, OKX, and/or Bybit.",
     )
     parser.add_argument(
         "--symbols", default="BTCUSDT",
-        help="Comma-separated trading pairs (default: BTCUSDT)",
+        help="Comma-separated trading pairs (default: BTCUSDT). "
+             "Use exchange-native format: BTCUSDT for Binance/Bybit, BTC-USDT-SWAP for OKX.",
+    )
+    parser.add_argument(
+        "--exchange", default="binance",
+        help="Comma-separated exchanges to fetch from: binance, okx, bybit "
+             "(default: binance). Example: --exchange binance,okx,bybit",
     )
     parser.add_argument(
         "--start", default="2020-09-01",
@@ -165,6 +198,21 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _save_exchange_parquet(
+    df: pd.DataFrame,
+    output_dir: Path,
+    exchange: str,
+    symbol: str,
+) -> Path:
+    """Save to exchange-partitioned path: output_dir/funding_rate/exchange={exchange}/symbol={symbol}/part-0.parquet."""
+    part_dir = output_dir / "funding_rate" / f"exchange={exchange}" / f"symbol={symbol}"
+    part_dir.mkdir(parents=True, exist_ok=True)
+    out_path = part_dir / "part-0.parquet"
+    table = pa.Table.from_pandas(df.reset_index(drop=True))
+    pq.write_table(table, out_path)
+    return out_path
+
+
 def main(argv: list[str] | None = None) -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     parser = build_parser()
@@ -172,24 +220,45 @@ def main(argv: list[str] | None = None) -> None:
 
     output_dir = Path(args.output_dir)
     symbols = [s.strip() for s in args.symbols.split(",") if s.strip()]
+    exchanges = [e.strip().lower() for e in args.exchange.split(",") if e.strip()]
 
-    for idx, symbol in enumerate(symbols):
-        if idx > 0:
-            time.sleep(_SLEEP_BETWEEN)
+    _SUPPORTED = {"binance", "okx", "bybit"}
+    unknown = set(exchanges) - _SUPPORTED
+    if unknown:
+        parser.error(f"Unknown exchange(s): {unknown}. Supported: {_SUPPORTED}")
 
-        print(
-            f"Fetching funding rates for {symbol} "
-            f"from {args.start} to {args.end} -> {output_dir}"
-        )
-        df = fetch_funding_rates(symbol=symbol, start=args.start, end=args.end)
+    for exchange in exchanges:
+        for idx, symbol in enumerate(symbols):
+            if idx > 0:
+                time.sleep(_SLEEP_BETWEEN)
 
-        if df.empty:
-            print(f"  No data fetched for {symbol}.")
-            continue
+            print(
+                f"[{exchange}] Fetching funding rates for {symbol} "
+                f"from {args.start} to {args.end} -> {output_dir}"
+            )
 
-        print(f"  Fetched {len(df)} funding rate records.")
-        out_path = save_funding_parquet(df, output_dir, symbol=symbol)
-        print(f"  Wrote: {out_path}")
+            if exchange == "binance":
+                df = fetch_funding_rates(symbol=symbol, start=args.start, end=args.end)
+                # Keep legacy path for binance backward-compat
+                if not df.empty:
+                    legacy_path = save_funding_parquet(df, output_dir, symbol=symbol)
+                    print(f"  Wrote (legacy): {legacy_path}")
+            elif exchange == "okx":
+                from src.data_lake.exchange_funding.okx import fetch_funding_history
+                df = fetch_funding_history(symbol=symbol, start=args.start, end=args.end)
+            elif exchange == "bybit":
+                from src.data_lake.exchange_funding.bybit import fetch_funding_history
+                df = fetch_funding_history(symbol=symbol, start=args.start, end=args.end)
+            else:
+                continue  # guarded above
+
+            if df.empty:
+                print(f"  No data fetched for {symbol} on {exchange}.")
+                continue
+
+            print(f"  Fetched {len(df)} funding rate records.")
+            out_path = _save_exchange_parquet(df, output_dir, exchange=exchange, symbol=symbol)
+            print(f"  Wrote: {out_path}")
 
     print("Done.")
 
