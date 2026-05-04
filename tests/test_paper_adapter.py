@@ -23,7 +23,7 @@ import pytest
 
 from src.backtest.swing.paper_adapter import AdapterConfig, PaperAdapter
 from src.brokers.base import Balance, OrderAck, OrderRequest, Position, PositionSide
-from src.execution.base import Side
+from src.execution.base import Side, TimeInForce
 
 
 # ---------------------------------------------------------------------------
@@ -313,3 +313,171 @@ class TestPaperAdapterShortHistory:
         result = asyncio.run(adapter.on_bar(df))
         assert result is None
         assert len(broker.submitted) == 0
+
+
+class TestPaperAdapterStateRestoration:
+    """Cross-restart state restoration (#143).
+
+    Cron-based 30-day operation: each cron fires a new process. Without WAL
+    replay, _in_position resets to False every run -> exit signals get lost.
+    Validates that PaperBroker.from_wal + adapter sync restores in_position
+    correctly so subsequent exit signals route to broker.
+    """
+
+    def test_in_position_restored_from_broker_after_wal_replay(self, tmp_path):
+        """First session enters; second session must see in_position=True."""
+        from src.brokers.base import PositionSide
+        from src.execution.paper_broker import PaperBroker
+        from src.execution.mock_matching import MockMatchingEngine
+        from src.execution.base import MarketState, Tick
+        from src.live.wal import WAL
+        from src.ops.kill_switch import KillSwitch
+        from datetime import datetime, timezone
+
+        wal_path = tmp_path / "wal.jsonl"
+
+        # --- Session 1: open a position ---
+        wal1 = WAL(wal_path)
+        broker1 = PaperBroker(
+            wal=wal1,
+            kill_switch=KillSwitch(),
+            matching_engine=MockMatchingEngine(),
+            initial_balance=Decimal("100000"),
+        )
+        # Update market so the matching engine has a price.
+        tick = Tick(
+            symbol="BTCUSDT",
+            bid=Decimal("49990"),
+            ask=Decimal("50010"),
+            last=Decimal("50000"),
+            volume=Decimal("0"),
+            ts=datetime.now(timezone.utc),
+        )
+        broker1.update_market(MarketState(tick=tick))
+
+        from src.brokers.base import OrderRequest, OrderType
+        req = OrderRequest(
+            client_order_id="test-entry-001",
+            symbol="BTCUSDT",
+            side=Side.BUY,
+            qty=Decimal("0.5"),
+            order_type=OrderType.MARKET,
+            price=None,
+            tif=TimeInForce.IOC,
+        )
+        ack = asyncio.run(broker1.place_order(req))
+        assert ack.status == "FILLED", f"entry should fill, got {ack.status}"
+        asyncio.run(broker1.aclose())
+
+        # --- Session 2: replay WAL into a fresh broker ---
+        broker2 = PaperBroker.from_wal(
+            path=wal_path,
+            kill_switch=KillSwitch(),
+            matching_engine=MockMatchingEngine(),
+            initial_balance=Decimal("100000"),
+        )
+        positions = asyncio.run(broker2.get_positions("BTCUSDT"))
+        assert len(positions) == 1, "broker should have restored 1 position"
+        assert positions[0].side == PositionSide.LONG
+        assert positions[0].qty == Decimal("0.5")
+
+        # --- Adapter created in session 2 should sync from broker positions ---
+        config = AdapterConfig(strategy="r4-switch", symbol="BTCUSDT")
+        adapter = PaperAdapter(config=config, broker=broker2)
+        existing = asyncio.run(broker2.get_positions("BTCUSDT"))
+        if existing:
+            adapter._in_position = True
+            adapter._entry_price = existing[0].entry_price
+        assert adapter.in_position is True, "adapter must sync in_position=True after replay"
+
+
+class TestPaperAdapterR4Switch:
+    """R4 threshold-based regime switch (#143): rolling return + funding rate.
+
+    R4 routes between S2c (bullish regime) and S4 (funding_negative regime).
+    See src/backtest/swing/regime_switching.py::route_r4 and #173 bench.
+    """
+
+    def test_r4_switch_entry_on_bullish_regime_breakout(self):
+        """Bullish rolling return + Donchian breakout → S2c signal=1 → BUY."""
+        broker = MockBroker()
+        config = AdapterConfig(
+            strategy="r4-switch",
+            symbol="BTCUSDT",
+            entry_lookback=5,
+            exit_lookback=3,
+            vol_lookback=10,
+            return_lookback=20,
+        )
+        adapter = PaperAdapter(config=config, broker=broker)
+
+        # Need: rolling_ret(20).shift(1) > 0 at last bar AND Donchian breakout
+        # Construct: 30 bars steady uptrend → bullish regime, then breakout spike.
+        n_base = 30
+        base = [40_000.0 + i * 100.0 for i in range(n_base)]  # +100/bar uptrend
+        spike = max(base) * 1.05
+        closes = base + [spike]
+        df = _make_ohlcv(close_values=closes)
+
+        asyncio.run(adapter.on_bar(df))
+
+        assert len(broker.submitted) == 1
+        assert broker.submitted[0].side == Side.BUY
+        assert adapter.in_position is True
+
+    def test_r4_switch_no_signal_in_neutral_regime(self):
+        """Flat closes + neutral funding → R4 returns 0 signal → no order."""
+        broker = MockBroker()
+        config = AdapterConfig(
+            strategy="r4-switch",
+            symbol="BTCUSDT",
+            entry_lookback=5,
+            exit_lookback=3,
+            vol_lookback=10,
+            return_lookback=20,
+        )
+        adapter = PaperAdapter(config=config, broker=broker)
+
+        # Flat closes → rolling_ret = 0, not > 0 → not bullish
+        # Positive funding (default _make_ohlcv uses -0.0001, override here)
+        closes = [50_000.0] * 30
+        df = _make_ohlcv(close_values=closes)
+        df["_funding_rate"] = 0.0001  # positive → not funding_negative
+
+        asyncio.run(adapter.on_bar(df))
+
+        assert len(broker.submitted) == 0
+        assert adapter.in_position is False
+
+    def test_r4_switch_round_trip(self):
+        """Entry on bullish breakout, exit on subsequent crash."""
+        config = AdapterConfig(
+            strategy="r4-switch",
+            symbol="BTCUSDT",
+            entry_lookback=5,
+            exit_lookback=3,
+            vol_lookback=10,
+            return_lookback=20,
+        )
+
+        n_base = 30
+        base = [40_000.0 + i * 100.0 for i in range(n_base)]
+        spike = max(base) * 1.05
+        closes_entry = base + [spike]
+        df_entry = _make_ohlcv(close_values=closes_entry)
+
+        broker = MockBroker(positions=[_long_position()])
+        adapter = PaperAdapter(config=config, broker=broker)
+        asyncio.run(adapter.on_bar(df_entry))
+        assert adapter.in_position is True
+        assert broker.submitted[0].side == Side.BUY
+
+        # Crash bar → S2c exit signal=0
+        closes_exit = closes_entry + [20_000.0]
+        df_exit = _make_ohlcv(close_values=closes_exit)
+        asyncio.run(adapter.on_bar(df_exit))
+
+        sell_orders = [r for r in broker.submitted if r.side == Side.SELL]
+        assert len(sell_orders) == 1
+        assert sell_orders[0].reduce_only is True
+        assert adapter.in_position is False
