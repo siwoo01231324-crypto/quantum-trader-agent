@@ -1,0 +1,71 @@
+{
+  "meta": {
+    "variant_registry_sha256": "26866f908fdc4a650c28ae608cab9f043db0b3c7d8ad740bd822a0eb7cdc57bc",
+    "git_commit": "238c206e3e4ea57c593fea96c919c99b1b04aa54",
+    "dry_run": false,
+    "generated_at": "2026-05-04T14:15:43.218881+00:00",
+    "n_bars": 13147
+  },
+  "variants": {
+    "B0": {
+      "description": "VWMA cross only \u2014 #99 baseline sanity check",
+      "metrics": {
+        "n_trades": 285,
+        "sharpe": 2.1072,
+        "mdd_pct": -56.14,
+        "monthly_hit_rate": 0.3579,
+        "total_return_pct": 600.61
+      }
+    },
+    "B1": {
+      "description": "B0 + stop_loss(1%)",
+      "metrics": {
+        "n_trades": 286,
+        "sharpe": 1.8442,
+        "mdd_pct": -48.74,
+        "monthly_hit_rate": 0.2308,
+        "total_return_pct": 267.53
+      }
+    },
+    "B2": {
+      "description": "B0 + take_profit(7%)",
+      "metrics": {
+        "n_trades": 285,
+        "sharpe": 0.781,
+        "mdd_pct": -41.7,
+        "monthly_hit_rate": 0.4035,
+        "total_return_pct": 27.06
+      }
+    },
+    "B3": {
+      "description": "B0 + stop(1%) + take(7%) \u2014 Iranyi R:R rule",
+      "metrics": {
+        "n_trades": 286,
+        "sharpe": 0.148,
+        "mdd_pct": -29.67,
+        "monthly_hit_rate": 0.2622,
+        "total_return_pct": -2.12
+      }
+    },
+    "B4": {
+      "description": "B (VWMA + ema_slope>0) + stop(1%) + take(7%) \u2014 core hypothesis",
+      "metrics": {
+        "n_trades": 142,
+        "sharpe": 1.7652,
+        "mdd_pct": -15.5,
+        "monthly_hit_rate": 0.2746,
+        "total_return_pct": 35.27
+      }
+    },
+    "B5": {
+      "description": "B4 + ATR-based adaptive stop (2*ATR14)",
+      "metrics": {
+        "n_trades": 142,
+        "sharpe": 2.5216,
+        "mdd_pct": -22.54,
+        "monthly_hit_rate": 0.4225,
+        "total_return_pct": 85.06
+      }
+    }
+  }
+}
