@@ -4,6 +4,7 @@ import logging
 import os
 from dataclasses import asdict
 from pathlib import Path
+from typing import Callable
 
 from src.live.types import WALCorruption, WALEvent
 
@@ -18,11 +19,18 @@ class WAL:
     """Append-only JSONL Write-Ahead Log. fsync 즉시.
 
     실패 시 WALWriteFailed raise — 호출자가 kill-switch 와 주문 거부 책임.
+
+    observer: 선택. fsync 성공 후 호출. 예외는 swallow + log warn (#181).
     """
 
-    def __init__(self, path: Path | str) -> None:
+    def __init__(
+        self,
+        path: Path | str,
+        observer: Callable[[WALEvent], None] | None = None,
+    ) -> None:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.observer = observer
 
     def write(self, event: WALEvent) -> None:
         try:
@@ -33,6 +41,11 @@ class WAL:
                 os.fsync(f.fileno())
         except (OSError, IOError) as err:
             raise WALWriteFailed(f"WAL write failed at {self.path}: {err}") from err
+        if self.observer is not None:
+            try:
+                self.observer(event)
+            except Exception as obs_err:
+                logger.warning("WAL observer raised %s: %s", type(obs_err).__name__, obs_err)
 
 
 def replay(path: Path | str) -> tuple[list[WALEvent], list[WALCorruption]]:
