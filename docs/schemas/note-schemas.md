@@ -47,12 +47,24 @@ owner: siwoo                    # 필수
 created: 2026-04-14             # 필수
 sharpe_bt: 1.8                  # 선택, 백테스트 Sharpe
 sharpe_live: null               # 선택, 라이브 Sharpe (없으면 null)
+mdd_bt: -0.18                   # 선택, 백테스트 최대낙폭 (음수, 예: -0.18 = -18%)
+annual_return_bt: 0.24          # 선택, 백테스트 연수익률 (예: 0.24 = +24%)
+backtest_period: 2020-01-01/2024-12-31  # 선택, ISO 날짜 범위
+last_updated: 2026-04-14        # 선택, frontmatter 마지막 갱신일 (ISO date)
+summary_ko: |                   # 선택, 카탈로그 카드용 한국어 요약 (2-3문장, 평이한 용어)
+  RSI 강세 다이버전스 시 매수, 약세 시 매도.
+  추세가 꺾이는 시점을 노리는 모멘텀 전략.
 tags: [momentum, crypto]        # 선택
 ---
 ```
 
 ### 필수 필드
 `type`, `id`, `name`, `status`, `instruments`, `timeframe`, `owner`, `created`
+
+### 선택 필드 (대시보드 표시용 — #178)
+`sharpe_bt`, `sharpe_live`, `mdd_bt`, `annual_return_bt`, `backtest_period`, `last_updated`, `summary_ko`, `tags`
+
+값을 모르면 `null` 로 둔다. 백테스트 실측 후 `update_strategy_frontmatter` (`src/backtest/frontmatter.py`) 가 갱신.
 
 ### 상태 전이
 `draft` → `backtest` → `paper` → `live` → `retired`

@@ -106,3 +106,19 @@ class FillAnomalyPayload:
 EVENT_ORDER_ACKED = "order_acked"
 EVENT_TRACKING_SAMPLE = "tracking_sample"
 EVENT_FILL_ANOMALY = "fill_anomaly"
+EVENT_STRATEGY_TOGGLED = "strategy_toggled"
+
+
+@dataclass(frozen=True)
+class StrategyToggledPayload:
+    """Payload for event_type='strategy_toggled' (#180).
+
+    Recorded by AsyncStrategyOrchestrator.enable_strategy / disable_strategy
+    via wal_observer. Audit log of every runtime ON/OFF transition.
+
+    actor: "user" (REST API), "auto" (future: auto-disable on circuit-break).
+    """
+
+    strategy_id: str
+    enabled: bool
+    actor: str = "user"

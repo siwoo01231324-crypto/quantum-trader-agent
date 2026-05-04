@@ -16,6 +16,14 @@ owner: siwoo
 created: 2026-04-25
 sharpe_bt: null
 sharpe_live: null
+mdd_bt: null
+annual_return_bt: null
+backtest_period: null
+last_updated: 2026-05-05
+summary_ko: |
+  비트코인 4시간봉. MACD 지표가 위로 돌아 모멘텀이 양수이고,
+  최근 변동성이 연 80% 미만일 때만 매수.
+  "오르는 추세 + 너무 위험하지 않은 구간" 만 진입하는 보수적 모멘텀 전략.
 tags:
 - momentum
 - crypto
