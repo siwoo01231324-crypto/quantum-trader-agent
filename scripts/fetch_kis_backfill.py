@@ -157,16 +157,53 @@ async def _fetch_async(symbols: list[str], start: str, end: str, args: argparse.
     await asyncio.gather(*[_bounded(sym) for sym in symbols])
 
 
-def _run_live(args: argparse.Namespace) -> int:
-    app_key = os.environ.get("KIS_APP_KEY", "")
-    app_secret = os.environ.get("KIS_APP_SECRET", "")
+def _resolve_kis_credentials() -> tuple[str, str, str, str, bool]:
+    """KIS_* 우선, 없으면 HANTOO_FAKE_* (paper) 폴백.
+
+    Returns
+    -------
+    (app_key, app_secret, cano, acnt_prdt_cd, paper_flag)
+    """
+    app_key = os.environ.get("KIS_APP_KEY") or os.environ.get("HANTOO_FAKE_API_KEY", "")
+    app_secret = os.environ.get("KIS_APP_SECRET") or os.environ.get("HANTOO_FAKE_SECRET_API_KEY", "")
     cano = os.environ.get("KIS_CANO", "")
-    acnt_prdt_cd = os.environ.get("KIS_ACNT_PRDT_CD", "01")
+    acnt_prdt_cd = os.environ.get("KIS_ACNT_PRDT_CD", "")
+
+    # HANTOO_FAKE_CREDIT_NUMBER ("XXXXXXXX-XX") 으로 cano/acnt_prdt_cd 보강
+    if not cano:
+        credit = (
+            os.environ.get("HANTOO_FAKE_CREDIT_NUMBER")
+            or os.environ.get("HANTOO_CREDIT_NUMBER", "")
+        )
+        if credit:
+            try:
+                from brokers.kis.async_adapter import _parse_credit_number
+                cano, acnt_prdt_cd_parsed = _parse_credit_number(credit)
+                if not acnt_prdt_cd:
+                    acnt_prdt_cd = acnt_prdt_cd_parsed
+            except Exception:
+                pass
+
+    if not acnt_prdt_cd:
+        acnt_prdt_cd = "01"
+
+    # HANTOO_FAKE_* 사용 시 자동 paper. KIS_PAPER 가 명시되면 우선.
+    if "KIS_PAPER" in os.environ:
+        paper = os.environ["KIS_PAPER"].lower() == "true"
+    else:
+        paper = bool(os.environ.get("HANTOO_FAKE_API_KEY"))
+
+    return app_key, app_secret, cano, acnt_prdt_cd, paper
+
+
+def _run_live(args: argparse.Namespace) -> int:
+    app_key, app_secret, cano, acnt_prdt_cd, paper = _resolve_kis_credentials()
 
     if not all([app_key, app_secret, cano]):
         print(
-            "KIS_TOKEN env not set. Skipping backfill. "
-            "To enable: set KIS_APP_KEY/KIS_APP_SECRET. "
+            "KIS credentials missing. Skipping backfill. "
+            "Set either KIS_APP_KEY/KIS_APP_SECRET/KIS_CANO or "
+            "HANTOO_FAKE_API_KEY/HANTOO_FAKE_SECRET_API_KEY/HANTOO_FAKE_CREDIT_NUMBER. "
             "Synthetic fixture is for tests/ only — do not use for production verdict.",
             file=sys.stderr,
         )
@@ -177,8 +214,6 @@ def _run_live(args: argparse.Namespace) -> int:
     except ImportError as exc:
         print(f"[ERROR] Import failed: {exc}", file=sys.stderr)
         return 1
-
-    paper = os.environ.get("KIS_PAPER", "false").lower() == "true"
     try:
         auth = KISAuth(app_key=app_key, app_secret=app_secret, paper=paper)
     except Exception as exc:

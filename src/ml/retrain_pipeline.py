@@ -258,6 +258,7 @@ def run_cv_extended(
             "fold": fold_idx,
             "train": len(train_idx),
             "test": len(test_idx),
+            "test_event_idx": list(X.index[test_idx]),
             "y_true": y_true_arr,
             "y_prob": y_prob,
             "accuracy": acc,
