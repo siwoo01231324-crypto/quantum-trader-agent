@@ -27,7 +27,7 @@ from src.execution.base import Side, TimeInForce
 
 logger = logging.getLogger(__name__)
 
-StrategyId = Literal["s2c-voltarget", "s4-funding"]
+StrategyId = Literal["s2c-voltarget", "s4-funding", "r4-switch"]
 
 
 @dataclass
@@ -46,6 +46,9 @@ class AdapterConfig:
 
     # s4-funding params
     funding_threshold: float = -0.005e-2
+
+    # r4-switch params (threshold-based regime switch, #173 best variant)
+    return_lookback: int = 180
 
     # sizing
     min_order_usdt: Decimal = Decimal("10")
@@ -119,6 +122,24 @@ class PaperAdapter:
             sig_series = s4_funding_carry(df, threshold_neg=self._cfg.funding_threshold)
             signal = int(sig_series.iloc[-1])
             pos_size = 1.0
+        elif self._cfg.strategy == "r4-switch":
+            from src.backtest.swing.regime_switching import route_r4
+
+            s2c_params = {
+                "entry_lookback": self._cfg.entry_lookback,
+                "exit_lookback": self._cfg.exit_lookback,
+                "vol_target": self._cfg.vol_target,
+                "vol_lookback": self._cfg.vol_lookback,
+            }
+            s4_params = {"threshold_neg": self._cfg.funding_threshold}
+            sig_series, size_series = route_r4(
+                df,
+                return_lookback=self._cfg.return_lookback,
+                s2c_params=s2c_params,
+                s4_params=s4_params,
+            )
+            signal = int(sig_series.iloc[-1])
+            pos_size = float(size_series.iloc[-1]) if size_series is not None else 1.0
         else:
             raise ValueError(f"Unknown strategy: {self._cfg.strategy!r}")
 

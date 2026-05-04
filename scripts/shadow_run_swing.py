@@ -1,22 +1,25 @@
 #!/usr/bin/env python3
-"""Shadow Run - Swing Strategy Paper Trading CLI (Issue #175).
+"""Shadow Run - Swing Strategy Paper Trading CLI (Issues #175, #143).
 
-Runs s2c-voltarget or s4-funding strategy against live 4h Binance Futures
-candles, submitting signals to PaperBroker and recording all fills to WAL.
+Runs s2c-voltarget / s4-funding / r4-switch strategy against live 4h Binance
+Futures candles, submitting signals to PaperBroker and recording all fills to WAL.
 
 Usage:
+    python scripts/shadow_run_swing.py --strategy r4-switch --symbol BTCUSDT
     python scripts/shadow_run_swing.py --strategy s2c-voltarget --symbol BTCUSDT
-    python scripts/shadow_run_swing.py --strategy s4-funding --symbol BTCUSDT --exchange binance-futures
-    python scripts/shadow_run_swing.py --strategy s2c-voltarget --symbol BTCUSDT --max-bars 3
+    python scripts/shadow_run_swing.py --strategy s4-funding --symbol BTCUSDT
+    python scripts/shadow_run_swing.py --strategy r4-switch --symbol BTCUSDT --max-bars 3
 
 WAL location: logs/shadow/{run_id}/wal.jsonl
 
-Strategy variants (shard-registered, see 01_plan.md):
+Strategy variants:
     s2c-voltarget : s2_donchian_voltarget  (entry=20, exit=10, vol_target=0.15)
     s4-funding    : s4_funding_carry        (threshold=-0.005%)
+    r4-switch     : threshold-regime switch (return_lookback=180; #173 BEST,
+                    Sharpe 1.218 / MDD -9.7% in 5y BTCUSDT@4h bench)
 
-Cron example (every 4h at bar close):
-    0 1,5,9,13,17,21 * * * python scripts/shadow_run_swing.py --strategy s2c-voltarget --symbol BTCUSDT --max-bars 1
+Cron example (Phase 1 #143 default — every 4h at bar close):
+    0 1,5,9,13,17,21 * * * python scripts/shadow_run_swing.py --strategy r4-switch --symbol BTCUSDT --max-bars 1
 """
 from __future__ import annotations
 
@@ -47,7 +50,14 @@ from src.live.wal import WAL
 from src.ops.kill_switch import KillSwitch
 
 
-def _build_run_id() -> str:
+def _build_run_id(strategy: str | None = None, symbol: str | None = None) -> str:
+    """Default run_id is stable per (strategy, symbol) so cron runs share the
+    same WAL directory across 30-day operation. Position/balance state is
+    restored via WAL replay on each cron startup (#143). Pass --run-id to
+    override (e.g., for one-off smoke tests use --run-id smoke-$(date)).
+    """
+    if strategy and symbol:
+        return f"phase1-{strategy}-{symbol}"
     return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
 
@@ -59,8 +69,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--strategy",
         required=True,
-        choices=["s2c-voltarget", "s4-funding"],
-        help="Strategy variant to run.",
+        choices=["s2c-voltarget", "s4-funding", "r4-switch"],
+        help="Strategy variant to run. r4-switch is the #173 BEST (Sharpe 1.218).",
     )
     parser.add_argument(
         "--symbol",
@@ -113,6 +123,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--vol-lookback", type=int, default=60)
     # s4-funding params
     parser.add_argument("--funding-threshold", type=float, default=-0.005e-2)
+    # r4-switch params
+    parser.add_argument(
+        "--return-lookback",
+        type=int,
+        default=180,
+        help="Rolling return lookback for r4-switch threshold regime (default 180 bars).",
+    )
 
     return parser.parse_args(argv)
 
@@ -166,7 +183,7 @@ async def run_shadow_swing(args: argparse.Namespace) -> int:
 
     logger = logging.getLogger("shadow_run_swing")
 
-    run_id = args.run_id or _build_run_id()
+    run_id = args.run_id or _build_run_id(args.strategy, args.symbol)
     wal_dir = Path(args.log_dir) / run_id
     wal_dir.mkdir(parents=True, exist_ok=True)
     wal_path = wal_dir / "wal.jsonl"
@@ -176,14 +193,27 @@ async def run_shadow_swing(args: argparse.Namespace) -> int:
         args.strategy, args.symbol, args.exchange, run_id, wal_path,
     )
 
-    wal = WAL(wal_path)
     kill_switch = KillSwitch()
-    broker = PaperBroker(
-        wal=wal,
-        kill_switch=kill_switch,
-        matching_engine=MockMatchingEngine(),
-        initial_balance=Decimal(args.initial_balance),
-    )
+    if wal_path.exists():
+        broker = PaperBroker.from_wal(
+            path=wal_path,
+            kill_switch=kill_switch,
+            matching_engine=MockMatchingEngine(),
+            initial_balance=Decimal(args.initial_balance),
+        )
+        logger.info(
+            "WAL replay: restored broker state from %s (positions=%d)",
+            wal_path, len(await broker.get_positions()),
+        )
+    else:
+        wal = WAL(wal_path)
+        broker = PaperBroker(
+            wal=wal,
+            kill_switch=kill_switch,
+            matching_engine=MockMatchingEngine(),
+            initial_balance=Decimal(args.initial_balance),
+        )
+        logger.info("Fresh broker: WAL not found, starting from initial_balance=%s", args.initial_balance)
 
     config = AdapterConfig(
         strategy=args.strategy,
@@ -194,8 +224,21 @@ async def run_shadow_swing(args: argparse.Namespace) -> int:
         vol_target=args.vol_target,
         vol_lookback=args.vol_lookback,
         funding_threshold=args.funding_threshold,
+        return_lookback=args.return_lookback,
     )
     adapter = PaperAdapter(config=config, broker=broker)
+
+    # Restore PaperAdapter._in_position from broker positions (post-WAL-replay).
+    # Without this, after a cron restart the adapter would think it's flat
+    # while the broker still holds an open position → exit signals get lost.
+    existing = await broker.get_positions(args.symbol)
+    if existing:
+        adapter._in_position = True
+        adapter._entry_price = existing[0].entry_price
+        logger.info(
+            "Adapter state restored: in_position=True symbol=%s qty=%s entry=%s",
+            args.symbol, existing[0].qty, existing[0].entry_price,
+        )
 
     # Fetch historical candles for signal warmup
     df_hist = await _fetch_candles(args.symbol, limit=args.history_bars)

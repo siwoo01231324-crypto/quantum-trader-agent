@@ -9,6 +9,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+# hmmlearn has no prebuilt wheel for Python 3.14 yet — skip whole file when absent.
+pytest.importorskip("hmmlearn")
+
 from src.ml.regime.hmm import GaussianHMMRegime, RegimeResult
 
 
