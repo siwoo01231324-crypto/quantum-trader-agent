@@ -159,3 +159,67 @@ strategies:
 
     with pytest.raises(RuntimeError, match="MetaLabeler.load"):
         load_orchestrator_from_yaml(config_path, _make_policy())
+
+
+# ---------------------------------------------------------------------------
+# Test 5 (#177): on_metalabeler_missing="skip" drops only the affected entry
+# ---------------------------------------------------------------------------
+
+def test_metalabeler_missing_skip_preserves_other_strategies(tmp_path, caplog):
+    """5전략 + metalabeler 1개 — 모델 아티팩트 부재 시 metalabeler entry 만 skip,
+    나머지 5전략은 정상 로드되어야 한다 (#177 EXE-on-fresh-machine 시나리오)."""
+    yaml_content = """
+strategies:
+  - id: momo-btc-v2
+    class: backtest.strategies.momo_btc_v2.MomoBtcV2
+    kwargs: { sizing_mode: full }
+
+  - id: momo-vol-filtered
+    class: backtest.strategies.momo_vol_filtered.MomoVolFiltered
+    kwargs: {}
+
+  - id: meanrev-pairs
+    class: backtest.strategies.meanrev_pairs.MeanrevPairs
+    kwargs: {}
+
+  - id: breakout-donchian
+    class: backtest.strategies.breakout_donchian.BreakoutDonchian
+    kwargs: {}
+
+  - id: momo-kis-v1
+    class: backtest.strategies.momo_kis_v1.MomoKisV1
+    kwargs:
+      symbol: "005930"
+      sizing_mode: half-kelly
+
+  - id: momo-btc-v2-meta
+    class: backtest.strategies.momo_btc_v2.MomoBtcV2
+    kwargs:
+      sizing_mode: full
+      metalabeler:
+        load_path: /nonexistent/models/momo-btc-v2/latest/
+      metalabeler_threshold: 0.5
+"""
+    config_path = _write_yaml(tmp_path, yaml_content)
+    from portfolio.config_loader import load_orchestrator_from_yaml
+
+    import logging
+    with caplog.at_level(logging.WARNING, logger="portfolio.config_loader"):
+        orch = load_orchestrator_from_yaml(
+            config_path,
+            _make_policy(),
+            on_metalabeler_missing="skip",
+        )
+
+    assert set(orch._strategies.keys()) == {
+        "momo-btc-v2",
+        "momo-vol-filtered",
+        "meanrev-pairs",
+        "breakout-donchian",
+        "momo-kis-v1",
+    }, "5 baseline strategies must register; only momo-btc-v2-meta should skip"
+    assert any(
+        "metalabeler_artifact_missing" in rec.getMessage()
+        and "momo-btc-v2-meta" in rec.getMessage()
+        for rec in caplog.records
+    ), f"Expected skip warning, got: {[r.getMessage() for r in caplog.records]}"

@@ -19,6 +19,7 @@ dependencies = [
     "websockets>=12",
     "prometheus-client>=0.20",
     "filelock>=3.13",
+    "pytz>=2024.1",  # universe.krx_calendar / breakout_donchian — host venv 엔 transitive 로 있었으나 컨테이너 빌드 시 누락 발견 (#133 운영 디버깅).
 ]
 
 [project.optional-dependencies]

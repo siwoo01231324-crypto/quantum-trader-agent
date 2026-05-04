@@ -1,13 +1,57 @@
+# Production strategy roster (#177).
+#
+# This file is bundled into qta.exe via qta.spec datas=[("configs", "configs")].
+# Loaded by src.live.loop._load_orchestrator → src.portfolio.config_loader.load_orchestrator_from_yaml.
+#
+# Override path: qta.exe --production-yaml /path/to/custom.yaml
+#
+# Risk thresholds: NOT in this file. policy.yaml (risk DSL) is loaded separately
+# via ShadowConfig.policy. See docs/specs/risk-rule-dsl.md and §7-2 of the
+# whitepaper for the boilerplate Phase 1-2 policy.
+#
+# 5 baseline strategies + 메타라벨러 (#85) opt-in entry (commented).
 strategies:
+  # ── Crypto sleeve (Binance USDT-M Futures, 15m bars) ─────────────────────
   - id: momo-btc-v2
     class: backtest.strategies.momo_btc_v2.MomoBtcV2
     kwargs:
+      symbol: BTCUSDT      # cross-asset gate (#177); strategy holds on non-BTC bars
       sizing_mode: full
 
-  - id: momo-btc-v2-meta
-    class: backtest.strategies.momo_btc_v2.MomoBtcV2
+  # ── Crypto sleeve (Binance USDT-M Futures, 4h bars, vol-filtered) ────────
+  - id: momo-vol-filtered
+    class: backtest.strategies.momo_vol_filtered.MomoVolFiltered
+    kwargs: {}
+
+  # ── Crypto sleeve (ETH/BTC, 1h bars, mean-reversion z-score) ─────────────
+  - id: meanrev-pairs
+    class: backtest.strategies.meanrev_pairs.MeanrevPairs
+    kwargs: {}
+
+  # ── KRX sleeve (KOSPI200 basket, EOD donchian breakout) ──────────────────
+  - id: breakout-donchian
+    class: backtest.strategies.breakout_donchian.BreakoutDonchian
+    kwargs: {}
+
+  # ── KRX sleeve (single stock 005930, 15m RSI divergence) ─────────────────
+  - id: momo-kis-v1
+    class: backtest.strategies.momo_kis_v1.MomoKisV1
     kwargs:
-      sizing_mode: full
-      metalabeler:
-        load_path: models/momo-btc-v2/latest/
-      metalabeler_threshold: 0.5
+      symbol: "005930"
+      sizing_mode: half-kelly
+
+  # ── 메타라벨러 활성화 (#85) — 운영자 절차 ─────────────────────────────────
+  # 1. python scripts/train_metalabeler_btc.py --output-dir models/momo-btc-v2
+  # 2. python scripts/promote_metalabeler.py --strategy momo-btc-v2 --version <ts>
+  # 3. 아래 블록 uncomment 후 EXE 재시작
+  #
+  # config_loader 는 모델 아티팩트 부재 시 본 entry 만 skip + warning (#177
+  # graceful skip). 다른 5전략은 정상 등록.
+  #
+  # - id: momo-btc-v2-meta
+  #   class: backtest.strategies.momo_btc_v2.MomoBtcV2
+  #   kwargs:
+  #     sizing_mode: full
+  #     metalabeler:
+  #       load_path: models/momo-btc-v2/latest/
+  #     metalabeler_threshold: 0.5
