@@ -31,6 +31,14 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 
+# UTF-8 stdout/stderr — Windows console (cp1252/cp949) 에서 한글 출력 시 charmap fail 방지.
+# `qta.exe --help` 가 docstring 의 한글을 출력할 때 UnicodeEncodeError 회피 (#123).
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+    except (AttributeError, ValueError):
+        pass
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.live.loop import ShadowConfig, run_shadow_loop
