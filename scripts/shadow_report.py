@@ -23,6 +23,11 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
+
+# Ensure repo root is on sys.path when invoked as a script
+_root = Path(__file__).parent.parent
+if str(_root) not in sys.path:
+    sys.path.insert(0, str(_root))
 from typing import Optional
 
 import pandas as pd
