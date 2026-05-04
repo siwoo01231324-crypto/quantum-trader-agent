@@ -277,6 +277,8 @@ def run_kis_pipeline_pooled(
 
         features = features.copy()
         features["symbol"] = symbol
+        events = events.copy()
+        events["symbol"] = symbol
 
         all_events.append(events)
         all_features.append(features)
@@ -335,14 +337,19 @@ def run_kis_pipeline_pooled(
         splitter = PurgedKFold(n_splits=5, embargo_frac=0.01)
 
     accuracies: list[float] = []
+    oof_pos: list[int] = []
+    oof_prob_vals: list[float] = []
     for fold_idx, (tr_idx, te_idx) in enumerate(splitter.split(X_tr, t1_tr)):
         if len(tr_idx) < 50 or len(te_idx) < 5:
             continue
         ml_fold = MetaLabeler()
         ml_fold.fit(X_tr.iloc[tr_idx], y_tr.iloc[tr_idx])
-        preds = (ml_fold.win_probability(X_tr.iloc[te_idx]) >= 0.5).astype(int)
+        y_prob_fold = ml_fold.win_probability(X_tr.iloc[te_idx])
+        preds = (y_prob_fold >= 0.5).astype(int)
         acc = float((preds == y_tr.iloc[te_idx].values).mean())
         accuracies.append(acc)
+        oof_pos.extend(list(te_idx))
+        oof_prob_vals.extend(list(y_prob_fold))
         log.info("  fold %d: train=%d test=%d acc=%.4f", fold_idx, len(tr_idx), len(te_idx), acc)
 
     cv_report = {
@@ -351,6 +358,9 @@ def run_kis_pipeline_pooled(
         "n_folds": len(accuracies),
         "use_time_block_cv": use_time_block_cv,
     }
+
+    # OOF probabilities indexed by X_tr's positional index (#154)
+    oof_prob_pos = pd.Series(oof_prob_vals, index=oof_pos, dtype=float)
 
     # Fit final model on full train split
     ml_final = MetaLabeler()
@@ -410,6 +420,18 @@ def run_kis_pipeline_pooled(
         feature_importance_path=None,
     )
 
+    # Equity-curve raw artifacts for downstream bench (#154).
+    # Not JSON-serialised here (DataFrames + dict). Caller pops/uses as needed.
+    extras = {
+        "events_concat": events_concat.loc[common].copy(),  # has 'symbol' col
+        "labels_concat": labels_concat.loc[common].copy(),
+        "ohlcv_per_symbol": all_ohlcv_by_symbol,
+        "oof_prob_pos": oof_prob_pos,  # X_tr positional index → prob
+        "X_tr_index": X_tr.index,
+        "X_tr_symbol": features_concat.loc[common, "symbol"].iloc[:split].values,
+        "train_split": split,
+    }
+
     report = {
         "status": "ok",
         "n_symbols": len(processed_symbols),
@@ -421,5 +443,6 @@ def run_kis_pipeline_pooled(
         "use_time_block_cv": use_time_block_cv,
         "positive_rate": pos_rate,
         "cv": cv_report,
+        "_extras": extras,
     }
     return artifact, report

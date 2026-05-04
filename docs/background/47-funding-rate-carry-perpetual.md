@@ -224,3 +224,69 @@ Binance 등 CEX 에 자산 예치 필수 → FTX 붕괴 (2022-11) 와 같은 exc
 5. **Binance Futures API Documentation.** https://fapi.binance.com/fapi/v1/fundingRate
    - Funding rate 데이터 소스 (공식 API, 무료)
    - 관련: https://data.binance.vision (히스토리 bulk download)
+
+6. **OKX API Documentation.** https://www.okx.com/api/v5/public/funding-rate-history
+   - OKX USDT-M 무기한 선물 funding rate 히스토리 (공개 엔드포인트, API key 불필요)
+   - instId 형식: BTC-USDT-SWAP, 최대 100건/요청, cursor 기반 pagination
+
+7. **Bybit API Documentation.** https://api.bybit.com/v5/market/funding/history
+   - Bybit linear category USDT-M 무기한 선물 funding rate (공개 엔드포인트)
+   - category=linear, 최대 200건/요청, startTime/endTime ms 기반 pagination
+
+---
+
+## 7. Multi-Exchange Spread 전략 (이슈 #174, 2026-05-04 추가)
+
+### 7.1 동기 — S4 monthly hit rate 한계
+
+S4 (단일 Binance, 8h rebalance) 의 실증 결과 (PR #172):
+- Sharpe 0.961, MDD -17.1% → 4/5 게이트 통과
+- **미통과**: monthly hit rate 0.29 (60개월 중 17개월만 수익)
+- 원인: funding carry 의 구조적 패턴 — negative funding 구간이 불연속적으로 발생
+
+### 7.2 Multi-Exchange Spread 가설
+
+거래소별 funding rate 산출 방식이 미세하게 달라 **교차 거래소 spread** 가 발생한다:
+- Binance: `FR = Premium Index + clamp(IR - PI, -0.05%, +0.05%)`, Interest Rate 0.01%/8h
+- OKX: 유사 공식이나 Premium Index 계산 주기·방법 미세 차이
+- Bybit: 동일 8h 구조이나 funding interval 미세 타이밍 차이 존재
+
+이 spread 를 차익거래하면:
+1. **시장 방향 리스크 제거** — long/short 동시 포지션으로 delta-neutral
+2. **hit rate 개선** — spread 차익은 funding 부호와 무관하게 발생
+3. **빈도 증가** — 1h rebalance 와 결합 시 진입 기회 상승
+
+### 7.3 Variant 설계 (F0-F5)
+
+| ID | 구성 | 데이터 소스 | 기대 효과 |
+|----|------|------------|----------|
+| F0 | Binance 단일, 8h | Binance only | baseline (Sharpe 0.96, mhr 0.29) |
+| F1 | Binance 단일, 1h bar | Binance only | hit rate ↑ (더 빈번한 진입) |
+| F2 | Binance-OKX spread | Binance + OKX | 시장 중립, mhr ↑ |
+| F3 | 3-exchange best spread | Binance + OKX + Bybit | 더 많은 spread 기회 |
+| F4 | F2 + 1h rebalance | Binance + OKX | 빈도 + spread 결합 |
+| F5 | Ensemble(F0, F2, F4) | 모든 거래소 | 분산 효과 |
+
+### 7.4 데이터 파티션 규칙 (이슈 #174)
+
+```
+lake/funding_rate/exchange=binance/symbol=BTCUSDT/part-0.parquet
+lake/funding_rate/exchange=okx/symbol=BTC-USDT-SWAP/part-0.parquet
+lake/funding_rate/exchange=bybit/symbol=BTCUSDT/part-0.parquet
+```
+
+컬럼: `ts` (UTC DatetimeTZ), `funding_rate` (float64)
+
+### 7.5 구현 위치
+
+- `src/data_lake/exchange_funding/okx.py` — OKX fetcher
+- `src/data_lake/exchange_funding/bybit.py` — Bybit fetcher
+- `src/backtest/swing/multi_exchange_carry.py` — F0-F5 strategy 함수
+- `scripts/fetch_funding_rates.py` — `--exchange binance,okx,bybit` flag 지원
+- `scripts/bench_funding_arbitrage.py` — F0-F5 사전등록 bench
+
+### 7.6 리스크 추가 고려사항
+
+- **거래소 타이밍 차이**: 3거래소 모두 8h funding 이지만 정확한 정산 시각이 수 분 차이날 수 있음 → 데이터 합산 시 ts 정렬 주의
+- **Basis divergence**: 현물-선물 헤지를 다른 거래소 실행 시 basis risk 잔존
+- **API rate limit**: OKX 100건/요청, Bybit 200건/요청 → 5년 fetch 는 약 30-60분 소요
