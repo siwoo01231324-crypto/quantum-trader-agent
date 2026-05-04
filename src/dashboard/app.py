@@ -8,15 +8,19 @@
 """
 from __future__ import annotations
 
+import asyncio
 import html
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from prometheus_client import CONTENT_TYPE_LATEST, CollectorRegistry, generate_latest
 
+from src.dashboard.timeline_broker import TimelineBroker
+from src.live.wal import replay as wal_replay
 from src.observability.metrics import Metrics
 
 
@@ -53,6 +57,10 @@ class DashboardState:
 
     # Prometheus registry (shared with Metrics)
     metrics: Metrics | None = None
+
+    # WS 타임라인 (#181)
+    timeline_broker: TimelineBroker | None = None
+    wal_path: Path | None = None
 
 
 def _gauge_html(name: str, value: float) -> str:
@@ -219,6 +227,41 @@ async function resetKS(reason){{
   await fetch('/api/kill-switch/reset',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{reason}})}});
   location.reload();
 }}
+
+// /ws/timeline live + replay (#181). 메타 새로고침과 충돌하지만 5초 사이 incremental update 가능.
+const TYPE_CLASS = {{
+  signal_emitted: 'tl-signal',
+  metalabeler_decision: 'tl-meta',
+  order_placed: 'tl-order',
+  fill_received: 'tl-fill',
+}};
+const TIMELINE_MAX_ROWS = 100;
+function tlEscape(s){{
+  return String(s).replace(/[&<>"']/g, c => ({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}})[c]);
+}}
+function tlAppend(ev){{
+  const tbody = document.getElementById('timeline');
+  if(!tbody) return;
+  if(ev.phase === 'live_ready') return;
+  const cls = TYPE_CLASS[ev.event_type] || '';
+  const detail = ev.payload ? tlEscape(JSON.stringify(ev.payload)) : '';
+  const row = document.createElement('tr');
+  row.innerHTML = `<td>${{tlEscape(ev.ts || '')}}</td><td><span class="tl-badge ${{cls}}">${{tlEscape(ev.event_type || '')}}</span></td><td>${{detail}}</td>`;
+  tbody.insertBefore(row, tbody.firstChild);
+  while(tbody.rows.length > TIMELINE_MAX_ROWS){{
+    tbody.deleteRow(tbody.rows.length - 1);
+  }}
+}}
+function tlConnect(){{
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const ws = new WebSocket(`${{proto}}//${{location.host}}/ws/timeline?replay=${{TIMELINE_MAX_ROWS}}`);
+  ws.onmessage = (e) => {{
+    try {{ tlAppend(JSON.parse(e.data)); }} catch(err) {{ console.warn('ws parse', err); }}
+  }};
+  ws.onclose = () => setTimeout(tlConnect, 1000);
+  ws.onerror = () => ws.close();
+}}
+if (typeof WebSocket !== 'undefined') {{ tlConnect(); }}
 </script>
 </body>
 </html>"""
@@ -230,6 +273,9 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
 
     if state.metrics is None:
         state.metrics = Metrics()
+
+    if state.timeline_broker is None:
+        state.timeline_broker = TimelineBroker()
 
     app = FastAPI(title="QTA Dashboard", docs_url=None, redoc_url=None)
 
@@ -282,6 +328,45 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
         if reason in state.kill_switch_triggers:
             state.kill_switch_triggers[reason] = False
         return JSONResponse({"ok": True, "reason": reason})
+
+    @app.websocket("/ws/timeline")
+    async def ws_timeline(
+        ws: WebSocket,
+        replay: int = Query(default=100, ge=0, le=1000),
+    ) -> None:
+        """매매 타임라인 실시간 스트림 (#181).
+
+        프로토콜:
+        1. 연결 후 WAL replay 마지막 N건을 dict 로 전송 (replay=0 시 생략).
+        2. `{"phase": "live_ready", "replayed": N}` 센티넬 전송.
+        3. broker subscribe → 큐에서 받아 send_json (drop-oldest back-pressure).
+        4. 클라 disconnect 시 unsubscribe.
+        """
+        await ws.accept()
+        replayed = 0
+        if replay > 0 and state.wal_path is not None:
+            events, _corruptions = wal_replay(state.wal_path)
+            tail = events[-replay:] if events else []
+            for ev in tail:
+                await ws.send_json(asdict(ev))
+            replayed = len(tail)
+
+        await ws.send_json({"phase": "live_ready", "replayed": replayed})
+
+        broker = state.timeline_broker
+        assert broker is not None  # create_app 에서 보장
+        queue = broker.subscribe()
+        try:
+            while True:
+                event = await queue.get()
+                await ws.send_json(event)
+        except WebSocketDisconnect:
+            pass
+        except (asyncio.CancelledError, RuntimeError):
+            # Client closed mid-send; treat as normal disconnect.
+            pass
+        finally:
+            broker.unsubscribe(queue)
 
     return app
 
