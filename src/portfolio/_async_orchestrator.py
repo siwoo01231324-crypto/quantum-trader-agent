@@ -9,7 +9,8 @@ import inspect
 import logging
 import random
 import time
-from typing import Optional
+from datetime import datetime, timezone
+from typing import Callable, Optional
 
 import pandas as pd
 
@@ -22,6 +23,7 @@ from risk import (
     PortfolioRiskReport,
 )
 from src.brokers.base import AsyncBrokerAdapter
+from src.live.types import EVENT_STRATEGY_TOGGLED, WALEvent
 from .orchestrator import _SyncStrategyOrchestrator
 from .order_intent import OrderIntent
 from .sizing import resolve_size
@@ -43,6 +45,7 @@ class AsyncStrategyOrchestrator:
         refresh_every_n_bars: int | None = None,
         min_reliability: float = 0.0,
         broker: AsyncBrokerAdapter | None = None,
+        wal_observer: Callable[[WALEvent], None] | None = None,
     ) -> None:
         self._sync = _SyncStrategyOrchestrator(policy)
         self._policy = policy
@@ -50,11 +53,13 @@ class AsyncStrategyOrchestrator:
         self._strategies: dict[str, object] = {}
         self._recent_returns: dict[str, pd.Series] = {}
         self._quarantined: set[str] = set()
+        self._disabled: set[str] = set()
         self._fail_count: dict[str, int] = {}
         self._report_lock = asyncio.Lock()
         self._refresh_task: asyncio.Task | None = None
         self._bar_count = 0
         self._refresh_every_n_bars = refresh_every_n_bars
+        self._wal_observer = wal_observer
 
     # ---- sync delegation API -----------------------------------------------
 
@@ -80,6 +85,94 @@ class AsyncStrategyOrchestrator:
     def current_report(self) -> Optional[PortfolioRiskReport]:
         return self._sync.current_report
 
+    # ---- enable / disable (#180) -------------------------------------------
+
+    @property
+    def disabled_strategies(self) -> frozenset[str]:
+        return frozenset(self._disabled)
+
+    def is_enabled(self, strategy_id: str) -> bool:
+        return strategy_id not in self._disabled
+
+    def enable_strategy(self, strategy_id: str) -> None:
+        """Re-enable a previously disabled strategy.
+
+        No-op if already enabled (audit event NOT emitted on no-op).
+        """
+        if strategy_id not in self._strategies:
+            raise ValueError(f"strategy {strategy_id!r} not registered")
+        if strategy_id not in self._disabled:
+            return
+        self._disabled.discard(strategy_id)
+        self._emit_strategy_toggled(strategy_id, enabled=True)
+
+    def disable_strategy(
+        self,
+        strategy_id: str,
+        *,
+        positions: list[tuple[str, float]] | None = None,
+    ) -> list[OrderIntent]:
+        """Disable a strategy: block new signals + emit WAL audit + return liquidation intents.
+
+        Args:
+            strategy_id: registered strategy id.
+            positions: list of (symbol, qty) currently held by this strategy.
+                Each non-zero qty produces a market-sell OrderIntent for the caller
+                to submit (D1: 즉시 청산 — issue #180 user decision 2026-05-05).
+
+        Returns:
+            list[OrderIntent]: liquidation intents (side='sell') for each non-zero
+            position. Empty if positions is None or all qtys are zero.
+
+        Raises:
+            ValueError: if strategy_id is not registered.
+
+        Idempotent: disabling an already-disabled strategy still returns liquidation
+        intents (caller may pass updated positions) but does NOT re-emit the WAL audit.
+        """
+        if strategy_id not in self._strategies:
+            raise ValueError(f"strategy {strategy_id!r} not registered")
+
+        was_enabled = strategy_id not in self._disabled
+        self._disabled.add(strategy_id)
+        if was_enabled:
+            self._emit_strategy_toggled(strategy_id, enabled=False)
+
+        intents: list[OrderIntent] = []
+        if positions:
+            for symbol, qty in positions:
+                if qty <= 0:
+                    continue
+                intents.append(OrderIntent(
+                    strategy_id=strategy_id,
+                    symbol=symbol,
+                    side="sell",
+                    qty=qty,
+                    reason="strategy_disabled_liquidation",
+                ))
+        return intents
+
+    def _emit_strategy_toggled(self, strategy_id: str, *, enabled: bool) -> None:
+        if self._wal_observer is None:
+            return
+        ev = WALEvent(
+            ts=datetime.now(timezone.utc).isoformat(),
+            event_type=EVENT_STRATEGY_TOGGLED,
+            payload={
+                "strategy_id": strategy_id,
+                "enabled": enabled,
+                "actor": "user",
+            },
+        )
+        try:
+            self._wal_observer(ev)
+        except Exception as err:
+            logger.warning(
+                "portfolio.orchestrator.wal_observer_error event=strategy_toggled "
+                "strategy_id=%s enabled=%s error=%s",
+                strategy_id, enabled, err,
+            )
+
     # ---- async API ---------------------------------------------------------
 
     async def run_bar(
@@ -92,6 +185,7 @@ class AsyncStrategyOrchestrator:
         targets = [
             sid for sid in self._strategies
             if sid not in self._quarantined
+            and sid not in self._disabled
             and (strategies is None or sid in strategies)
         ]
 

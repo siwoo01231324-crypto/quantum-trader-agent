@@ -20,8 +20,11 @@ import numpy as np
 import pandas as pd
 
 from src.backtest.swing.strategies import s2_donchian_voltarget, s4_funding_carry
-from src.ml.regime.hmm import GaussianHMMRegime
 from src.ml.regime.threshold import ThresholdRegime
+
+# GaussianHMMRegime is lazy-imported inside route_r2/r3/r5 so that threshold-only
+# paths (route_r0/r1/r4) can run without the hmmlearn dependency. PaperAdapter
+# uses route_r4 in production (#143) and must not require hmmlearn.
 
 
 def _run_s2c(
@@ -64,6 +67,8 @@ def route_r2(
     **kwargs: Any,
 ) -> tuple[pd.Series, pd.Series | None]:
     """R2: HMM-2state vol regime -> high-vol=S4, low-vol=S2c."""
+    from src.ml.regime.hmm import GaussianHMMRegime
+
     returns = df["close"].pct_change().dropna()
 
     s2c_signal, s2c_pos = _run_s2c(df, kwargs.get("s2c_params"))
@@ -99,6 +104,8 @@ def route_r3(
     **kwargs: Any,
 ) -> tuple[pd.Series, pd.Series | None]:
     """R3: HMM-3state -> bull=S2c, bear/sideways=S4, crash=flat."""
+    from src.ml.regime.hmm import GaussianHMMRegime
+
     returns = df["close"].pct_change().dropna()
 
     s2c_signal, s2c_pos = _run_s2c(df, kwargs.get("s2c_params"))
@@ -173,6 +180,8 @@ def route_r5(
     At each bar, if >= 2 of {R2, R3, R4} choose S2c, use S2c.
     Otherwise use S4.
     """
+    from src.ml.regime.hmm import GaussianHMMRegime
+
     s2c_signal, s2c_pos = _run_s2c(df, kwargs.get("s2c_params"))
     s4_signal = _run_s4(df, kwargs.get("s4_params"))
 

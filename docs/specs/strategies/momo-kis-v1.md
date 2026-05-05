@@ -11,6 +11,14 @@ owner: siwoo
 created: 2026-04-25
 sharpe_bt: null
 sharpe_live: null
+mdd_bt: null
+annual_return_bt: null
+backtest_period: null
+last_updated: 2026-05-05
+summary_ko: |
+  삼성전자(005930) 15분봉 인트라데이 전략.
+  RSI 강세 다이버전스(가격은 떨어졌는데 RSI는 덜 떨어진 상태) 시 매수, 약세 다이버전스 시 전량 청산.
+  KRX 마감 15:30 직전 자동 평탄화. 데이트레이딩 호흡.
 tags: [momentum, krx, intraday]
 ---
 

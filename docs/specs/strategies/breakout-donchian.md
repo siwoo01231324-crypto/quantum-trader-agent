@@ -16,6 +16,14 @@ owner: siwoo
 created: 2026-04-25
 sharpe_bt: null
 sharpe_live: null
+mdd_bt: null
+annual_return_bt: null
+backtest_period: null
+last_updated: 2026-05-05
+summary_ko: |
+  코스피200 종목 일봉. 20일 신고가를 돌파한 종목 중,
+  ATR(변동성) 대비 돌파 강도 상위 10종목을 동일 비중으로 매수.
+  10일 저점을 깨면 청산. "신고가 돌파 = 추세 시작" 가설로 따라붙는 추세추종 전략.
 tags:
 - breakout
 - krx
