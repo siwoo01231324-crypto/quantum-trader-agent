@@ -62,6 +62,12 @@ class DashboardState:
     timeline_broker: TimelineBroker | None = None
     wal_path: Path | None = None
 
+    # 거래 시작/정지 컨트롤 (#182 단계 2). dashboard-only 모드에서만 주입.
+    run_controller: object | None = None
+
+    # KIS 계좌 정보 provider (#182 — "내 계좌" 카드)
+    account_info_provider: object | None = None
+
 
 def _gauge_html(name: str, value: float) -> str:
     pct = min(max(value * 100, 0), 100)
@@ -162,6 +168,10 @@ th{{color:#888;font-weight:600}}
 .btn-reset:hover{{background:#2ecc71}}
 .ks-controls{{margin-top:10px;display:flex;gap:6px;flex-wrap:wrap}}
 .last-ts{{font-size:.72rem;color:#888;margin-top:6px}}
+.run-status{{font-size:1rem;font-weight:700;margin-bottom:8px;color:#bbb}}
+.acct-table td{{padding:4px 8px;font-size:.78rem}}
+.acct-table td:first-child{{color:#888;width:90px}}
+.acct-table td:last-child{{color:#e0e0e0;font-family:'Consolas','Menlo',monospace}}
 </style>
 </head>
 <body>
@@ -217,6 +227,47 @@ th{{color:#888;font-weight:600}}
     </div>
   </div>
 
+  <!-- Q5: 거래 시작/정지 (#182 단계 2) -->
+  <div class="card" id="run-control-card">
+    <h2>거래 시작/정지</h2>
+    <div id="run-status" class="run-status">상태 조회 중…</div>
+    <div class="ks-controls">
+      <button id="btn-run-start" class="btn btn-reset" onclick="runStart()">거래 시작</button>
+      <button id="btn-run-stop" class="btn btn-trigger" onclick="runStop()">거래 정지</button>
+    </div>
+    <div class="last-ts" id="run-detail">production.yaml 의 등록 전략으로 시작합니다.</div>
+  </div>
+
+  <!-- Q6: KIS 계좌 (#182) -->
+  <div class="card" id="account-card-kis">
+    <h2>KIS 계좌 (paper, KRX)</h2>
+    <div id="kis-status" class="run-status">조회 중…</div>
+    <table class="acct-table">
+      <tbody>
+        <tr><td>계좌</td><td id="kis-cano">-</td></tr>
+        <tr><td>현금 (KRW)</td><td id="kis-cash">-</td></tr>
+        <tr><td>평가금액</td><td id="kis-eval">-</td></tr>
+        <tr><td>보유 종목</td><td id="kis-positions">-</td></tr>
+      </tbody>
+    </table>
+    <div class="last-ts" id="kis-detail">.env 의 HANTOO_FAKE_* 인증.</div>
+  </div>
+
+  <!-- Q7: Binance Futures 계좌 (#182) -->
+  <div class="card" id="account-card-binance">
+    <h2>Binance Futures (USDS-M)</h2>
+    <div id="bnb-status" class="run-status">조회 중…</div>
+    <table class="acct-table">
+      <tbody>
+        <tr><td>API Key</td><td id="bnb-key">-</td></tr>
+        <tr><td>모드</td><td id="bnb-mode">-</td></tr>
+        <tr><td>지갑 (USDT)</td><td id="bnb-wallet">-</td></tr>
+        <tr><td>가용 (USDT)</td><td id="bnb-avail">-</td></tr>
+      </tbody>
+    </table>
+    <div class="last-ts" id="bnb-detail">.env 의 BINANCE_API_KEY/SECRET 인증.</div>
+  </div>
+
 </div>
 <script>
 async function triggerKS(reason){{
@@ -262,6 +313,73 @@ function tlConnect(){{
   ws.onerror = () => ws.close();
 }}
 if (typeof WebSocket !== 'undefined') {{ tlConnect(); }}
+
+// 거래 시작/정지 컨트롤 (#182 단계 2)
+async function runStart(){{
+  document.getElementById('run-status').textContent = '시작 중…';
+  const r = await fetch('/api/run/start', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body:JSON.stringify({{}})}});
+  const d = await r.json();
+  runRefresh();
+  if(!d.ok) alert('시작 실패: '+(d.reason || JSON.stringify(d)));
+}}
+async function runStop(){{
+  document.getElementById('run-status').textContent = '정지 중…';
+  const r = await fetch('/api/run/stop', {{method:'POST'}});
+  await r.json();
+  runRefresh();
+}}
+async function runRefresh(){{
+  try {{
+    const r = await fetch('/api/run/status');
+    const d = await r.json();
+    const el = document.getElementById('run-status');
+    const det = document.getElementById('run-detail');
+    if(!d.available){{
+      el.textContent = '컨트롤러 미주입 (cmd 모드)';
+      det.textContent = '거래 시작 시 cmd 에서 실행하세요: qta.exe --symbols 005930 --broker kis-paper-shadow';
+      return;
+    }}
+    const status = d.status || '?';
+    el.textContent = '상태: ' + status;
+    el.style.color = status === 'running' ? '#2ecc71' : status === 'error' ? '#e74c3c' : '#bbb';
+    if(d.last_error) det.textContent = 'Error: ' + d.last_error;
+    else if(d.started_at) det.textContent = '시작: ' + d.started_at + (d.stopped_at ? ' · 종료: ' + d.stopped_at : '');
+  }} catch(err) {{ console.warn('run-status', err); }}
+}}
+runRefresh();
+setInterval(runRefresh, 3000);
+
+// 내 계좌 (#182) — KIS + Binance 동시 폴링
+function fmtNum(n) {{ return (n||0).toLocaleString('ko-KR'); }}
+function setOk(elId, ok, txtOk, txtBad) {{
+  const el = document.getElementById(elId);
+  if (!el) return;
+  el.textContent = ok ? txtOk : txtBad;
+  el.style.color = ok ? '#2ecc71' : '#e74c3c';
+}}
+async function acctRefresh() {{
+  try {{
+    const r = await fetch('/api/account/info');
+    const d = await r.json();
+    if (!d.available) return;
+    // KIS
+    const k = d.kis || {{}};
+    setOk('kis-status', !!k.ok, '✓ 연결됨 (paper)', '✗ ' + (k.error || '실패'));
+    document.getElementById('kis-cano').textContent = k.cano_masked || '-';
+    document.getElementById('kis-cash').textContent = k.ok ? fmtNum(k.cash_balance) + ' 원' : '-';
+    document.getElementById('kis-eval').textContent = k.ok ? fmtNum(k.eval_amount) + ' 원' : '-';
+    document.getElementById('kis-positions').textContent = k.ok ? (k.n_positions || 0) + ' 종목' : '-';
+    // Binance
+    const b = d.binance || {{}};
+    setOk('bnb-status', !!b.ok, '✓ 연결됨', '✗ ' + (b.error || '실패'));
+    document.getElementById('bnb-key').textContent = b.api_key_masked || '-';
+    document.getElementById('bnb-mode').textContent = b.ok ? (b.testnet ? 'testnet' : 'live') + ' · ' + (b.base_url_short||'') : '-';
+    document.getElementById('bnb-wallet').textContent = b.ok ? fmtNum(b.wallet_balance_usdt) + ' USDT' : '-';
+    document.getElementById('bnb-avail').textContent = b.ok ? fmtNum(b.available_usdt) + ' USDT' : '-';
+  }} catch (err) {{ console.warn('account', err); }}
+}}
+acctRefresh();
+setInterval(acctRefresh, 5000);
 </script>
 </body>
 </html>"""
@@ -367,6 +485,41 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
             pass
         finally:
             broker.unsubscribe(queue)
+
+    # ── 거래 시작/정지 컨트롤 (#182 단계 2) ────────────────────────────────
+    @app.get("/api/run/status")
+    async def api_run_status() -> JSONResponse:
+        rc = state.run_controller
+        if rc is None:
+            return JSONResponse({"available": False})
+        return JSONResponse({"available": True, **rc.status()})
+
+    @app.post("/api/run/start")
+    async def api_run_start(body: dict[str, Any] | None = None) -> JSONResponse:
+        rc = state.run_controller
+        if rc is None:
+            return JSONResponse({"ok": False, "reason": "controller unavailable"}, status_code=503)
+        params = body or {}
+        result = await rc.start(params)
+        code = 200 if result.get("ok") else 422
+        return JSONResponse(result, status_code=code)
+
+    @app.post("/api/run/stop")
+    async def api_run_stop() -> JSONResponse:
+        rc = state.run_controller
+        if rc is None:
+            return JSONResponse({"ok": False, "reason": "controller unavailable"}, status_code=503)
+        result = await rc.stop()
+        code = 200 if result.get("ok") else 422
+        return JSONResponse(result, status_code=code)
+
+    # ── 내 계좌 정보 (#182) ────────────────────────────────────────────────
+    @app.get("/api/account/info")
+    async def api_account_info() -> JSONResponse:
+        provider = state.account_info_provider
+        if provider is None:
+            return JSONResponse({"available": False})
+        return JSONResponse({"available": True, **provider.fetch()})
 
     return app
 
