@@ -21,6 +21,13 @@ dependencies = [
     "filelock>=3.13",
     "hmmlearn>=0.3,<1",
     "pytz>=2024.1",  # universe.krx_calendar / breakout_donchian — host venv 엔 transitive 로 있었으나 컨테이너 빌드 시 누락 발견 (#133 운영 디버깅).
+    # FastAPI dashboard (#125, #178, #198). live_run.py 가 부팅 시 항상
+    # `from src.dashboard.app import DashboardState` 호출 + `_start_dashboard`
+    # 에서 `import uvicorn`. 옛날 dev-only 였으나 #133 컨테이너 운영에서
+    # ModuleNotFoundError 발견 (#202 후속 hotfix).
+    "fastapi",
+    "starlette",
+    "uvicorn",
 ]
 
 [project.optional-dependencies]
@@ -34,8 +41,6 @@ dev = [
     "pytz",
     "python-frontmatter",
     "rdflib",
-    "fastapi",
-    "starlette",
     "pyshacl",
 ]
 # pandas-ta is a Python <=3.10 only optional cross-check dep used by tests/signals/.
