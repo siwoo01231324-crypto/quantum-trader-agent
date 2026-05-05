@@ -234,6 +234,60 @@ def route_r5(
     return combined_signal.rename("r5_signal"), combined_pos.rename("r5_pos_size")
 
 
+def route_r6(
+    df: pd.DataFrame,
+    return_lookback: int = 720,
+    **kwargs: Any,
+) -> tuple[pd.Series, pd.Series | None]:
+    """R6: R4 logic on 1h bars (#199).
+
+    Same threshold-based regime switch as R4, but with parameters retuned for
+    1h timeframe to preserve the same time horizons in days:
+
+        Param            R4 (4h)      R6 (1h)       Time horizon
+        ---------------- ------------ ------------- ----------------
+        return_lookback  180 bars     720 bars      30 days
+        entry_lookback   20 bars      80 bars       3.3 days
+        exit_lookback    10 bars      40 bars       1.7 days
+        vol_lookback     60 bars      240 bars      10 days
+
+    Default s2c_params override the inner s2_donchian_voltarget defaults so the
+    Donchian breakout / vol-target sizing match the 1h cadence. Caller may
+    override via kwargs["s2c_params"].
+
+    Expected ~28 trades / 30-day paper run vs R4's ~7 — better Sharpe SE.
+    """
+    s2c_params = kwargs.get("s2c_params") or {
+        "entry_lookback": 80,
+        "exit_lookback": 40,
+        "vol_target": 0.15,
+        "vol_lookback": 240,
+    }
+    s2c_signal, s2c_pos = _run_s2c(df, s2c_params)
+    s4_signal = _run_s4(df, kwargs.get("s4_params"))
+
+    funding = df.get("_funding_rate")
+    classifier = ThresholdRegime(
+        return_lookback=return_lookback,
+        return_threshold=0.0,
+        funding_threshold=0.0,
+    )
+    result = classifier.classify(df["close"], funding_rate=funding)
+    regime_states = pd.Series(result.states, index=df.index)
+
+    combined_signal = pd.Series(0, index=df.index, dtype=int)
+    combined_pos = pd.Series(0.0, index=df.index)
+
+    bullish_mask = regime_states == 0
+    combined_signal[bullish_mask] = s2c_signal[bullish_mask]
+    combined_pos[bullish_mask] = s2c_pos[bullish_mask]
+
+    funding_neg_mask = regime_states == 1
+    combined_signal[funding_neg_mask] = s4_signal[funding_neg_mask]
+
+    return combined_signal.rename("r6_signal"), combined_pos.rename("r6_pos_size")
+
+
 VARIANT_REGISTRY: dict[str, Any] = {
     "R0": {"fn": route_r0, "desc": "S2c always (baseline)"},
     "R1": {"fn": route_r1, "desc": "S4 always (baseline 2)"},
@@ -241,4 +295,5 @@ VARIANT_REGISTRY: dict[str, Any] = {
     "R3": {"fn": route_r3, "desc": "HMM-3state (bull/bear/crash)"},
     "R4": {"fn": route_r4, "desc": "Threshold-based switch"},
     "R5": {"fn": route_r5, "desc": "Ensemble vote (R2+R3+R4)"},
+    "R6": {"fn": route_r6, "desc": "R4 logic on 1h bars (retuned)"},
 }
