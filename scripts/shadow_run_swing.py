@@ -69,8 +69,21 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--strategy",
         required=True,
-        choices=["s2c-voltarget", "s4-funding", "r4-switch"],
-        help="Strategy variant to run. r4-switch is the #173 BEST (Sharpe 1.218).",
+        choices=["s2c-voltarget", "s4-funding", "r4-switch", "r6-switch"],
+        help=(
+            "Strategy variant. r4-switch (4h, Sharpe 1.218) / r6-switch (1h, "
+            "Sharpe 1.201) — both #173 BEST tier. r6-switch = R4 logic with "
+            "1h-tuned params (#199)."
+        ),
+    )
+    parser.add_argument(
+        "--interval",
+        default=None,
+        choices=["1h", "4h"],
+        help=(
+            "Bar interval. Default: 4h for r4-switch/s2c-voltarget/s4-funding, "
+            "1h for r6-switch."
+        ),
     )
     parser.add_argument(
         "--symbol",
@@ -134,8 +147,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-async def _fetch_candles(symbol: str, limit: int = 500) -> "pd.DataFrame":
-    """Fetch historical 4h OHLCV from Binance Futures REST API.
+async def _fetch_candles(symbol: str, limit: int = 500, interval: str = "4h") -> "pd.DataFrame":
+    """Fetch historical OHLCV from Binance Futures REST API.
 
     Returns DataFrame with columns: open, high, low, close, volume.
     Falls back to empty DataFrame if network unavailable (useful for dry-run/test).
@@ -151,7 +164,7 @@ async def _fetch_candles(symbol: str, limit: int = 500) -> "pd.DataFrame":
 
     logger = logging.getLogger("shadow_run_swing")
     url = "https://fapi.binance.com/fapi/v1/klines"
-    params = {"symbol": symbol, "interval": "4h", "limit": limit}
+    params = {"symbol": symbol, "interval": interval, "limit": limit}
 
     async with aiohttp.ClientSession() as session:
         try:
@@ -183,14 +196,33 @@ async def run_shadow_swing(args: argparse.Namespace) -> int:
 
     logger = logging.getLogger("shadow_run_swing")
 
+    # Resolve interval / lookback defaults per strategy (#199 R6 1h variant).
+    # r6-switch uses 1h bars with 4x bar counts to preserve same time horizons.
+    # User-provided CLI args override these auto-resolved defaults.
+    if args.strategy == "r6-switch":
+        if args.interval is None:
+            args.interval = "1h"
+        # Bump lookbacks 4x only if still at 4h defaults (= user didn't override)
+        if args.entry_lookback == 20:
+            args.entry_lookback = 80
+        if args.exit_lookback == 10:
+            args.exit_lookback = 40
+        if args.vol_lookback == 60:
+            args.vol_lookback = 240
+        if args.return_lookback == 180:
+            args.return_lookback = 720
+    else:
+        if args.interval is None:
+            args.interval = "4h"
+
     run_id = args.run_id or _build_run_id(args.strategy, args.symbol)
     wal_dir = Path(args.log_dir) / run_id
     wal_dir.mkdir(parents=True, exist_ok=True)
     wal_path = wal_dir / "wal.jsonl"
 
     logger.info(
-        "shadow_run_swing start: strategy=%s symbol=%s exchange=%s run_id=%s wal=%s",
-        args.strategy, args.symbol, args.exchange, run_id, wal_path,
+        "shadow_run_swing start: strategy=%s symbol=%s interval=%s exchange=%s run_id=%s wal=%s",
+        args.strategy, args.symbol, args.interval, args.exchange, run_id, wal_path,
     )
 
     kill_switch = KillSwitch()
@@ -241,7 +273,7 @@ async def run_shadow_swing(args: argparse.Namespace) -> int:
         )
 
     # Fetch historical candles for signal warmup
-    df_hist = await _fetch_candles(args.symbol, limit=args.history_bars)
+    df_hist = await _fetch_candles(args.symbol, limit=args.history_bars, interval=args.interval)
     if df_hist.empty:
         logger.warning("No historical candles; adapter will produce no signals until warmed up.")
 

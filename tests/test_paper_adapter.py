@@ -481,3 +481,91 @@ class TestPaperAdapterR4Switch:
         assert len(sell_orders) == 1
         assert sell_orders[0].reduce_only is True
         assert adapter.in_position is False
+
+
+class TestPaperAdapterR6Switch:
+    """R6 = R4 logic on 1h bars with retuned defaults (#199).
+
+    Same threshold regime switch as R4, expected ~9 trades / 30-day paper run
+    (vs R4's ~7 on 4h). Tests use compressed lookbacks to keep df size small.
+    """
+
+    def test_r6_switch_entry_on_bullish_regime_breakout(self):
+        """Bullish rolling return + Donchian breakout → S2c signal=1 → BUY."""
+        broker = MockBroker()
+        config = AdapterConfig(
+            strategy="r6-switch",
+            symbol="BTCUSDT",
+            entry_lookback=5,
+            exit_lookback=3,
+            vol_lookback=10,
+            return_lookback=20,
+        )
+        adapter = PaperAdapter(config=config, broker=broker)
+
+        n_base = 30
+        base = [40_000.0 + i * 100.0 for i in range(n_base)]
+        spike = max(base) * 1.05
+        closes = base + [spike]
+        df = _make_ohlcv(close_values=closes)
+
+        asyncio.run(adapter.on_bar(df))
+
+        assert len(broker.submitted) == 1
+        assert broker.submitted[0].side == Side.BUY
+        assert adapter.in_position is True
+
+    def test_r6_switch_no_signal_in_neutral_regime(self):
+        """Flat closes + positive funding → R6 returns 0 signal → no order."""
+        broker = MockBroker()
+        config = AdapterConfig(
+            strategy="r6-switch",
+            symbol="BTCUSDT",
+            entry_lookback=5,
+            exit_lookback=3,
+            vol_lookback=10,
+            return_lookback=20,
+        )
+        adapter = PaperAdapter(config=config, broker=broker)
+
+        closes = [50_000.0] * 30
+        df = _make_ohlcv(close_values=closes)
+        df["_funding_rate"] = 0.0001  # positive → not funding_negative
+
+        asyncio.run(adapter.on_bar(df))
+
+        assert len(broker.submitted) == 0
+        assert adapter.in_position is False
+
+    def test_r6_switch_round_trip(self):
+        """Entry on bullish breakout, exit on subsequent crash."""
+        config = AdapterConfig(
+            strategy="r6-switch",
+            symbol="BTCUSDT",
+            entry_lookback=5,
+            exit_lookback=3,
+            vol_lookback=10,
+            return_lookback=20,
+        )
+
+        n_base = 30
+        base = [40_000.0 + i * 100.0 for i in range(n_base)]
+        spike = max(base) * 1.05
+        closes_entry = base + [spike]
+        df_entry = _make_ohlcv(close_values=closes_entry)
+
+        broker = MockBroker(positions=[_long_position()])
+        adapter = PaperAdapter(config=config, broker=broker)
+        asyncio.run(adapter.on_bar(df_entry))
+        assert adapter.in_position is True
+        assert broker.submitted[0].side == Side.BUY
+
+        # Crash bar → S2c exit signal=0
+        closes_exit = closes_entry + [20_000.0]
+        df_exit = _make_ohlcv(close_values=closes_exit)
+        asyncio.run(adapter.on_bar(df_exit))
+
+        sell_orders = [r for r in broker.submitted if r.side == Side.SELL]
+        assert len(sell_orders) == 1
+        assert sell_orders[0].reduce_only is True
+        assert adapter.in_position is False
