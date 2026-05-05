@@ -13,12 +13,13 @@ import html
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
-from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from prometheus_client import CONTENT_TYPE_LATEST, CollectorRegistry, generate_latest
 
+from src.dashboard.strategy_catalog import load_strategy_catalog
 from src.dashboard.timeline_broker import TimelineBroker
 from src.live.wal import replay as wal_replay
 from src.observability.metrics import Metrics
@@ -62,6 +63,11 @@ class DashboardState:
     timeline_broker: TimelineBroker | None = None
     wal_path: Path | None = None
 
+    # 전략 카탈로그 + 토글 (#178 + #180)
+    orchestrator: Any | None = None  # AsyncStrategyOrchestrator (avoid import cycle)
+    specs_dir: Path | None = None    # docs/specs/strategies — fall back to repo default
+    position_provider: Callable[[str], list[tuple[str, float]]] | None = None
+
 
 def _gauge_html(name: str, value: float) -> str:
     pct = min(max(value * 100, 0), 100)
@@ -95,7 +101,10 @@ def _kill_row(name: str, active: bool) -> str:
     </tr>"""
 
 
-def _render_dashboard(state: DashboardState) -> str:
+def _render_dashboard(state: DashboardState, catalog_items: list[dict] | None = None) -> str:
+    # 전략 카탈로그 카드 (#178+#180 인라인)
+    catalog_cards_html = "".join(_strategy_card(it) for it in (catalog_items or []))
+
     # Q1: 손익
     pnl_realtime_fmt = f"{state.pnl_realtime:,.2f}"
     pnl_daily_fmt = f"{state.pnl_daily:,.2f}"
@@ -162,10 +171,17 @@ th{{color:#888;font-weight:600}}
 .btn-reset:hover{{background:#2ecc71}}
 .ks-controls{{margin-top:10px;display:flex;gap:6px;flex-wrap:wrap}}
 .last-ts{{font-size:.72rem;color:#888;margin-top:6px}}
+.nav{{margin-bottom:10px}}
+.nav-link{{display:inline-block;background:#1a3a5c;color:#7ecef4;padding:6px 14px;border-radius:5px;text-decoration:none;font-size:.85rem;font-weight:600}}
+.nav-link:hover{{background:#2a4a6c;color:#fff}}
+.catalog-section{{margin-top:14px}}
+.catalog-section > h2{{font-size:.85rem;color:#aaa;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px}}
+{_STRATEGY_CARD_CSS}
 </style>
 </head>
 <body>
 <h1>QTA 로컬 대시보드 — {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}</h1>
+<div class="nav"><a href="/strategies" class="nav-link">📋 전략 카탈로그 단독 페이지 →</a></div>
 <div class="grid">
 
   <!-- Q1: 손익 그래프 -->
@@ -218,6 +234,12 @@ th{{color:#888;font-weight:600}}
   </div>
 
 </div>
+
+<div class="catalog-section">
+  <h2>전략 카탈로그</h2>
+  <div class="strat-grid">{catalog_cards_html}</div>
+</div>
+
 <script>
 async function triggerKS(reason){{
   await fetch('/api/kill-switch/trigger',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{reason}})}});
@@ -262,6 +284,164 @@ function tlConnect(){{
   ws.onerror = () => ws.close();
 }}
 if (typeof WebSocket !== 'undefined') {{ tlConnect(); }}
+
+{_STRATEGY_TOGGLE_JS}
+</script>
+</body>
+</html>"""
+
+
+# ---- Shared CSS/JS used by both / (main dashboard) and /strategies ---------
+
+_STRATEGY_CARD_CSS = """
+.strat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}
+.strat-card{background:#1a1d27;border:1px solid #2a2d3a;border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.strat-card-disabled{opacity:.55;border-color:#5a2a2a}
+.strat-head{display:flex;justify-content:space-between;align-items:baseline}
+.strat-name{color:#fff;font-weight:700;font-size:1rem;text-decoration:none}
+.strat-name:hover{color:#7ecef4}
+.strat-status{font-size:.7rem;background:#2a2d3a;border-radius:3px;padding:2px 6px;color:#bbb;text-transform:uppercase}
+.strat-meta{display:flex;gap:12px;flex-wrap:wrap;font-size:.75rem;color:#aaa}
+.strat-summary{font-size:.78rem;color:#cfd5e0;line-height:1.45;background:#0f1117;border-left:3px solid #7ecef4;padding:8px 10px;border-radius:4px;white-space:pre-line}
+.strat-metrics{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.strat-metrics > div{background:#0f1117;border-radius:5px;padding:6px 8px;display:flex;justify-content:space-between;font-size:.78rem}
+.m-label{color:#888}
+.m-val{color:#ddd;font-weight:600}
+.strat-toggle-row{display:flex;justify-content:space-between;align-items:center;border-top:1px solid #2a2d3a;padding-top:10px}
+.strat-state{font-size:.78rem;font-weight:700}
+.strat-on{color:#2ecc71}
+.strat-off{color:#e74c3c}
+.switch{position:relative;display:inline-block;width:46px;height:24px}
+.switch input{opacity:0;width:0;height:0}
+.slider{position:absolute;cursor:pointer;inset:0;background:#3a3f4d;border-radius:24px;transition:.2s}
+.slider:before{content:"";position:absolute;height:18px;width:18px;left:3px;bottom:3px;background:#e0e0e0;border-radius:50%;transition:.2s}
+input:checked + .slider{background:#2ecc71}
+input:checked + .slider:before{transform:translateX(22px)}
+"""
+
+_STRATEGY_TOGGLE_JS = """
+async function postToggle(sid, enabled){
+  const resp = await fetch(`/api/strategies/${sid}/toggle`,{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({enabled})
+  });
+  return resp.json();
+}
+function bindStrategyToggles(root){
+  (root || document).querySelectorAll('.strat-toggle').forEach(el => {
+    if (el.dataset.bound === '1') return;
+    el.dataset.bound = '1';
+    el.addEventListener('change', async (ev) => {
+      const sid = ev.target.dataset.strategyId;
+      const next = ev.target.checked;
+      if (!next) {
+        const ok = window.confirm(
+          `[${sid}] 비활성 시 보유 포지션이 즉시 청산됩니다.\\n\\n계속하시겠습니까?`
+        );
+        if (!ok) { ev.target.checked = true; return; }
+      }
+      try {
+        const result = await postToggle(sid, next);
+        if (!result.ok) throw new Error('toggle failed');
+        const intents = result.liquidation_intents || [];
+        if (intents.length > 0) {
+          window.alert(`청산 의도 ${intents.length}건 생성됨 — 브로커 전송 대기`);
+        }
+        location.reload();
+      } catch (err) {
+        console.error('toggle error', err);
+        ev.target.checked = !next;
+        window.alert('토글 실패: ' + (err && err.message || err));
+      }
+    });
+  });
+}
+bindStrategyToggles();
+"""
+
+
+def _fmt_metric(value: Any, *, percent: bool = False, digits: int = 2) -> str:
+    if value is None:
+        return "—"
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return html.escape(str(value))
+    if percent:
+        return f"{v * 100:.{digits}f}%"
+    return f"{v:.{digits}f}"
+
+
+def _strategy_card(item: dict) -> str:
+    sid = html.escape(str(item.get("id", "")))
+    name = html.escape(str(item.get("name", sid)))
+    status = html.escape(str(item.get("status", "")))
+    instruments = html.escape(", ".join(item.get("instruments") or []))
+    timeframe = html.escape(str(item.get("timeframe", "")))
+    sharpe = _fmt_metric(item.get("sharpe_bt"))
+    mdd = _fmt_metric(item.get("mdd_bt"), percent=True, digits=1)
+    annual = _fmt_metric(item.get("annual_return_bt"), percent=True, digits=1)
+    period = html.escape(str(item.get("backtest_period") or "—"))
+    summary_raw = (item.get("summary_ko") or "").strip()
+    summary_html = (
+        f'<div class="strat-summary">{html.escape(summary_raw)}</div>'
+        if summary_raw else ""
+    )
+    enabled = bool(item.get("enabled", True))
+    card_cls = "strat-card" + ("" if enabled else " strat-card-disabled")
+    state_label = "ON" if enabled else "OFF"
+    state_cls = "strat-on" if enabled else "strat-off"
+    checked_attr = " checked" if enabled else ""
+    return f"""
+    <div class="{card_cls}" data-strategy-id="{sid}">
+      <div class="strat-head">
+        <a class="strat-name" href="/strategies/{sid}">{name}</a>
+        <span class="strat-status">{status}</span>
+      </div>
+      <div class="strat-meta">
+        <span><b>id:</b> {sid}</span>
+        <span><b>tf:</b> {timeframe}</span>
+        <span><b>univ:</b> {instruments}</span>
+      </div>
+      {summary_html}
+      <div class="strat-metrics">
+        <div><span class="m-label">Sharpe (BT)</span><span class="m-val">{sharpe}</span></div>
+        <div><span class="m-label">MDD (BT)</span><span class="m-val">{mdd}</span></div>
+        <div><span class="m-label">연수익 (BT)</span><span class="m-val">{annual}</span></div>
+        <div><span class="m-label">기간 (BT)</span><span class="m-val">{period}</span></div>
+      </div>
+      <div class="strat-toggle-row">
+        <span class="strat-state {state_cls}">{state_label}</span>
+        <label class="switch">
+          <input type="checkbox" class="strat-toggle" data-strategy-id="{sid}"{checked_attr}>
+          <span class="slider"></span>
+        </label>
+      </div>
+    </div>"""
+
+
+def _render_strategies(items: list[dict]) -> str:
+    cards_html = "".join(_strategy_card(it) for it in items)
+    return f"""<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>QTA — 전략 카탈로그</title>
+<style>
+*{{box-sizing:border-box;margin:0;padding:0}}
+body{{font-family:'Segoe UI',sans-serif;background:#0f1117;color:#e0e0e0;padding:16px}}
+h1{{font-size:1.1rem;color:#7ecef4;margin-bottom:14px}}
+.nav a{{color:#7ecef4;text-decoration:none;margin-right:14px;font-size:.85rem}}
+{_STRATEGY_CARD_CSS}
+</style>
+</head>
+<body>
+<h1>QTA — 전략 카탈로그</h1>
+<div class="nav"><a href="/">← 대시보드</a></div>
+<div class="strat-grid">{cards_html}</div>
+<script>
+{_STRATEGY_TOGGLE_JS}
 </script>
 </body>
 </html>"""
@@ -281,7 +461,7 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
 
     @app.get("/", response_class=HTMLResponse)
     async def root() -> HTMLResponse:
-        return HTMLResponse(content=_render_dashboard(state))
+        return HTMLResponse(content=_render_dashboard(state, _enriched_catalog()))
 
     @app.get("/metrics")
     async def metrics() -> Response:
@@ -328,6 +508,67 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
         if reason in state.kill_switch_triggers:
             state.kill_switch_triggers[reason] = False
         return JSONResponse({"ok": True, "reason": reason})
+
+    # ---- Strategy catalog + toggle (#178 + #180) -------------------------
+
+    def _resolve_specs_dir() -> Path:
+        if state.specs_dir is not None:
+            return Path(state.specs_dir)
+        # Default: docs/specs/strategies relative to repo root.
+        return Path(__file__).resolve().parents[2] / "docs" / "specs" / "strategies"
+
+    def _enriched_catalog() -> list[dict]:
+        items = load_strategy_catalog(_resolve_specs_dir())
+        orch = state.orchestrator
+        for it in items:
+            if orch is not None and hasattr(orch, "is_enabled"):
+                it["enabled"] = bool(orch.is_enabled(it["id"]))
+            else:
+                it["enabled"] = True
+        return items
+
+    @app.get("/api/strategies")
+    async def api_strategies() -> JSONResponse:
+        return JSONResponse(_enriched_catalog())
+
+    @app.get("/strategies", response_class=HTMLResponse)
+    async def strategies_page() -> HTMLResponse:
+        return HTMLResponse(content=_render_strategies(_enriched_catalog()))
+
+    @app.post("/api/strategies/{strategy_id}/toggle")
+    async def api_toggle_strategy(strategy_id: str, body: dict) -> JSONResponse:
+        if "enabled" not in body or not isinstance(body.get("enabled"), bool):
+            raise HTTPException(status_code=400, detail="body must contain {enabled: bool}")
+        orch = state.orchestrator
+        if orch is None:
+            raise HTTPException(status_code=503, detail="orchestrator not wired")
+        try:
+            if body["enabled"]:
+                orch.enable_strategy(strategy_id)
+                intents: list = []
+            else:
+                positions = []
+                if state.position_provider is not None:
+                    positions = list(state.position_provider(strategy_id) or [])
+                order_intents = orch.disable_strategy(strategy_id, positions=positions)
+                intents = [
+                    {
+                        "strategy_id": oi.strategy_id,
+                        "symbol": oi.symbol,
+                        "side": oi.side,
+                        "qty": oi.qty,
+                        "reason": oi.reason,
+                    }
+                    for oi in order_intents
+                ]
+        except ValueError as err:
+            raise HTTPException(status_code=404, detail=str(err))
+        return JSONResponse({
+            "ok": True,
+            "strategy_id": strategy_id,
+            "enabled": body["enabled"],
+            "liquidation_intents": intents,
+        })
 
     @app.websocket("/ws/timeline")
     async def ws_timeline(

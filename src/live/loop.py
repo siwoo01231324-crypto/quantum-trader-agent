@@ -52,6 +52,10 @@ class ShadowConfig:
     # Mock-mode feed payload (deterministic smoke tests, --feed mock).
     mock_ticks: list[Tick] | None = None
     snapshot_builder_config: SnapshotBuilderConfig | None = None
+    # Callback invoked once the orchestrator instance is constructed (#180).
+    # Used by live_run.py to wire `DashboardState.orchestrator` so that
+    # `POST /api/strategies/{id}/toggle` reaches the live orchestrator.
+    on_orchestrator_ready: Callable[[AsyncStrategyOrchestrator], None] | None = None
 
 
 def _load_orchestrator(config: ShadowConfig, broker: PaperBroker) -> AsyncStrategyOrchestrator:
@@ -223,6 +227,13 @@ async def run_shadow_loop(
             config.broker_mode, kill_switch, metrics, paper_broker, kis_adapter
         )
         orchestrator = _load_orchestrator(config, paper_broker)
+        if config.on_orchestrator_ready is not None:
+            try:
+                config.on_orchestrator_ready(orchestrator)
+            except Exception as err:
+                logger.warning(
+                    "live.loop.on_orchestrator_ready_failed error=%s", err,
+                )
 
         snapshot_builder = SnapshotBuilder(
             config.symbols,

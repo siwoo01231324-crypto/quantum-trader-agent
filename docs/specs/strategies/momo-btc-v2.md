@@ -14,6 +14,14 @@ owner: siwoo
 created: 2026-04-14
 sharpe_bt: 0.1847
 sharpe_live: null
+mdd_bt: null
+annual_return_bt: null
+backtest_period: null
+last_updated: 2026-05-05
+summary_ko: |
+  비트코인 무기한 선물 15분봉. RSI 지표가 가격과 반대로 움직이는 다이버전스를 본다.
+  강세 다이버전스(가격은 신저점인데 RSI는 더 안 떨어짐) → 매수. 반대 → 매도.
+  추세가 꺾이는 변곡점을 노리는 모멘텀 전략.
 tags:
 - momentum
 - crypto

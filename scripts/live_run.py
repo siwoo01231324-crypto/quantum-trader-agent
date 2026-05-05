@@ -344,6 +344,11 @@ async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
         wal_path=config.wal_path,
     )
     config.wal_observer = lambda ev: timeline_broker.publish(asdict(ev))
+    # #180: surface the live orchestrator into DashboardState so the
+    # /api/strategies/{id}/toggle endpoint can call enable/disable.
+    config.on_orchestrator_ready = lambda orch: setattr(
+        dashboard_state, "orchestrator", orch,
+    )
 
     shutdown_dashboard = None
     if dashboard_port > 0:

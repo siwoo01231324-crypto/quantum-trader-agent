@@ -136,6 +136,49 @@ async def test_run_shadow_loop_with_fake_feed(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_on_orchestrator_ready_callback_invoked(tmp_path):
+    """#180: ShadowConfig.on_orchestrator_ready receives the live orchestrator instance."""
+    from portfolio import AsyncStrategyOrchestrator
+
+    received: list[AsyncStrategyOrchestrator] = []
+    fake_feed = FakeFeed([_make_tick()])
+
+    cfg = ShadowConfig(
+        symbols=["BTCUSDT"],
+        wal_path=tmp_path / "wal.jsonl",
+        lock_path=tmp_path / ".live_loop.lock",
+        max_iterations=1,
+        on_orchestrator_ready=received.append,
+    )
+
+    await run_shadow_loop(cfg, feed=fake_feed)
+
+    assert len(received) == 1
+    assert isinstance(received[0], AsyncStrategyOrchestrator)
+
+
+@pytest.mark.asyncio
+async def test_on_orchestrator_ready_callback_exception_swallowed(tmp_path, caplog):
+    """Callback 예외는 swallow + log warn — loop 자체는 계속 진행."""
+    fake_feed = FakeFeed([_make_tick()])
+
+    def raising_cb(orch):
+        raise RuntimeError("downstream wiring blew up")
+
+    cfg = ShadowConfig(
+        symbols=["BTCUSDT"],
+        wal_path=tmp_path / "wal.jsonl",
+        lock_path=tmp_path / ".live_loop.lock",
+        max_iterations=1,
+        on_orchestrator_ready=raising_cb,
+    )
+
+    # Loop must still complete despite callback raising.
+    await run_shadow_loop(cfg, feed=fake_feed)
+    assert any("on_orchestrator_ready_failed" in m for m in caplog.messages)
+
+
+@pytest.mark.asyncio
 async def test_lock_busy_raises(tmp_path):
     """동일 lock_path 로 ProcessLock 점유 후 run_shadow_loop 호출 → ProcessLockBusy raise."""
     lock_path = tmp_path / ".live_loop.lock"

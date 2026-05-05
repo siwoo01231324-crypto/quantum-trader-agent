@@ -15,6 +15,14 @@ owner: siwoo
 created: 2026-04-25
 sharpe_bt: null
 sharpe_live: null
+mdd_bt: null
+annual_return_bt: null
+backtest_period: null
+last_updated: 2026-05-05
+summary_ko: |
+  이더리움/비트코인 비율(ETH÷BTC)을 1시간봉으로 본다.
+  비율이 60시간 평균 대비 -2σ 이상 떨어지면(과매도) 매수, 평균선까지 회복하면 청산.
+  "비율은 결국 평균으로 돌아온다"는 가설의 평균회귀 전략.
 tags:
 - mean-reversion
 - crypto
