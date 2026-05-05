@@ -212,3 +212,39 @@ class KISAdapter:
         except Exception as exc:
             log.warning("KIS health_check failed: %s", exc)
             return HealthStatus.DOWN
+
+    # ── Protective orders (#127) — KIS 조건부 주문 (예약매도/매수) ──────────
+    # KIS 의 조건부 주문 endpoint 는 일반 주문과 별개의 tr_id 사용:
+    #   매수: ttf-prdc / ttf-stck-cs (주식, 모의는 V 접두사)
+    #   매도: 동일하게 분기
+    # 본 PR (#127 v1) 에서는 인터페이스만 노출하고 NotImplementedError 발생.
+    # 실제 구현은 KIS 모의계좌 API 도큐 검증 후 후속 PR (#127 v2) 에서.
+
+    def place_protective_order(
+        self,
+        *,
+        symbol: str,
+        side: str,
+        qty: Decimal,
+        stop_price: Decimal,
+        kind: str,
+    ) -> str:
+        raise NotImplementedError(
+            "KIS protective order (조건부 주문) endpoint integration pending. "
+            "Phase 3 (실자금) 진입 전에 별도 PR 로 통합 — KIS 모의계좌 도큐 "
+            "(예약매도 tr_id) 검증 후 구현. 현재는 interface 만 노출."
+        )
+
+    def cancel_protective_order(self, *, symbol: str, broker_order_id: str) -> None:
+        raise NotImplementedError(
+            "KIS protective order cancel pending — see place_protective_order TODO."
+        )
+
+    def list_open_protective_orders(
+        self,
+        *,
+        symbol: str | None = None,
+    ) -> list[dict]:
+        raise NotImplementedError(
+            "KIS protective order list pending — see place_protective_order TODO."
+        )
