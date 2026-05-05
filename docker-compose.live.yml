@@ -8,14 +8,14 @@
 #   report-cron       - scripts/cron_loop.sh (KST 16:00 일일 리포트 + Telegram 요약)
 #   telegram-notifier - scripts/telegram_alert.py --watch (WAL tail kill-switch/mode_switched 알림)
 #
-# 사용법 (워크트리 root 에서):
+# 사용법 (메인 repo 또는 워크트리 root 에서 동일):
 #   docker compose -f docker-compose.live.yml build
 #   docker compose -f docker-compose.live.yml up -d
 #   docker compose -f docker-compose.live.yml logs -f live-daemon
 #   docker compose -f docker-compose.live.yml ps
 #   docker compose -f docker-compose.live.yml down            # graceful stop (WAL flush)
 #
-# .env 위치: ../../.env (main repo 의 .env 직접 참조 — 사용자가 한 곳만 관리).
+# .env 위치: ./.env (compose 파일과 같은 디렉토리. 메인 repo 에서도 워크트리에서도 동일).
 # 필수 변수 (전체 목록은 docs/work/active/000133-phase2-operation/SECRETS.md):
 #   HANTOO_FAKE_API_KEY, HANTOO_FAKE_SECRET_API_KEY, HANTOO_FAKE_CREDIT_NUMBER
 #   TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
@@ -38,7 +38,7 @@ services:
       - "--schedule=krx"
       - "--log-dir=/data/logs"
     env_file:
-      - ../../.env
+      - ./.env
     environment:
       TZ: Asia/Seoul
       KIS_PAPER: "true"
@@ -67,7 +67,7 @@ services:
     container_name: qta-report-cron
     entrypoint: ["/bin/bash", "/app/scripts/cron_loop.sh"]
     env_file:
-      - ../../.env
+      - ./.env
     environment:
       TZ: Asia/Seoul
       LOG_DIR: /data/logs
@@ -95,7 +95,7 @@ services:
       - "/app/scripts/telegram_alert.py"
       - "--watch=/data/logs"
     env_file:
-      - ../../.env
+      - ./.env
     environment:
       TZ: Asia/Seoul
     volumes:
