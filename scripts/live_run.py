@@ -27,9 +27,12 @@ import asyncio
 import logging
 import os
 import sys
+import webbrowser
 from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
+
+QTA_VERSION = "0.1.0"
 
 # UTF-8 stdout/stderr — Windows console (cp1252/cp949) 에서 한글 출력 시 charmap fail 방지.
 # `qta.exe --help` 가 docstring 의 한글을 출력할 때 UnicodeEncodeError 회피 (#123).
@@ -42,6 +45,36 @@ for _stream in (sys.stdout, sys.stderr):
 _REPO_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(_REPO_ROOT))
 sys.path.insert(0, str(_REPO_ROOT / "src"))
+
+
+def _autoload_dotenv() -> None:
+    """EXE 같은 폴더 또는 워크트리 루트의 .env 자동 로드 (#182).
+
+    PyInstaller frozen 시: sys.executable 의 부모 폴더 .env
+    dev 환경: _REPO_ROOT/.env. 없으면 cwd 의 .env (dotenv 기본).
+    """
+    try:
+        from dotenv import load_dotenv  # noqa: PLC0415
+    except ImportError:
+        return
+    if getattr(sys, "frozen", False):
+        env_path = Path(sys.executable).parent / ".env"
+    else:
+        env_path = _REPO_ROOT / ".env"
+    if env_path.exists():
+        load_dotenv(env_path, override=False)
+    else:
+        load_dotenv(override=False)  # cwd .env fallback
+
+
+_autoload_dotenv()
+
+
+def _bundle_root() -> Path:
+    """PyInstaller frozen 시 sys._MEIPASS, 그 외 _REPO_ROOT (#182)."""
+    meipass = getattr(sys, "_MEIPASS", None)
+    return Path(meipass) if meipass else _REPO_ROOT
+
 
 from src.live.loop import ShadowConfig, run_shadow_loop
 
@@ -82,9 +115,121 @@ def _build_config(args: argparse.Namespace) -> ShadowConfig:
     )
 
 
-def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+def _is_no_args(argv: list[str] | None = None) -> bool:
+    """더블클릭 패턴 감지 — sys.argv[0] 빼고 인자 0개 (#182).
+
+    --help 는 argparse 가 자체 처리하도록 위임 (no-args 아님).
+    """
+    args = argv if argv is not None else sys.argv[1:]
+    return len(args) == 0
+
+
+def _count_strategies(yaml_path: Path) -> int:
+    """production.yaml 의 strategies 개수. 파싱 실패/파일 없음 → 0 (#182)."""
+    try:
+        import yaml  # noqa: PLC0415
+        data = yaml.safe_load(Path(yaml_path).read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            return 0
+        strats = data.get("strategies") or []
+        return len(strats) if isinstance(strats, list) else 0
+    except Exception:
+        return 0
+
+
+def _print_startup_banner(strategies_count: int, dashboard_port: int) -> None:
+    """ASCII 시작 배너 — qta.exe 더블클릭 시 콘솔창에 표시 (#182)."""
+    url = f"http://localhost:{dashboard_port}" if dashboard_port > 0 else "(dashboard off)"
+    banner = (
+        "\n"
+        "   ___    _____      _\n"
+        "  / _ \\  |_   _|    / \\     QTA · quantum-trader-agent v" + QTA_VERSION + "\n"
+        " | | | |   | |     / _ \\    Local trading desk · " + url + "\n"
+        " | |_| |   | |    / ___ \\   Strategies registered: " + str(strategies_count) + "\n"
+        "  \\__\\_\\   |_|   /_/   \\_\\\n"
+    )
+    print(banner)
+
+
+def _show_first_run_help() -> int:
+    """텍스트 도움말 + Press Enter 모드 (CI/테스트용, #182).
+
+    QTA_FIRST_RUN_HELP_ONLY=true 환경변수 시 _run_dashboard_only_mode 대신 호출됨.
+    """
+    yaml_path = _bundle_root() / "configs/orchestrator/production.yaml"
+    n_strats = _count_strategies(yaml_path)
+    _print_startup_banner(n_strats, dashboard_port=8000)
+    _build_parser().print_help()
+    print()
+    print("To start: qta.exe --symbols 005930 --broker kis-paper-shadow")
+    print("Then open the dashboard:  http://localhost:8000")
+    print()
+    try:
+        input("Press Enter to exit...")
+    except EOFError:
+        pass
+    return 0
+
+
+def _run_dashboard_only_mode(port: int = 8000) -> int:
+    """qta.exe 더블클릭(인자 없음) → 대시보드만 자동 기동 + 자동 브라우저 (#182 B 안).
+
+    거래는 시작하지 않음. 사용자는 대시보드에서 5 전략 카드를 확인하고
+    별도 명령줄에서 `qta.exe --symbols 005930 ...` 로 거래를 시작한다.
+
+    Ctrl+C 까지 uvicorn 이 listen. 종료 시 graceful shutdown.
+    """
+    yaml_path = _bundle_root() / "configs/orchestrator/production.yaml"
+    n_strats = _count_strategies(yaml_path)
+    _print_startup_banner(n_strats, dashboard_port=port)
+    print(f"Dashboard ready: http://localhost:{port}")
+    print("거래는 아직 시작 안 됨 — 별도 cmd 에서 다음 명령으로 시작:")
+    print("  qta.exe --symbols 005930 --broker kis-paper-shadow")
+    print("종료: 이 콘솔창에서 Ctrl+C")
+    print()
+
+    async def _serve() -> None:
+        import uvicorn  # noqa: PLC0415
+        from src.dashboard.app import DashboardState, create_app  # noqa: PLC0415
+        from src.dashboard.timeline_broker import TimelineBroker  # noqa: PLC0415
+        from src.dashboard.run_controller import RunController  # noqa: PLC0415
+        from src.dashboard.account_info import AccountInfoProvider  # noqa: PLC0415
+
+        state = DashboardState(timeline_broker=TimelineBroker(), wal_path=None)
+        state.run_controller = RunController(
+            _build_pipeline_factory(state, logging.getLogger("qta-pipeline"))
+        )
+        state.account_info_provider = AccountInfoProvider()
+        app = create_app(state)
+        config = uvicorn.Config(
+            app, host="127.0.0.1", port=port,
+            log_level="warning", access_log=False, loop="none",
+        )
+        server = uvicorn.Server(config)
+        server.config.setup_event_loop = lambda: None
+
+        async def _open_browser() -> None:
+            await asyncio.sleep(1.0)
+            try:
+                webbrowser.open(f"http://localhost:{port}")
+            except Exception:
+                pass
+
+        asyncio.create_task(_open_browser())
+        await server.serve()
+
+    try:
+        asyncio.run(_serve())
+    except KeyboardInterrupt:
+        print("\n[qta] dashboard stopped (Ctrl+C)")
+    return 0
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    """argparse Parser 생성 (parse_args 와 _show_first_run_help 양쪽에서 재사용)."""
     parser = argparse.ArgumentParser(
-        description="Issue #105 Phase 2 KIS 모의계좌 Live Loop CLI"
+        prog="qta",
+        description="quantum-trader-agent — Phase 2 KIS 모의계좌 Live Loop CLI",
     )
     parser.add_argument(
         "--symbols", required=True,
@@ -150,6 +295,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--dashboard-port", type=int, default=8000,
         help="로컬 대시보드(/, /metrics, /ws/timeline) 포트. 0=비활성. default 8000.",
     )
+    parser.add_argument(
+        "--no-browser", action="store_true", default=False,
+        help="대시보드 자동 브라우저 열기 비활성화 (default: 자동 열림, #182).",
+    )
+    return parser
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = _build_parser()
     args = parser.parse_args(argv)
     args.symbols = [s.strip() for s in args.symbols.split(",") if s.strip()]
     return args
@@ -332,8 +486,67 @@ def _start_dashboard(state, port: int, logger):
     return task, _shutdown
 
 
+async def _run_pipeline_attached(
+    state, config, kis_adapter, logger, duration_sec: float,
+) -> None:
+    """이미 떠있는 dashboard 에 attach — 거래만 시작 (#182 단계 2).
+
+    dashboard 재기동 없이 state.timeline_broker 를 WAL fan-out observer 로 와이어링한 뒤
+    run_shadow_loop 호출. RunController 가 이 함수를 background task 로 돌린다.
+    """
+    from dataclasses import asdict
+    if state.timeline_broker is not None:
+        config.wal_observer = lambda ev: state.timeline_broker.publish(asdict(ev))
+    await _run_with_duration(
+        run_shadow_loop(config, kis_adapter=kis_adapter),
+        duration_sec,
+    )
+
+
+def _build_pipeline_factory(state, logger):
+    """RunController 의 pipeline_factory — 대시보드 시작 버튼 클릭 시 호출 (#182).
+
+    params: {symbols?: list[str] | str, broker?: str, duration?: str}
+    """
+    def _resolve_symbols(params):
+        s = params.get("symbols")
+        if isinstance(s, list):
+            return [x for x in s if x]
+        if isinstance(s, str) and s.strip():
+            return [x.strip() for x in s.split(",") if x.strip()]
+        # production.yaml 의 첫 KRX 전략 symbol fallback
+        yaml_path = _bundle_root() / "configs/orchestrator/production.yaml"
+        try:
+            import yaml as _yaml  # noqa: PLC0415
+            data = _yaml.safe_load(yaml_path.read_text(encoding="utf-8")) or {}
+            for s in data.get("strategies", []):
+                sym = (s.get("kwargs") or {}).get("symbol")
+                if sym and isinstance(sym, str) and sym.isdigit():
+                    return [sym]
+        except Exception:
+            pass
+        return ["005930"]
+
+    async def _factory(params: dict):
+        symbols = _resolve_symbols(params)
+        broker = params.get("broker") or "kis-paper-shadow"
+        duration = params.get("duration") or "0"
+        argv = ["--symbols", ",".join(symbols), "--broker", broker, "--duration", duration]
+        args = parse_args(argv)
+        config = _build_config(args)
+        if args.feed == "mock":
+            config.mock_ticks = _build_mock_ticks(args.symbols, args.mock_bars)
+        else:
+            config.kis_client = _build_kis_client(args.feed, args.symbols)
+        kis_adapter = _build_kis_adapter(args.broker)
+        duration_sec = _parse_duration(args.duration)
+        await _run_pipeline_attached(state, config, kis_adapter, logger, duration_sec)
+
+    return _factory
+
+
 async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
-                       duration_sec: float):
+                       duration_sec: float, auto_open_browser: bool = True):
     from dataclasses import asdict
     from src.dashboard.app import DashboardState
     from src.dashboard.timeline_broker import TimelineBroker
@@ -356,6 +569,14 @@ async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
             _task, shutdown_dashboard = _start_dashboard(
                 dashboard_state, dashboard_port, logger,
             )
+            if auto_open_browser:
+                async def _open_after_listen():
+                    await asyncio.sleep(0.8)
+                    try:
+                        webbrowser.open(f"http://localhost:{dashboard_port}")
+                    except Exception as err:
+                        logger.warning("auto-open browser failed: %s", err)
+                asyncio.create_task(_open_after_listen(), name="qta-browser-open")
         except OSError as err:
             logger.warning(
                 "dashboard.start_failed port=%d error=%s — continuing without dashboard",
@@ -373,12 +594,20 @@ async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
 
 
 def main(argv: list[str] | None = None) -> int:
+    if _is_no_args(argv):
+        if os.environ.get("QTA_FIRST_RUN_HELP_ONLY", "").lower() == "true":
+            return _show_first_run_help()
+        return _run_dashboard_only_mode()
     args = parse_args(argv)
     logging.basicConfig(
         level=args.log_level,
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
     logger = logging.getLogger("live_run")
+    yaml_path = Path(args.production_yaml)
+    if not yaml_path.is_absolute():
+        yaml_path = _bundle_root() / yaml_path
+    _print_startup_banner(_count_strategies(yaml_path), args.dashboard_port)
     logger.info("Phase 2 KIS Live Loop starting")
     logger.info(
         "symbols=%s broker=%s duration=%s auto_fallback=%s feed=%s dashboard_port=%d",
@@ -407,6 +636,7 @@ def main(argv: list[str] | None = None) -> int:
         asyncio.run(
             _run_pipeline(
                 config, kis_adapter, args.dashboard_port, logger, duration_sec,
+                auto_open_browser=not args.no_browser,
             )
         )
     except KeyboardInterrupt:
