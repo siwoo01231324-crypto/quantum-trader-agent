@@ -44,7 +44,7 @@ services:
       KIS_PAPER: "true"
       KIS_FILL_MISSING_HALT_THRESHOLD: "${KIS_FILL_MISSING_HALT_THRESHOLD:-1}"
     volumes:
-      - ./data/logs:/data/logs
+      - ./logs/shadow:/data/logs
       - ./data/state:/app/.omc/state  # token cache + process lock
     restart: unless-stopped
     healthcheck:
@@ -74,7 +74,7 @@ services:
       REPORTS_DIR: /data/reports
       REPORT_HOUR_KST: "16"  # KRX 마감 30분 후
     volumes:
-      - ./data/logs:/data/logs:ro
+      - ./logs/shadow:/data/logs:ro
       - ./data/reports:/data/reports
     restart: unless-stopped
     depends_on:
@@ -99,7 +99,7 @@ services:
     environment:
       TZ: Asia/Seoul
     volumes:
-      - ./data/logs:/data/logs:ro
+      - ./logs/shadow:/data/logs:ro
     restart: unless-stopped
     depends_on:
       - live-daemon
