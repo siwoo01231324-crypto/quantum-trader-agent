@@ -146,7 +146,11 @@ def _synthetic_pending_report(asset_id: str, strategy_id: str, periods_per_year:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Cross-asset MetaLabeler comparison")
     parser.add_argument("--btc-model-dir", default=str(REPO_ROOT / "models/momo-btc-v2"))
-    parser.add_argument("--kis-model-dir", default=str(REPO_ROOT / "models/momo-kis-v1"))
+    parser.add_argument(
+        "--kis-model-dir",
+        default=str(REPO_ROOT / "models/momo-kis-v1-pooled"),
+        help="KIS model dir. Default matches bench_metalabeler_kis.py --manifest-dir output (#155).",
+    )
     parser.add_argument("--dsr-threshold", type=float, default=0.3)
     parser.add_argument("--output", default=str(OUTPUT_PATH))
     args = parser.parse_args(argv)

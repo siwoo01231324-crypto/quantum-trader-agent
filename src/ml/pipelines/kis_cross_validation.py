@@ -407,6 +407,8 @@ def run_kis_pipeline_pooled(
             "costs_bps": costs_bps,
         },
         "training_window": {
+            "start": str(X_tr.index[0]) if len(X_tr) > 0 else "",
+            "end": str(X_tr.index[-1]) if len(X_tr) > 0 else "",
             "n_events": int(len(X_tr)),
         },
         "positive_rate_train": float(y_tr.mean()),
