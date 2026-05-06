@@ -175,3 +175,58 @@ class TestRetryAutoInvalidate:
             data = client._get("/uapi/test", "FHKST00000000", {"FID_INPUT": "X"})
         assert data == ok_body
         assert auth.invalidate.call_count == 0
+
+    def test_rate_limit_egw00201_does_not_invalidate(self, tmp_path: Path):
+        """KIS rate limit (EGW00201) 5xx body: token 유효, invalidate 스킵.
+
+        Regression: invalidate on rate limit triggers token re-issue, which
+        is itself rate-limited (1/min) → token starvation. Must retry without
+        invalidating when body indicates rate limit.
+        """
+        auth = MagicMock(spec=KISAuth)
+        auth.get_token.return_value = "tok"
+        client = _make_client(auth)
+        rate_limit_text = (
+            '{"rt_cd":"1","msg1":"초당 거래건수를 초과하였습니다",'
+            '"msg_cd":"EGW00201","message":"EGW00201"}'
+        )
+        ok_body = {"rt_cd": "0", "output1": {}}
+        responses = [
+            _mock_response(500, text=rate_limit_text),
+            _mock_response(200, ok_body),
+        ]
+        with patch("src.brokers.kis.rest.requests.request", side_effect=responses):
+            data = client._get("/uapi/test", "FHKST00000000", {"FID_INPUT": "X"})
+        assert data == ok_body
+        # invalidate must NOT be called for rate limit
+        assert auth.invalidate.call_count == 0
+
+    def test_rate_limit_korean_message_does_not_invalidate(self, tmp_path: Path):
+        """fallback: 한글 '초당' 만으로도 rate limit 감지 (EGW00201 누락 시)."""
+        auth = MagicMock(spec=KISAuth)
+        auth.get_token.return_value = "tok"
+        client = _make_client(auth)
+        rate_limit_text = '{"rt_cd":"1","msg1":"초당 거래건수 제한"}'
+        ok_body = {"rt_cd": "0", "output1": {}}
+        responses = [
+            _mock_response(500, text=rate_limit_text),
+            _mock_response(200, ok_body),
+        ]
+        with patch("src.brokers.kis.rest.requests.request", side_effect=responses):
+            data = client._get("/uapi/test", "FHKST00000000", {"FID_INPUT": "X"})
+        assert data == ok_body
+        assert auth.invalidate.call_count == 0
+
+    def test_real_5xx_still_invalidates(self, tmp_path: Path):
+        """Sanity: rate limit 메시지 없는 일반 5xx 는 여전히 invalidate."""
+        auth = MagicMock(spec=KISAuth)
+        auth.get_token.return_value = "tok"
+        client = _make_client(auth)
+        responses = [
+            _mock_response(500, text="internal server error"),
+            _mock_response(200, {"rt_cd": "0", "output1": {}}),
+        ]
+        with patch("src.brokers.kis.rest.requests.request", side_effect=responses):
+            client._get("/uapi/test", "FHKST00000000", {"FID_INPUT": "X"})
+        # invalidate IS called for non-rate-limit 5xx
+        assert auth.invalidate.call_count == 1
