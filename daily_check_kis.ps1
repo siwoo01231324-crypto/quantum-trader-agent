@@ -38,7 +38,9 @@ if ($daemonLogs) {
     $lastWarmup = ($lines | Select-String "warmup_loaded" | Select-Object -Last 1)
     $lastSignal = ($lines | Select-String "signal_emitted|order_filled|order_submitted" | Select-Object -Last 1)
     $err500     = ($lines | Select-String "returned 500").Count
-    $errOther   = ($lines | Select-String " ERROR ").Count
+    # `-CaseSensitive` + 행 시작 timestamp anchor → "network error" / "fetch_failed
+    # error=..." 같은 lowercase WARNING 라인을 ERROR 로 오인하지 않음 (false positive 0).
+    $errOther   = ($lines | Select-String "^\d{4}-\d{2}-\d{2}.*\sERROR\s" -CaseSensitive).Count
     $lastReconn = ($lines | Select-String "feed reconnected" | Select-Object -Last 1)
 
     if ($lastWarmup) {

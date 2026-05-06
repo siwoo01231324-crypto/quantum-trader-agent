@@ -76,8 +76,13 @@ class KISClient:
 
         Retries only 5xx (server errors). 4xx errors and rt_cd business errors
         are raised immediately — no sense retrying a malformed request.
+
+        On first 5xx or 401, invalidates the auth token cache (server-side
+        token revoke 의심) and retries with fresh token. Single invalidation
+        per request — repeated 5xx after refresh raise normally.
         """
         last_exc: Exception | None = None
+        invalidated = False  # 한 요청 내 invalidate 1회만
         for attempt in range(_RETRY_MAX_ATTEMPTS):
             try:
                 resp = requests.request(
@@ -95,11 +100,27 @@ class KISClient:
                 return data
             except requests.HTTPError as exc:
                 status = exc.response.status_code if exc.response is not None else 0
+                # Diagnostic: log response body on 5xx so future debugging
+                # can identify KIS-specific error codes (msg_cd / msg1).
+                body_snippet = ""
+                if exc.response is not None:
+                    try:
+                        body_snippet = exc.response.text[:200]
+                    except Exception:
+                        body_snippet = "(unreadable)"
+                if (status == 401 or 500 <= status < 600) and not invalidated:
+                    log.warning(
+                        "KIS %s %s returned %d body=%r — invalidating token cache",
+                        method, url, status, body_snippet,
+                    )
+                    self._auth.invalidate()
+                    invalidated = True
                 if 500 <= status < 600 and attempt < _RETRY_MAX_ATTEMPTS - 1:
                     delay = _RETRY_BASE_DELAY * (2 ** attempt)
                     log.warning(
-                        "KIS %s %s returned %d (attempt %d/%d), retrying in %.2fs",
-                        method, url, status, attempt + 1, _RETRY_MAX_ATTEMPTS, delay,
+                        "KIS %s %s returned %d (attempt %d/%d) body=%r, retrying in %.2fs",
+                        method, url, status, attempt + 1, _RETRY_MAX_ATTEMPTS,
+                        body_snippet, delay,
                     )
                     time.sleep(delay)
                     last_exc = exc

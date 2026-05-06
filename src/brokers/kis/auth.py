@@ -83,6 +83,23 @@ class KISAuth:
             raise AuthError("KIS access token unavailable")
         return self._access_token
 
+    def invalidate(self) -> None:
+        """Server-side 무효화된 토큰 강제 폐기. 다음 get_token() 호출 시 새 발급.
+
+        호출자: KISClient._request_with_retry 에서 5xx/401 응답 받았을 때.
+        Disk cache 도 삭제하여 다른 프로세스가 같은 stale 토큰 재사용하지
+        않게 함. Rate limit (_check_rate_limit, 1분 1회) 은 _issue_token 이
+        다음 호출 시 그대로 강제 — 본 메소드는 단순히 캐시만 폐기.
+        """
+        self._access_token = None
+        self._expires_at = None
+        try:
+            if self._cache_path.exists():
+                self._cache_path.unlink()
+                log.info("KIS token cache invalidated: %s", self._cache_path)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Failed to delete KIS token cache: %s", exc)
+
     async def get_token_async(self) -> str:
         """async 경로용 get_token. asyncio.Lock 으로 concurrent refresh 직렬화.
 
