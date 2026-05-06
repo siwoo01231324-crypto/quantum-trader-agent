@@ -550,13 +550,25 @@ async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
     from dataclasses import asdict
     from src.dashboard.app import DashboardState
     from src.dashboard.timeline_broker import TimelineBroker
+    from src.live.strategy_position_store import StrategyPositionStore
 
     timeline_broker = TimelineBroker()
+    # #192: per-strategy position store, fed by every order_filled WAL event.
+    # Replay any pre-existing WAL so that a daemon restart preserves attribution.
+    position_store = StrategyPositionStore()
+    if config.wal_path and Path(config.wal_path).exists():
+        position_store.replay_from_wal(config.wal_path)
     dashboard_state = DashboardState(
         timeline_broker=timeline_broker,
         wal_path=config.wal_path,
     )
-    config.wal_observer = lambda ev: timeline_broker.publish(asdict(ev))
+    dashboard_state.position_provider = position_store.get_positions
+
+    def _wal_observer(ev) -> None:
+        timeline_broker.publish(asdict(ev))
+        position_store.ingest_fill_event(ev.event_type, ev.payload or {})
+
+    config.wal_observer = _wal_observer
     # #180: surface the live orchestrator into DashboardState so the
     # /api/strategies/{id}/toggle endpoint can call enable/disable.
     config.on_orchestrator_ready = lambda orch: setattr(

@@ -174,3 +174,48 @@ async def test_execute_multiple_intents(broker, metrics):
         # last segment of client_order_id is the idx
         actual_idx = int(ack.client_order_id.split(":")[-1])
         assert actual_idx == expected_idx
+
+
+# ---------------------------------------------------------------------------
+# #192 — strategy_id propagation
+# ---------------------------------------------------------------------------
+
+async def test_order_acked_wal_payload_includes_strategy_id(broker, metrics):
+    """#192 AC2: WAL `order_acked` payload must carry strategy_id."""
+    from src.live.executor import execute_intents
+    from src.live.wal import replay
+
+    pb, ks, wal = broker
+    intent = _btc_intent(strategy_id="strat_tag_test")
+    acks = await execute_intents([intent], broker=pb, kill_switch=ks, wal=wal, metrics=metrics)
+    assert acks[0].status == "FILLED"
+
+    events, _ = replay(wal.path)
+    acked = [e for e in events if e.event_type == "order_acked"]
+    assert len(acked) == 1
+    assert acked[0].payload.get("strategy_id") == "strat_tag_test"
+
+
+async def test_position_store_register_order_called(broker, metrics):
+    """#192: executor optionally registers (client_order_id → strategy_id) so
+    the store can attribute fills even when the broker payload omits strategy_id.
+    """
+    from src.live.executor import execute_intents
+    from src.live.strategy_position_store import StrategyPositionStore
+
+    pb, ks, wal = broker
+    store = StrategyPositionStore()
+    intent = _btc_intent(strategy_id="store_register_test")
+
+    acks = await execute_intents(
+        [intent],
+        broker=pb,
+        kill_switch=ks,
+        wal=wal,
+        metrics=metrics,
+        position_store=store,
+    )
+    assert acks[0].status == "FILLED"
+
+    coid = acks[0].client_order_id
+    assert store._resolve_strategy(coid) == "store_register_test"

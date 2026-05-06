@@ -2,7 +2,7 @@ from __future__ import annotations
 import logging
 import time
 from datetime import datetime, timezone
-from typing import Iterable
+from typing import TYPE_CHECKING, Iterable
 
 from src.brokers.base import AsyncBrokerAdapter, OrderAck
 from src.brokers.errors import BrokerError
@@ -18,6 +18,9 @@ from src.observability.metrics import Metrics
 from src.ops.kill_switch import KillSwitch, KillSwitchTripped
 from src.portfolio.order_intent import OrderIntent
 
+if TYPE_CHECKING:
+    from src.live.strategy_position_store import StrategyPositionStore
+
 logger = logging.getLogger(__name__)
 
 
@@ -29,6 +32,7 @@ async def execute_intents(
     wal: WAL,
     metrics: Metrics,
     market_state: MarketState | None = None,
+    position_store: "StrategyPositionStore | None" = None,
 ) -> list[OrderAck]:
     """OrderIntent 시퀀스를 broker 에 전달. Phase 2 전환 seam.
 
@@ -94,6 +98,11 @@ async def execute_intents(
         # 4. order_acked WAL append — 정상 ack 만 (Architect note #2)
         # WAL writes serialized via single consumer task (loop.py:167); WS fill listener writes via asyncio.Queue (Stage 5)
         if ack.status not in ("REJECTED",):
+            if position_store is not None:
+                position_store.register_order(
+                    client_order_id=ack.client_order_id,
+                    strategy_id=intent.strategy_id,
+                )
             ts_now = datetime.now(timezone.utc).isoformat()
             try:
                 wal.write(WALEvent(
@@ -105,6 +114,7 @@ async def execute_intents(
                         "ack_ts": ts_now,
                         "status": ack.status,
                         "origin": "executor",
+                        "strategy_id": intent.strategy_id,
                     },
                 ))
             except WALWriteFailed:
@@ -113,7 +123,7 @@ async def execute_intents(
         # 5. self-sim tracking_sample (Architect note #3)
         # Gate: non-paper broker + market_state provided → sim-vs-sim tautology prevented
         if not getattr(broker, "paper", False) and market_state is not None:
-            _write_tracking_sample(wal, req, ack, market_state)
+            _write_tracking_sample(wal, req, ack, market_state, intent.strategy_id)
 
         # 6. 메트릭
         metrics.order_latency_seconds.labels(
@@ -136,6 +146,7 @@ def _write_tracking_sample(
     req: "OrderRequest",  # noqa: F821 — avoids circular import at runtime
     ack: OrderAck,
     market_state: MarketState,
+    strategy_id: str | None = None,
 ) -> None:
     """Call MockMatchingEngine.match() once and append tracking_sample to WAL.
 
@@ -164,6 +175,7 @@ def _write_tracking_sample(
                 "kis_fill_ts": "",
                 "sim_fill_ts": ts_now,
                 "latency_ms": 0.0,     # backfilled on join
+                "strategy_id": strategy_id,
             },
         ))
     except WALWriteFailed:
