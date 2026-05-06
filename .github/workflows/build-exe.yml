@@ -18,15 +18,14 @@ name: Build EXE — PyInstaller PoC
 # Avast/Norton require separate licensed environments.
 
 on:
+  # CI minutes optimization (2026-05-06): pull_request 트리거 제거.
+  # PR 마다 5분짜리 Windows EXE 빌드 안 돌리고, master 머지 후 1번만 빌드.
+  # EXE 빌드 사고 발생 시 master 의 빨간 X + GitHub 이메일로 즉시 발견 →
+  # hotfix 1번 추가 머지로 해결. 운영 중엔 새 EXE 배포가 적어서 PR 마다
+  # 검증할 필요성 낮음. 긴급 검증 필요하면 workflow_dispatch 로 수동 실행.
   push:
     branches:
       - master
-    paths:
-      - "scripts/live_run.py"
-      - "src/**"
-      - "qta.spec"
-      - ".github/workflows/build-exe.yml"
-  pull_request:
     paths:
       - "scripts/live_run.py"
       - "src/**"
@@ -38,6 +37,10 @@ on:
         description: "Upload as GitHub Release asset"
         required: false
         default: "false"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-exe:

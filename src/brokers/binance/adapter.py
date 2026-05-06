@@ -194,3 +194,82 @@ class BinanceFuturesAdapter:
                 "Change position mode manually before starting the adapter."
             )
         self._hedge_mode = hedge
+
+    # ── Protective orders (#127) ────────────────────────────────────────────
+    # STOP_MARKET / TAKE_PROFIT_MARKET 보호 주문은 schema 확장 없이 raw REST 로
+    # 전송. ProtectiveOrderManager 가 이 메소드를 통해 broker 에 등록한다.
+
+    def place_protective_order(
+        self,
+        *,
+        symbol: str,
+        side: str,            # "BUY" or "SELL" — 진입 반대방향
+        qty: Decimal,
+        stop_price: Decimal,
+        kind: str,            # "STOP_MARKET" or "TAKE_PROFIT_MARKET"
+    ) -> str:
+        """Submit a Binance Futures STOP_MARKET / TAKE_PROFIT_MARKET reduceOnly order.
+
+        Returns broker order id (orderId from the exchange response).
+        """
+        self._assert_allow_order(emergency_exit=False)
+        if kind not in ("STOP_MARKET", "TAKE_PROFIT_MARKET"):
+            raise ValueError(f"unsupported protective kind: {kind}")
+        if side not in ("BUY", "SELL"):
+            raise ValueError(f"side must be BUY or SELL, got {side}")
+
+        from src.brokers.client_id import generate  # noqa: PLC0415
+        cid = generate(
+            strategy="protect",
+            symbol=symbol,
+            side=side,
+            ts_ms=self._client._now_ms(),
+        )
+        params = {
+            "symbol": symbol,
+            "side": side,
+            "type": kind,
+            "quantity": str(qty),
+            "stopPrice": str(stop_price),
+            "reduceOnly": "true",
+            "timeInForce": "GTC",
+            "workingType": "MARK_PRICE",  # mark price-triggered (less wick noise)
+            "newClientOrderId": cid,
+        }
+        raw = self._client._post("/fapi/v1/order", params)
+        order_id = raw.get("orderId")
+        if order_id is None:
+            raise RuntimeError(f"protective order missing orderId in response: {raw!r}")
+        return str(order_id)
+
+    def cancel_protective_order(self, *, symbol: str, broker_order_id: str) -> None:
+        """Cancel a previously-registered protective order by broker_order_id."""
+        self._client.cancel_order(symbol, broker_order_id=broker_order_id)
+
+    def list_open_protective_orders(
+        self,
+        *,
+        symbol: str | None = None,
+    ) -> list[dict]:
+        """Return open STOP_MARKET / TAKE_PROFIT_MARKET orders only.
+
+        Used by ProtectiveOrderManager.sync_from_broker() on PC restart to
+        reconstruct manager state vs exchange state.
+        """
+        params = {"symbol": symbol} if symbol else {}
+        raw = self._client._get("/fapi/v1/openOrders", params)
+        if not isinstance(raw, list):
+            return []
+        protective_types = {"STOP_MARKET", "TAKE_PROFIT_MARKET"}
+        out: list[dict] = []
+        for o in raw:
+            if o.get("type") in protective_types:
+                out.append({
+                    "broker_order_id": str(o.get("orderId")),
+                    "symbol": o.get("symbol"),
+                    "side": o.get("side"),
+                    "type": o.get("type"),
+                    "stop_price": o.get("stopPrice"),
+                    "client_order_id": o.get("clientOrderId"),
+                })
+        return out

@@ -19,6 +19,7 @@ from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnec
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from prometheus_client import CONTENT_TYPE_LATEST, CollectorRegistry, generate_latest
 
+from src.dashboard.shadow_runs import discover_shadow_runs, load_run_detail
 from src.dashboard.strategy_catalog import load_strategy_catalog
 from src.dashboard.timeline_broker import TimelineBroker
 from src.live.wal import replay as wal_replay
@@ -74,6 +75,38 @@ class DashboardState:
     # KIS + Binance 계좌 정보 provider (#182 — "내 계좌" 카드)
     account_info_provider: object | None = None
 
+    # Shadow Runs 뷰어 (#198) — logs/shadow/{run_id}/wal.jsonl 디렉토리 루트
+    shadow_log_dir: Path | None = None
+
+    # 라이브 PnL aggregator (#194). When wired, /api/pnl and per-card
+    # pnl_today are sourced from this object instead of the legacy
+    # pnl_realtime / pnl_daily / pnl_monthly fields above (kept for
+    # backwards compatibility with callers that set them directly).
+    pnl_aggregator: Any | None = None
+
+
+def _pnl_view(state: "DashboardState") -> dict:
+    """Resolve the dashboard PnL snapshot.
+
+    Prefers the live `PnLAggregator` (#194). Falls back to the static
+    `pnl_realtime / pnl_daily / pnl_monthly` fields when no aggregator is
+    wired (legacy callers, dashboard-only mode).
+    """
+    agg = state.pnl_aggregator
+    if agg is not None:
+        return {
+            "realtime": float(agg.realtime),
+            "daily": float(agg.daily),
+            "monthly": float(agg.monthly),
+            "by_strategy": {k: float(v) for k, v in agg.by_strategy.items()},
+        }
+    return {
+        "realtime": state.pnl_realtime,
+        "daily": state.pnl_daily,
+        "monthly": state.pnl_monthly,
+        "by_strategy": {},
+    }
+
 
 def _gauge_html(name: str, value: float) -> str:
     pct = min(max(value * 100, 0), 100)
@@ -112,9 +145,10 @@ def _render_dashboard(state: DashboardState, catalog_items: list[dict] | None = 
     catalog_cards_html = "".join(_strategy_card(it) for it in (catalog_items or []))
 
     # Q1: 손익
-    pnl_realtime_fmt = f"{state.pnl_realtime:,.2f}"
-    pnl_daily_fmt = f"{state.pnl_daily:,.2f}"
-    pnl_monthly_fmt = f"{state.pnl_monthly:,.2f}"
+    pnl = _pnl_view(state)
+    pnl_realtime_fmt = f"{pnl['realtime']:,.2f}"
+    pnl_daily_fmt = f"{pnl['daily']:,.2f}"
+    pnl_monthly_fmt = f"{pnl['monthly']:,.2f}"
 
     # Q2: 한도 게이지
     limits = [
@@ -191,7 +225,10 @@ th{{color:#888;font-weight:600}}
 </head>
 <body>
 <h1>QTA 로컬 대시보드 — {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}</h1>
-<div class="nav"><a href="/strategies" class="nav-link">📋 전략 카탈로그 단독 페이지 →</a></div>
+<div class="nav">
+  <a href="/strategies" class="nav-link">📋 전략 카탈로그 →</a>
+  <a href="/shadow_runs" class="nav-link">📊 Shadow Runs (#198) →</a>
+</div>
 <div class="grid">
 
   <!-- Q1: 손익 그래프 -->
@@ -539,6 +576,88 @@ def _strategy_card(item: dict) -> str:
     </div>"""
 
 
+def _render_shadow_runs(runs: list[dict]) -> str:
+    """HTML page listing all shadow daemon runs (#198, read-only)."""
+    if not runs:
+        body = '<p class="empty">아직 가동된 shadow run 이 없습니다. <code>logs/shadow/</code> 디렉토리에 데몬이 첫 신호를 기록하면 여기에 표시됩니다.</p>'
+    else:
+        body = '<div class="strat-grid">' + "".join(_shadow_run_card(r) for r in runs) + "</div>"
+    return f"""<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="refresh" content="60">
+<title>QTA — Shadow Runs (#198)</title>
+<style>
+*{{box-sizing:border-box;margin:0;padding:0}}
+body{{font-family:'Segoe UI',sans-serif;background:#0f1117;color:#e0e0e0;padding:16px}}
+h1{{font-size:1.1rem;color:#7ecef4;margin-bottom:14px}}
+.nav a{{color:#7ecef4;text-decoration:none;margin-right:14px;font-size:.85rem}}
+.empty{{padding:30px;text-align:center;color:#888;background:#1a1d27;border-radius:8px}}
+.empty code{{background:#0f1117;padding:2px 6px;border-radius:3px;color:#7ecef4}}
+{_STRATEGY_CARD_CSS}
+.shadow-status-alive{{color:#2ecc71}}
+.shadow-status-idle{{color:#f39c12}}
+.shadow-status-dead{{color:#e74c3c}}
+.shadow-meta-row{{display:flex;gap:14px;flex-wrap:wrap;font-size:.78rem;color:#aaa}}
+.shadow-counts{{display:grid;grid-template-columns:1fr 1fr;gap:6px}}
+.shadow-counts > div{{background:#0f1117;border-radius:5px;padding:6px 8px;display:flex;justify-content:space-between;font-size:.78rem}}
+.shadow-warn{{color:#e74c3c;font-size:.75rem;margin-top:4px}}
+</style>
+</head>
+<body>
+<h1>📊 Shadow Runs — Binance/KIS WAL read-only 통합 표시</h1>
+<div class="nav">
+  <a href="/">← 대시보드</a>
+  <a href="/strategies">전략 카탈로그</a>
+</div>
+{body}
+</body>
+</html>"""
+
+
+def _shadow_run_card(run: dict) -> str:
+    rid = html.escape(str(run.get("run_id", "")))
+    exch = html.escape(str(run.get("exchange", "unknown")))
+    sym = html.escape(str(run.get("symbol", "")))
+    tf = html.escape(str(run.get("timeframe", "")))
+    status = run.get("status", "idle")
+    status_emoji = {"alive": "🟢", "idle": "🟡", "dead": "🔴"}.get(status, "⚪")
+    status_cls = f"shadow-status-{status}"
+
+    last_ts = run.get("last_event_ts") or "—"
+    n_entry = run.get("n_entry", 0)
+    n_exit = run.get("n_exit", 0)
+    n_events = run.get("n_events", 0)
+    n_corruptions = run.get("n_corruptions", 0)
+
+    warn_html = ""
+    if n_corruptions > 0:
+        warn_html = f'<div class="shadow-warn">⚠️ WAL 손상 {n_corruptions} 행</div>'
+    if run.get("error"):
+        warn_html += f'<div class="shadow-warn">⚠️ {html.escape(str(run["error"]))[:120]}</div>'
+
+    return f"""
+    <div class="strat-card" data-run-id="{rid}">
+      <div class="strat-head">
+        <span class="strat-name">{status_emoji} {rid}</span>
+        <span class="strat-status {status_cls}">{status.upper()}</span>
+      </div>
+      <div class="shadow-meta-row">
+        <span><b>거래소:</b> {exch}</span>
+        <span><b>종목:</b> {sym}</span>
+        <span><b>봉:</b> {tf}</span>
+      </div>
+      <div class="shadow-counts">
+        <div><span class="m-label">최근 활동</span><span class="m-val">{html.escape(str(last_ts))[:19] if last_ts != "—" else "—"}</span></div>
+        <div><span class="m-label">총 이벤트</span><span class="m-val">{n_events}</span></div>
+        <div><span class="m-label">진입 (BUY)</span><span class="m-val">{n_entry}</span></div>
+        <div><span class="m-label">청산 (SELL)</span><span class="m-val">{n_exit}</span></div>
+      </div>
+      {warn_html}
+    </div>"""
+
+
 def _render_strategies(items: list[dict]) -> str:
     cards_html = "".join(_strategy_card(it) for it in items)
     return f"""<!DOCTYPE html>
@@ -588,11 +707,7 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
 
     @app.get("/api/pnl")
     async def api_pnl() -> JSONResponse:
-        return JSONResponse({
-            "realtime": state.pnl_realtime,
-            "daily": state.pnl_daily,
-            "monthly": state.pnl_monthly,
-        })
+        return JSONResponse(_pnl_view(state))
 
     @app.get("/api/limits")
     async def api_limits() -> JSONResponse:
@@ -638,11 +753,13 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
     def _enriched_catalog() -> list[dict]:
         items = load_strategy_catalog(_resolve_specs_dir())
         orch = state.orchestrator
+        agg = state.pnl_aggregator
         for it in items:
             if orch is not None and hasattr(orch, "is_enabled"):
                 it["enabled"] = bool(orch.is_enabled(it["id"]))
             else:
                 it["enabled"] = True
+            it["pnl_today"] = float(agg.daily_for(it["id"])) if agg is not None else 0.0
         return items
 
     @app.get("/api/strategies")
@@ -761,6 +878,30 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
         if provider is None:
             return JSONResponse({"available": False})
         return JSONResponse({"available": True, **provider.fetch()})
+
+    # ── Shadow Runs 뷰어 (#198) — read-only WAL 통합 표시 ───────────────────
+    def _resolve_shadow_log_dir() -> Path:
+        if state.shadow_log_dir is not None:
+            return Path(state.shadow_log_dir)
+        # Default: <repo_root>/logs/shadow
+        return Path(__file__).resolve().parents[2] / "logs" / "shadow"
+
+    @app.get("/api/shadow_runs")
+    async def api_shadow_runs() -> JSONResponse:
+        runs = discover_shadow_runs(_resolve_shadow_log_dir())
+        return JSONResponse(runs)
+
+    @app.get("/api/shadow_runs/{run_id}")
+    async def api_shadow_run_detail(run_id: str) -> JSONResponse:
+        detail = load_run_detail(_resolve_shadow_log_dir(), run_id)
+        if detail is None:
+            raise HTTPException(status_code=404, detail=f"run not found: {run_id}")
+        return JSONResponse(detail)
+
+    @app.get("/shadow_runs", response_class=HTMLResponse)
+    async def shadow_runs_page() -> HTMLResponse:
+        runs = discover_shadow_runs(_resolve_shadow_log_dir())
+        return HTMLResponse(content=_render_shadow_runs(runs))
 
     return app
 

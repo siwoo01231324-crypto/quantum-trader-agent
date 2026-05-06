@@ -178,6 +178,93 @@ async def test_on_orchestrator_ready_callback_exception_swallowed(tmp_path, capl
     assert any("on_orchestrator_ready_failed" in m for m in caplog.messages)
 
 
+class FlakyFeed:
+    """Yields ticks; raises on first iteration after `disconnect_after`. After
+    reconnect (= subsequent connect() call), yields `recovery_ticks`.
+
+    Used by test_producer_reconnects_on_disconnect (#133 hotfix) to verify
+    the loop's WS reconnect logic — the original producer crashed once the
+    KIS WS sent a 1011 keepalive timeout.
+    """
+
+    def __init__(self, initial_ticks, disconnect_after, recovery_ticks):
+        self._initial = list(initial_ticks)
+        self._disconnect_after = disconnect_after
+        self._recovery = list(recovery_ticks)
+        self._iteration = 0
+        self.connect_calls = 0
+        self.subscribe_calls = 0
+        self.aclose_calls = 0
+
+    async def connect(self):
+        self.connect_calls += 1
+        self._iteration += 1
+
+    async def subscribe(self, symbols):
+        self.subscribe_calls += 1
+
+    async def aclose(self):
+        self.aclose_calls += 1
+
+    def __aiter__(self):
+        return self._gen()
+
+    async def _gen(self):
+        if self._iteration == 1:
+            for i, t in enumerate(self._initial):
+                if i >= self._disconnect_after:
+                    raise ConnectionResetError("simulated WS keepalive timeout")
+                yield t
+            raise ConnectionResetError("simulated WS keepalive timeout")
+        else:
+            for t in self._recovery:
+                yield t
+
+
+@pytest.mark.asyncio
+async def test_producer_reconnects_on_disconnect(tmp_path, caplog):
+    """#133 hotfix — producer reconnects feed after ConnectionResetError
+    instead of letting the daemon die on a single keepalive timeout."""
+    initial = [_make_tick(price=str(50000 + i)) for i in range(2)]
+    recovery = [_make_tick(price=str(60000 + i)) for i in range(2)]
+    flaky = FlakyFeed(initial_ticks=initial, disconnect_after=1, recovery_ticks=recovery)
+
+    cfg = ShadowConfig(
+        symbols=["BTCUSDT"],
+        wal_path=tmp_path / "wal.jsonl",
+        lock_path=tmp_path / ".live_loop.lock",
+        # 3 ticks total: 1 from initial (before disconnect) + 2 recovery.
+        max_iterations=3,
+    )
+
+    # Caller passes the feed pre-connected per existing convention. The
+    # producer should call connect()+subscribe() a second time after the
+    # disconnect to recover.
+    await flaky.connect()
+    await flaky.subscribe(cfg.symbols)
+    pre_calls = flaky.connect_calls
+
+    # short backoff so test isn't slow; rely on monkeypatch of backoff_delay.
+    import src.live.loop as loop_mod
+    original_backoff = loop_mod.backoff_delay
+    loop_mod.backoff_delay = lambda *a, **k: 0.01
+    try:
+        with caplog.at_level(logging.WARNING, logger="src.live.loop"):
+            await run_shadow_loop(cfg, feed=flaky)
+    finally:
+        loop_mod.backoff_delay = original_backoff
+
+    # Reconnect must have happened at least once (on top of the caller's
+    # pre-connect). subscribe is called after each connect.
+    assert flaky.connect_calls > pre_calls, (
+        f"expected at least one reconnect; connect_calls={flaky.connect_calls} "
+        f"pre={pre_calls}"
+    )
+    assert any("feed disconnect" in m or "feed reconnected" in m for m in caplog.messages), (
+        f"expected disconnect/reconnect log, got: {caplog.messages}"
+    )
+
+
 @pytest.mark.asyncio
 async def test_lock_busy_raises(tmp_path):
     """동일 lock_path 로 ProcessLock 점유 후 run_shadow_loop 호출 → ProcessLockBusy raise."""

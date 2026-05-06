@@ -19,6 +19,7 @@ from src.execution.paper_broker import PaperBroker
 from src.live.executor import execute_intents
 from src.live.feed import MarketDataFeed, BinancePublicFeed
 from src.live.process_lock import ProcessLock
+from src.live.reconnect import backoff_delay
 from src.live.snapshot_builder import SnapshotBuilder, SnapshotBuilderConfig, is_krx_symbol
 from src.live.types import Tick, WALEvent
 from src.live.wal import WAL
@@ -253,18 +254,68 @@ async def run_shadow_loop(
         tick_queue: asyncio.Queue[Tick] = asyncio.Queue(maxsize=1)
 
         async def producer():
-            async for tick in feed:
-                if stop_event.is_set():
+            # WS reconnect loop (#133 hotfix): keepalive ping timeout / network
+            # errors restart the feed with exponential backoff instead of
+            # killing the daemon. The original implementation had no reconnect
+            # so a single ConnectionClosedError after ~24h ended the run.
+            attempt = 0
+            max_attempts = 100  # ~ days of retries; daemon should outlive any
+                                # transient outage but eventually give up if
+                                # the exchange WS is permanently down.
+            while not stop_event.is_set() and attempt < max_attempts:
+                try:
+                    async for tick in feed:
+                        if stop_event.is_set():
+                            break
+                        if tick_queue.full():
+                            try:
+                                tick_queue.get_nowait()
+                                metrics.broker_fill_queue_overflow_total.labels(
+                                    broker="live_feed", policy="latest_only",
+                                ).inc()
+                            except asyncio.QueueEmpty:
+                                pass
+                        await tick_queue.put(tick)
+                        attempt = 0  # reset on any successful tick
+                    # async for exited cleanly (e.g., feed closed) — stop.
                     break
-                if tick_queue.full():
+                except (asyncio.CancelledError, KeyboardInterrupt):
+                    raise
+                except BaseException as err:
+                    if stop_event.is_set():
+                        break
+                    attempt += 1
+                    delay = backoff_delay(attempt - 1, base=1.0, cap=60.0)
+                    logger.warning(
+                        "feed disconnect (attempt=%d/%d, sleep=%.1fs): %s: %s",
+                        attempt, max_attempts, delay,
+                        type(err).__name__, err,
+                    )
                     try:
-                        tick_queue.get_nowait()
-                        metrics.broker_fill_queue_overflow_total.labels(
-                            broker="live_feed", policy="latest_only",
-                        ).inc()
-                    except asyncio.QueueEmpty:
+                        await feed.aclose()
+                    except BaseException:
                         pass
-                await tick_queue.put(tick)
+                    try:
+                        await asyncio.wait_for(stop_event.wait(), timeout=delay)
+                        break  # stop_event triggered during sleep
+                    except asyncio.TimeoutError:
+                        pass
+                    try:
+                        await feed.connect()
+                        await feed.subscribe(config.symbols)
+                        logger.info("feed reconnected after attempt=%d", attempt)
+                    except BaseException as reconnect_err:
+                        logger.warning(
+                            "feed reconnect failed (attempt=%d): %s: %s",
+                            attempt, type(reconnect_err).__name__, reconnect_err,
+                        )
+                        # loop will retry with longer backoff
+                        continue
+            if attempt >= max_attempts:
+                logger.error(
+                    "feed reconnect exhausted %d attempts; producer exiting",
+                    max_attempts,
+                )
 
         async def consumer():
             iter_count = 0

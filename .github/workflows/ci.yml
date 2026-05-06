@@ -1,5 +1,10 @@
 name: CI — Broker Async Tests
 
+# CI minutes optimization (2026-05-06):
+# Broker pytest matrix (Linux + Windows, ~2분) → master push 만. PR 에서는
+# pr-quick-check.yml 의 단일 pytest 가 broker tests 도 포함 (cov 없이 빠르게).
+# Invariants 는 17초라 PR + master 둘 다 유지.
+
 on:
   pull_request:
     paths:
@@ -14,9 +19,15 @@ on:
   push:
     branches: [master, "feat/000073-broker-async"]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     name: pytest (${{ matrix.os }})
+    # CI minutes 절감: master push 만 (PR 은 pr-quick-check 가 담당)
+    if: github.event_name == 'push'
     strategy:
       fail-fast: false
       matrix:
