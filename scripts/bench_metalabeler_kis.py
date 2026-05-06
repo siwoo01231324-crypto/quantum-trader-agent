@@ -23,6 +23,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
@@ -57,6 +58,67 @@ TRAIN_FRAC = 0.7
 KRX_PERIODS_PER_YEAR_1M = 98280  # 390 bars/day × 252 trading days
 DSR_PASS_THRESHOLD = 0.3
 N_EFF_MIN = 5.0
+
+
+def _resolve_manifest_dir(explicit: Path | None, *, multi_symbol: bool) -> Path:
+    """Return persistent manifest directory matching the BTC pattern (#155).
+
+    If --manifest-dir is provided, use it as-is. Otherwise default to
+    ``models/<strategy_id>/<UTC timestamp>/`` so cross_asset_compare can
+    locate the manifest with default args.
+    """
+    if explicit is not None:
+        return explicit
+    strategy_dir = f"{STRATEGY_ID}-pooled" if multi_symbol else STRATEGY_ID
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return WORKTREE / "models" / strategy_dir / ts
+
+
+def _write_single_symbol_manifest(
+    manifest_dir: Path,
+    *,
+    symbol: str,
+    interval: str,
+    cv_result: dict,
+    X_tr: pd.DataFrame,
+    y_tr: pd.Series,
+    holding_bars: int,
+) -> Path:
+    """Persist single-symbol manifest in the same shape as the pooled manifest
+    so ``cross_asset_compare.py`` can read it uniformly (#155)."""
+    manifest_dir.mkdir(parents=True, exist_ok=True)
+    manifest = {
+        "strategy_id": STRATEGY_ID,
+        "trained_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "n_symbols": 1,
+        "symbols": [symbol],
+        "rho_avg": 0.0,
+        "n_eff": 1.0,
+        "interval": interval,
+        "holding_bars": holding_bars,
+        "costs_bps": COSTS_BPS,
+        "cv_score": {
+            "mean_accuracy": cv_result.get("mean_accuracy", 0.0),
+            "std_accuracy": cv_result.get("std_accuracy", 0.0),
+            "n_folds": cv_result.get("n_folds", 0),
+            "embargo_frac": cv_result.get("embargo_frac", 0.01),
+        },
+        "label_config": {
+            "tp_sigma": TP_SIGMA,
+            "sl_sigma": SL_SIGMA,
+            "holding_bars": holding_bars,
+            "costs_bps": COSTS_BPS,
+        },
+        "training_window": {
+            "start": str(X_tr.index[0]) if len(X_tr) > 0 else "",
+            "end": str(X_tr.index[-1]) if len(X_tr) > 0 else "",
+            "n_events": int(len(X_tr)),
+        },
+        "positive_rate_train": float(y_tr.mean()) if len(y_tr) > 0 else 0.0,
+    }
+    path = manifest_dir / "manifest.json"
+    path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
+    return path
 
 
 def _sortino(returns: pd.Series, periods_per_year: int) -> float:
@@ -192,7 +254,6 @@ def _pooled_triple_barrier_returns(
 
 def _run_multi_symbol_bench(args: argparse.Namespace) -> int:
     """Multi-symbol pooled benchmark — equity-curve Sharpe/Sortino/MDD/DSR + verdict (#154)."""
-    import tempfile
     from universe.krx_pool import get_pool_codes  # noqa: PLC0415
 
     symbols = get_pool_codes(args.n_symbols, seed=args.seed)
@@ -203,19 +264,23 @@ def _run_multi_symbol_bench(args: argparse.Namespace) -> int:
     if args.interval == "15m" and args.holding_bars == 26:
         holding_bars = 26
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        try:
-            artifact, report = run_kis_pipeline_pooled(
-                symbols=symbols,
-                lake_dir=args.lake_dir,
-                output_dir=Path(tmp_dir) / "model",
-                interval=args.interval,
-                holding_bars=holding_bars,
-                costs_bps=COSTS_BPS,
-            )
-        except ValueError as exc:
-            print(f"[ERROR] {exc}", file=sys.stderr)
-            return 4
+    # Persist so cross_asset_compare can read post-run (tempfile was lost on exit).
+    manifest_dir = _resolve_manifest_dir(args.manifest_dir, multi_symbol=True)
+    manifest_dir.mkdir(parents=True, exist_ok=True)
+    print(f"[bench] manifest dir: {manifest_dir}", file=sys.stderr)
+
+    try:
+        artifact, report = run_kis_pipeline_pooled(
+            symbols=symbols,
+            lake_dir=args.lake_dir,
+            output_dir=manifest_dir,
+            interval=args.interval,
+            holding_bars=holding_bars,
+            costs_bps=COSTS_BPS,
+        )
+    except ValueError as exc:
+        print(f"[ERROR] {exc}", file=sys.stderr)
+        return 4
 
     if report.get("exit_code") == 3:
         print("[ERROR] No events after pooling — check lake data.", file=sys.stderr)
@@ -340,6 +405,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--periods-per-year", type=int, default=None,
         help="명시 시 우선. None 이면 interval 기반 자동 (1m=98280, 15m=6552)",
+    )
+    parser.add_argument(
+        "--manifest-dir", type=Path, default=None,
+        help=(
+            "manifest.json 영속 저장 디렉토리. None 이면 "
+            "models/momo-kis-v1[-pooled]/<UTC ts>/ 자동 생성 (#155). "
+            "cross_asset_compare.py 가 default --kis-model-dir 로 이 경로를 읽는다."
+        ),
     )
     args = parser.parse_args(argv)
 
@@ -495,6 +568,19 @@ def main(argv: list[str] | None = None) -> int:
         args.output_json.parent.mkdir(parents=True, exist_ok=True)
         args.output_json.write_text(out_str, encoding="utf-8")
         print(f"[bench] JSON written to {args.output_json}", file=sys.stderr)
+
+    # Single-symbol manifest mirrors the pooled shape so cross_asset_compare can read both uniformly.
+    manifest_dir = _resolve_manifest_dir(args.manifest_dir, multi_symbol=False)
+    manifest_path = _write_single_symbol_manifest(
+        manifest_dir,
+        symbol=args.symbol,
+        interval=args.interval,
+        cv_result=cv_result,
+        X_tr=X_tr,
+        y_tr=y_tr,
+        holding_bars=HOLDING_BARS,
+    )
+    print(f"[bench] manifest written to {manifest_path}", file=sys.stderr)
 
     return 0
 
