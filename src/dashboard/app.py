@@ -78,6 +78,35 @@ class DashboardState:
     # Shadow Runs 뷰어 (#198) — logs/shadow/{run_id}/wal.jsonl 디렉토리 루트
     shadow_log_dir: Path | None = None
 
+    # 라이브 PnL aggregator (#194). When wired, /api/pnl and per-card
+    # pnl_today are sourced from this object instead of the legacy
+    # pnl_realtime / pnl_daily / pnl_monthly fields above (kept for
+    # backwards compatibility with callers that set them directly).
+    pnl_aggregator: Any | None = None
+
+
+def _pnl_view(state: "DashboardState") -> dict:
+    """Resolve the dashboard PnL snapshot.
+
+    Prefers the live `PnLAggregator` (#194). Falls back to the static
+    `pnl_realtime / pnl_daily / pnl_monthly` fields when no aggregator is
+    wired (legacy callers, dashboard-only mode).
+    """
+    agg = state.pnl_aggregator
+    if agg is not None:
+        return {
+            "realtime": float(agg.realtime),
+            "daily": float(agg.daily),
+            "monthly": float(agg.monthly),
+            "by_strategy": {k: float(v) for k, v in agg.by_strategy.items()},
+        }
+    return {
+        "realtime": state.pnl_realtime,
+        "daily": state.pnl_daily,
+        "monthly": state.pnl_monthly,
+        "by_strategy": {},
+    }
+
 
 def _gauge_html(name: str, value: float) -> str:
     pct = min(max(value * 100, 0), 100)
@@ -116,9 +145,10 @@ def _render_dashboard(state: DashboardState, catalog_items: list[dict] | None = 
     catalog_cards_html = "".join(_strategy_card(it) for it in (catalog_items or []))
 
     # Q1: 손익
-    pnl_realtime_fmt = f"{state.pnl_realtime:,.2f}"
-    pnl_daily_fmt = f"{state.pnl_daily:,.2f}"
-    pnl_monthly_fmt = f"{state.pnl_monthly:,.2f}"
+    pnl = _pnl_view(state)
+    pnl_realtime_fmt = f"{pnl['realtime']:,.2f}"
+    pnl_daily_fmt = f"{pnl['daily']:,.2f}"
+    pnl_monthly_fmt = f"{pnl['monthly']:,.2f}"
 
     # Q2: 한도 게이지
     limits = [
@@ -677,11 +707,7 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
 
     @app.get("/api/pnl")
     async def api_pnl() -> JSONResponse:
-        return JSONResponse({
-            "realtime": state.pnl_realtime,
-            "daily": state.pnl_daily,
-            "monthly": state.pnl_monthly,
-        })
+        return JSONResponse(_pnl_view(state))
 
     @app.get("/api/limits")
     async def api_limits() -> JSONResponse:
@@ -727,11 +753,13 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
     def _enriched_catalog() -> list[dict]:
         items = load_strategy_catalog(_resolve_specs_dir())
         orch = state.orchestrator
+        agg = state.pnl_aggregator
         for it in items:
             if orch is not None and hasattr(orch, "is_enabled"):
                 it["enabled"] = bool(orch.is_enabled(it["id"]))
             else:
                 it["enabled"] = True
+            it["pnl_today"] = float(agg.daily_for(it["id"])) if agg is not None else 0.0
         return items
 
     @app.get("/api/strategies")
