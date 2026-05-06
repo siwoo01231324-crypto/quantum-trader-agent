@@ -57,6 +57,10 @@ class OrderAckedPayload:
     Written by executor immediately after broker ack. Provides the join key
     (broker_order_id) needed to correlate WS fill notifications.
     origin='executor' distinguishes this from PaperBroker's 'order_submitted'.
+
+    strategy_id (#192): tags the originating strategy so per-strategy
+    position tracking and PnL attribution don't have to parse client_order_id.
+    None for legacy entries written before #192.
     """
 
     client_order_id: str
@@ -64,6 +68,7 @@ class OrderAckedPayload:
     ack_ts: str          # UTC ISO 8601
     status: str          # OrderStatus value
     origin: str = "executor"
+    strategy_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -84,6 +89,7 @@ class TrackingSamplePayload:
     kis_fill_ts: str      # UTC ISO 8601
     sim_fill_ts: str      # UTC ISO 8601
     latency_ms: float
+    strategy_id: str | None = None  # #192
 
 
 @dataclass(frozen=True)
@@ -100,6 +106,7 @@ class FillAnomalyPayload:
     reason: str          # e.g. "partial_fill" | "unmatched_broker_id"
     fill_ts: str         # UTC ISO 8601
     fill_qty: str        # Decimal-serialised
+    strategy_id: str | None = None  # #192
 
 
 # Canonical event_type string constants for use in WALEvent.event_type
