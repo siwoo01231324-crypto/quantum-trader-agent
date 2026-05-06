@@ -108,7 +108,16 @@ class KISClient:
                         body_snippet = exc.response.text[:200]
                     except Exception:
                         body_snippet = "(unreadable)"
-                if (status == 401 or 500 <= status < 600) and not invalidated:
+                # KIS rate limit (EGW00201 = "초당 거래건수 초과") 도 HTTP 500 으로
+                # 떨어지지만 토큰은 유효. invalidate 호출 시 token 재발급 rate
+                # limit (1분 1회) 에 막혀서 더 악화. rate limit 은 단순 backoff
+                # retry 로만 처리.
+                is_rate_limit = (
+                    "EGW00201" in body_snippet
+                    or "초당" in body_snippet
+                    or "rate" in body_snippet.lower()
+                )
+                if (status == 401 or 500 <= status < 600) and not invalidated and not is_rate_limit:
                     log.warning(
                         "KIS %s %s returned %d body=%r — invalidating token cache",
                         method, url, status, body_snippet,
@@ -116,7 +125,9 @@ class KISClient:
                     self._auth.invalidate()
                     invalidated = True
                 if 500 <= status < 600 and attempt < _RETRY_MAX_ATTEMPTS - 1:
-                    delay = _RETRY_BASE_DELAY * (2 ** attempt)
+                    # Rate limit 일 때 더 긴 backoff (KIS 권장 초당 1회).
+                    base = _RETRY_BASE_DELAY * 5 if is_rate_limit else _RETRY_BASE_DELAY
+                    delay = base * (2 ** attempt)
                     log.warning(
                         "KIS %s %s returned %d (attempt %d/%d) body=%r, retrying in %.2fs",
                         method, url, status, attempt + 1, _RETRY_MAX_ATTEMPTS,
