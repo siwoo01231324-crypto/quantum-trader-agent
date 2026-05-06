@@ -12,6 +12,37 @@ sources:
 
 # 이랑이 단타 인터뷰 영상 전사 + 8 기법 비교 대조
 
+> ## 🚫 VERDICT — 이 가설은 폐기됨 (Negative Result, 2026-05-06)
+>
+> 본 영상에서 도출된 **Iranyi 12-rule stack 가설** 은 사전등록 평가 (#147 → #185 → #206) 결과 **4 게이트 (DSR/PBO/MDD/mhr) 어디서도 통과 못 함**:
+>
+> | 평가 | winning | Sharpe | MDD | mhr | 게이트 |
+> |---|---|---|---|---|---|
+> | BTC 4h B5 (#147) | B5 | 2.522 | -22.5% | 42.3% | mhr 미달 |
+> | BTC 4h D0~D5 (#185) | D0 | 2.41 | -22.4% | 41.9% | DSR + mhr |
+> | BTC 5m + multi_tf (#185+#206) | D6 | 0.13 | -20.8% | 19.3% | mhr |
+> | 10코인 5m + UBAI top-Q (#206) | D7 | **-1.27** | **-83.4%** | 21.6% | 모두 |
+>
+> **핵심 통찰**: mhr 50% 임계는 trend-following + 결정론적 ATR(2×)/take(7%) 룰로 도달 불가능. Iranyi 본인 룰은 mean-reversion / 단기 스캘핑에 최적화돼 있어 *trend-following 게이트와 본질적으로 어긋남*.
+>
+> ### 향후 본 영상 또는 유사 가설 재시도 시 필수 점검
+> 1. **mhr 임계 vs 룰 의도 사전 정합성** — 영상 룰이 trend-following 인지 mean-reversion 인지 먼저 확인
+> 2. **알트 변동성 ↔ ATR multiplier 부정합** — 4h BTC 와 5m alt 에 *동일* ATR 배수 / 고정 take 비율 적용 시 큰 손실 누적 (#206 D7 MDD -83% 사례)
+> 3. **stub features 의 실제 효과 측정** — multi_tf gate / turning_point 가 mhr 자체를 끌어올리지 못한다는 사실 (#206 D6→D8 측정 결과)
+> 4. **메타라벨러 의존성 한계** — base mhr 가 19~22% 인 신호에 메타라벨러 (false positive 줄이기) 적용해도 50% 까지 끌어올리는 건 매우 어려움
+>
+> ### 정식 negative result 기록
+> - `docs/work/done/000147-vwma-stoploss/02_implementation.md` (B5 baseline)
+> - `docs/work/done/000185-iranyi-12rules-5m/02_implementation.md` (D0~D9 사전등록 평가)
+> - `docs/work/done/000206-iranyi-multi-asset-wiring/02_implementation.md` (multi-asset + 풀 wiring)
+>
+> ### 영구 부산물 (재사용 가능, 본 가설과 별개)
+> - `lake/ohlcv/freq=5m/symbol=*` 10 코인 5년 (270MB) — 다른 alt 전략 평가에 재사용
+> - `lake/ubai_index.parquet` — UBAI 5년 가중 인덱스 (cross-sectional momentum 등)
+> - `src/features/{ma_alignment, forward_ma_projection, ma_magnet, price_ma_zscore, volume_burst, turning_point, vpvr_poc}.py` — 일반 신호 피쳐
+> - `src/backtest/iranyi/entry_router.py` (sha256 `8405cf460...`) — frozen variant matrix (historical reference, FROZEN)
+> - `scripts/bench_iranyi_full_stack.py` — multi-asset bench 인프라 (`_run_variant_multi_asset`, `_build_cross_asset_rs_filter`)
+
 ## 메타
 
 - **URL**: https://youtu.be/j_0FRRgYYN8
