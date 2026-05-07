@@ -32,16 +32,21 @@ foreach ($c in $containers) {
 Write-Host ""
 Write-Host "=== Daemon log ===" -ForegroundColor Cyan
 $daemonLogs = Get-DaemonLogs "qta-live-daemon" 300
+# 카운터는 24h 윈도우 — `--tail 300` 만 보면 마감 직전 버스트 후 잘려 부하 과소평가됨 (#213 학습).
+$daemonLogs24h = (& docker logs --since 24h qta-live-daemon 2>&1 | Out-String)
 if ($daemonLogs) {
     $lines = $daemonLogs -split "`n"
+    $lines24h = $daemonLogs24h -split "`n"
 
     $lastWarmup = ($lines | Select-String "warmup_loaded" | Select-Object -Last 1)
     $lastSignal = ($lines | Select-String "signal_emitted|order_filled|order_submitted" | Select-Object -Last 1)
-    $err500     = ($lines | Select-String "returned 500").Count
+    $err500       = ($lines24h | Select-String "returned 500").Count
+    $errRateLimit = ($lines24h | Select-String "EGW00201").Count
+    $errGaveUp    = ($lines24h | Select-String "attempt 3/3").Count
     # `-CaseSensitive` + 행 시작 timestamp anchor → "network error" / "fetch_failed
     # error=..." 같은 lowercase WARNING 라인을 ERROR 로 오인하지 않음 (false positive 0).
-    $errOther   = ($lines | Select-String "^\d{4}-\d{2}-\d{2}.*\sERROR\s" -CaseSensitive).Count
-    $lastReconn = ($lines | Select-String "feed reconnected" | Select-Object -Last 1)
+    $errOther     = ($lines24h | Select-String "^\d{4}-\d{2}-\d{2}.*\sERROR\s" -CaseSensitive).Count
+    $lastReconn   = ($lines | Select-String "feed reconnected" | Select-Object -Last 1)
 
     if ($lastWarmup) {
         $tsRaw = ($lastWarmup.ToString().Trim() -split " ")[0..1] -join " "
@@ -54,8 +59,17 @@ if ($daemonLogs) {
     } else {
         Write-Host "  Last signal:    none (KRX opens at 09:00 KST)" -ForegroundColor Yellow
     }
-    Write-Host ("  500 retries:    {0} (KRX after-hours = normal)" -f $err500)
-    Write-Host ("  Errors:         {0}" -f $errOther)
+    # `returned 500` 의 정체는 KIS EGW00201 (초당 rate limit). 위험 신호는 `attempt 3/3` 카운트 — 0 이면 모두 회복.
+    Write-Host ("  500 retries (24h):       {0}" -f $err500)
+    if ($errRateLimit -gt 0) {
+        Write-Host ("    rate-limit (EGW00201): {0} (KIS per-second cap)" -f $errRateLimit) -ForegroundColor Yellow
+    }
+    if ($errGaveUp -gt 0) {
+        Write-Host ("    final failures (3/3):  {0}" -f $errGaveUp) -ForegroundColor Red
+    } else {
+        Write-Host ("    final failures (3/3):  0 (all recovered)") -ForegroundColor Green
+    }
+    Write-Host ("  Errors (24h):            {0}" -f $errOther)
     if ($lastReconn) {
         $tsRaw = ($lastReconn.ToString().Trim() -split " ")[0..1] -join " "
         Write-Host ("  Last reconnect: {0}" -f $tsRaw) -ForegroundColor Yellow
