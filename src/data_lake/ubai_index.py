@@ -76,12 +76,16 @@ def _fetch_daily_candles(
     Returns DataFrame with columns: date, trade_price, candle_acc_trade_price.
     """
     rows = []
-    # Upbit returns candles in reverse chronological order (newest first)
-    # We page backwards from end until we've covered the full range.
     to_date = end + "T23:59:59"
     start_ts = pd.Timestamp(start)
+    prev_to_date: str | None = None
+    max_pages = 1000  # hard ceiling against runaway pagination (e.g., misbehaving mock)
 
-    while True:
+    for _ in range(max_pages):
+        if to_date == prev_to_date:
+            logger.warning("UBAI fetch: to_date did not advance (%s) — breaking", to_date)
+            break
+        prev_to_date = to_date
         params = {"market": market, "to": to_date, "count": 200}
         resp = _get_with_retry(session, f"{_UPBIT_BASE}/candles/days", params=params)
         candles = resp.json()
@@ -100,7 +104,6 @@ def _fetch_daily_candles(
                 }
             )
         else:
-            # Check if oldest candle in this page is still within range
             oldest = pd.Timestamp(candles[-1]["candle_date_time_utc"])
             if oldest <= start_ts:
                 break
