@@ -48,7 +48,7 @@ sys.path.insert(0, str(_REPO_ROOT / "src"))
 
 
 def _autoload_dotenv() -> None:
-    """EXE/dev 환경에서 .env 자동 탐색 (#182, walk-up #214).
+    """EXE/dev 환경에서 .env 자동 탐색 (#182, walk-up #215).
 
     탐색 순서 (먼저 발견되는 것이 적용):
       1. frozen: sys.executable 부모 → 그 부모 → 드라이브 루트까지 walk-up
@@ -169,7 +169,7 @@ def _print_startup_banner(strategies_count: int, dashboard_port: int) -> None:
 
 
 def _run_check_bundle() -> int:
-    """CI/release smoke — verify bundled assets are present (#214).
+    """CI/release smoke — verify bundled assets are present (#215).
 
     Run as `qta.exe --check-bundle` (no other flags). Returns 0 only if all
     bundled assets that dashboard needs are reachable from `_bundle_root()`:

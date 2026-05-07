@@ -42,7 +42,7 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# Releases "latest" rolling tag 갱신 + asset upload 에 contents:write 필요 (#214)
+# Releases "latest" rolling tag 갱신 + asset upload 에 contents:write 필요 (#215)
 permissions:
   contents: write
 
@@ -125,7 +125,7 @@ jobs:
             Write-Host "PASS: ${elapsed}s < 30s and EXE runs"
           }
 
-      # Bundle integrity (#214) — fail-blocking. Catches qta.spec datas
+      # Bundle integrity (#215) — fail-blocking. Catches qta.spec datas
       # regressions like #178 (docs/specs/strategies missing → empty grid).
       - name: Verify bundled assets (--check-bundle)
         shell: pwsh
@@ -173,7 +173,7 @@ jobs:
             dist/qta.exe.sha256
           retention-days: 30
 
-      # ── Releases "latest" rolling tag — master push 마다 자동 갱신 (#214) ────
+      # ── Releases "latest" rolling tag — master push 마다 자동 갱신 (#215) ────
       # 사용자는 항상 같은 URL 한 곳에서만 받음:
       #   https://github.com/${{ github.repository }}/releases/latest/download/qta.exe
       # GH artifact 처럼 7일 만료/계정 로그인 없음. master HEAD 와 EXE 가 결코
@@ -215,7 +215,7 @@ jobs:
             ## 사용법
             1. `qta.exe` 다운로드 → 원하는 폴더에 저장
             2. 같은 폴더 또는 상위 폴더에 `.env` 작성 (BINANCE_*, HANTOO_FAKE_* 등)
-               — qta.exe 가 부모 디렉토리를 walk-up 하며 `.env` 자동 탐색 (#214)
+               — qta.exe 가 부모 디렉토리를 walk-up 하며 `.env` 자동 탐색 (#215)
             3. `qta.exe` 더블클릭 → 자동으로 http://localhost:8000 대시보드 오픈
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
