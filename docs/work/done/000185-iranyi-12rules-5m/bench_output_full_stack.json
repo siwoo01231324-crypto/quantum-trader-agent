@@ -1,0 +1,272 @@
+{
+  "schema_version": "iranyi-12rules-185/v1",
+  "issue": 185,
+  "data_source": "D:\\project\\quantum-trader-agent\\lake::BTCUSDT",
+  "symbol": "BTCUSDT",
+  "start": "2020-01-01 00:00:00+00:00",
+  "end": "2025-12-31 00:00:00+00:00",
+  "git_commit": "bec5445dd998d7c89ff88cd023bf37749a22d36f",
+  "python_version": "3.14.3",
+  "variant_registry_sha256": "8405cf460d0adf1ff4199eed84f679e59a3773849322d4221247dad51012bd8a",
+  "cv_params": {
+    "n_splits": 5,
+    "embargo_frac": 0.01,
+    "cscv_n_S": 16
+  },
+  "cv_split_hash": "67a72d1950376ca2fcc911bfd19dd6f7fd084696a9bd65dfbc456da62105e30b",
+  "gate_params": {
+    "DSR_min": 0.95,
+    "DSR_n_trials": 10,
+    "PBO_max": 0.2,
+    "OOS_MDD_max": 0.25,
+    "monthly_hit_rate_min": 0.5,
+    "min_n_obs": 60,
+    "min_n_trades_per_variant": 30
+  },
+  "fee_round_trip": 0.0008,
+  "variants": [
+    {
+      "variant_id": "D0",
+      "status": "ok",
+      "n_trades": 155,
+      "sharpe": 2.408742477520844,
+      "sortino": 5.578290563006278,
+      "mdd": -0.2244275040500642,
+      "calmar": 3.9852372816720485,
+      "avg_rr": 1.9510490032823335,
+      "turnover": 0.011789761922872137,
+      "monthly_hit_rate": 0.41935483870967744,
+      "skew": 0.6236912098740864,
+      "kurtosis_excess": -0.36819616509326014,
+      "stop_take_params_used": {
+        "atr_multiplier": 2.0,
+        "atr_window": 14,
+        "take_pct": 0.07,
+        "stop_loss_pct": null,
+        "ema_slope_filter": true,
+        "fee_round_trip": 0.0
+      }
+    },
+    {
+      "variant_id": "D1",
+      "status": "ok",
+      "n_trades": 20,
+      "sharpe": 0.7540930178150542,
+      "sortino": 2.7816190062426114,
+      "mdd": -0.1514226347142057,
+      "calmar": 0.11045981625413885,
+      "avg_rr": 2.5592604458359505,
+      "turnover": 0.0015212596029512437,
+      "monthly_hit_rate": 0.3,
+      "skew": 0.7621856294958164,
+      "kurtosis_excess": -1.268063185875162,
+      "stop_take_params_used": {
+        "atr_multiplier": 2.0,
+        "atr_window": 14,
+        "take_pct": 0.07,
+        "stop_loss_pct": null,
+        "ema_slope_filter": true,
+        "fee_round_trip": 0.0008
+      }
+    },
+    {
+      "variant_id": "D2",
+      "status": "ok",
+      "n_trades": 6,
+      "sharpe": 0.44039326853430444,
+      "sortino": 2.883087693778619,
+      "mdd": -0.07648470901565971,
+      "calmar": 0.005310988823885635,
+      "avg_rr": 2.1119152007715756,
+      "turnover": 0.0004563778808853731,
+      "monthly_hit_rate": 0.3333333333333333,
+      "skew": 0.9082033484637267,
+      "kurtosis_excess": -1.8778752302102983,
+      "stop_take_params_used": {
+        "atr_multiplier": 2.0,
+        "atr_window": 14,
+        "take_pct": 0.07,
+        "stop_loss_pct": null,
+        "ema_slope_filter": true,
+        "fee_round_trip": 0.0008
+      }
+    },
+    {
+      "variant_id": "D3",
+      "status": "ok",
+      "n_trades": 20,
+      "sharpe": 0.7540930178150542,
+      "sortino": 2.7816190062426114,
+      "mdd": -0.1514226347142057,
+      "calmar": 0.11045981625413885,
+      "avg_rr": 2.5592604458359505,
+      "turnover": 0.0015212596029512437,
+      "monthly_hit_rate": 0.3,
+      "skew": 0.7621856294958164,
+      "kurtosis_excess": -1.268063185875162,
+      "stop_take_params_used": {
+        "atr_multiplier": 2.0,
+        "atr_window": 14,
+        "take_pct": 0.07,
+        "stop_loss_pct": null,
+        "ema_slope_filter": true,
+        "fee_round_trip": 0.0008
+      }
+    },
+    {
+      "variant_id": "D4",
+      "status": "ok",
+      "n_trades": 19,
+      "sharpe": -0.7299408798255899,
+      "sortino": -2.59999129496978,
+      "mdd": -0.1514226347142058,
+      "calmar": -0.32725150595642705,
+      "avg_rr": 2.559260445835951,
+      "turnover": 0.0014451966228036814,
+      "monthly_hit_rate": 0.2631578947368421,
+      "skew": 0.9538871536775113,
+      "kurtosis_excess": -0.8379343764603839,
+      "stop_take_params_used": {
+        "atr_multiplier": 2.0,
+        "atr_window": 14,
+        "take_pct": 0.07,
+        "stop_loss_pct": null,
+        "ema_slope_filter": true,
+        "fee_round_trip": 0.0008
+      }
+    },
+    {
+      "variant_id": "D5",
+      "status": "ok",
+      "n_trades": 5,
+      "sharpe": -5.123614569158584,
+      "sortino": -29.183778496237093,
+      "mdd": -0.05337084256480483,
+      "calmar": -1.2143205915559916,
+      "avg_rr": 2.1119152007715765,
+      "turnover": 0.0003803149007378109,
+      "monthly_hit_rate": 0.2,
+      "skew": 2.1091529140417324,
+      "kurtosis_excess": 4.539575926926954,
+      "stop_take_params_used": {
+        "atr_multiplier": 2.0,
+        "atr_window": 14,
+        "take_pct": 0.07,
+        "stop_loss_pct": null,
+        "ema_slope_filter": true,
+        "fee_round_trip": 0.0008
+      }
+    },
+    {
+      "variant_id": "D6",
+      "status": "ok",
+      "n_trades": 331,
+      "sharpe": 0.12926130846269346,
+      "sortino": 0.7019503848525909,
+      "mdd": -0.20783385490812503,
+      "calmar": 0.008216522678620464,
+      "avg_rr": 4.28425570576405,
+      "turnover": 0.0005245567020438695,
+      "monthly_hit_rate": 0.1933534743202417,
+      "skew": 4.028084762604512,
+      "kurtosis_excess": 17.50008416843478,
+      "stop_take_params_used": {
+        "atr_multiplier": 2.0,
+        "atr_window": 14,
+        "take_pct": 0.07,
+        "stop_loss_pct": null,
+        "ema_slope_filter": true,
+        "fee_round_trip": 0.0008
+      }
+    },
+    {
+      "variant_id": "D7",
+      "status": "ok",
+      "n_trades": 1046,
+      "sharpe": -1.2651278883060093,
+      "sortino": -3.7573669017480613,
+      "mdd": -0.8337680957968635,
+      "calmar": -0.9593775659082386,
+      "avg_rr": 2.9521074265765894,
+      "turnover": 0.00017241424781235,
+      "monthly_hit_rate": 0.21606118546845124,
+      "skew": 2.293162026988939,
+      "kurtosis_excess": 5.753050648075955,
+      "stop_take_params_used": {
+        "atr_multiplier": 2.0,
+        "atr_window": 14,
+        "take_pct": 0.07,
+        "stop_loss_pct": null,
+        "ema_slope_filter": true,
+        "fee_round_trip": 0.0008,
+        "universe": "top10_alt",
+        "n_universe_symbols": 10
+      }
+    },
+    {
+      "variant_id": "D8",
+      "status": "ok",
+      "n_trades": 596,
+      "sharpe": -1.7438589557416453,
+      "sortino": -5.129893895260963,
+      "mdd": -0.7071518367085803,
+      "calmar": -0.9660898301874451,
+      "avg_rr": 2.7331253122224126,
+      "turnover": 9.823985821812677e-05,
+      "monthly_hit_rate": 0.21644295302013422,
+      "skew": 2.389492957477317,
+      "kurtosis_excess": 6.381970230045219,
+      "stop_take_params_used": {
+        "atr_multiplier": 2.0,
+        "atr_window": 14,
+        "take_pct": 0.07,
+        "stop_loss_pct": null,
+        "ema_slope_filter": true,
+        "fee_round_trip": 0.0008,
+        "universe": "top10_alt",
+        "n_universe_symbols": 10
+      }
+    },
+    {
+      "variant_id": "D9",
+      "status": "ok",
+      "n_trades": 596,
+      "sharpe": -1.7438589557416453,
+      "sortino": -5.129893895260963,
+      "mdd": -0.7071518367085803,
+      "calmar": -0.9660898301874451,
+      "avg_rr": 2.7331253122224126,
+      "turnover": 9.823985821812677e-05,
+      "monthly_hit_rate": 0.21644295302013422,
+      "skew": 2.389492957477317,
+      "kurtosis_excess": 6.381970230045219,
+      "stop_take_params_used": {
+        "atr_multiplier": 2.0,
+        "atr_window": 14,
+        "take_pct": 0.07,
+        "stop_loss_pct": null,
+        "ema_slope_filter": true,
+        "fee_round_trip": 0.0008,
+        "universe": "top10_alt",
+        "n_universe_symbols": 10
+      }
+    }
+  ],
+  "scoring_4h": {
+    "dsr": 0.5,
+    "pbo": 0.06814296814296815,
+    "dsr_n_trials": 6,
+    "winning_variant": "D0",
+    "gate_passed": false,
+    "gate_reason": "DSR=0.5 < 0.95; monthly_hit_rate=0.41935483870967744 < 0.5"
+  },
+  "scoring_5m": {
+    "dsr": 0.0,
+    "pbo": 0.031313131313131314,
+    "dsr_n_trials": 4,
+    "winning_variant": "D6",
+    "gate_passed": false,
+    "gate_reason": "DSR=0.0 < 0.95; monthly_hit_rate=0.1933534743202417 < 0.5"
+  },
+  "timestamp": "2026-05-06T05:17:23.659845+00:00"
+}
