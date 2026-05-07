@@ -129,6 +129,7 @@ def _build_config(args: argparse.Namespace) -> ShadowConfig:
         max_iterations=args.max_iterations,
         broker_mode=args.broker,
         feed_mode=args.feed,
+        schedule=args.schedule,  # #216 fix: was unused (argparse-only) before
     )
 
 
