@@ -48,23 +48,40 @@ sys.path.insert(0, str(_REPO_ROOT / "src"))
 
 
 def _autoload_dotenv() -> None:
-    """EXE 같은 폴더 또는 워크트리 루트의 .env 자동 로드 (#182).
+    """EXE/dev 환경에서 .env 자동 탐색 (#182, walk-up #214).
 
-    PyInstaller frozen 시: sys.executable 의 부모 폴더 .env
-    dev 환경: _REPO_ROOT/.env. 없으면 cwd 의 .env (dotenv 기본).
+    탐색 순서 (먼저 발견되는 것이 적용):
+      1. frozen: sys.executable 부모 → 그 부모 → 드라이브 루트까지 walk-up
+         dev:    _REPO_ROOT → cwd → 그 부모 → 드라이브 루트까지 walk-up
+      2. 위에서 못 찾으면 dotenv 의 find_dotenv 기본 동작에 위임
+
+    frozen 시 `__file__` 이 `_MEIPASS` 안이라 dotenv 의 find_dotenv 가
+    호출자 프레임 기준으로 못 찾는 문제(사용자 .env 가 EXE 보다 상위
+    디렉토리에 있을 때) 를 walk-up 으로 명시 회피.
     """
     try:
         from dotenv import load_dotenv  # noqa: PLC0415
     except ImportError:
         return
+
+    candidates: list[Path] = []
     if getattr(sys, "frozen", False):
-        env_path = Path(sys.executable).parent / ".env"
+        cur = Path(sys.executable).resolve().parent
     else:
-        env_path = _REPO_ROOT / ".env"
-    if env_path.exists():
-        load_dotenv(env_path, override=False)
-    else:
-        load_dotenv(override=False)  # cwd .env fallback
+        candidates.append(_REPO_ROOT / ".env")
+        cur = Path.cwd().resolve()
+    candidates.append(cur / ".env")
+    candidates.extend(parent / ".env" for parent in cur.parents)
+
+    seen: set[Path] = set()
+    for env_path in candidates:
+        if env_path in seen:
+            continue
+        seen.add(env_path)
+        if env_path.exists():
+            load_dotenv(env_path, override=False)
+            return
+    load_dotenv(override=False)  # last-resort: dotenv 의 find_dotenv
 
 
 _autoload_dotenv()
@@ -149,6 +166,49 @@ def _print_startup_banner(strategies_count: int, dashboard_port: int) -> None:
         "  \\__\\_\\   |_|   /_/   \\_\\\n"
     )
     print(banner)
+
+
+def _run_check_bundle() -> int:
+    """CI/release smoke — verify bundled assets are present (#214).
+
+    Run as `qta.exe --check-bundle` (no other flags). Returns 0 only if all
+    bundled assets that dashboard needs are reachable from `_bundle_root()`:
+
+      - configs/orchestrator/production.yaml
+      - docs/specs/strategies/*.md  (strategy_catalog parses ≥ 5 specs)
+
+    Past regression: #178 inlined the strategy catalog on `/` but qta.spec
+    only bundled `configs/`, so the EXE rendered an empty grid. This check
+    fails the CI build instead of shipping a silently-broken EXE.
+    """
+    root = _bundle_root()
+    errors: list[str] = []
+
+    yaml_path = root / "configs/orchestrator/production.yaml"
+    if not yaml_path.exists():
+        errors.append(f"missing: {yaml_path}")
+
+    specs_dir = root / "docs/specs/strategies"
+    if not specs_dir.exists():
+        errors.append(f"missing: {specs_dir}")
+    else:
+        from src.dashboard.strategy_catalog import load_strategy_catalog  # noqa: PLC0415
+        items = load_strategy_catalog(specs_dir)
+        if len(items) < 5:
+            errors.append(
+                f"strategy_catalog count={len(items)} (<5) — specs may not be bundled"
+            )
+        else:
+            print(f"[check-bundle] strategy_catalog count={len(items)} (OK)")
+            for it in items:
+                print(f"  - {it.get('id')}: {it.get('name')}")
+
+    if errors:
+        for e in errors:
+            print(f"[check-bundle] FAIL: {e}", file=sys.stderr)
+        return 1
+    print(f"[check-bundle] PASS — bundle_root={root}")
+    return 0
 
 
 def _show_first_run_help() -> int:
@@ -612,6 +672,9 @@ async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
 
 
 def main(argv: list[str] | None = None) -> int:
+    av = sys.argv[1:] if argv is None else argv
+    if "--check-bundle" in av:
+        return _run_check_bundle()
     if _is_no_args(argv):
         if os.environ.get("QTA_FIRST_RUN_HELP_ONLY", "").lower() == "true":
             return _show_first_run_help()

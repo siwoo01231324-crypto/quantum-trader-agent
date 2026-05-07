@@ -42,6 +42,10 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Releases "latest" rolling tag 갱신 + asset upload 에 contents:write 필요 (#214)
+permissions:
+  contents: write
+
 jobs:
   build-exe:
     name: PyInstaller — Windows single EXE
@@ -121,6 +125,22 @@ jobs:
             Write-Host "PASS: ${elapsed}s < 30s and EXE runs"
           }
 
+      # Bundle integrity (#214) — fail-blocking. Catches qta.spec datas
+      # regressions like #178 (docs/specs/strategies missing → empty grid).
+      - name: Verify bundled assets (--check-bundle)
+        shell: pwsh
+        timeout-minutes: 1
+        run: |
+          $output = & dist\qta.exe --check-bundle 2>&1
+          $exitCode = $LASTEXITCODE
+          Write-Host "---OUTPUT---"
+          Write-Output $output
+          Write-Host "---END---"
+          if ($exitCode -ne 0) {
+            Write-Error "FAIL: --check-bundle reported missing assets"
+            exit 1
+          }
+
       # AC5 (partial): Windows Defender on-runner scan
       - name: Windows Defender scan
         shell: pwsh
@@ -137,15 +157,71 @@ jobs:
             Write-Host "Windows Defender CLI not found — skipping AV scan"
           }
 
-      - name: Upload EXE artifact
+      - name: Compute SHA256 checksum
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash dist\qta.exe -Algorithm SHA256).Hash.ToLower()
+          "$hash  qta.exe" | Out-File -FilePath dist\qta.exe.sha256 -Encoding ascii
+          Write-Host "SHA256: $hash"
+
+      - name: Upload EXE artifact (CI history backup)
         uses: actions/upload-artifact@v4
         with:
           name: qta-exe-${{ github.sha }}
-          path: dist/qta.exe
+          path: |
+            dist/qta.exe
+            dist/qta.exe.sha256
           retention-days: 30
 
-      # Optional: attach to GitHub Release when triggered manually with upload_release=true
-      - name: Upload to GitHub Release
+      # ── Releases "latest" rolling tag — master push 마다 자동 갱신 (#214) ────
+      # 사용자는 항상 같은 URL 한 곳에서만 받음:
+      #   https://github.com/${{ github.repository }}/releases/latest/download/qta.exe
+      # GH artifact 처럼 7일 만료/계정 로그인 없음. master HEAD 와 EXE 가 결코
+      # 어긋나지 않음 — 본 PR 머지 전엔 EXE 가 5/5 정체돼있던 사고(#178+#182+#198
+      # 머지 후 EXE 미갱신) 의 영구 처방.
+      - name: Move "latest" rolling tag to current commit
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -f latest
+          git push origin latest --force
+
+      - name: Publish to GitHub Releases (latest)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "qta.exe — latest (master auto-build)"
+          files: |
+            dist/qta.exe
+            dist/qta.exe.sha256
+          prerelease: false
+          make_latest: "true"
+          body: |
+            **자동 빌드** — master push 마다 갱신됨. 사용자는 항상 이 한 곳에서 다운로드:
+
+            ```
+            https://github.com/${{ github.repository }}/releases/latest/download/qta.exe
+            ```
+
+            ## 빌드 정보
+            - commit: [`${{ github.sha }}`](https://github.com/${{ github.repository }}/commit/${{ github.sha }})
+            - 메시지: ${{ github.event.head_commit.message }}
+            - 빌드 시각: ${{ github.event.head_commit.timestamp }}
+            - 검증: `--check-bundle` 통과 (전략 카탈로그 ≥ 5종 + production.yaml 번들)
+
+            ## 사용법
+            1. `qta.exe` 다운로드 → 원하는 폴더에 저장
+            2. 같은 폴더 또는 상위 폴더에 `.env` 작성 (BINANCE_*, HANTOO_FAKE_* 등)
+               — qta.exe 가 부모 디렉토리를 walk-up 하며 `.env` 자동 탐색 (#214)
+            3. `qta.exe` 더블클릭 → 자동으로 http://localhost:8000 대시보드 오픈
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # 수동 dispatch 모드는 별도 draft 릴리스로 분리 — latest 와 충돌 X
+      - name: Upload to GitHub Release (manual dispatch only)
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.upload_release == 'true'
         uses: softprops/action-gh-release@v2
         with:

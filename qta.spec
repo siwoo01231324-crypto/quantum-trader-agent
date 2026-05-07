@@ -51,6 +51,10 @@ a = Analysis(
         # Default config shipped inside the EXE so users can run without a
         # separate clone.  Actual secrets (API keys) are NEVER bundled.
         ("configs", "configs"),
+        # Strategy frontmatter source-of-truth — dashboard /strategies and
+        # /api/strategies load these via load_strategy_catalog(). Without it
+        # the strategy grid renders empty inside the EXE (#178 regression).
+        ("docs/specs/strategies", "docs/specs/strategies"),
         *_native_datas,
     ],
     hiddenimports=[
