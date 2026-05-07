@@ -11,12 +11,21 @@ def _make_post_mock(calls: list):
     return mock_post
 
 
+def _clear_telegram_env(monkeypatch):
+    """#152: LIVE/QTA fallback 우선이라 legacy 경로 검증 시 모두 비워야 함."""
+    for v in (
+        "TELEGRAM_LIVE_BOT_TOKEN", "TELEGRAM_LIVE_CHAT_ID",
+        "TELEGRAM_QTA_BOT_TOKEN", "TELEGRAM_QTA_CHAT_ID",
+        "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID",
+    ):
+        monkeypatch.delenv(v, raising=False)
+
+
 # Test 1: SLACK only → 1 call
 def test_slack_only(monkeypatch):
     calls = []
     monkeypatch.setenv("SLACK_WEBHOOK_URL", "https://hooks.slack.com/test")
-    monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
-    monkeypatch.delenv("TELEGRAM_CHAT_ID", raising=False)
+    _clear_telegram_env(monkeypatch)
     monkeypatch.setattr(requests, "post", _make_post_mock(calls))
 
     notify("warn", "test title", "test body", {"key": "val"})
@@ -27,10 +36,11 @@ def test_slack_only(monkeypatch):
     assert "test title" in calls[0]["json"]["text"]
 
 
-# Test 2: TELEGRAM only → 1 call
+# Test 2: TELEGRAM only (legacy) → 1 call
 def test_telegram_only(monkeypatch):
     calls = []
     monkeypatch.delenv("SLACK_WEBHOOK_URL", raising=False)
+    _clear_telegram_env(monkeypatch)
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "bot_token_123")
     monkeypatch.setenv("TELEGRAM_CHAT_ID", "chat_456")
     monkeypatch.setattr(requests, "post", _make_post_mock(calls))
@@ -42,10 +52,31 @@ def test_telegram_only(monkeypatch):
     assert calls[0]["json"]["chat_id"] == "chat_456"
 
 
+# Test 2b (#152): TELEGRAM_LIVE_* takes priority over legacy
+def test_telegram_live_priority(monkeypatch):
+    calls = []
+    monkeypatch.delenv("SLACK_WEBHOOK_URL", raising=False)
+    _clear_telegram_env(monkeypatch)
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "legacy")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "111")
+    monkeypatch.setenv("TELEGRAM_QTA_BOT_TOKEN", "qta")
+    monkeypatch.setenv("TELEGRAM_QTA_CHAT_ID", "222")
+    monkeypatch.setenv("TELEGRAM_LIVE_BOT_TOKEN", "live")
+    monkeypatch.setenv("TELEGRAM_LIVE_CHAT_ID", "333")
+    monkeypatch.setattr(requests, "post", _make_post_mock(calls))
+
+    notify("warn", "live priority", "body")
+
+    assert len(calls) == 1
+    assert "live" in calls[0]["url"]
+    assert calls[0]["json"]["chat_id"] == "333"
+
+
 # Test 3: both → 2 calls
 def test_both_channels(monkeypatch):
     calls = []
     monkeypatch.setenv("SLACK_WEBHOOK_URL", "https://hooks.slack.com/test2")
+    _clear_telegram_env(monkeypatch)
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "tok")
     monkeypatch.setenv("TELEGRAM_CHAT_ID", "cid")
     monkeypatch.setattr(requests, "post", _make_post_mock(calls))
@@ -58,8 +89,7 @@ def test_both_channels(monkeypatch):
 # Test 4: no env → 0 calls, stdout output
 def test_no_env_stdout(monkeypatch, capsys):
     monkeypatch.delenv("SLACK_WEBHOOK_URL", raising=False)
-    monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
-    monkeypatch.delenv("TELEGRAM_CHAT_ID", raising=False)
+    _clear_telegram_env(monkeypatch)
 
     calls = []
     monkeypatch.setattr(requests, "post", _make_post_mock(calls))
@@ -77,8 +107,7 @@ def test_post_exception_swallowed(monkeypatch):
         raise requests.exceptions.ConnectionError("network error")
 
     monkeypatch.setenv("SLACK_WEBHOOK_URL", "https://hooks.slack.com/test3")
-    monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
-    monkeypatch.delenv("TELEGRAM_CHAT_ID", raising=False)
+    _clear_telegram_env(monkeypatch)
     monkeypatch.setattr(requests, "post", raising_post)
 
     # Must not raise

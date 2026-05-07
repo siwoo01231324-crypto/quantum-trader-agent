@@ -25,6 +25,11 @@ TELEGRAM_MAX_LEN = _MOD.TELEGRAM_MAX_LEN
 
 @pytest.fixture
 def telegram_env(monkeypatch):
+    # #152: LIVE/QTA fallback 이 1·2순위 — legacy 경로 검증을 위해 둘 다 비움.
+    monkeypatch.delenv("TELEGRAM_LIVE_BOT_TOKEN", raising=False)
+    monkeypatch.delenv("TELEGRAM_LIVE_CHAT_ID", raising=False)
+    monkeypatch.delenv("TELEGRAM_QTA_BOT_TOKEN", raising=False)
+    monkeypatch.delenv("TELEGRAM_QTA_CHAT_ID", raising=False)
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "test_token")
     monkeypatch.setenv("TELEGRAM_CHAT_ID", "12345")
 
@@ -48,9 +53,53 @@ def test_send_telegram_ok(telegram_env):
 def test_send_telegram_skip_when_env_missing(monkeypatch):
     monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
     monkeypatch.delenv("TELEGRAM_CHAT_ID", raising=False)
+    monkeypatch.delenv("TELEGRAM_QTA_BOT_TOKEN", raising=False)
+    monkeypatch.delenv("TELEGRAM_QTA_CHAT_ID", raising=False)
+    monkeypatch.delenv("TELEGRAM_LIVE_BOT_TOKEN", raising=False)
+    monkeypatch.delenv("TELEGRAM_LIVE_CHAT_ID", raising=False)
     # No responses registered → would fail if it tried to call.
     assert send_telegram("hello") is False
     assert len(responses.calls) == 0
+
+
+@responses.activate
+def test_send_telegram_uses_qta_fallback(monkeypatch):
+    """QTA 만 있을 때 fallback 으로 발송돼야 함 (#133 초기 표준)."""
+    monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
+    monkeypatch.delenv("TELEGRAM_CHAT_ID", raising=False)
+    monkeypatch.delenv("TELEGRAM_LIVE_BOT_TOKEN", raising=False)
+    monkeypatch.delenv("TELEGRAM_LIVE_CHAT_ID", raising=False)
+    monkeypatch.setenv("TELEGRAM_QTA_BOT_TOKEN", "qta_token")
+    monkeypatch.setenv("TELEGRAM_QTA_CHAT_ID", "67890")
+    responses.add(
+        responses.POST,
+        "https://api.telegram.org/botqta_token/sendMessage",
+        json={"ok": True},
+        status=200,
+    )
+    assert send_telegram("hello") is True
+    body = json.loads(responses.calls[0].request.body)
+    assert body["chat_id"] == "67890"
+
+
+@responses.activate
+def test_send_telegram_live_takes_priority(monkeypatch):
+    """#152: 모든 알림 LIVE 봇 단일 채널로 통일 — LIVE 가 QTA/legacy 모두 누른다."""
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "legacy_token")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "111")
+    monkeypatch.setenv("TELEGRAM_QTA_BOT_TOKEN", "qta_token")
+    monkeypatch.setenv("TELEGRAM_QTA_CHAT_ID", "222")
+    monkeypatch.setenv("TELEGRAM_LIVE_BOT_TOKEN", "live_token")
+    monkeypatch.setenv("TELEGRAM_LIVE_CHAT_ID", "333")
+    responses.add(
+        responses.POST,
+        "https://api.telegram.org/botlive_token/sendMessage",
+        json={"ok": True},
+        status=200,
+    )
+    assert send_telegram("hello") is True
+    body = json.loads(responses.calls[0].request.body)
+    assert body["chat_id"] == "333"
 
 
 @responses.activate

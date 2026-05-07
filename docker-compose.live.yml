@@ -108,4 +108,35 @@ services:
         limits:
           memory: 128M
 
+  # #152: KIS 1분봉 매일 1회 fetch + 주간 누적 summary.
+  # cron_loop.sh 패턴 차용 (bash sleep loop). 평일 KST FETCH_HOUR_KST 에 cron_fetch_kis_daily.py
+  # 실행 + 매 결과 Telegram, WEEKLY_DOW 요일에 kis_lake_monitor.py 로 누적 진척도 Telegram 발송.
+  # 90거래일 누적 시 #153 (KIS 가설 본판정) 트리거 가능.
+  kis-1m-fetch-cron:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: qta-phase2:latest
+    container_name: qta-kis-1m-fetch-cron
+    entrypoint: ["/bin/bash", "/app/scripts/kis_1m_fetch_loop.sh"]
+    env_file:
+      - ./.env
+    environment:
+      TZ: Asia/Seoul
+      LAKE_DIR: /data/lake
+      LOG_DIR: /data/logs
+      FETCH_HOUR_KST: "16"   # KRX 마감 30분 후
+      N_POOL: "30"
+      INTERVAL: "1m"
+      WEEKLY_DOW: "0"        # 0=Sunday weekly summary
+      TARGET_DAYS: "90"
+    volumes:
+      - ./lake:/data/lake
+      - ./logs/kis-fetch:/data/logs
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
 # Named volumes 미사용 - bind mount 로 호스트 ./data/ 직접 inspect 가능 (운영 일지 작성 시).

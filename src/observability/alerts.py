@@ -27,6 +27,23 @@ def _post(url: str, payload: dict) -> None:
         print(f"[alerts] WARNING: post failed ({exc})", file=sys.stderr)
 
 
+def _resolve_telegram_env() -> tuple[str, str]:
+    """Resolve (token, chat_id). Priority LIVE > QTA > legacy (#152)."""
+    token = (
+        os.environ.get("TELEGRAM_LIVE_BOT_TOKEN")
+        or os.environ.get("TELEGRAM_QTA_BOT_TOKEN")
+        or os.environ.get("TELEGRAM_BOT_TOKEN")
+        or ""
+    )
+    chat_id = (
+        os.environ.get("TELEGRAM_LIVE_CHAT_ID")
+        or os.environ.get("TELEGRAM_QTA_CHAT_ID")
+        or os.environ.get("TELEGRAM_CHAT_ID")
+        or ""
+    )
+    return token, chat_id
+
+
 def notify(
     level: Level,
     title: str,
@@ -34,8 +51,7 @@ def notify(
     fields: dict | None = None,
 ) -> None:
     slack_url = os.environ.get("SLACK_WEBHOOK_URL", "")
-    tg_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
-    tg_chat = os.environ.get("TELEGRAM_CHAT_ID", "")
+    tg_token, tg_chat = _resolve_telegram_env()
 
     text = _build_text(level, title, body, fields)
     sent = False

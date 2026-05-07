@@ -21,6 +21,12 @@ REPORT_HOUR_KST="${REPORT_HOUR_KST:-16}"
 
 mkdir -p "$REPORTS_DIR"
 
+# #152 텔레그램 변수명 fallback — 모든 알림 LIVE 봇 단일 채널로 통일.
+# legacy TELEGRAM_BOT_TOKEN/CHAT_ID 가 비어있으면 LIVE > QTA 순으로 보강.
+: "${TELEGRAM_BOT_TOKEN:=${TELEGRAM_LIVE_BOT_TOKEN:-${TELEGRAM_QTA_BOT_TOKEN:-}}}"
+: "${TELEGRAM_CHAT_ID:=${TELEGRAM_LIVE_CHAT_ID:-${TELEGRAM_QTA_CHAT_ID:-}}}"
+export TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID
+
 # graceful shutdown
 trap 'echo "[cron_loop] received TERM, exiting"; exit 0' TERM INT
 

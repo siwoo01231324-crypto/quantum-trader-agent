@@ -121,6 +121,38 @@ def _resolve_symbols(args: argparse.Namespace) -> list[str]:
     return [args.symbol]
 
 
+def resolve_kis_credentials(env: dict[str, str]) -> tuple[str, str, str, str]:
+    """Return (app_key, app_secret, cano, acnt_prdt_cd) from env vars.
+
+    Primary: HANTOO_FAKE_* (matches src/brokers/config.py and #133 .env layout).
+    Fallback: KIS_APP_KEY / KIS_APP_SECRET / KIS_CANO / KIS_ACNT_PRDT_CD (legacy).
+
+    HANTOO_FAKE_CREDIT_NUMBER / HANTOO_CREDIT_NUMBER (or KIS_CREDIT_NUMBER) accepts
+    the dash format 'NNNNNNNN-NN' — split into cano (8 digits) + acnt_prdt_cd (2 digits).
+    Falls back to separate KIS_CANO / KIS_ACNT_PRDT_CD when the dash form is absent.
+
+    Missing values are returned as empty strings (caller decides to abort).
+    """
+    app_key = env.get("HANTOO_FAKE_API_KEY") or env.get("KIS_APP_KEY") or ""
+    app_secret = env.get("HANTOO_FAKE_SECRET_API_KEY") or env.get("KIS_APP_SECRET") or ""
+
+    credit = (
+        env.get("HANTOO_FAKE_CREDIT_NUMBER")
+        or env.get("HANTOO_CREDIT_NUMBER")
+        or env.get("KIS_CREDIT_NUMBER")
+        or ""
+    )
+    if credit and "-" in credit:
+        parts = credit.split("-", 1)
+        cano = parts[0]
+        acnt_prdt_cd = parts[1]
+    else:
+        cano = env.get("KIS_CANO") or ""
+        acnt_prdt_cd = env.get("KIS_ACNT_PRDT_CD") or "01"
+
+    return app_key, app_secret, cano, acnt_prdt_cd
+
+
 def _run_dry(args: argparse.Namespace) -> int:
     """Print what would be fetched without making any API calls."""
     today = _today_kst()
@@ -147,14 +179,12 @@ def _run_live(args: argparse.Namespace) -> int:
     # -----------------------------------------------------------------------
     # Credential check — graceful exit on missing token (cron-friendly)
     # -----------------------------------------------------------------------
-    app_key = os.environ.get("KIS_APP_KEY", "")
-    app_secret = os.environ.get("KIS_APP_SECRET", "")
-    cano = os.environ.get("KIS_CANO", "")
-    acnt_prdt_cd = os.environ.get("KIS_ACNT_PRDT_CD", "01")
+    app_key, app_secret, cano, acnt_prdt_cd = resolve_kis_credentials(dict(os.environ))
 
     if not all([app_key, app_secret, cano]):
         print(
-            "[WARN] KIS credentials not set (KIS_APP_KEY / KIS_APP_SECRET / KIS_CANO). "
+            "[WARN] KIS credentials not set (HANTOO_FAKE_API_KEY / HANTOO_FAKE_SECRET_API_KEY / "
+            "HANTOO_CREDIT_NUMBER, or legacy KIS_APP_KEY / KIS_APP_SECRET / KIS_CANO). "
             "Skipping fetch. Set env vars and re-run.",
             file=sys.stderr,
         )
