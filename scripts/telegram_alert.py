@@ -7,9 +7,11 @@ Modes (mutually exclusive):
   --report PATH  Send daily report markdown summary (KST 16:00 cron 발화 직후).
   --test         Send a test ping message.
 
-Env:
-  TELEGRAM_BOT_TOKEN   필수 (없으면 warn + skip — daemon halt 안 함)
-  TELEGRAM_CHAT_ID     필수
+Env (#152 fallback chain — 모든 알림 단일 LIVE 채널로 통일):
+  TELEGRAM_LIVE_BOT_TOKEN / TELEGRAM_LIVE_CHAT_ID   1순위 (현 운영 표준)
+  TELEGRAM_QTA_BOT_TOKEN  / TELEGRAM_QTA_CHAT_ID    2순위 (#133 초기 표준)
+  TELEGRAM_BOT_TOKEN      / TELEGRAM_CHAT_ID        legacy fallback
+  토큰/chat_id 둘 중 하나라도 빠지면 warn + skip — daemon halt 안 함.
 """
 from __future__ import annotations
 
@@ -31,12 +33,34 @@ TELEGRAM_MAX_LEN = 4000
 log = logging.getLogger("telegram_alert")
 
 
+def _resolve_telegram_credentials() -> tuple[str | None, str | None]:
+    """Resolve (token, chat_id) from env.
+
+    Priority: TELEGRAM_LIVE_BOT_TOKEN/CHAT_ID (현 운영 표준 — 모든 알림 단일 채널)
+        → TELEGRAM_QTA_BOT_TOKEN/CHAT_ID (#133 초기 표준)
+        → legacy TELEGRAM_BOT_TOKEN/CHAT_ID.
+    """
+    token = (
+        os.environ.get("TELEGRAM_LIVE_BOT_TOKEN")
+        or os.environ.get("TELEGRAM_QTA_BOT_TOKEN")
+        or os.environ.get("TELEGRAM_BOT_TOKEN")
+    )
+    chat_id = (
+        os.environ.get("TELEGRAM_LIVE_CHAT_ID")
+        or os.environ.get("TELEGRAM_QTA_CHAT_ID")
+        or os.environ.get("TELEGRAM_CHAT_ID")
+    )
+    return token, chat_id
+
+
 def send_telegram(text: str, *, parse_mode: str = "Markdown") -> bool:
     """Telegram bot sendMessage. token/chat_id 미설정 시 warn + skip (False 반환)."""
-    token = os.environ.get("TELEGRAM_BOT_TOKEN")
-    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+    token, chat_id = _resolve_telegram_credentials()
     if not token or not chat_id:
-        log.warning("TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID 미설정 — skip")
+        log.warning(
+            "TELEGRAM_LIVE_BOT_TOKEN/CHAT_ID "
+            "(or TELEGRAM_QTA_*, legacy TELEGRAM_BOT_TOKEN/CHAT_ID) 미설정 — skip"
+        )
         return False
     if len(text) > TELEGRAM_MAX_LEN:
         text = text[: TELEGRAM_MAX_LEN - 20] + "\n... (truncated)"
