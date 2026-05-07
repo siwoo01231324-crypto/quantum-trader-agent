@@ -3,7 +3,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
-from pydantic import BaseModel, field_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 
 class KISOrderOutput(BaseModel):
@@ -19,11 +19,16 @@ class KISOrderResponse(BaseModel):
 
 
 class KISBalanceStock(BaseModel):
-    PDNO: str           # 종목코드
-    PRDT_NAME: str      # 종목명
-    HLDG_QTY: str       # 보유수량
-    PCHS_AVG_PRIC: str  # 매입평균가
-    EVLU_AMT: str       # 평가금액
+    """KIS 잔고 종목 — KIS API 가 일부 환경(특히 paper 계정 일부 응답)에서
+    동일 필드를 소문자로 내려보내므로 case-insensitive 매핑.
+    """
+    model_config = ConfigDict(populate_by_name=True)
+
+    PDNO: str = Field(validation_alias=AliasChoices("PDNO", "pdno"))                          # 종목코드
+    PRDT_NAME: str = Field(validation_alias=AliasChoices("PRDT_NAME", "prdt_name"))           # 종목명
+    HLDG_QTY: str = Field(validation_alias=AliasChoices("HLDG_QTY", "hldg_qty"))              # 보유수량
+    PCHS_AVG_PRIC: str = Field(validation_alias=AliasChoices("PCHS_AVG_PRIC", "pchs_avg_pric"))  # 매입평균가
+    EVLU_AMT: str = Field(validation_alias=AliasChoices("EVLU_AMT", "evlu_amt"))              # 평가금액
 
     @property
     def qty(self) -> Decimal:
@@ -48,7 +53,10 @@ class KISBalanceResponse(BaseModel):
 
 
 class KISBuyableOutput(BaseModel):
-    NRCVB_BUY_AMT: str   # 매수가능금액
+    """KIS 매수가능 — 소문자 응답 호환 (KISBalanceStock 와 같은 KIS API quirk)."""
+    model_config = ConfigDict(populate_by_name=True)
+
+    NRCVB_BUY_AMT: str = Field(validation_alias=AliasChoices("NRCVB_BUY_AMT", "nrcvb_buy_amt"))  # 매수가능금액
 
     @property
     def buyable_amount(self) -> Decimal:
