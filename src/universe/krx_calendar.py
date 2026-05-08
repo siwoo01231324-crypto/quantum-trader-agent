@@ -5,7 +5,7 @@ Separate from src/execution/krx_handler.py (single-auction order buffer).
 """
 from __future__ import annotations
 
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 
 import pytz
 
@@ -83,3 +83,34 @@ def is_krx_trading_hours(ts: datetime) -> bool:
         return False
     t = ts_kst.time().replace(tzinfo=None)
     return _MARKET_OPEN <= t <= _MARKET_CLOSE
+
+
+def _is_business_day(d: date) -> bool:
+    return d.weekday() < 5 and not is_krx_holiday(d)
+
+
+def next_session_open(now: datetime) -> datetime:
+    """Return the next KRX session open (09:00 KST) datetime, timezone-aware (KST).
+
+    Semantics (#216 schedule gate):
+      - Same day if it is a business day and current time is on/before 15:30 KST
+        (caller treats this as "session is current or imminent").
+      - Otherwise (weekend / holiday / weekday after close) → next business day 09:00 KST.
+
+    Args:
+        now: timezone-aware datetime (any timezone). Naive datetime raises ValueError.
+    """
+    if now.tzinfo is None:
+        raise ValueError("now must be timezone-aware")
+
+    now_kst = now.astimezone(KST)
+    today = now_kst.date()
+    today_close_kst = KST.localize(datetime.combine(today, _MARKET_CLOSE))
+
+    if _is_business_day(today) and now_kst <= today_close_kst:
+        return KST.localize(datetime.combine(today, _MARKET_OPEN))
+
+    candidate = today + timedelta(days=1)
+    while not _is_business_day(candidate):
+        candidate += timedelta(days=1)
+    return KST.localize(datetime.combine(candidate, _MARKET_OPEN))

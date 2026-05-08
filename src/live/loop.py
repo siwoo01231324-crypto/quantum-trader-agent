@@ -20,6 +20,7 @@ from src.live.executor import execute_intents
 from src.live.feed import MarketDataFeed, BinancePublicFeed
 from src.live.process_lock import ProcessLock
 from src.live.reconnect import backoff_delay
+from src.live.schedule import wait_until_session_open
 from src.live.snapshot_builder import SnapshotBuilder, SnapshotBuilderConfig, is_krx_symbol
 from src.live.types import Tick, WALEvent
 from src.live.wal import WAL
@@ -57,6 +58,11 @@ class ShadowConfig:
     # Used by live_run.py to wire `DashboardState.orchestrator` so that
     # `POST /api/strategies/{id}/toggle` reaches the live orchestrator.
     on_orchestrator_ready: Callable[[AsyncStrategyOrchestrator], None] | None = None
+    # #216 trading-session schedule gate. "krx" blocks startup until next KRX
+    # open (09:00 KST) when current time is outside session, preventing
+    # warmup-time EGW00201 floods that previously stalled the WS connect step.
+    # "always" preserves legacy 24/7 behaviour for non-KRX symbols / smoke tests.
+    schedule: Literal["krx", "always"] = "always"
 
 
 def _load_orchestrator(config: ShadowConfig, broker: PaperBroker) -> AsyncStrategyOrchestrator:
@@ -132,6 +138,46 @@ def _build_router(
     raise ValueError(f"Unknown broker_mode: '{broker_mode}'")
 
 
+def emit_startup_events(
+    wal: WAL,
+    config: ShadowConfig,
+    gate_resumed_at: datetime | None,
+) -> None:
+    """Write the WAL startup heartbeat events (#216 US-004).
+
+    Always writes ``run_started`` so external monitors can see the daemon
+    booted (lack of this record was the symptom that #216 surfaced — empty
+    ``logs/shadow/{run_id}/`` directories).
+
+    Additionally writes ``session_open`` when ``config.schedule='krx'`` and a
+    gate-resume timestamp is available — i.e. either we slept through the
+    gate or the gate evaluated us as already in-session. ``schedule='always'``
+    skips ``session_open`` because no session-boundary semantics apply.
+    """
+    now_utc_iso = datetime.now(tz=timezone.utc).isoformat()
+    wal.write(WALEvent(
+        ts=now_utc_iso,
+        event_type="run_started",
+        payload={
+            "run_id": config.wal_path.parent.name,
+            "broker": config.broker_mode,
+            "feed": config.feed_mode,
+            "symbols": list(config.symbols),
+            "schedule": config.schedule,
+            "wal_path": str(config.wal_path),
+        },
+    ))
+    if config.schedule == "krx" and gate_resumed_at is not None:
+        wal.write(WALEvent(
+            ts=datetime.now(tz=timezone.utc).isoformat(),
+            event_type="session_open",
+            payload={
+                "kst_open": gate_resumed_at.isoformat(),
+                "date": gate_resumed_at.date().isoformat(),
+            },
+        ))
+
+
 def _select_feed(config: ShadowConfig) -> MarketDataFeed:
     """Select the live feed based on `config.feed_mode` and symbol shape.
 
@@ -193,9 +239,14 @@ async def run_shadow_loop(
     metrics: Metrics | None = None,
     kill_switch: KillSwitch | None = None,
     kis_adapter=None,
+    wait_for_session_fn: Callable[..., Any] = wait_until_session_open,
 ) -> None:
     """Phase 1 Shadow Live Loop.
 
+    0. **Schedule gate (#216)** — block here until KRX session opens when
+       ``config.schedule='krx'`` and current time is outside session. Prevents
+       warmup-time KIS REST flood that previously stalled the WS connect step.
+       ``schedule='always'`` is a no-op (legacy / non-KRX behaviour).
     1. ProcessLock 획득 (단일 인스턴스, FMEA F9)
     2. WAL 초기화
     3. PaperBroker + MockMatchingEngine 생성
@@ -210,6 +261,10 @@ async def run_shadow_loop(
 
     config.max_iterations 가 정수면 N tick 처리 후 종료 (테스트용).
     """
+    # Step 0: Schedule gate (#216) — must precede ProcessLock so startup outside
+    # KRX hours does not hold the lock or spam the KIS REST API.
+    gate_resumed_at = await wait_for_session_fn(config.schedule)
+
     metrics = metrics or Metrics()
     kill_switch = kill_switch or KillSwitch()
     config.lock_path.parent.mkdir(parents=True, exist_ok=True)
@@ -219,6 +274,10 @@ async def run_shadow_loop(
     lock.acquire()
     try:
         wal = WAL(config.wal_path, observer=config.wal_observer)
+        # #216 US-004: emit startup heartbeat before any side-effecting work so
+        # external monitors (telegram-notifier WAL tail, report-cron WAL find)
+        # can see the daemon is alive even before the first market tick.
+        emit_startup_events(wal, config, gate_resumed_at)
         matching_engine = MockMatchingEngine()
         paper_broker = PaperBroker(
             wal=wal, kill_switch=kill_switch,
