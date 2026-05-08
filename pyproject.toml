@@ -28,6 +28,9 @@ dependencies = [
     "fastapi",
     "starlette",
     "uvicorn",
+    # KRX daily OHLCV 5y+ 무료 데이터 — 일봉 swing 전략 backtest 용. KIS 분봉
+    # 30일 한도 보완 (#152 후속). bench_swing_kr_daily.py 가 사용.
+    "finance-datareader>=0.9",
 ]
 
 [project.optional-dependencies]

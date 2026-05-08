@@ -54,13 +54,16 @@
 - 백테스트·인시던트 초안 자동 생성은 `services/doc_agent/` (#53) — 출력은 항상 `.draft.md`, 정식 승격은 사람이 rename
 - 자동 커밋 금지 — 드래프트도 리뷰 후 수동 커밋
 
-## 새 전략 추가 시 필수 (#70 이후, #78 확장)
+## 새 전략 추가 시 필수 (#70 이후, #78 확장, 2026-05-06 universe-scan default)
+- **패턴 선택** — **universe-scan 이 신규 default** (`docs/specs/universe-scan-strategy-pattern.md`). 단일종목 고정으로 추가하려면 사유를 spec 문서에 명시.
+  - universe-scan: 종목 universe → 랭킹 → top-N 보유. 예: `breakout_donchian`, `cs_tsmom_kr_daily`.
+  - single-ticker (legacy): 사전 지정 1~3 종목. 신규는 예외 (사유 필수).
 - **Protocol 선택** — `Strategy` (sync `on_bar(bar, history, context)`) 또는 `AsyncStrategy` (async `on_bar(ctx)`) 중 하나를 준수 (`src/backtest/protocol.py`).
 - **orchestrator 등록** — `AsyncStrategyOrchestrator.register_strategy(strategy_id, strategy)` 호출 필수. 생략 시 tick driver 에 연결되지 않음.
 - **일수익률 시계열 export** — `orchestrator.register_strategy_returns(strategy_id, series)` 로 공급 필수. 생략 시 포트폴리오 CVaR·상관·ENB 체크가 침묵함.
-- **`docs/specs/strategies/<strategy_id>.md` 스펙 파일** — 프론트매터 `type: strategy`, "리스크 연동" 섹션에 register 호출 방법 명시.
+- **`docs/specs/strategies/<strategy_id>.md` 스펙 파일** — 프론트매터 `type: strategy`, "리스크 연동" 섹션에 register 호출 방법 명시. universe-scan 인 경우 universe pin-date 명시.
 - **단위 테스트 1건** — `tests/test_portfolio_orchestrator_async.py` 또는 전략-전용 테스트에서 수익률 → report 생성까지 검증.
-- **상세**: `src/backtest/strategies/.ai.md` "리스크 연동 (필수)" 섹션 참조.
+- **상세**: `src/backtest/strategies/.ai.md` "리스크 연동 (필수)" 섹션 + `docs/specs/universe-scan-strategy-pattern.md` "PR 체크리스트" 참조.
 
 ## 조사·리서치 규칙
 - 서베이·리서치 등 조사 작업은 팩트에 근거한 내용만 작성한다
