@@ -320,3 +320,67 @@ class TestAuditLog:
         )
         # Must not raise.
         tc.write_audit_event(target, result)
+
+
+class TestBuildConfigEnvFallback:
+    """#216 — build_config_from_env 이 LIVE > QTA > legacy 우선순위로 토큰/chat_id 해석."""
+
+    def _clear(self, monkeypatch):
+        for v in (
+            "TELEGRAM_LIVE_BOT_TOKEN", "TELEGRAM_LIVE_CHAT_ID",
+            "TELEGRAM_QTA_BOT_TOKEN", "TELEGRAM_QTA_CHAT_ID",
+            "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID",
+        ):
+            monkeypatch.delenv(v, raising=False)
+
+    def _make_args(self):
+        import argparse
+        return argparse.Namespace(
+            audit_wal=None,
+            policy="configs/policy.yaml",
+            dashboard="http://localhost:8000",
+        )
+
+    def test_legacy_only(self, monkeypatch):
+        self._clear(monkeypatch)
+        monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "legacy_tok")
+        monkeypatch.setenv("TELEGRAM_CHAT_ID", "111")
+        cfg = tc.build_config_from_env(self._make_args())
+        assert cfg.token == "legacy_tok"
+        assert cfg.allowed_chat_ids == frozenset({111})
+
+    def test_qta_overrides_legacy(self, monkeypatch):
+        self._clear(monkeypatch)
+        monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "legacy_tok")
+        monkeypatch.setenv("TELEGRAM_CHAT_ID", "111")
+        monkeypatch.setenv("TELEGRAM_QTA_BOT_TOKEN", "qta_tok")
+        monkeypatch.setenv("TELEGRAM_QTA_CHAT_ID", "222")
+        cfg = tc.build_config_from_env(self._make_args())
+        assert cfg.token == "qta_tok"
+        assert cfg.allowed_chat_ids == frozenset({222})
+
+    def test_live_overrides_all(self, monkeypatch):
+        """#216 운영 표준: TELEGRAM_LIVE_* 가 1순위."""
+        self._clear(monkeypatch)
+        monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "legacy_tok")
+        monkeypatch.setenv("TELEGRAM_CHAT_ID", "111")
+        monkeypatch.setenv("TELEGRAM_QTA_BOT_TOKEN", "qta_tok")
+        monkeypatch.setenv("TELEGRAM_QTA_CHAT_ID", "222")
+        monkeypatch.setenv("TELEGRAM_LIVE_BOT_TOKEN", "live_tok")
+        monkeypatch.setenv("TELEGRAM_LIVE_CHAT_ID", "333")
+        cfg = tc.build_config_from_env(self._make_args())
+        assert cfg.token == "live_tok"
+        assert cfg.allowed_chat_ids == frozenset({333})
+
+    def test_multi_chat_csv_still_parsed(self, monkeypatch):
+        self._clear(monkeypatch)
+        monkeypatch.setenv("TELEGRAM_LIVE_BOT_TOKEN", "live_tok")
+        monkeypatch.setenv("TELEGRAM_LIVE_CHAT_ID", "100, 200, 300")
+        cfg = tc.build_config_from_env(self._make_args())
+        assert cfg.allowed_chat_ids == frozenset({100, 200, 300})
+
+    def test_empty_env_yields_empty_config(self, monkeypatch):
+        self._clear(monkeypatch)
+        cfg = tc.build_config_from_env(self._make_args())
+        assert cfg.token == ""
+        assert cfg.allowed_chat_ids == frozenset()

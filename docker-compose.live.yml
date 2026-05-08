@@ -108,6 +108,37 @@ services:
         limits:
           memory: 128M
 
+  # #126 양방향 봇 (PR #205 머지) 의 운영 wiring (#216 후속).
+  # telegram_control.py 는 long-poll getUpdates 로 `/kill /release /status /policy /help`
+  # 명령을 처리하고 live-daemon 의 dashboard REST API 를 호출. dashboard 가 127.0.0.1:8000
+  # 만 listen 하므로 network_mode 로 live-daemon 네트워크 namespace 를 공유 → 호스트 노출
+  # 없이 localhost:8000 도달 가능.
+  telegram-control:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: qta-phase2:latest
+    container_name: qta-telegram-control
+    entrypoint:
+      - "python"
+      - "/app/scripts/telegram_control.py"
+      - "--dashboard=http://localhost:8000"
+      - "--audit-wal=/data/logs/telegram_control.wal.jsonl"
+    env_file:
+      - ./.env
+    environment:
+      TZ: Asia/Seoul
+    volumes:
+      - ./logs/shadow:/data/logs   # audit WAL 쓰기 권한 (RW)
+    network_mode: "service:live-daemon"
+    restart: unless-stopped
+    depends_on:
+      - live-daemon
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
   # #152: KIS 1분봉 매일 1회 fetch + 주간 누적 summary.
   # cron_loop.sh 패턴 차용 (bash sleep loop). 평일 KST FETCH_HOUR_KST 에 cron_fetch_kis_daily.py
   # 실행 + 매 결과 Telegram, WEEKLY_DOW 요일에 kis_lake_monitor.py 로 누적 진척도 Telegram 발송.

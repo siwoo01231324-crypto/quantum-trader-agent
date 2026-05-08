@@ -15,9 +15,11 @@ Commands:
 Usage:
     python scripts/telegram_control.py --dashboard http://localhost:8000
 
-Env (.env):
-    TELEGRAM_BOT_TOKEN   필수
-    TELEGRAM_CHAT_ID     필수 — 화이트리스트 (단일 chat 만 허용)
+Env (.env, #216 fallback chain):
+    TELEGRAM_LIVE_BOT_TOKEN / TELEGRAM_LIVE_CHAT_ID   1순위 (현 운영 표준)
+    TELEGRAM_QTA_BOT_TOKEN  / TELEGRAM_QTA_CHAT_ID    2순위
+    TELEGRAM_BOT_TOKEN      / TELEGRAM_CHAT_ID        legacy fallback
+    chat_id 는 화이트리스트 (단일/복수 chat 허용, 콤마/공백 구분)
     TELEGRAM_AUDIT_WAL   선택 — `logs/shadow/.../wal.jsonl` 절대경로,
                          설정 시 모든 명령 수신을 WAL command_received 이벤트로 기록.
 """
@@ -455,8 +457,19 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def build_config_from_env(args: argparse.Namespace) -> BotConfig:
-    token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
-    chat_id_raw = os.environ.get("TELEGRAM_CHAT_ID", "")
+    # #216 fallback chain — 시우님 .env 가 TELEGRAM_LIVE_*/TELEGRAM_QTA_* 만 보유.
+    # 우선순위: TELEGRAM_LIVE_* (운영 표준) > TELEGRAM_QTA_* (#133 초기) > legacy
+    # TELEGRAM_BOT_TOKEN/CHAT_ID. telegram_alert.py 와 동일 패턴 (동일 LIVE 봇 채널).
+    token = (
+        os.environ.get("TELEGRAM_LIVE_BOT_TOKEN")
+        or os.environ.get("TELEGRAM_QTA_BOT_TOKEN")
+        or os.environ.get("TELEGRAM_BOT_TOKEN", "")
+    )
+    chat_id_raw = (
+        os.environ.get("TELEGRAM_LIVE_CHAT_ID")
+        or os.environ.get("TELEGRAM_QTA_CHAT_ID")
+        or os.environ.get("TELEGRAM_CHAT_ID", "")
+    )
     chat_ids: set[int] = set()
     for tok in chat_id_raw.replace(",", " ").split():
         try:
