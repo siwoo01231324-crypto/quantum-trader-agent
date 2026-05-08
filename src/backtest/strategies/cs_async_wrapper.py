@@ -18,6 +18,7 @@
 """
 from __future__ import annotations
 
+import importlib
 from typing import Callable, Optional
 
 import pandas as pd
@@ -44,15 +45,40 @@ class CrossSectionalAsyncStrategy:
 
     def __init__(
         self,
-        strategy_id: str,
-        compute_weights_fn: Callable,
-        symbol: str,
+        strategy_id: str | None = None,
+        compute_weights_fn: Optional[Callable] = None,
+        symbol: str = "UNIVERSE_BASKET",
         *,
         rebal_freq: int = 5,
         warmup_bars: int = 252,
         weights_kind: str = "krx",
         params: Optional[dict] = None,
+        module: Optional[str] = None,
     ) -> None:
+        """
+        Two construction modes:
+
+        1. Direct (programmatic):
+              CrossSectionalAsyncStrategy(strategy_id="...",
+                  compute_weights_fn=cs_tsmom_kr_daily.compute_weights, ...)
+
+        2. Config-driven (production.yaml via portfolio.config_loader):
+              CrossSectionalAsyncStrategy(strategy_id="cs_tsmom_kr_daily",
+                  module="backtest.strategies.cs_tsmom_kr_daily", ...)
+           → 모듈을 importlib 으로 resolve 후 `module.compute_weights` 사용.
+        """
+        if compute_weights_fn is None and module is not None:
+            mod = importlib.import_module(module)
+            compute_weights_fn = mod.compute_weights
+            if strategy_id is None:
+                # 모듈 마지막 segment 를 strategy_id 로 추론 (fallback)
+                strategy_id = module.rsplit(".", 1)[-1]
+        if compute_weights_fn is None:
+            raise ValueError(
+                "Either compute_weights_fn or module must be provided")
+        if strategy_id is None:
+            raise ValueError("strategy_id required")
+
         self.strategy_id = strategy_id
         self.compute_weights_fn = compute_weights_fn
         self.SYMBOL = symbol

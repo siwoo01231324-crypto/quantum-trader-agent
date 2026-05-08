@@ -121,6 +121,34 @@ def test_all_active_factories_produce_protocol_compliant_instance():
         assert s.strategy_id == name
 
 
+def test_module_based_construction_for_yaml_config():
+    """config_loader (YAML) 경로 — module 문자열로 compute_weights 자동 resolve."""
+    s = CrossSectionalAsyncStrategy(
+        strategy_id="cs_tsmom_kr_daily",
+        module="backtest.strategies.cs_tsmom_kr_daily",
+        symbol="KRX_TOP350_BASKET",
+        rebal_freq=5, warmup_bars=252, weights_kind="krx",
+        params={"top_n": 20, "min_turnover": 1e9, "min_price": 1000},
+    )
+    assert s.strategy_id == "cs_tsmom_kr_daily"
+    assert s.SYMBOL == "KRX_TOP350_BASKET"
+    assert callable(s.compute_weights_fn)
+
+
+def test_module_only_infers_strategy_id():
+    s = CrossSectionalAsyncStrategy(
+        module="backtest.strategies.cs_tsmom_crypto_daily",
+        symbol="CRYPTO_TOP30_BASKET",
+        weights_kind="crypto",
+    )
+    assert s.strategy_id == "cs_tsmom_crypto_daily"
+
+
+def test_construction_requires_compute_fn_or_module():
+    with pytest.raises(ValueError, match="compute_weights_fn or module"):
+        CrossSectionalAsyncStrategy(strategy_id="bad")
+
+
 @pytest.mark.asyncio
 async def test_crypto_wrapper_uses_quote_volume_path():
     s = make_cs_tsmom_kr_daily()  # KRX kind

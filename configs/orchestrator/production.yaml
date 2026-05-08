@@ -40,6 +40,100 @@ strategies:
       symbol: "005930"
       sizing_mode: half-kelly
 
+  # ── Universe-Scan strategies (#218) — broker 동적 universe 통합 후 활성화 ─
+  #
+  # 본 entries 는 config_loader 가 import + register 하지만, market_snapshot
+  # ["ohlcv_history"] 에 universe 종목 OHLCV 가 없으면 cs_async_wrapper 가 graceful
+  # warmup 또는 no_data 로 hold 반환 — broker 미연동 상태에서 zero impact.
+  #
+  # broker 통합 후 (universe-scan-broker-contract.md 참조) 실제 작동 — KIS 측은
+  # fetch_universe_snapshot, Binance 측은 fetch_universe_klines 메서드 추가 필요.
+
+  - id: cs-tsmom-kr-daily
+    class: backtest.strategies.cs_async_wrapper.CrossSectionalAsyncStrategy
+    kwargs:
+      strategy_id: cs_tsmom_kr_daily
+      module: backtest.strategies.cs_tsmom_kr_daily
+      symbol: KRX_TOP350_BASKET
+      rebal_freq: 5
+      warmup_bars: 252
+      weights_kind: krx
+      params:
+        top_n: 20
+        min_turnover: 1.0e9
+        min_price: 1000
+
+  - id: cs-rsi-div-kr
+    class: backtest.strategies.cs_async_wrapper.CrossSectionalAsyncStrategy
+    kwargs:
+      strategy_id: cs_rsi_div_kr
+      module: backtest.strategies.cs_rsi_div_kr
+      symbol: KRX_TOP350_BASKET
+      rebal_freq: 5
+      warmup_bars: 40
+      weights_kind: krx
+      params:
+        top_n: 20
+        min_turnover: 1.0e9
+        min_price: 1000
+
+  - id: cs-adx-ma-kr
+    class: backtest.strategies.cs_async_wrapper.CrossSectionalAsyncStrategy
+    kwargs:
+      strategy_id: cs_adx_ma_kr
+      module: backtest.strategies.cs_adx_ma_kr
+      symbol: KRX_TOP350_BASKET
+      rebal_freq: 5
+      warmup_bars: 40
+      weights_kind: krx_hlc
+      params:
+        top_n: 20
+        min_turnover: 1.0e9
+        min_price: 1000
+
+  - id: cs-tsmom-crypto-daily
+    class: backtest.strategies.cs_async_wrapper.CrossSectionalAsyncStrategy
+    kwargs:
+      strategy_id: cs_tsmom_crypto_daily
+      module: backtest.strategies.cs_tsmom_crypto_daily
+      symbol: CRYPTO_TOP30_BASKET
+      rebal_freq: 5
+      warmup_bars: 252
+      weights_kind: crypto
+      params:
+        top_n: 10
+        min_quote_vol: 1.0e7
+
+  - id: cs-rsi-div-crypto
+    class: backtest.strategies.cs_async_wrapper.CrossSectionalAsyncStrategy
+    kwargs:
+      strategy_id: cs_rsi_div_crypto
+      module: backtest.strategies.cs_rsi_div_crypto
+      symbol: CRYPTO_TOP30_BASKET
+      rebal_freq: 5
+      warmup_bars: 40
+      weights_kind: crypto
+      params:
+        top_n: 10
+        min_quote_vol: 1.0e7
+
+  - id: cs-macd-vol-crypto
+    class: backtest.strategies.cs_async_wrapper.CrossSectionalAsyncStrategy
+    kwargs:
+      strategy_id: cs_macd_vol_crypto
+      module: backtest.strategies.cs_macd_vol_crypto
+      symbol: CRYPTO_TOP30_BASKET
+      rebal_freq: 5
+      warmup_bars: 40
+      weights_kind: crypto
+      params:
+        top_n: 10
+        min_quote_vol: 1.0e7
+        vol_ceiling: 2.0
+
+  # cs-bb-macd-kr 는 5y bench Sharpe -0.32 → status: inactive, production 미등록.
+  # 코드는 src/backtest/strategies/cs_bb_macd_kr.py 유지 — score 정의 재설계 후 활성화 검토.
+
   # ── 메타라벨러 활성화 (#85) — 운영자 절차 ─────────────────────────────────
   # 1. python scripts/train_metalabeler_btc.py --output-dir models/momo-btc-v2
   # 2. python scripts/promote_metalabeler.py --strategy momo-btc-v2 --version <ts>
