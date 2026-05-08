@@ -82,3 +82,9 @@ scripts/live_run.py:321:    "--schedule", choices=["krx", "always"], default="al
   - **Smoke 1** (`--schedule=krx` 마감 후): `python scripts/live_run.py --symbols 005930 --broker kis-paper-shadow --schedule krx --duration 8s --no-browser --feed kis --dashboard-port 0` 실행 시 `live.schedule outside session, sleeping 51150s (~14.2h) until 2026-05-08T09:00:00+09:00 KST` 로그 출력 + `logs/` 디렉토리 자체 미생성 (ProcessLock + WAL 보다 먼저 게이트가 차단). Bug 1+2 fix 동작 확인.
   - **Smoke 2** (`--schedule=always` 즉시 진입): `python scripts/live_run.py --symbols 005930 --broker paper-only --schedule always --duration 6s --no-browser --feed mock --mock-bars 5 --dashboard-port 0` 실행 시 `logs/live/{run_id}/wal.jsonl` 첫 줄에 `{"event_type":"run_started", payload:{run_id,broker,feed,symbols,schedule,wal_path}}` 기록. Bug 3 fix 동작 확인.
   - 운영 e2e 검증 (Bug 4 + 텔레그램 도달) 은 시우님 머지 후 컨테이너 재빌드 + 다음 KRX 영업일 09:00 진입 시 가능.
+- 2026-05-08: #126 양방향 봇 (PR #205 머지) 의 운영 wiring 누락 발견 → #216 에 통합 해결.
+  - **scripts/telegram_control.py:build_config_from_env** — telegram_alert.py 와 동일 fallback chain (`TELEGRAM_LIVE_*` > `TELEGRAM_QTA_*` > legacy `TELEGRAM_BOT_TOKEN/CHAT_ID`). 시우님 .env 의 `TELEGRAM_LIVE_BOT_TOKEN/CHAT_ID` 가 정상 잡힘.
+  - **docker-compose.live.yml** — `telegram-control` service 신규 추가 (5번째 컨테이너). `network_mode: service:live-daemon` 으로 dashboard 의 127.0.0.1:8000 에 호스트 노출 없이 도달. audit WAL 은 `/data/logs/telegram_control.wal.jsonl`.
+  - **tests/test_telegram_control.py** — TestBuildConfigEnvFallback 5 케이스 추가 (legacy/QTA priority/LIVE priority/multi-chat CSV/empty env).
+  - 회귀: 206/206 통과 (이전 176 + 신규 5 + 회귀 25). `docker compose -f docker-compose.live.yml config` syntax OK. `check_invariants --strict` 187 노트 통과.
+  - 추가 컨테이너 ping evidence: `qta-phase2:latest` 이미지 안에서 `_resolve_telegram_credentials` 가 LIVE 봇 토큰 (`8531859516...`, chat `7942211803`) 정상 잡고 `send_telegram(parse_mode='')` 200 OK.
