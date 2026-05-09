@@ -51,6 +51,10 @@ ENDPOINT_KILL_RESET = "/api/kill-switch/reset"
 ENDPOINT_KILL_STATE = "/api/kill-switch"
 ENDPOINT_PNL = "/api/pnl"
 ENDPOINT_LIMITS = "/api/limits"
+# #221 — 거래 현황 명령어용 endpoints (#126/#216 후속).
+ENDPOINT_STRATEGIES = "/api/strategies"
+ENDPOINT_ACCOUNT = "/api/account/info"
+ENDPOINT_SHADOW_RUNS = "/api/shadow_runs"
 
 
 @dataclass(frozen=True)
@@ -335,6 +339,156 @@ def handle_policy(config: BotConfig, args: str, chat_id: int, user_id: int | Non
     )
 
 
+def handle_today(config: BotConfig, args: str, chat_id: int, user_id: int | None) -> CommandResult:
+    """`/today` — 오늘 realized PnL + 종목별/전략별 손익 + 체결 수.
+
+    Aggregates `/api/pnl` (daily bucket) and `/api/strategies` (per-strategy
+    realized). Designed for at-a-glance KST 09:00 business-day summary.
+    """
+    base = config.dashboard_base_url.rstrip("/")
+    try:
+        pnl_resp = requests.get(f"{base}{ENDPOINT_PNL}", timeout=10)
+        strat_resp = requests.get(f"{base}{ENDPOINT_STRATEGIES}", timeout=10)
+    except requests.RequestException as exc:
+        return CommandResult(
+            command="today", args=args, chat_id=chat_id, user_id=user_id,
+            accepted=False, reply=f"❌ dashboard unreachable: {exc}",
+            reason="dashboard_unreachable",
+        )
+
+    pnl = pnl_resp.json() if pnl_resp.status_code == 200 else {}
+    strategies = strat_resp.json() if strat_resp.status_code == 200 else []
+
+    lines = ["📅 오늘 (KST 09:00 business day)"]
+    lines.append(f"PnL daily realized: {pnl.get('daily', 0):.2f} KRW")
+    lines.append(f"PnL realtime:       {pnl.get('realtime', 0):.2f} KRW")
+    by_strategy = pnl.get("by_strategy") or {}
+    if by_strategy:
+        lines.append("By strategy:")
+        for sid, val in sorted(by_strategy.items()):
+            lines.append(f"  • {sid}: {float(val):.2f}")
+    if strategies:
+        active = [s for s in strategies if s.get("enabled")]
+        lines.append(f"Strategies active: {len(active)}/{len(strategies)}")
+    return CommandResult(
+        command="today", args=args, chat_id=chat_id, user_id=user_id,
+        accepted=True, reply="\n".join(lines),
+    )
+
+
+def handle_positions(config: BotConfig, args: str, chat_id: int, user_id: int | None) -> CommandResult:
+    """`/positions` — 종목별 보유 포지션 (전략별, 수량/평단가)."""
+    base = config.dashboard_base_url.rstrip("/")
+    try:
+        resp = requests.get(f"{base}{ENDPOINT_STRATEGIES}", timeout=10)
+    except requests.RequestException as exc:
+        return CommandResult(
+            command="positions", args=args, chat_id=chat_id, user_id=user_id,
+            accepted=False, reply=f"❌ dashboard unreachable: {exc}",
+            reason="dashboard_unreachable",
+        )
+    if resp.status_code != 200:
+        return CommandResult(
+            command="positions", args=args, chat_id=chat_id, user_id=user_id,
+            accepted=False, reply=f"❌ /api/strategies HTTP {resp.status_code}",
+            reason="dashboard_http_error",
+        )
+    strategies = resp.json() or []
+    lines = ["📈 Positions (per strategy)"]
+    any_pos = False
+    for s in strategies:
+        sid = s.get("strategy_id", "?")
+        positions = s.get("positions") or {}
+        if not positions:
+            continue
+        any_pos = True
+        pretty = ", ".join(f"{sym}={qty}" for sym, qty in sorted(positions.items()))
+        lines.append(f"• {sid}: {pretty}")
+    if not any_pos:
+        lines.append("  (no open positions)")
+    return CommandResult(
+        command="positions", args=args, chat_id=chat_id, user_id=user_id,
+        accepted=True, reply="\n".join(lines),
+    )
+
+
+def handle_fills(config: BotConfig, args: str, chat_id: int, user_id: int | None) -> CommandResult:
+    """`/fills [N]` — 최근 N개 체결 (default 10). `/api/shadow_runs/latest` 의 fills 사용."""
+    try:
+        n = int(args.strip()) if args.strip() else 10
+    except ValueError:
+        n = 10
+    n = max(1, min(50, n))  # clamp [1, 50]
+
+    base = config.dashboard_base_url.rstrip("/")
+    try:
+        runs_resp = requests.get(f"{base}{ENDPOINT_SHADOW_RUNS}", timeout=10)
+    except requests.RequestException as exc:
+        return CommandResult(
+            command="fills", args=args, chat_id=chat_id, user_id=user_id,
+            accepted=False, reply=f"❌ dashboard unreachable: {exc}",
+            reason="dashboard_unreachable",
+        )
+    runs = runs_resp.json() if runs_resp.status_code == 200 else []
+    if not runs:
+        return CommandResult(
+            command="fills", args=args, chat_id=chat_id, user_id=user_id,
+            accepted=True, reply="📜 Fills: (no shadow runs found)",
+        )
+    latest_run = sorted(runs, key=lambda r: r.get("run_id", ""))[-1]
+    run_id = latest_run.get("run_id")
+    try:
+        detail = requests.get(f"{base}{ENDPOINT_SHADOW_RUNS}/{run_id}", timeout=10).json() or {}
+    except requests.RequestException as exc:
+        return CommandResult(
+            command="fills", args=args, chat_id=chat_id, user_id=user_id,
+            accepted=False, reply=f"❌ shadow_run detail fetch failed: {exc}",
+            reason="dashboard_unreachable",
+        )
+    fills = (detail.get("fills") or [])[-n:]
+    lines = [f"📜 Fills (latest {len(fills)} of run {run_id})"]
+    if not fills:
+        lines.append("  (none yet)")
+    for f in fills:
+        ts = (f.get("ts") or "")[:19]
+        lines.append(
+            f"  {ts} {f.get('symbol','?')} {f.get('side','?')} "
+            f"qty={f.get('qty','?')} px={f.get('price','?')}"
+        )
+    return CommandResult(
+        command="fills", args=args, chat_id=chat_id, user_id=user_id,
+        accepted=True, reply="\n".join(lines),
+    )
+
+
+def handle_account(config: BotConfig, args: str, chat_id: int, user_id: int | None) -> CommandResult:
+    """`/account` — 잔고 + 가용 현금."""
+    base = config.dashboard_base_url.rstrip("/")
+    try:
+        resp = requests.get(f"{base}{ENDPOINT_ACCOUNT}", timeout=10)
+    except requests.RequestException as exc:
+        return CommandResult(
+            command="account", args=args, chat_id=chat_id, user_id=user_id,
+            accepted=False, reply=f"❌ dashboard unreachable: {exc}",
+            reason="dashboard_unreachable",
+        )
+    if resp.status_code != 200:
+        return CommandResult(
+            command="account", args=args, chat_id=chat_id, user_id=user_id,
+            accepted=False, reply=f"❌ /api/account/info HTTP {resp.status_code}",
+            reason="dashboard_http_error",
+        )
+    info = resp.json() or {}
+    lines = ["💰 Account"]
+    for key in ("balance_krw", "available_krw", "equity_krw", "currency", "broker", "mode"):
+        if key in info:
+            lines.append(f"{key}: {info[key]}")
+    return CommandResult(
+        command="account", args=args, chat_id=chat_id, user_id=user_id,
+        accepted=True, reply="\n".join(lines),
+    )
+
+
 def handle_help(_config: BotConfig, args: str, chat_id: int, user_id: int | None) -> CommandResult:
     reply = (
         "QTA 제어봇 명령\n"
@@ -342,6 +496,10 @@ def handle_help(_config: BotConfig, args: str, chat_id: int, user_id: int | None
         "/release        비상정지 해제 (60초내 두 번)\n"
         "/status         PnL + 한도 + KillSwitch\n"
         "/policy         정책 요약\n"
+        "/today          오늘 PnL + 전략별 손익\n"
+        "/positions      종목별 보유 포지션\n"
+        "/fills [N]      최근 N개 체결 (default 10)\n"
+        "/account        잔고 + 가용 현금\n"
         "/help           이 메시지"
     )
     return CommandResult(
@@ -355,6 +513,11 @@ _HANDLERS = {
     "release": handle_release,
     "status": handle_status,
     "policy": handle_policy,
+    # #221 거래 현황 (#126/#216 후속).
+    "today": handle_today,
+    "positions": handle_positions,
+    "fills": handle_fills,
+    "account": handle_account,
     "help": handle_help,
     "start": handle_help,  # /start = /help on first interaction
 }

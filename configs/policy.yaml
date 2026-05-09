@@ -1,0 +1,65 @@
+# #133 Phase 2 KIS 모의계좌 운영 정책 (#221 신규).
+#
+# `src/risk/dsl.Policy` 스키마를 따른다. evaluate_order 가 모든 주문을 본 정책으로
+# 검증하고, 위반 시 BLOCK / REDUCE / HALT 액션을 수행한다 (단계: rule_id 단위 first-violation-wins).
+#
+# 환경 가정 (시우님 Phase 2 paper 운영):
+# - 잔고 1,000,000 KRW (paper, 1백만)
+# - 종목 3개 (005930 삼성전자 / 035720 카카오 / 000660 SK하이닉스)
+# - 현물 only (leverage 1.0)
+# - 보수 시작 → 운영 안정화 후 점진 상향
+#
+# 본 yaml 은 텔레그램 봇 `/policy` 응답 source 이며, evaluate_order 의 입력은
+# `risk.dsl.Policy.model_validate(...)` 로 동일 schema 강제.
+
+policy_version: 1
+name: "phase2-kis-paper-conservative-v1"
+description: |
+  #133 Phase 2 KIS 모의계좌 보수 운영 정책 v1.
+  잔고 1M KRW, 3종목(005930/035720/000660), 현물 only.
+  운영 1주 후 평가 → v2 (한도 상향) 검토.
+
+# 단일 주문 한도
+per_trade:
+  max_notional_krw: 300000.0   # 1주문 30만 KRW (잔고 30%) — 분산 우선
+  max_qty: 100                  # 100주/주문 (스프레드 깊이 감안)
+  allowed_sides: [buy, sell]    # long-only paper, short 차단 (KIS 모의계좌도 short 미지원)
+
+# 일별 한도
+per_day:
+  max_orders: 30                # 30종목 × 1주문 또는 3종목 × 10주문 한도
+  max_loss_krw: 50000.0         # 일일 손실 5% (50,000 KRW) — 초과 시 HALT
+  max_turnover_krw: 3000000.0   # 일일 회전 3배 (300만) — 과회전 차단
+
+# 포트폴리오 노출 한도
+per_portfolio:
+  max_gross_exposure_krw: 1000000.0  # 잔고의 100% 까지 (현물 only)
+  max_net_exposure_krw: 1000000.0    # short 없으니 net == gross
+  max_leverage: 1.0                   # KIS 현물 모의계좌 — 레버리지 0
+
+# 포지션 단일 비중
+per_position:
+  max_weight_pct: 40.0          # 단일 종목 40% 상한 (3종목 기준 분산 강제)
+
+# 섹터 한도 (#133 3종목 = 반도체 2 + 인터넷 1; 보수)
+sector_limits:
+  - sector: "Tech-Semi"
+    max_weight_pct: 70.0        # 005930 + 000660 합 70% 상한
+  - sector: "Tech-Internet"
+    max_weight_pct: 40.0        # 035720 단일 = 40% 상한 (per_position 와 동일)
+
+# 드로우다운 차단
+drawdown:
+  max_intraday_dd_pct: 5.0      # 장중 -5% 도달 → HALT
+  max_running_dd_pct: 10.0      # running peak 대비 -10% → HALT
+  on_breach: halt               # 초과 시 KillSwitch.trip — 신규 주문 차단 (Action enum, lowercase)
+
+# 포트폴리오 리스크 (CVaR / 상관 / ENB) — Phase 2 첫 1주는 모니터링만
+# (한도 자체는 비활성화, 통계만 수집. v2 에서 활성화 후보)
+# per_portfolio_risk:
+#   max_cvar_pct: 0.05          # 95% CVaR 5% 상한 (Basel III FRTB α=0.975)
+#   max_corr_avg: 0.7           # 평균 페어 상관 70%
+#   min_enb_ratio: 0.3          # ENB ≥ 0.3·N (3종목이면 0.9)
+#   on_cvar_breach: reduce
+#   on_corr_breach: block
+#   on_enb_breach: halt
