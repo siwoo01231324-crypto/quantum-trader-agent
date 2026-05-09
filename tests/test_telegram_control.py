@@ -384,3 +384,127 @@ class TestBuildConfigEnvFallback:
         cfg = tc.build_config_from_env(self._make_args())
         assert cfg.token == ""
         assert cfg.allowed_chat_ids == frozenset()
+
+
+_TEST_BASE = "http://dashboard.test"
+
+
+class TestTradingStatusCommands:
+    """#221 — /today /positions /fills /account 명령어 단위 테스트."""
+
+    @responses.activate
+    def test_today_aggregates_pnl_and_strategies(self):
+        cfg = _make_config()
+        responses.add(
+            responses.GET, f"{_TEST_BASE}/api/pnl",
+            json={"realtime": 12.5, "daily": 100.0, "monthly": 500.0,
+                  "by_strategy": {"momo-btc-v2": 80.0, "momo-kis-v1": 20.0}},
+            status=200,
+        )
+        responses.add(
+            responses.GET, f"{_TEST_BASE}/api/strategies",
+            json=[{"strategy_id": "momo-btc-v2", "enabled": True},
+                  {"strategy_id": "momo-kis-v1", "enabled": False}],
+            status=200,
+        )
+        result = tc.handle_today(cfg, "", chat_id=12345, user_id=1)
+        assert result.accepted
+        assert "오늘" in result.reply
+        assert "100.00 KRW" in result.reply
+        assert "momo-btc-v2: 80.00" in result.reply
+        assert "Strategies active: 1/2" in result.reply
+
+    @responses.activate
+    def test_positions_lists_open_positions(self):
+        cfg = _make_config()
+        responses.add(
+            responses.GET, f"{_TEST_BASE}/api/strategies",
+            json=[
+                {"strategy_id": "momo-kis-v1", "positions": {"005930": "10", "035720": "5"}},
+                {"strategy_id": "idle", "positions": {}},
+            ],
+            status=200,
+        )
+        result = tc.handle_positions(cfg, "", chat_id=12345, user_id=1)
+        assert result.accepted
+        assert "momo-kis-v1" in result.reply
+        assert "005930=10" in result.reply
+        assert "035720=5" in result.reply
+
+    @responses.activate
+    def test_positions_no_open(self):
+        cfg = _make_config()
+        responses.add(
+            responses.GET, f"{_TEST_BASE}/api/strategies",
+            json=[{"strategy_id": "idle", "positions": {}}],
+            status=200,
+        )
+        result = tc.handle_positions(cfg, "", chat_id=12345, user_id=1)
+        assert result.accepted
+        assert "no open positions" in result.reply
+
+    @responses.activate
+    def test_fills_returns_latest_n(self):
+        cfg = _make_config()
+        responses.add(
+            responses.GET, f"{_TEST_BASE}/api/shadow_runs",
+            json=[{"run_id": "run-001"}, {"run_id": "run-002"}],
+            status=200,
+        )
+        responses.add(
+            responses.GET, f"{_TEST_BASE}/api/shadow_runs/run-002",
+            json={"fills": [
+                {"ts": "2026-05-08T09:01:23.456Z", "symbol": "005930", "side": "buy",
+                 "qty": "10", "price": "70000"},
+                {"ts": "2026-05-08T09:02:00Z", "symbol": "035720", "side": "buy",
+                 "qty": "5", "price": "55000"},
+            ]},
+            status=200,
+        )
+        result = tc.handle_fills(cfg, "5", chat_id=12345, user_id=1)
+        assert result.accepted
+        assert "run-002" in result.reply
+        assert "005930" in result.reply
+        assert "035720" in result.reply
+
+    @responses.activate
+    def test_fills_no_runs(self):
+        cfg = _make_config()
+        responses.add(
+            responses.GET, f"{_TEST_BASE}/api/shadow_runs",
+            json=[],
+            status=200,
+        )
+        result = tc.handle_fills(cfg, "", chat_id=12345, user_id=1)
+        assert result.accepted
+        assert "no shadow runs" in result.reply
+
+    @responses.activate
+    def test_account_shows_balance(self):
+        cfg = _make_config()
+        responses.add(
+            responses.GET, f"{_TEST_BASE}/api/account/info",
+            json={"balance_krw": 1000000, "available_krw": 950000,
+                  "equity_krw": 1010000, "currency": "KRW",
+                  "broker": "kis-paper-shadow", "mode": "paper"},
+            status=200,
+        )
+        result = tc.handle_account(cfg, "", chat_id=12345, user_id=1)
+        assert result.accepted
+        assert "1000000" in result.reply
+        assert "kis-paper-shadow" in result.reply
+
+    @responses.activate
+    def test_account_dashboard_unreachable(self):
+        cfg = _make_config()
+        # No mock registered → connection error path
+        result = tc.handle_account(cfg, "", chat_id=12345, user_id=1)
+        assert not result.accepted
+        assert "unreachable" in result.reply or "Connection" in result.reply
+
+    def test_help_includes_new_commands(self):
+        cfg = _make_config()
+        result = tc.handle_help(cfg, "", chat_id=12345, user_id=1)
+        assert result.accepted
+        for cmd in ("/today", "/positions", "/fills", "/account"):
+            assert cmd in result.reply
