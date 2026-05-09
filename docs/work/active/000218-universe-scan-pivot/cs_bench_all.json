@@ -1,0 +1,65 @@
+{
+  "cs_tsmom_kr_daily": {
+    "sharpe": 1.048,
+    "mdd": -0.4635,
+    "ann_return": 0.3514,
+    "exposure": 0.996,
+    "n_trades": 287,
+    "n_days": 1473,
+    "avg_holdings": 20.0
+  },
+  "cs_rsi_div_kr": {
+    "sharpe": 0.97,
+    "mdd": -0.3546,
+    "ann_return": 0.2458,
+    "exposure": 1.0,
+    "n_trades": 294,
+    "n_days": 1473,
+    "avg_holdings": 20.0
+  },
+  "cs_bb_macd_kr": {
+    "sharpe": -0.323,
+    "mdd": -0.766,
+    "ann_return": -0.1343,
+    "exposure": 0.735,
+    "n_trades": 268,
+    "n_days": 1473,
+    "avg_holdings": 5.01
+  },
+  "cs_adx_ma_kr": {
+    "sharpe": 1.031,
+    "mdd": -0.4536,
+    "ann_return": 0.3355,
+    "exposure": 1.0,
+    "n_trades": 295,
+    "n_days": 1473,
+    "avg_holdings": 19.52
+  },
+  "cs_tsmom_crypto_daily": {
+    "sharpe": 1.019,
+    "mdd": -0.7701,
+    "ann_return": 0.626,
+    "exposure": 0.884,
+    "n_trades": 242,
+    "n_days": 2192,
+    "avg_holdings": 7.65
+  },
+  "cs_rsi_div_crypto": {
+    "sharpe": 1.015,
+    "mdd": -0.8166,
+    "ann_return": 0.6282,
+    "exposure": 0.995,
+    "n_trades": 392,
+    "n_days": 2192,
+    "avg_holdings": 9.2
+  },
+  "cs_macd_vol_crypto": {
+    "sharpe": 1.012,
+    "mdd": -0.8451,
+    "ann_return": 0.6873,
+    "exposure": 0.9,
+    "n_trades": 396,
+    "n_days": 2192,
+    "avg_holdings": 6.76
+  }
+}

@@ -56,18 +56,27 @@ def _build_history(n_bars: int = 60) -> pd.DataFrame:
     return df
 
 
-def test_production_yaml_registers_five_strategies():
+def test_production_yaml_registers_all_strategies():
+    """Single-ticker (5) + universe-scan (6, #218) = 11 등록 (cs-bb-macd-kr inactive 제외)."""
     orch = load_orchestrator_from_yaml(
         _PRODUCTION_YAML,
         _make_policy(),
         on_metalabeler_missing="skip",
     )
     assert set(orch._strategies.keys()) == {
+        # Legacy single-ticker (5)
         "momo-btc-v2",
         "momo-vol-filtered",
         "meanrev-pairs",
         "breakout-donchian",
         "momo-kis-v1",
+        # Universe-scan (#218, 6 active; cs-bb-macd-kr inactive)
+        "cs-tsmom-kr-daily",
+        "cs-rsi-div-kr",
+        "cs-adx-ma-kr",
+        "cs-tsmom-crypto-daily",
+        "cs-rsi-div-crypto",
+        "cs-macd-vol-crypto",
     }
 
 

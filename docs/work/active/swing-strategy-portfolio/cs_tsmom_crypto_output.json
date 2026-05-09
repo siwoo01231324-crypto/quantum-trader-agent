@@ -1,0 +1,106 @@
+{
+  "config": {
+    "universe_size": 30,
+    "top_n": 10,
+    "rebal_freq": 5,
+    "long_lb": 252,
+    "skip_lb": 21,
+    "min_quote_vol": 10000000.0,
+    "dd_guard": -0.3,
+    "cost_bps": 16,
+    "warmup_start": "2019-01-01",
+    "end": "2025-12-31",
+    "eval_start": "2020-01-01",
+    "fetched_size": 29
+  },
+  "universe": [
+    "BTCUSDT",
+    "ETHUSDT",
+    "SOLUSDT",
+    "TONUSDT",
+    "ZECUSDT",
+    "BNBUSDT",
+    "XRPUSDT",
+    "DOGEUSDT",
+    "TAOUSDT",
+    "SUIUSDT",
+    "DOGSUSDT",
+    "NEARUSDT",
+    "DASHUSDT",
+    "PEPEUSDT",
+    "LINKUSDT",
+    "ADAUSDT",
+    "FILUSDT",
+    "VANAUSDT",
+    "IOUSDT",
+    "ICPUSDT",
+    "ENAUSDT",
+    "TRXUSDT",
+    "CHIPUSDT",
+    "AVAXUSDT",
+    "PENGUUSDT",
+    "VIRTUALUSDT",
+    "DUSDT",
+    "APTUSDT",
+    "UNIUSDT",
+    "ONDOUSDT"
+  ],
+  "results": {
+    "sharpe": 1.328,
+    "mdd": -0.5242,
+    "calmar": 1.733,
+    "ann_return": 0.9085,
+    "final_equity": 48.4905,
+    "avg_holdings": 8.06,
+    "avg_turnover_ann": 20.29,
+    "exposure_pct_days": 0.724,
+    "n_days": 2192
+  },
+  "benchmark": {
+    "sharpe": 0.989,
+    "mdd": -0.7663,
+    "ann_return": 0.5161
+  },
+  "top_holdings_recent": [
+    {
+      "symbol": "BTCUSDT",
+      "weight": 0.1
+    },
+    {
+      "symbol": "ZECUSDT",
+      "weight": 0.1
+    },
+    {
+      "symbol": "ETHUSDT",
+      "weight": 0.1
+    },
+    {
+      "symbol": "BNBUSDT",
+      "weight": 0.1
+    },
+    {
+      "symbol": "DASHUSDT",
+      "weight": 0.1
+    },
+    {
+      "symbol": "LINKUSDT",
+      "weight": 0.1
+    },
+    {
+      "symbol": "PENGUUSDT",
+      "weight": 0.1
+    },
+    {
+      "symbol": "VIRTUALUSDT",
+      "weight": 0.1
+    },
+    {
+      "symbol": "TRXUSDT",
+      "weight": 0.1
+    },
+    {
+      "symbol": "UNIUSDT",
+      "weight": 0.1
+    }
+  ]
+}

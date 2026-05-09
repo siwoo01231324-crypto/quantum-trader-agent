@@ -141,6 +141,24 @@ quantum-trader-agent/
 
 ---
 
+## 전략 패턴 (2026-05-06 결정)
+
+신규 전략은 **유니버스 스캔 패턴** 을 기본으로 한다. 단일종목 고정 전략은 legacy 로 유지하되 신규 추가는 본 패턴 우선.
+
+| 패턴 | 정의 | 예시 | 비고 |
+|------|------|------|------|
+| **universe-scan** (default) | 유니버스 전체 스캔 → 랭킹 → 상위 N 보유 | `breakout_donchian` (KOSPI200 → top-10), `cs_tsmom_kr_daily` (KOSPI200+KOSDAQ150 → top-20) | 신규 KRX·crypto 전략 default |
+| single-ticker (legacy) | 사전 지정 1~3 종목, RSI/MACD 등 단일 시그널 | `momo_btc_v2` (BTC), `momo_kis_v1` (005930), `momo_vol_filtered` (BTC), `meanrev_pairs` (ETHBTC) | 운영 중 전략은 유지, 신규 추가 시 사유 명시 |
+
+**왜 universe-scan 이 default**:
+- 횡단면(cross-sectional) 신호 밀도 ≫ 단일 종목 (#79 breakout, 2026-05-06 cs_tsmom 백테스트로 검증)
+- 1인 운용 환경에서 종목 회전 (테마 사이클·시총 변동) 적응 필수
+- 리스크 분산 (top 20 동일가중 = 단일 종목 대비 idiosyncratic 위험 1/20)
+
+상세 규약 → `docs/specs/universe-scan-strategy-pattern.md`
+
+---
+
 ## 지식볼트 · 온톨로지 (#47)
 
 `docs/` 는 Obsidian 볼트로 열린다. 프론트매터 기반 노트가 RDF 온톨로지로 동기화된다.

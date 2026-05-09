@@ -1,0 +1,158 @@
+{
+  "config": {
+    "kospi_top": 200,
+    "kosdaq_top": 150,
+    "top_n": 20,
+    "rebal_freq": 5,
+    "long_lb": 252,
+    "skip_lb": 21,
+    "liq_turnover": 1000000000.0,
+    "liq_price": 1000,
+    "dd_guard": -0.1,
+    "ma_filter": 200,
+    "cost_bps": 55,
+    "warmup_start": "2019-01-01",
+    "end": "2025-12-31",
+    "eval_start": "2020-01-01",
+    "universe_size": 347,
+    "fetched_size": 334
+  },
+  "results": {
+    "sharpe": 0.711,
+    "mdd": -0.438,
+    "calmar": 0.338,
+    "ann_return": 0.148,
+    "final_equity": 2.2404,
+    "avg_holdings": 20.0,
+    "avg_turnover_ann": 12.71,
+    "exposure_pct_days": 0.554,
+    "n_days": 1473
+  },
+  "benchmark": {
+    "sharpe": 0.656,
+    "mdd": -0.3571,
+    "ann_return": 0.1198
+  },
+  "top_holdings_recent": [
+    {
+      "code": "034020",
+      "name": "두산에너빌리티",
+      "board": "KOSPI",
+      "weight": 0.05
+    },
+    {
+      "code": "298040",
+      "name": "효성중공업",
+      "board": "KOSPI",
+      "weight": 0.05
+    },
+    {
+      "code": "278470",
+      "name": "에이피알",
+      "board": "KOSPI",
+      "weight": 0.05
+    },
+    {
+      "code": "007660",
+      "name": "이수페타시스",
+      "board": "KOSPI",
+      "weight": 0.05
+    },
+    {
+      "code": "000155",
+      "name": "두산우",
+      "board": "KOSPI",
+      "weight": 0.05
+    },
+    {
+      "code": "097230",
+      "name": "HJ중공업",
+      "board": "KOSPI",
+      "weight": 0.05
+    },
+    {
+      "code": "298380",
+      "name": "에이비엘바이오",
+      "board": "KOSDAQ",
+      "weight": 0.05
+    },
+    {
+      "code": "108490",
+      "name": "로보티즈",
+      "board": "KOSDAQ",
+      "weight": 0.05
+    },
+    {
+      "code": "222800",
+      "name": "심텍",
+      "board": "KOSDAQ",
+      "weight": 0.05
+    },
+    {
+      "code": "226950",
+      "name": "올릭스",
+      "board": "KOSDAQ",
+      "weight": 0.05
+    },
+    {
+      "code": "347850",
+      "name": "디앤디파마텍",
+      "board": "KOSDAQ",
+      "weight": 0.05
+    },
+    {
+      "code": "030530",
+      "name": "원익홀딩스",
+      "board": "KOSDAQ",
+      "weight": 0.05
+    },
+    {
+      "code": "458870",
+      "name": "씨어스",
+      "board": "KOSDAQ",
+      "weight": 0.05
+    },
+    {
+      "code": "437730",
+      "name": "삼현",
+      "board": "KOSDAQ",
+      "weight": 0.05
+    },
+    {
+      "code": "445680",
+      "name": "큐리옥스바이오시스템즈",
+      "board": "KOSDAQ",
+      "weight": 0.05
+    },
+    {
+      "code": "127120",
+      "name": "제이에스링크",
+      "board": "KOSDAQ",
+      "weight": 0.05
+    },
+    {
+      "code": "160190",
+      "name": "하이젠알앤엠",
+      "board": "KOSDAQ",
+      "weight": 0.05
+    },
+    {
+      "code": "466100",
+      "name": "클로봇",
+      "board": "KOSDAQ",
+      "weight": 0.05
+    },
+    {
+      "code": "115180",
+      "name": "큐리언트",
+      "board": "KOSDAQ",
+      "weight": 0.05
+    },
+    {
+      "code": "356860",
+      "name": "티엘비",
+      "board": "KOSDAQ",
+      "weight": 0.05
+    }
+  ]
+}
