@@ -126,6 +126,47 @@ class TestScanLake:
         assert df.iloc[0]["n_bars"] == 200
         assert df.iloc[0]["n_days"] == 1
 
+    def test_krx_only_filter_excludes_binance_symbols(self, tmp_path: Path) -> None:
+        """Same lake/ohlcv/freq=1m partition is shared with Binance backtest data
+        (BTCUSDT, ETHUSDT). With krx_only=True (default), monitor must skip them
+        and only count 6-digit KRX codes — otherwise the weekly summary reports
+        2192 거래일 against a 90-day target (real bug observed 2026-05-10)."""
+        mon = _load_monitor()
+        # KRX symbol — 1 day session
+        krx_ts = _krx_session_minutes(datetime(2026, 5, 4, tzinfo=timezone.utc))
+        _write_partition(tmp_path, symbol="005930", interval="1m", timestamps=krx_ts)
+        # Binance symbol — 5 days of synthetic 1m bars (would dominate without filter)
+        binance_ts = [
+            datetime(2024, 1, d, h, m, tzinfo=timezone.utc)
+            for d in range(1, 6)
+            for h in range(24)
+            for m in (0, 15, 30, 45)
+        ]
+        _write_partition(tmp_path, symbol="BTCUSDT", interval="1m", timestamps=binance_ts)
+        _write_partition(tmp_path, symbol="ETHUSDT", interval="1m", timestamps=binance_ts)
+
+        # Default (krx_only=True): only 005930 visible
+        df = mon.scan_lake(tmp_path, interval="1m")
+        assert list(df["symbol"]) == ["005930"]
+        assert df.iloc[0]["n_bars"] == 390
+
+        # Opt-out: include non-KRX symbols too
+        df_all = mon.scan_lake(tmp_path, interval="1m", krx_only=False)
+        assert set(df_all["symbol"]) == {"005930", "BTCUSDT", "ETHUSDT"}
+
+    def test_krx_only_default_filters_lowercase_or_alpha_symbols(self, tmp_path: Path) -> None:
+        """Sanity: any symbol that doesn't match ^\\d{6}$ is dropped — guards
+        against future Binance / NASDAQ codes accidentally landing in lake/."""
+        mon = _load_monitor()
+        ts = _krx_session_minutes(datetime(2026, 5, 4, tzinfo=timezone.utc))
+        _write_partition(tmp_path, symbol="005930", interval="1m", timestamps=ts)
+        _write_partition(tmp_path, symbol="aapl", interval="1m", timestamps=ts)
+        _write_partition(tmp_path, symbol="00593O", interval="1m", timestamps=ts)  # letter O instead of zero
+        _write_partition(tmp_path, symbol="12345", interval="1m", timestamps=ts)   # 5 digits, not 6
+
+        df = mon.scan_lake(tmp_path, interval="1m")
+        assert list(df["symbol"]) == ["005930"]
+
 
 # ---------------------------------------------------------------------------
 # aggregate_stats — global summary
