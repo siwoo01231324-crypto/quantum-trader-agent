@@ -170,4 +170,38 @@ services:
         limits:
           memory: 256M
 
+  # #218 후속: Universe-scan paper rebalance cron.
+  # 평일 KRX 금요일 15:32 KST → cs-tsmom-kr-daily / cs-rsi-div-kr / cs-adx-ma-kr 발주
+  # 일요일 00:00 UTC → cs-tsmom-crypto-daily / cs-rsi-div-crypto / cs-macd-vol-crypto 발주
+  # cron_paper_universe_rebal.py 가 universe quote fetch + weights 계산 + paper broker
+  # 발주 + Telegram digest 까지 1회 실행. WAL 은 logs/shadow/cron-{sid}/wal.jsonl 에 분리.
+  universe-rebal-cron:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: qta-phase2:latest
+    container_name: qta-universe-rebal-cron
+    entrypoint: ["/bin/bash", "/app/scripts/universe_rebal_loop.sh"]
+    env_file:
+      - ./.env
+    environment:
+      TZ: Asia/Seoul
+      KRX_REBAL_HOUR_KST: "15"
+      KRX_REBAL_MIN_KST: "32"
+      CRYPTO_REBAL_HOUR_UTC: "0"
+      CRYPTO_REBAL_DOW_UTC: "0"
+      KRX_STRATEGIES: "cs-tsmom-kr-daily cs-rsi-div-kr cs-adx-ma-kr"
+      CRYPTO_STRATEGIES: "cs-tsmom-crypto-daily cs-rsi-div-crypto cs-macd-vol-crypto"
+      LAST_RUN_FILE: /data/logs/universe-rebal-last-run.txt
+      UNIVERSE_SCAN_LIVE_ENABLED: "1"
+    volumes:
+      - ./logs/shadow:/app/logs/shadow
+      - ./logs/universe-rebal:/data/logs
+      - ./data/cache:/app/data/cache
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+
 # Named volumes 미사용 - bind mount 로 호스트 ./data/ 직접 inspect 가능 (운영 일지 작성 시).
