@@ -172,6 +172,16 @@ async def _replay_symbol(
 
 
 def _aggregate(trades: list[dict]) -> dict:
+    """Aggregate per-trade returns into daily-PnL metrics.
+
+    Each trade contributes its return on its *exit date*. Days with no exit
+    are zero. Sharpe / MDD / annualised return are then computed in
+    daily-equivalent units so ``× √252`` is dimensionally correct.
+
+    The previous version mistakenly applied trade-count as the time axis,
+    which inflated Sharpe / MDD whenever the strategy turned positions over
+    multiple times per day (#227 follow-up bug-fix).
+    """
     if not trades:
         return {
             "trades": 0, "win_rate": 0.0, "avg_hold_days": 0.0,
@@ -185,16 +195,45 @@ def _aggregate(trades: list[dict]) -> dict:
         (pd.Timestamp(t["exit_ts"]) - pd.Timestamp(t["entry_ts"])).days
         for t in trades
     ]
-    cum = np.cumprod(1 + rets) - 1
-    peak = np.maximum.accumulate(1 + cum)
-    dd = (1 + cum) / peak - 1
+
+    # Aggregate to daily PnL. Multiple trades exiting on the same day add up
+    # (linear approximation — sufficient for low single-digit % per trade).
+    by_day: dict[pd.Timestamp, float] = {}
+    for t in trades:
+        day = pd.Timestamp(t["exit_ts"]).normalize()
+        by_day[day] = by_day.get(day, 0.0) + float(t["ret"])
+    if not by_day:
+        return {
+            "trades": int(len(trades)),
+            "win_rate": float(len(wins) / max(len(rets), 1)),
+            "avg_hold_days": float(np.mean(holds)) if holds else 0.0,
+            "sharpe": 0.0, "mdd": 0.0, "ann_return": 0.0,
+            "realized_pnl_profit": float(wins.sum()),
+            "realized_pnl_loss": float(losses.sum()),
+        }
+    days = sorted(by_day.keys())
+    daily_pnl = np.array([by_day[d] for d in days], dtype=float)
+    n_days = len(daily_pnl)
+    sharpe = (
+        float(daily_pnl.mean() / daily_pnl.std() * np.sqrt(252))
+        if daily_pnl.std() > 0 else 0.0
+    )
+    equity = np.cumprod(1 + daily_pnl)
+    cum_max = np.maximum.accumulate(equity)
+    dd = equity / cum_max - 1
+    mdd = float(dd.min()) if len(dd) > 0 else 0.0
+    final = float(equity[-1])
+    ann_return = (
+        float(final ** (252 / max(n_days, 1)) - 1) if final > 0 else -1.0
+    )
     return {
         "trades": int(len(trades)),
         "win_rate": float(len(wins) / max(len(rets), 1)),
         "avg_hold_days": float(np.mean(holds)) if holds else 0.0,
-        "sharpe": float(rets.mean() / rets.std() * np.sqrt(252)) if rets.std() > 0 else 0.0,
-        "mdd": float(dd.min()) if len(dd) > 0 else 0.0,
-        "ann_return": float((1 + cum[-1]) ** (252 / max(len(rets), 1)) - 1) if len(cum) > 0 else 0.0,
+        "sharpe": sharpe,
+        "mdd": mdd,
+        "ann_return": ann_return,
+        "n_days_with_trades": int(n_days),
         "realized_pnl_profit": float(wins.sum()),
         "realized_pnl_loss": float(losses.sum()),
     }
