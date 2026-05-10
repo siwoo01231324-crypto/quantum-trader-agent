@@ -60,7 +60,7 @@ strategies:
       weights_kind: krx
       params:
         top_n: 20
-        min_turnover: 1.0e9
+        min_turnover: 1000000000
         min_price: 1000
 
   - id: cs-rsi-div-kr
@@ -74,7 +74,7 @@ strategies:
       weights_kind: krx
       params:
         top_n: 20
-        min_turnover: 1.0e9
+        min_turnover: 1000000000
         min_price: 1000
 
   - id: cs-adx-ma-kr
@@ -88,7 +88,7 @@ strategies:
       weights_kind: krx_hlc
       params:
         top_n: 20
-        min_turnover: 1.0e9
+        min_turnover: 1000000000
         min_price: 1000
 
   - id: cs-tsmom-crypto-daily
@@ -102,7 +102,7 @@ strategies:
       weights_kind: crypto
       params:
         top_n: 10
-        min_quote_vol: 1.0e7
+        min_quote_vol: 10000000
 
   - id: cs-rsi-div-crypto
     class: backtest.strategies.cs_async_wrapper.CrossSectionalAsyncStrategy
@@ -115,7 +115,7 @@ strategies:
       weights_kind: crypto
       params:
         top_n: 10
-        min_quote_vol: 1.0e7
+        min_quote_vol: 10000000
 
   - id: cs-macd-vol-crypto
     class: backtest.strategies.cs_async_wrapper.CrossSectionalAsyncStrategy
@@ -128,7 +128,7 @@ strategies:
       weights_kind: crypto
       params:
         top_n: 10
-        min_quote_vol: 1.0e7
+        min_quote_vol: 10000000
         vol_ceiling: 2.0
 
   # cs-bb-macd-kr 는 5y bench Sharpe -0.32 → status: inactive, production 미등록.

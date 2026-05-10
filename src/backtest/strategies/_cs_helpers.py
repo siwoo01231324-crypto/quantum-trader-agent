@@ -151,7 +151,13 @@ def daily_returns_from_weights(weights: pd.DataFrame, closes: pd.DataFrame,
 def liquid_mask_panel(turnover: pd.DataFrame, close: pd.DataFrame,
                      min_turnover: float, min_price: float, window: int = 60
                      ) -> Callable[[int], pd.Series]:
-    """유동성 + 가격 필터 → eligible_mask_fn 호환 클로저 반환."""
+    """유동성 + 가격 필터 → eligible_mask_fn 호환 클로저 반환.
+
+    Note: PyYAML 1.1 spec 이 `1.0e9` 같은 표기를 str 로 파싱 → comparison TypeError.
+    production.yaml 운영 디버깅 (2026-05-10) 후 방어용 float 캐스팅 추가.
+    """
+    min_turnover = float(min_turnover)
+    min_price = float(min_price)
     avg_t = turnover.rolling(window, min_periods=window // 2).mean()
 
     def mask(i: int) -> pd.Series:
