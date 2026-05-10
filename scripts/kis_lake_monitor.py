@@ -34,9 +34,27 @@ DEFAULT_TARGET_DAYS = 90
 SCHEMA_COLUMNS = ("symbol", "n_bars", "n_days", "first_ts", "last_ts")
 
 
-def scan_lake(lake_dir: Path, interval: str = "1m") -> pd.DataFrame:
+_KRX_SYMBOL_RE = __import__("re").compile(r"^\d{6}$")
+
+
+def scan_lake(
+    lake_dir: Path,
+    interval: str = "1m",
+    *,
+    krx_only: bool = True,
+) -> pd.DataFrame:
     """Walk lake/ohlcv/freq={interval}/.../symbol=*/part-0.parquet and return
-    per-symbol stats (symbol, n_bars, n_days, first_ts, last_ts)."""
+    per-symbol stats (symbol, n_bars, n_days, first_ts, last_ts).
+
+    Args:
+        krx_only: when True (default — matches the "KIS 1분봉 누적 모니터" intent),
+            skip symbols whose name does not match the 6-digit KRX format. The
+            same `lake/ohlcv/freq=1m/.../symbol=*` partition is also used by
+            Binance backfill (`fetch_alt_universe_ohlcv.py`) and BTC/ETH 5y
+            datasets, so without this filter the monitor would pick up
+            ``BTCUSDT`` / ``ETHUSDT`` and report nonsensical "2192 거래일"
+            against KIS-only target.
+    """
     lake_dir = Path(lake_dir)
     freq_dir = lake_dir / "ohlcv" / f"freq={interval}"
     if not freq_dir.exists():
@@ -45,6 +63,8 @@ def scan_lake(lake_dir: Path, interval: str = "1m") -> pd.DataFrame:
     rows: dict[str, dict] = {}
     for part in freq_dir.rglob("symbol=*/part-0.parquet"):
         sym = part.parent.name.split("=", 1)[1]
+        if krx_only and not _KRX_SYMBOL_RE.match(sym):
+            continue
         try:
             df = pd.read_parquet(part, columns=["ts"])
         except Exception:
@@ -151,9 +171,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--target-days", type=int, default=DEFAULT_TARGET_DAYS)
     parser.add_argument("--out", type=Path, default=None, help="markdown 출력 경로 (없으면 stdout)")
     parser.add_argument("--telegram", action="store_true", help="markdown 을 Telegram 으로 발송")
+    parser.add_argument(
+        "--include-non-krx", action="store_true",
+        help="KRX 6자리 종목 외 (BTCUSDT 등 백테스트 데이터) 도 포함. default=False — KIS 1분봉 모니터 의도",
+    )
     args = parser.parse_args(argv)
 
-    df = scan_lake(args.lake_dir, interval=args.interval)
+    df = scan_lake(args.lake_dir, interval=args.interval, krx_only=not args.include_non_krx)
     agg = aggregate_stats(df, target_days=args.target_days)
     md = render_markdown(df, agg)
 
