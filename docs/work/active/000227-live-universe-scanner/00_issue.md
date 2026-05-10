@@ -252,6 +252,37 @@
 
 다음 단계: 사용자 승인 후 commit + PR. 이후 #229 (5y backtest 실제 실행) + KIS WS market subscribe 별 이슈 진행.
 
+### 2026-05-11 — 후속 4건 코드 보강 (PR #228 흡수)
+
+#2 + #7 + #1 + #3 코드 수준 완료. 실 5y backtest / 실 KIS WS 검증은 사용자 환경에서 별도 (Claude 세션 timeout 위험 회피).
+
+- **#2 SYMBOL_STEP_SIZES 확장**:
+  - `src/live/conversion.py::get_step_size()` 신규 — KRX 6자리 fallback (step=1) + Binance USDT pair fallback (step=0.001)
+  - `intent_to_order_request` 가 fallback 사용 — universe-wide live-scanner 활성화 시 종목별 등록 불필요
+  - `tests/live/test_conversion_step_size_fallback.py` (9 tests, 9 pass)
+  - paper_broker scale test 의 monkeypatch 제거 — fallback 자동 작동
+- **#7 cs_* 5y bench harness**:
+  - `scripts/bench_cs_universe.py` — 5종 cs_* generic harness (cs_rsi_div_kr / cs_bb_macd_kr / cs_adx_ma_kr / cs_rsi_div_crypto / cs_macd_vol_crypto)
+  - 기존 `bench_cs_tsmom_kr` / `bench_cs_tsmom_crypto` 의 universe + fetch + cache 재사용
+  - `--strategy <id>` 또는 `--all` 로 5종 일괄 실행
+  - 실 5y 실행은 사용자 환경 (350종 fetch ~30분, 캐시 후 < 1분)
+- **#1 live-scanner 5y bench universe loader 보강**:
+  - `scripts/bench_live_scanner.py::_load_krx_universe` / `_load_binance_universe` 가 cs bench 의 cache 재사용
+- **#3 KIS WS market subscribe**:
+  - `src/brokers/kis/tr_ids.py::TR_ID_WS_KRX_TRADE = "H0STCNT0"` 추가
+  - `src/live/feed_kis_ws.py::KISWebSocketMarketFeed` 신규 — `MarketDataFeed` Protocol 준수, single connection multi-symbol subscribe, `^` 구분 frame 파싱
+  - `tests/live/test_feed_kis_ws.py` (9 tests, 9 pass) — wire-frame parser + subscribe payload + protocol guards
+  - 실 API 통합 검증은 사용자 환경 (메인 .env 의 KIS 키 사용)
+
+회귀 zero: 388/389 (1 skip) — 신규 ~20 tests 추가
+invariant 통과: 206 노트
+
+**사용자가 직접 실행할 항목** (코드 자체는 PR #228 안에):
+1. `python scripts/bench_cs_universe.py --all` — 5y cs_* bench (수~30분)
+2. `python scripts/bench_live_scanner.py --all` — 5y live-scanner bench (cs cache 재사용)
+3. KIS WS smoke: 메인 .env 키로 `KISWebSocketMarketFeed` 통합 테스트 1건 (장중 시간)
+4. 검증 통과 strategy 의 spec frontmatter (sharpe_bt 등) 갱신 + production.yaml `enabled: true` 결정
+
 ### 2026-05-11 — 정책 / 문서 정리 (사용자 요청)
 
 향후 신규 인트라데이 전략은 **universe-scan + live-scanner 둘 다 default** 라는 정책을 레포 전반에 명시:

@@ -26,20 +26,11 @@ from src.portfolio.order_intent import OrderIntent
 
 @pytest.mark.asyncio
 async def test_execute_intents_handles_380_orders_in_one_burst(
-    tmp_path: Path, monkeypatch,
+    tmp_path: Path,
 ):
-    # The conversion layer ships a small whitelist of symbols + step sizes;
-    # universe-wide live-scanner activation will populate this from a config
-    # source (out of scope for #227 S5). For the scale guardrail we extend
-    # the whitelist in-place so the test exercises 380 unique symbols.
-    from src.live import conversion as _conv
-    extra = {
-        **{f"{i:06d}": Decimal("1") for i in range(350)},
-        **{f"SYM{i}USDT": Decimal("0.001") for i in range(30)},
-    }
-    monkeypatch.setattr(
-        _conv, "SYMBOL_STEP_SIZES", {**_conv.SYMBOL_STEP_SIZES, **extra},
-    )
+    # No monkeypatch needed — `get_step_size` (#227 conversion fallback)
+    # resolves KRX 6-digit codes (step=1) and Binance USDT pairs
+    # (step=0.001) without an explicit registry entry per symbol.
 
     wal = WAL(tmp_path / "wal.jsonl")
     metrics = Metrics()

@@ -203,26 +203,36 @@ def _aggregate(trades: list[dict]) -> dict:
 # --- Universe loaders --------------------------------------------------------
 
 def _load_krx_universe(period: str) -> dict[str, pd.DataFrame]:
-    """KRX panel loader — placeholder. Wires through ``backtest.bundle`` in
-    a follow-up issue once a 5y daily KRX cache is materialised. For now,
-    returns an empty dict so the harness exits cleanly with a clear message.
+    """KRX panel loader — delegates to bench_cs_tsmom_kr's cache + fetch path.
+
+    Returns ``dict[code, OHLCV DataFrame]``. Daily-bar resolution (intraday
+    1m bench requires ~390x the data and is a separate harness).
     """
-    logger.warning(
-        "KRX universe loader is a stub — wire through src.backtest.bundle "
-        "in a follow-up issue (5y daily KRX cache + universe pin-date)."
+    sys.path.insert(0, str(_REPO_ROOT / "scripts"))
+    bench_kr = importlib.import_module("bench_cs_tsmom_kr")
+    uni = bench_kr.build_universe(
+        bench_kr.DEFAULT_KOSPI_TOP, bench_kr.DEFAULT_KOSDAQ_TOP,
     )
-    return {}
+    return bench_kr.fetch_universe(
+        uni, bench_kr.DEFAULT_START, bench_kr.DEFAULT_END, refresh=False,
+    )
 
 
 def _load_binance_universe(period: str) -> dict[str, pd.DataFrame]:
-    """Binance USDT-perp top-30 loader — placeholder. The cs_tsmom_crypto_daily
-    bench at scripts/bench_cs_tsmom_crypto.py shows the full pattern.
-    """
-    logger.warning(
-        "Binance universe loader is a stub — port the cs_tsmom_crypto_daily "
-        "fetch path in a follow-up issue."
-    )
-    return {}
+    """Binance top-30 loader — delegates to bench_cs_tsmom_crypto."""
+    sys.path.insert(0, str(_REPO_ROOT / "scripts"))
+    bench_bn = importlib.import_module("bench_cs_tsmom_crypto")
+    closes, _quote_volume = bench_bn.load_panels(refresh=False)[:2]
+    panels: dict[str, pd.DataFrame] = {}
+    for sym in closes.columns:
+        s = closes[sym].dropna()
+        if len(s) < 60:
+            continue
+        panels[sym] = pd.DataFrame({
+            "open": s, "high": s, "low": s, "close": s,
+            "volume": pd.Series(1.0, index=s.index),
+        })
+    return panels
 
 
 # --- Main --------------------------------------------------------------------
