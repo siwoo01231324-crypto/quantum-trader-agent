@@ -88,8 +88,10 @@ def build_krx_universe_panel(top_n_kospi: int = 200, top_n_kosdaq: int = 150,
     codes = combined_top_n(snap, kospi_n=top_n_kospi, kosdaq_n=top_n_kosdaq)
     logger.info("krx_universe_snapshot codes=%d", len(codes))
 
-    # OHLCV fetch — kis_client 있으면 broker.fetch_universe_snapshot 사용,
-    # 없으면 cached parquet → FDR fallback (테스트용).
+    # OHLCV fetch 우선순위:
+    #   1. kis_client 주입 시 broker.fetch_universe_snapshot (실 운영)
+    #   2. 캐시 (data/cache/krx_daily/{code}.parquet) — 1주일 미만 fresh 만 사용
+    #   3. FDR fallback — 최종 안전망 (cache 비었을 때, 평일 paper 운영 시)
     panels: dict[str, pd.DataFrame] = {}
     if kis_client is not None:
         from brokers.kis.universe_quote import fetch_universe_snapshot
@@ -97,6 +99,7 @@ def build_krx_universe_panel(top_n_kospi: int = 200, top_n_kosdaq: int = 150,
         panels = fetch_universe_snapshot(kis_client, codes, start, end)
     else:
         cache = ROOT / "data" / "cache" / "krx_daily"
+        cache.mkdir(parents=True, exist_ok=True)
         for code in codes:
             p = cache / f"{code}.parquet"
             if p.exists():
@@ -104,9 +107,47 @@ def build_krx_universe_panel(top_n_kospi: int = 200, top_n_kosdaq: int = 150,
                     panels[code] = pd.read_parquet(p)
                 except Exception:
                     pass
+        # FDR fallback for missing codes — 병렬 fetch (8 worker, ~30-60s for 350종목)
+        missing = [c for c in codes if c not in panels]
+        if missing:
+            import concurrent.futures as cf
+            logger.info("krx_universe_fdr_fallback fetching=%d", len(missing))
+            start_dt = (pd.Timestamp(start[:4] + "-" + start[4:6] + "-" + start[6:])
+                        if len(start) == 8 and start.isdigit()
+                        else pd.Timestamp(start))
+            end_dt = (pd.Timestamp.now() if not end
+                      else (pd.Timestamp(end[:4] + "-" + end[4:6] + "-" + end[6:])
+                            if len(end) == 8 and end.isdigit()
+                            else pd.Timestamp(end)))
+
+            def _fdr_one(code: str):
+                try:
+                    df = fdr.DataReader(code, start_dt, end_dt)
+                    if df is None or df.empty:
+                        return code, None
+                    df = df.rename(columns={
+                        "Open": "open", "High": "high", "Low": "low",
+                        "Close": "close", "Volume": "volume",
+                    })
+                    keep = [c for c in ["open", "high", "low", "close", "volume"]
+                            if c in df.columns]
+                    return code, df[keep].copy()
+                except Exception:
+                    return code, None
+
+            with cf.ThreadPoolExecutor(max_workers=8) as ex:
+                for code, df in ex.map(_fdr_one, missing):
+                    if df is not None and len(df) > 0:
+                        panels[code] = df
+                        try:
+                            df.to_parquet(cache / f"{code}.parquet")
+                        except Exception:
+                            pass
+            logger.info("krx_universe_fdr_complete fetched=%d total_panels=%d",
+                        len([c for c in missing if c in panels]), len(panels))
 
     if not panels:
-        raise RuntimeError("krx_universe_panel_empty — no broker client + no cache")
+        raise RuntimeError("krx_universe_panel_empty — no broker client + no cache + FDR failed")
 
     closes = pd.DataFrame({c: df["close"] for c, df in panels.items()}).sort_index().dropna(how="all")
     highs = pd.DataFrame({c: df["high"] for c, df in panels.items()}).reindex(closes.index)
