@@ -94,6 +94,7 @@ class BenchResult:
     ann_return: float
     realized_pnl_profit: float
     realized_pnl_loss: float
+    n_days_with_trades: int = 0
 
 
 # --- Per-symbol replay -------------------------------------------------------
