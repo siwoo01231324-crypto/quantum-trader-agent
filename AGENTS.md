@@ -141,21 +141,30 @@ quantum-trader-agent/
 
 ---
 
-## 전략 패턴 (2026-05-06 결정)
+## 전략 패턴 (2026-05-06 결정, 2026-05-11 live-scanner 추가)
 
-신규 전략은 **유니버스 스캔 패턴** 을 기본으로 한다. 단일종목 고정 전략은 legacy 로 유지하되 신규 추가는 본 패턴 우선.
+신규 전략은 **시간축에 따라 두 default 패턴 중 하나** 를 선택한다. 단일종목 고정 전략은 legacy 로 유지하되 신규 추가는 두 default 우선.
 
-| 패턴 | 정의 | 예시 | 비고 |
-|------|------|------|------|
-| **universe-scan** (default) | 유니버스 전체 스캔 → 랭킹 → 상위 N 보유 | `breakout_donchian` (KOSPI200 → top-10), `cs_tsmom_kr_daily` (KOSPI200+KOSDAQ150 → top-20) | 신규 KRX·crypto 전략 default |
-| single-ticker (legacy) | 사전 지정 1~3 종목, RSI/MACD 등 단일 시그널 | `momo_btc_v2` (BTC), `momo_kis_v1` (005930), `momo_vol_filtered` (BTC), `meanrev_pairs` (ETHBTC) | 운영 중 전략은 유지, 신규 추가 시 사유 명시 |
+| 패턴 | 정의 | 시간축 | 예시 | 비고 |
+|------|------|------|------|------|
+| **universe-scan** (default for daily/weekly) | 유니버스 전체 스캔 → 랭킹 → 상위 N 보유, 주기적 리밸 | 주간 (금/일) | `breakout_donchian`, `cs_tsmom_kr_daily`, `cs_tsmom_crypto_daily` | 학술 cross-sectional momentum / mean-reversion |
+| **live-scanner** (default for intraday) | 종목별 임계값 즉시 평가 → 매수 → 손익비 자동 청산 | 매 tick / 매 분봉 | `live_rsi_oversold_volume_spike`, `live_macd_bullish_cross_breakout`, `live_bb_lower_bounce`, `live_breakout_with_atr_stop`, `live_oversold_with_divergence` | HTS 검색식 + 자동매매 봇 패러다임 (#227) |
+| single-ticker (legacy) | 사전 지정 1~3 종목, 단일 시그널 | 가변 | `momo_btc_v2`, `momo_kis_v1`, `momo_vol_filtered`, `meanrev_pairs` | 운영 중 전략은 유지, 신규 추가 시 사유 spec 명시 |
 
-**왜 universe-scan 이 default**:
-- 횡단면(cross-sectional) 신호 밀도 ≫ 단일 종목 (#79 breakout, 2026-05-06 cs_tsmom 백테스트로 검증)
-- 1인 운용 환경에서 종목 회전 (테마 사이클·시총 변동) 적응 필수
-- 리스크 분산 (top 20 동일가중 = 단일 종목 대비 idiosyncratic 위험 1/20)
+**default 선택 기준**:
+- **신규 인트라데이 전략 (분봉/실시간 스캔)** → `live-scanner` 패러다임 사용. 종목별 stop_loss / take_profit / trailing_stop 자동 청산.
+- **신규 일/주봉 전략 (장기 보유, 주간 리밸)** → `universe-scan` 패러다임 사용. cross-sectional 점수 → top-N basket.
+- 두 패러다임은 **공존** — `production.yaml::capital_allocation` (universe_scan 70% / live_scanner 30%) 으로 자본 분배.
 
-상세 규약 → `docs/specs/universe-scan-strategy-pattern.md`
+**왜 두 default 가 필요**:
+- 시간축이 다른 알파 source (universe-scan = 주간 momentum, live-scanner = 분단위 reversal/breakout) 는 부분 독립 — 동시 운영 시 sleeve diversification.
+- 1인 운용 + 한국 시장 환경에서 검색식 패러다임 (`live-scanner`) 이 직관성 + 디버깅 ↑.
+- 단일 종목 고정은 종목 사이클 변화에 무력 — 두 default 모두 universe-wide 로 그 약점 회피.
+
+**상세 규약**:
+- universe-scan → `docs/specs/universe-scan-strategy-pattern.md`
+- live-scanner → `docs/specs/live-universe-scanner-paradigm.md` (#227 S1~S7 도입)
+- live-scanner 알파 가설 / 5y bench 계획 → `docs/background/50-live-universe-scanner-paradigm.md`
 
 ---
 

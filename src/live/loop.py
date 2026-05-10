@@ -63,6 +63,11 @@ class ShadowConfig:
     # warmup-time EGW00201 floods that previously stalled the WS connect step.
     # "always" preserves legacy 24/7 behaviour for non-KRX symbols / smoke tests.
     schedule: Literal["krx", "always"] = "always"
+    # #227 S3: optional LivePositionRiskManager. When set, the consumer calls
+    # `evaluate(symbol, last_price, ts)` after the strategy dispatch each tick,
+    # routing any returned SELL intents through the same broker/WAL pipeline.
+    # None (default) leaves the legacy single-paradigm path untouched.
+    position_risk_manager: Any | None = None
 
 
 def _load_orchestrator(config: ShadowConfig, broker: PaperBroker) -> AsyncStrategyOrchestrator:
@@ -415,6 +420,38 @@ async def run_shadow_loop(
                         intents, broker=router, kill_switch=kill_switch,
                         wal=wal, metrics=metrics, market_state=ms,
                     )
+                # #227 S3: position-level stop/TP evaluation. Runs even when
+                # the strategy dispatch produced no intents (the price tick is
+                # sufficient to cross a stop). Restricted to tick.symbol — the
+                # other symbols update on their own ticks.
+                if config.position_risk_manager is not None:
+                    risk_intents = config.position_risk_manager.evaluate(
+                        tick.symbol, Decimal(str(tick.price)), ts,
+                    )
+                    if risk_intents:
+                        for ri in risk_intents:
+                            try:
+                                wal.write(WALEvent(
+                                    ts=datetime.now(timezone.utc).isoformat(),
+                                    event_type="signal_emitted",
+                                    payload={
+                                        "strategy_id": ri.strategy_id,
+                                        "symbol": ri.symbol,
+                                        "side": ri.side,
+                                        "qty": str(ri.qty),
+                                        "reason": ri.reason,
+                                    },
+                                ))
+                            except Exception as wal_err:
+                                logger.warning(
+                                    "wal.signal_emitted_write_failed (live_scanner_exit) "
+                                    "strategy_id=%s error=%s",
+                                    ri.strategy_id, wal_err,
+                                )
+                        await execute_intents(
+                            risk_intents, broker=router, kill_switch=kill_switch,
+                            wal=wal, metrics=metrics, market_state=ms,
+                        )
                 iter_count += 1
                 if config.max_iterations is not None and iter_count >= config.max_iterations:
                     stop_event.set()

@@ -636,11 +636,52 @@ async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
         pnl_aggregator.ingest_fill_event(ev.event_type, ev.payload or {})
 
     config.wal_observer = _wal_observer
+
+    # #227 S3: env-gated Live Universe Scanner — when LIVE_SCANNER_ENABLED=1,
+    # construct LivePositionRiskManager + register exit policies for every
+    # registered LiveScannerMixin strategy. Default OFF preserves legacy
+    # universe-scan / single-ticker behaviour with zero impact.
+    live_scanner_enabled = os.environ.get("LIVE_SCANNER_ENABLED") == "1"
+    if live_scanner_enabled:
+        from src.portfolio.live_position_risk import LivePositionRiskManager
+        risk_mgr = LivePositionRiskManager(
+            position_store=position_store,
+            pnl_aggregator=pnl_aggregator,
+            wal_observer=_wal_observer,
+        )
+        config.position_risk_manager = risk_mgr
+        logger.info("LIVE_SCANNER_ENABLED=1 — LivePositionRiskManager constructed")
+    else:
+        risk_mgr = None
+        logger.info(
+            "LIVE_SCANNER_ENABLED!=1 — universe-scan / single-ticker only"
+        )
+
     # #180: surface the live orchestrator into DashboardState so the
     # /api/strategies/{id}/toggle endpoint can call enable/disable.
-    config.on_orchestrator_ready = lambda orch: setattr(
-        dashboard_state, "orchestrator", orch,
-    )
+    # #227 S3: also register live-scanner stop/TP policies once strategies load.
+    def _on_orchestrator_ready(orch):
+        setattr(dashboard_state, "orchestrator", orch)
+        if risk_mgr is None:
+            return
+        registered = 0
+        for sid, strategy in orch.strategies.items():
+            if not getattr(strategy, "is_live_scanner", False):
+                continue
+            risk_mgr.register_strategy_policy(
+                sid,
+                stop_loss_pct=float(getattr(strategy, "stop_loss_pct", 0.03)),
+                take_profit_pct=float(getattr(strategy, "take_profit_pct", 0.06)),
+                trailing_stop_pct=getattr(strategy, "trailing_stop_pct", None),
+            )
+            registered += 1
+            logger.info("live_scanner.policy_registered sid=%s", sid)
+        logger.info(
+            "live_scanner.policies_total registered=%d total_strategies=%d",
+            registered, len(orch.strategies),
+        )
+
+    config.on_orchestrator_ready = _on_orchestrator_ready
 
     shutdown_dashboard = None
     if dashboard_port > 0:

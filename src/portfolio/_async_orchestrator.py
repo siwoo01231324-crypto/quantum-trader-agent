@@ -82,6 +82,16 @@ class AsyncStrategyOrchestrator:
         return frozenset(self._quarantined)
 
     @property
+    def strategies(self) -> dict[str, object]:
+        """Read-only snapshot of registered strategies (#227 S3).
+
+        Used by external wiring (e.g. live_run.py) to discover registered
+        strategies and read their class attributes — typically the
+        ``LiveScannerMixin`` exit thresholds.
+        """
+        return dict(self._strategies)
+
+    @property
     def current_report(self) -> Optional[PortfolioRiskReport]:
         return self._sync.current_report
 
@@ -193,47 +203,98 @@ class AsyncStrategyOrchestrator:
         # `ctx["factors"][...]` (e.g. MomoKisV1 → ctx["factors"]["rsi"]) see
         # the precomputed series populated by SnapshotBuilder. Falls back to
         # empty dict for callers that don't supply factors.
-        _factors = (market_snapshot or {}).get("factors", {}) if isinstance(market_snapshot, dict) else {}
+        _snap_dict = market_snapshot if isinstance(market_snapshot, dict) else {}
+        _factors = _snap_dict.get("factors", {})
+        # Live-scanner per-symbol dispatch inputs (#227 S1). Both keys optional —
+        # absence keeps every strategy on the legacy single-dispatch path.
+        _universe_ohlcv = _snap_dict.get("ohlcv_history")
+        _universe_factors = _snap_dict.get("universe_factors", {}) or {}
+        _equity_krw = _snap_dict.get("equity_krw", 0.0)
+
         tasks = []
         sids = []
+        # Per-task symbol override — set for live-scanner per-symbol dispatch,
+        # None for legacy strategies (cs_*, momo_*, single-ticker).
+        task_symbols: list[str | None] = []
+
+        def _spawn(strategy, ctx):
+            if inspect.iscoroutinefunction(strategy.on_bar):
+                return asyncio.create_task(strategy.on_bar(ctx))
+            return asyncio.create_task(asyncio.to_thread(strategy.on_bar, ctx))
+
         for sid in targets:
             strategy = self._strategies[sid]
-            ctx = {"ts": ts, "market_snapshot": market_snapshot, "factors": _factors}
-            if inspect.iscoroutinefunction(strategy.on_bar):
-                task = asyncio.create_task(strategy.on_bar(ctx))
+            if (
+                getattr(strategy, "is_live_scanner", False)
+                and isinstance(_universe_ohlcv, dict)
+                and _universe_ohlcv
+            ):
+                # #227 S1 — iterate the universe and create one task per symbol.
+                # Each task receives a single-symbol market_snapshot + the
+                # per-symbol factors slice (or empty dict if none registered).
+                for symbol, hist in _universe_ohlcv.items():
+                    if hist is None or len(hist) == 0:
+                        continue
+                    last_close = float(hist["close"].iloc[-1])
+                    per_symbol_snap = {
+                        "symbol": symbol,
+                        "history": hist,
+                        "price": last_close,
+                        "equity_krw": _equity_krw,
+                    }
+                    per_symbol_factors = _universe_factors.get(symbol, {}) or {}
+                    ctx = {
+                        "ts": ts,
+                        "market_snapshot": per_symbol_snap,
+                        "factors": per_symbol_factors,
+                    }
+                    tasks.append(_spawn(strategy, ctx))
+                    sids.append(sid)
+                    task_symbols.append(symbol)
             else:
-                task = asyncio.create_task(asyncio.to_thread(strategy.on_bar, ctx))
-            tasks.append(task)
-            sids.append(sid)
+                ctx = {"ts": ts, "market_snapshot": market_snapshot, "factors": _factors}
+                tasks.append(_spawn(strategy, ctx))
+                sids.append(sid)
+                task_symbols.append(None)
 
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         order_intents: list[OrderIntent] = []
         report_snapshot = self._sync.current_report
+        # Dedup quarantine accounting to once per (sid, run_bar call) — a
+        # live-scanner that throws across N symbols in one tick must not
+        # increment the failure counter N times (#227 S1).
+        counted_failed: set[str] = set()
 
-        for sid, result in zip(sids, results):
+        for sid, sym_override, result in zip(sids, task_symbols, results):
             if isinstance(result, BaseException):
-                self._fail_count[sid] = self._fail_count.get(sid, 0) + 1
-                count = self._fail_count[sid]
-                logger.warning(
-                    "portfolio.orchestrator.strategy_exception strategy_id=%s exception=%s",
-                    sid,
-                    result,
-                )
-                if count >= 3:
-                    self._quarantined.add(sid)
+                if sid not in counted_failed:
+                    counted_failed.add(sid)
+                    self._fail_count[sid] = self._fail_count.get(sid, 0) + 1
+                    count = self._fail_count[sid]
                     logger.warning(
-                        "portfolio.orchestrator.quarantine strategy_id=%s fail_count=%d",
+                        "portfolio.orchestrator.strategy_exception strategy_id=%s exception=%s",
                         sid,
-                        count,
+                        result,
                     )
+                    if count >= 3:
+                        self._quarantined.add(sid)
+                        logger.warning(
+                            "portfolio.orchestrator.quarantine strategy_id=%s fail_count=%d",
+                            sid,
+                            count,
+                        )
                 continue
 
             signal = result
             if signal is None:
                 continue
 
-            self._fail_count[sid] = 0
+            # Reset only when no sibling task for this sid threw in the same
+            # tick — preserves the spirit of "consecutive bad ticks" semantics
+            # for live-scanner strategies.
+            if sid not in counted_failed:
+                self._fail_count[sid] = 0
 
             if signal.action == "hold":
                 continue
@@ -241,15 +302,23 @@ class AsyncStrategyOrchestrator:
             recent = self._recent_returns.get(sid)
             qty = resolve_size(signal, recent)
 
+            # For live-scanner per-symbol dispatch, use the iteration symbol;
+            # legacy single-dispatch falls back to market_snapshot["symbol"].
+            order_symbol = sym_override or _snap_dict.get("symbol", "UNKNOWN")
+            order_price = (
+                _snap_dict.get("price", 0.0)
+                if sym_override is None
+                else float(_universe_ohlcv[sym_override]["close"].iloc[-1])
+            )
             order = Order(
-                symbol=market_snapshot.get("symbol", "UNKNOWN"),
+                symbol=order_symbol,
                 side=signal.action,
                 qty=qty,
-                price=market_snapshot.get("price", 0.0),
+                price=order_price,
             )
             snap = Snapshot(
                 intent=order,
-                equity_krw=market_snapshot.get("equity_krw", 0.0),
+                equity_krw=_equity_krw,
                 portfolio_risk=report_snapshot,
             )
             decision = evaluate(self._policy, snap)

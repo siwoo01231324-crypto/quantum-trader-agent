@@ -26,7 +26,9 @@ from pathlib import Path
 import requests
 
 # WAL 의 critical event_type 화이트리스트 — Telegram 즉시 발송 대상.
-CRITICAL_EVENT_TYPES = {"mode_switched", "fill_anomaly"}
+# `position_stop_triggered` 는 #227 LivePositionRiskManager 가 stop_loss /
+# take_profit / trailing_stop 발동 시 발행 — 즉시 사용자에게 통지.
+CRITICAL_EVENT_TYPES = {"mode_switched", "fill_anomaly", "position_stop_triggered"}
 # Telegram sendMessage 본문 최대 4096 자 — 안전 마진 96 자.
 TELEGRAM_MAX_LEN = 4000
 
@@ -85,9 +87,28 @@ def send_telegram(text: str, *, parse_mode: str = "Markdown") -> bool:
     return False
 
 
+def _format_position_stop(event: dict) -> str:
+    """Friendly formatter for #227 LivePositionRiskManager exits."""
+    p = event.get("payload") or event
+    sid = p.get("strategy_id", "?")
+    sym = p.get("symbol", "?")
+    trigger = p.get("trigger", "?")
+    avg_cost = p.get("avg_cost", "?")
+    last_price = p.get("last_price", "?")
+    pct = p.get("pct_change")
+    icon = {"stop_loss": "🛑", "take_profit": "🎯", "trailing_stop": "📉"}.get(trigger, "⚠️")
+    pct_str = f"{pct:+.2%}" if isinstance(pct, (int, float)) else "?"
+    return (
+        f"{icon} *{trigger}* `{sid}`\n"
+        f"매도: `{sym}` @ {last_price} (매수가 {avg_cost}, {pct_str})"
+    )
+
+
 def is_critical_event(event: dict) -> tuple[bool, str]:
     """Returns (is_critical, formatted_message). Non-critical → (False, "")."""
     et = event.get("event_type") or ""
+    if et == "position_stop_triggered":
+        return True, _format_position_stop(event)
     if et in CRITICAL_EVENT_TYPES:
         payload = {k: v for k, v in event.items() if k != "event_type"}
         snippet = json.dumps(payload, ensure_ascii=False)[:300]

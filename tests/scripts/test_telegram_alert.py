@@ -223,3 +223,82 @@ def test_summarize_report_long_lines_capped():
     text = "\n".join(["x" * 200 for _ in range(100)])
     summary = summarize_report(text, "long.md")
     assert summary.count("\n") <= 65  # 60 + header/code fence ~3
+
+
+# ── #227 LivePositionRiskManager exit alerts ─────────────────────────────────
+
+
+def test_position_stop_triggered_is_critical():
+    event = {
+        "event_type": "position_stop_triggered",
+        "payload": {
+            "strategy_id": "live_rsi_oversold_volume_spike",
+            "symbol": "005930",
+            "trigger": "stop_loss",
+            "avg_cost": "80000",
+            "last_price": "76400",
+            "qty": "10",
+            "pct_change": -0.045,
+        },
+    }
+    is_crit, msg = is_critical_event(event)
+    assert is_crit is True
+    assert "stop_loss" in msg
+    assert "live_rsi_oversold_volume_spike" in msg
+    assert "005930" in msg
+    assert "76400" in msg
+    assert "-4.50%" in msg
+
+
+def test_position_stop_take_profit_uses_target_icon():
+    event = {
+        "event_type": "position_stop_triggered",
+        "payload": {
+            "strategy_id": "live_macd_bullish_cross_breakout",
+            "symbol": "BTCUSDT",
+            "trigger": "take_profit",
+            "avg_cost": "50000",
+            "last_price": "53000",
+            "qty": "0.5",
+            "pct_change": 0.06,
+        },
+    }
+    is_crit, msg = is_critical_event(event)
+    assert is_crit is True
+    assert "take_profit" in msg
+    assert "+6.00%" in msg
+
+
+def test_position_stop_trailing_uses_pulldown_icon():
+    event = {
+        "event_type": "position_stop_triggered",
+        "payload": {
+            "strategy_id": "live_breakout_with_atr_stop",
+            "symbol": "035720",
+            "trigger": "trailing_stop",
+            "avg_cost": "100000",
+            "last_price": "108000",
+            "qty": "5",
+            "pct_change": 0.08,
+        },
+    }
+    is_crit, msg = is_critical_event(event)
+    assert is_crit is True
+    assert "trailing_stop" in msg
+
+
+def test_non_position_stop_signal_emitted_not_critical():
+    """`signal_emitted` (entry signals) is high-frequency — must NOT trigger
+    Telegram. Only the explicit position-stop event is critical."""
+    event = {
+        "event_type": "signal_emitted",
+        "payload": {
+            "strategy_id": "live_rsi_oversold_volume_spike",
+            "symbol": "005930",
+            "side": "buy",
+            "qty": "10",
+            "reason": "rsi_oversold_volume_spike:rsi=25,vol=2.5x",
+        },
+    }
+    is_crit, _ = is_critical_event(event)
+    assert is_crit is False
