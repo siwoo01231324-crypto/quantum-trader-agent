@@ -161,9 +161,14 @@ def _load_krx_panels(refresh: bool):
 def _load_binance_panels(refresh: bool):
     sys.path.insert(0, str(ROOT / "scripts"))
     bench_bn = importlib.import_module("bench_cs_tsmom_crypto")
-    # bench_cs_tsmom_crypto exposes equivalent helpers — universe + fetch +
-    # close/quote_volume panel construction.
-    return bench_bn.load_panels(refresh=refresh) + (None, None, bench_bn)
+    universe = bench_bn.fetch_top_universe(bench_bn.DEFAULT_UNIVERSE_SIZE)
+    panels = bench_bn.fetch_universe(
+        universe, bench_bn.DEFAULT_START, bench_bn.DEFAULT_END,
+        refresh=refresh,
+    )
+    panels = {s: df for s, df in panels.items() if len(df) > bench_bn.DEFAULT_LONG_LB}
+    closes, quote_vol = bench_bn.build_panels(panels)
+    return closes, quote_vol, None, None, bench_bn
 
 
 # --- Backtest core ----------------------------------------------------------

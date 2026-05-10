@@ -219,20 +219,15 @@ def _load_krx_universe(period: str) -> dict[str, pd.DataFrame]:
 
 
 def _load_binance_universe(period: str) -> dict[str, pd.DataFrame]:
-    """Binance top-30 loader — delegates to bench_cs_tsmom_crypto."""
+    """Binance top-30 loader — delegates to bench_cs_tsmom_crypto helpers."""
     sys.path.insert(0, str(_REPO_ROOT / "scripts"))
     bench_bn = importlib.import_module("bench_cs_tsmom_crypto")
-    closes, _quote_volume = bench_bn.load_panels(refresh=False)[:2]
-    panels: dict[str, pd.DataFrame] = {}
-    for sym in closes.columns:
-        s = closes[sym].dropna()
-        if len(s) < 60:
-            continue
-        panels[sym] = pd.DataFrame({
-            "open": s, "high": s, "low": s, "close": s,
-            "volume": pd.Series(1.0, index=s.index),
-        })
-    return panels
+    universe = bench_bn.fetch_top_universe(bench_bn.DEFAULT_UNIVERSE_SIZE)
+    panels = bench_bn.fetch_universe(
+        universe, bench_bn.DEFAULT_START, bench_bn.DEFAULT_END,
+        refresh=False,
+    )
+    return {s: df for s, df in panels.items() if len(df) >= 60}
 
 
 # --- Main --------------------------------------------------------------------
