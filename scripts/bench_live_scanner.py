@@ -197,12 +197,15 @@ def _aggregate(trades: list[dict]) -> dict:
         for t in trades
     ]
 
-    # Aggregate to daily PnL. Multiple trades exiting on the same day add up
-    # (linear approximation — sufficient for low single-digit % per trade).
-    by_day: dict[pd.Timestamp, float] = {}
+    # Aggregate to daily PnL via compounded returns — assume one position
+    # per (strategy, symbol) per day so the per-trade returns multiply
+    # within a day rather than sum (linear sum could exceed -100% on a
+    # single day when many concurrent positions hit stop, producing
+    # unphysical mdd < -100% and ann_return >> 100x).
+    by_day: dict[pd.Timestamp, list[float]] = {}
     for t in trades:
         day = pd.Timestamp(t["exit_ts"]).normalize()
-        by_day[day] = by_day.get(day, 0.0) + float(t["ret"])
+        by_day.setdefault(day, []).append(float(t["ret"]))
     if not by_day:
         return {
             "trades": int(len(trades)),
@@ -213,7 +216,13 @@ def _aggregate(trades: list[dict]) -> dict:
             "realized_pnl_loss": float(losses.sum()),
         }
     days = sorted(by_day.keys())
-    daily_pnl = np.array([by_day[d] for d in days], dtype=float)
+    # Average per-day return so concurrent positions are equal-weighted —
+    # mirrors how an equal-weight portfolio would experience the basket
+    # of exits. Floor at -1 + ε to keep equity strictly positive.
+    daily_pnl = np.array(
+        [max(-0.999, float(np.mean(by_day[d]))) for d in days],
+        dtype=float,
+    )
     n_days = len(daily_pnl)
     sharpe = (
         float(daily_pnl.mean() / daily_pnl.std() * np.sqrt(252))
@@ -224,9 +233,13 @@ def _aggregate(trades: list[dict]) -> dict:
     dd = equity / cum_max - 1
     mdd = float(dd.min()) if len(dd) > 0 else 0.0
     final = float(equity[-1])
+    # Project from observed eval window to annual, but only over days with
+    # any trade activity (n_days). Cap at sane bounds.
     ann_return = (
         float(final ** (252 / max(n_days, 1)) - 1) if final > 0 else -1.0
     )
+    if ann_return > 100.0:  # > 10000% — clamp visibly
+        ann_return = float("inf")
     return {
         "trades": int(len(trades)),
         "win_rate": float(len(wins) / max(len(rets), 1)),
@@ -258,8 +271,32 @@ def _load_krx_universe(period: str) -> dict[str, pd.DataFrame]:
     )
 
 
-def _load_binance_universe(period: str) -> dict[str, pd.DataFrame]:
-    """Binance top-30 loader — delegates to bench_cs_tsmom_crypto helpers."""
+def _load_binance_universe(period: str, *, bar: str = "1d") -> dict[str, pd.DataFrame]:
+    """Binance universe loader.
+
+    bar='1d' → delegates to bench_cs_tsmom_crypto helpers (daily bars).
+    bar='1m' → reads ``data/cache/binance_1m/<symbol>.parquet`` populated
+               by ``scripts/fetch_binance_1m_5y.py``. Live-scanner strategies
+               are 1m-bar designs so this is the production-grade backtest.
+    """
+    if bar == "1m":
+        cache_dir = _REPO_ROOT / "data" / "cache" / "binance_1m"
+        if not cache_dir.exists():
+            logger.warning(
+                "binance_1m cache missing at %s — run "
+                "`python scripts/fetch_binance_1m_5y.py` first.", cache_dir,
+            )
+            return {}
+        panels: dict[str, pd.DataFrame] = {}
+        for path in sorted(cache_dir.glob("*.parquet")):
+            symbol = path.stem
+            try:
+                df = pd.read_parquet(path)
+                if len(df) >= 60:
+                    panels[symbol] = df
+            except Exception as exc:
+                logger.warning("failed to load %s: %s", path, exc)
+        return panels
     sys.path.insert(0, str(_REPO_ROOT / "scripts"))
     bench_bn = importlib.import_module("bench_cs_tsmom_crypto")
     universe = bench_bn.fetch_top_universe(bench_bn.DEFAULT_UNIVERSE_SIZE)
@@ -274,12 +311,13 @@ def _load_binance_universe(period: str) -> dict[str, pd.DataFrame]:
 
 async def _run_bench(
     strategy_id: str, universe: str, period: str, cost_bps: float,
+    *, bar: str = "1d",
 ) -> BenchResult:
     strategy = _load_strategy(strategy_id)
     if universe == "krx":
-        panels = _load_krx_universe(period)
+        panels = _load_krx_universe(period)  # 1d only — KIS 1m cache is a separate issue
     elif universe == "binance":
-        panels = _load_binance_universe(period)
+        panels = _load_binance_universe(period, bar=bar)
     else:
         raise ValueError(f"unknown universe: {universe}")
 
@@ -323,6 +361,11 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="run every (strategy, universe) pair (10 total).",
     )
     parser.add_argument("--output", default=None, help="results JSON path")
+    parser.add_argument(
+        "--bar", choices=["1d", "1m"], default="1d",
+        help="bar resolution for Binance universe; KRX is 1d only "
+             "(1m cache requires fetch_binance_1m_5y.py first).",
+    )
     return parser.parse_args(argv)
 
 
@@ -344,8 +387,11 @@ def main(argv: list[str] | None = None) -> int:
 
     results = []
     for sid, univ in combos:
-        logger.info("running bench: strategy=%s universe=%s", sid, univ)
-        result = asyncio.run(_run_bench(sid, univ, args.period, args.cost_bps))
+        logger.info("running bench: strategy=%s universe=%s bar=%s",
+                    sid, univ, args.bar)
+        result = asyncio.run(
+            _run_bench(sid, univ, args.period, args.cost_bps, bar=args.bar),
+        )
         logger.info(
             "  → trades=%d sharpe=%.3f ann=%.3f mdd=%.3f win_rate=%.2f",
             result.trades, result.sharpe, result.ann_return,
