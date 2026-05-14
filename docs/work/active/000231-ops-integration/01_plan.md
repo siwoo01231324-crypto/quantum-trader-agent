@@ -10,7 +10,9 @@
 ### AC0 — 머지 게이트 (절대 게이트)
 - [ ] AC0_dispatch_proof: docker compose up 후 24h 안에 paper WAL `order_submitted` ≥ 1
 - [ ] AC0_broker_coverage: `/api/account/info` 에 `kis.ok=true` + `binance.ok=true` 동시 + 각 broker `warmup_loaded` ≥ 1
-- [ ] AC0_strategy_dispatch: 11 strategy 모두 `strategy_evaluated` event ≥ 1
+- [ ] AC0_strategy_dispatch: production.yaml **활성 11 strategy** 모두 `strategy_evaluated` event ≥ 1.
+  - 활성 11: momo-btc-v2 / momo-vol-filtered / meanrev-pairs / breakout-donchian / momo-kis-v1 / cs-tsmom-kr-daily / cs-rsi-div-kr / cs-adx-ma-kr / cs-tsmom-crypto-daily / cs-rsi-div-crypto / cs-macd-vol-crypto
+  - **commented 6 (default OFF)**: #227 live-* 5종 + #233 live-hts-hybrid → 별도 활성화 결정 후 AC0 재측정. #231 머지 시점 측정은 활성 11 기준.
 
 ### AC1-AC9 — 영역별 검증
 - [ ] AC1: `qta-live-daemon-binance` healthy + BTCUSDT/ETHUSDT/ETHBTC warmup 391 bars
@@ -257,6 +259,8 @@ python scripts/verify_ac0.py --hours 24
 - `production.yaml` 변경 시 dry-run 검증 (config_loader smoke test)
 - WAL schema version 변경 시 backward-compatible (replay 가능)
 - 모든 strategy `enabled: false` 로 머지 (운영 시작 별도 결정)
+- **머지 전 `python scripts/check_strategy_completeness.py` 실행** (#232). 본 PR 작성 시점 결과: warn-only (각 strategy spec frontmatter `sharpe_bt/mdd_bt/backtest_period` null) + fail 0. PR 머지 차단 없음. CI `.github/workflows/strategy-completeness-check.yml` 가 자동 재실행.
+- **S2 universe broker wire 시 live-hts-hybrid (#233) 도 자동 포함** — generic dispatch wire 라 strategy 추가 작업 0. 단 commented 상태 유지 (default OFF).
 
 ### Must NOT Have
 - 실 자금 거래 자동 켜기 (KIS_PAPER=false 변경 금지)

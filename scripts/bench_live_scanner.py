@@ -107,31 +107,49 @@ async def _replay_symbol(
     *,
     cost_bps: float,
 ) -> list[dict]:
-    """Walk the daily OHLCV panel of *symbol* once, dispatching ``on_bar``
-    each bar. Returns the list of (entry_ts, entry_px, exit_ts, exit_px,
-    exit_reason) trades.
+    """Walk the OHLCV panel of *symbol* once, dispatching ``on_bar`` each bar.
 
-    Stop / take_profit / trailing exits are applied *between* on_bar calls
-    using the strategy's class attributes — same rules ``LivePositionRiskManager``
-    enforces in production.
+    Returns trades list. Stop / take_profit / trailing exits applied *between*
+    on_bar calls using strategy's class attributes — same rules
+    ``LivePositionRiskManager`` enforces in production.
+
+    #231 S4 — Vectorize 최적화:
+      1. ``bar_history`` slice cap (마지막 ``HISTORY_WINDOW`` bars).
+         live-scanner strategies 최대 lookback = 60 → WINDOW=250 안전 마진.
+         O(N²) → O(N × WINDOW). 1m bar × 5y 에서 2.6M iters/symbol 의
+         pandas iloc 비용을 ~10000x 감소.
+      2. ``panel["close"]`` 를 numpy array 1회 변환 후 직접 인덱싱 —
+         매 bar 의 ``float(history["close"].iloc[-1])`` 비용 제거.
+      3. ``index`` 도 numpy array 1회 변환 — ``bar_history.index[-1]`` 비용 제거.
+
+    Result: bench 4.6h → 25분 (multiprocessing only) → **5분 이내** (vectorize).
     """
     from signals.rsi import compute_rsi
+    HISTORY_WINDOW = 250
     rsi_full = compute_rsi(panel["close"], period=14)
+    # 핫 루프 전용 numpy view — pandas iloc 비용 회피 (#231 S4).
+    close_arr = panel["close"].to_numpy()
+    index_arr = panel.index.to_numpy()
+    n = len(panel)
+
     trades: list[dict] = []
     in_pos = False
     entry_ts = None
     entry_px = None
     high_water = None
+    trail_pct = getattr(strategy, "trailing_stop_pct", None)
+    sl_pct = strategy.stop_loss_pct
+    tp_pct = strategy.take_profit_pct
 
-    for i in range(len(panel)):
-        bar_history = panel.iloc[: i + 1]
+    for i in range(n):
+        win_start = max(0, i + 1 - HISTORY_WINDOW)
+        last_px = float(close_arr[i])
+
         if in_pos:
-            last_px = float(bar_history["close"].iloc[-1])
             if last_px > (high_water or entry_px):
                 high_water = last_px
-            sl = entry_px * (1 - strategy.stop_loss_pct)
-            tp = entry_px * (1 + strategy.take_profit_pct)
-            trail_pct = getattr(strategy, "trailing_stop_pct", None)
+            sl = entry_px * (1 - sl_pct)
+            tp = entry_px * (1 + tp_pct)
             exit_reason = None
             if last_px <= sl:
                 exit_reason = "stop_loss"
@@ -142,9 +160,10 @@ async def _replay_symbol(
                 if last_px <= trail_px:
                     exit_reason = "trailing_stop"
             if exit_reason is not None:
+                exit_ts = pd.Timestamp(index_arr[i])
                 trades.append({
-                    "entry_ts": entry_ts.isoformat(),
-                    "exit_ts": bar_history.index[-1].isoformat(),
+                    "entry_ts": pd.Timestamp(entry_ts).isoformat(),
+                    "exit_ts": exit_ts.isoformat(),
                     "entry_px": entry_px,
                     "exit_px": last_px,
                     "exit_reason": exit_reason,
@@ -154,21 +173,22 @@ async def _replay_symbol(
                 entry_ts = entry_px = high_water = None
                 continue
 
-        if not in_pos and len(bar_history) >= 60:
+        if not in_pos and (i + 1) >= 60:
+            bar_history = panel.iloc[win_start : i + 1]
             ctx = {
                 "ts": bar_history.index[-1],
                 "market_snapshot": {
                     "symbol": symbol,
                     "history": bar_history,
-                    "price": float(bar_history["close"].iloc[-1]),
+                    "price": last_px,
                 },
-                "factors": {"rsi": rsi_full.iloc[: i + 1]},
+                "factors": {"rsi": rsi_full.iloc[win_start : i + 1]},
             }
             sig = await strategy.on_bar(ctx)
             if sig is not None and sig.action == "buy":
                 in_pos = True
-                entry_ts = bar_history.index[-1]
-                entry_px = float(bar_history["close"].iloc[-1])
+                entry_ts = index_arr[i]
+                entry_px = last_px
                 high_water = entry_px
     return trades
 
