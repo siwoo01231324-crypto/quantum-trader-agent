@@ -89,9 +89,11 @@ async def test_execute_unknown_symbol_conversion_error(broker, metrics):
     from src.live.executor import execute_intents
 
     pb, ks, wal = broker
+    # EURUSD 는 USDT pair 도 KRX 6 자리도 아니어서 conversion 이 ValueError 를 던지고
+    # executor 는 REJECTED ack 로 변환. (USDT 로 끝나는 심볼은 #227 fallback 으로 통과)
     intent = OrderIntent(
         strategy_id="strat1",
-        symbol="DOGEUSDT",
+        symbol="EURUSD",
         side="buy",
         qty=100.0,
         reason="test",
