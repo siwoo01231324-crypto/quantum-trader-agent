@@ -161,6 +161,14 @@ strategies:
   # - id: live-oversold-with-divergence
   #   class: backtest.strategies.live_oversold_with_divergence.LiveOversoldWithDivergence
   #   kwargs: {}
+  #
+  # HTS 검색식 hybrid (#230) — 단타·5분대기·스윙 OR 합성. KST ≤ 10:30 시간대 게이트.
+  # KIS 1m 30일 한계로 5y bench 데이터 부족 → paper-only 운영 (5거래일 누적 후 검증).
+  # - id: live-hts-hybrid
+  #   class: backtest.strategies.live_hts_hybrid.LiveHtsHybrid
+  #   kwargs:
+  #     default_size: 0.05
+  #     max_entry_hour: 10.5
 
   # ── 메타라벨러 활성화 (#85) — 운영자 절차 ─────────────────────────────────
   # 1. python scripts/train_metalabeler_btc.py --output-dir models/momo-btc-v2
