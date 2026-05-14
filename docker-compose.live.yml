@@ -194,11 +194,21 @@ services:
       CRYPTO_STRATEGIES: "cs-tsmom-crypto-daily cs-rsi-div-crypto cs-macd-vol-crypto"
       LAST_RUN_FILE: /data/logs/universe-rebal-last-run.txt
       UNIVERSE_SCAN_LIVE_ENABLED: "1"
+      # #231 S6 — Python unbuffered stdout 으로 universe_rebal_loop.sh 의 echo
+      # 가 docker logs / tee 파일에 즉시 flush. 기존 stdout 손실 (#231 진단) fix.
+      PYTHONUNBUFFERED: "1"
     volumes:
       - ./logs/shadow:/app/logs/shadow
       - ./logs/universe-rebal:/data/logs
       - ./data/cache:/app/data/cache
     restart: unless-stopped
+    # #231 S6 — docker logs lifetime 보존 (기존 0 lines 진단 후속).
+    # max-size 10m × max-file 3 = 30m 보존 후 rotation.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     deploy:
       resources:
         limits:

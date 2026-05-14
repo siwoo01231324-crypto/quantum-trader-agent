@@ -23,7 +23,7 @@ from risk import (
     PortfolioRiskReport,
 )
 from src.brokers.base import AsyncBrokerAdapter
-from src.live.types import EVENT_STRATEGY_TOGGLED, WALEvent
+from src.live.types import EVENT_STRATEGY_EVALUATED, EVENT_STRATEGY_TOGGLED, WALEvent
 from .orchestrator import _SyncStrategyOrchestrator
 from .order_intent import OrderIntent
 from .sizing import resolve_size
@@ -183,6 +183,44 @@ class AsyncStrategyOrchestrator:
                 strategy_id, enabled, err,
             )
 
+    def _emit_strategy_evaluated(
+        self,
+        strategy_id: str,
+        *,
+        symbol: str,
+        decision: str,
+        reason: str,
+        ts: object,
+    ) -> None:
+        """Emit `strategy_evaluated` WAL event (#231 S5).
+
+        Called once per (strategy, symbol) pair in run_bar dispatch — gives
+        runtime visibility into on_bar invocation regardless of buy/sell/hold
+        outcome. Used by AC0_strategy_dispatch + AC5 (24h dispatch ≥ 1000).
+        Decision values: "buy" | "sell" | "hold" | "exception".
+        """
+        if self._wal_observer is None:
+            return
+        ts_str = ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
+        ev = WALEvent(
+            ts=ts_str,
+            event_type=EVENT_STRATEGY_EVALUATED,
+            payload={
+                "strategy_id": strategy_id,
+                "symbol": symbol,
+                "decision": decision,
+                "reason": reason,
+            },
+        )
+        try:
+            self._wal_observer(ev)
+        except Exception as err:
+            logger.warning(
+                "portfolio.orchestrator.wal_observer_error event=strategy_evaluated "
+                "strategy_id=%s symbol=%s decision=%s error=%s",
+                strategy_id, symbol, decision, err,
+            )
+
     # ---- async API ---------------------------------------------------------
 
     async def run_bar(
@@ -267,6 +305,9 @@ class AsyncStrategyOrchestrator:
         counted_failed: set[str] = set()
 
         for sid, sym_override, result in zip(sids, task_symbols, results):
+            # Resolve symbol once — used by S5 WAL event AND order routing.
+            order_symbol = sym_override or _snap_dict.get("symbol", "UNKNOWN")
+
             if isinstance(result, BaseException):
                 if sid not in counted_failed:
                     counted_failed.add(sid)
@@ -284,10 +325,18 @@ class AsyncStrategyOrchestrator:
                             sid,
                             count,
                         )
+                self._emit_strategy_evaluated(
+                    sid, symbol=order_symbol, decision="exception",
+                    reason=type(result).__name__, ts=ts,
+                )
                 continue
 
             signal = result
             if signal is None:
+                self._emit_strategy_evaluated(
+                    sid, symbol=order_symbol, decision="hold",
+                    reason="no_signal", ts=ts,
+                )
                 continue
 
             # Reset only when no sibling task for this sid threw in the same
@@ -297,14 +346,21 @@ class AsyncStrategyOrchestrator:
                 self._fail_count[sid] = 0
 
             if signal.action == "hold":
+                self._emit_strategy_evaluated(
+                    sid, symbol=order_symbol, decision="hold",
+                    reason="action_hold", ts=ts,
+                )
                 continue
+
+            # buy/sell — emit before order routing so the event captures
+            # strategy intent regardless of downstream risk-gate decision.
+            self._emit_strategy_evaluated(
+                sid, symbol=order_symbol, decision=signal.action,
+                reason=getattr(signal, "reason", None) or "entry", ts=ts,
+            )
 
             recent = self._recent_returns.get(sid)
             qty = resolve_size(signal, recent)
-
-            # For live-scanner per-symbol dispatch, use the iteration symbol;
-            # legacy single-dispatch falls back to market_snapshot["symbol"].
-            order_symbol = sym_override or _snap_dict.get("symbol", "UNKNOWN")
             order_price = (
                 _snap_dict.get("price", 0.0)
                 if sym_override is None

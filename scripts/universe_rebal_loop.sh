@@ -11,6 +11,14 @@ set -euo pipefail
 
 cd /app
 
+# #231 S6 — stdout 손실 fix. 모든 echo 를 docker logs + 호스트 마운트 로그파일
+# 양쪽에 기록. 기존엔 docker daemon log rotation 으로 lifetime 누적 stdout
+# 0 lines 발생 (#231 진단 — 5/10 첫 가동 시 발주 시도 stdout 추적 불가).
+# PYTHONUNBUFFERED=1 (compose env) + tee 조합으로 즉시 flush + 호스트 영구 보존.
+LOOP_LOG_DIR="${LOG_DIR:-/data/logs}"
+mkdir -p "$LOOP_LOG_DIR"
+exec > >(tee -a "$LOOP_LOG_DIR/universe-rebal-loop.log") 2>&1
+
 KRX_REBAL_HOUR_KST="${KRX_REBAL_HOUR_KST:-15}"   # 15시
 KRX_REBAL_MIN_KST="${KRX_REBAL_MIN_KST:-32}"     # 마감 후 2분 (15:32)
 CRYPTO_REBAL_HOUR_UTC="${CRYPTO_REBAL_HOUR_UTC:-0}"  # 00:00 UTC

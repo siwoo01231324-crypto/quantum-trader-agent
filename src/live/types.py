@@ -114,6 +114,10 @@ EVENT_ORDER_ACKED = "order_acked"
 EVENT_TRACKING_SAMPLE = "tracking_sample"
 EVENT_FILL_ANOMALY = "fill_anomaly"
 EVENT_STRATEGY_TOGGLED = "strategy_toggled"
+# #231 S5 — emitted by AsyncStrategyOrchestrator.run_bar for every strategy
+# evaluation (one event per (strategy_id, symbol, tick)). Used by AC0 dispatch
+# proof + 운영 디버깅 (live-daemon 의 strategy 가 실제로 호출되는지 가시화).
+EVENT_STRATEGY_EVALUATED = "strategy_evaluated"
 
 
 @dataclass(frozen=True)
