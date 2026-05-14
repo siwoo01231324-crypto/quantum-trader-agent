@@ -3,6 +3,7 @@ type: strategy
 id: cs-tsmom-kr-daily
 name: KRX Cross-Sectional TSMOM 12-1 Daily
 status: backtest
+paradigm: universe-scan
 instruments:
 - kospi200+kosdaq150
 market: krx

@@ -3,6 +3,7 @@ type: strategy
 id: cs-bb-macd-kr
 name: KRX Cross-Sectional Bollinger Rebound + MACD Cross
 status: inactive
+paradigm: universe-scan
 instruments:
 - kospi200+kosdaq150
 market: krx
