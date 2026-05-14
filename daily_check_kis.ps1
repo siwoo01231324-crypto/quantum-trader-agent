@@ -1,7 +1,10 @@
-# 일일 점검 스크립트 (KIS)
+﻿# 일일 점검 스크립트 (KIS)
 # .\daily_check_kis.ps1
 
 $env:PYTHONUTF8 = 1
+# PowerShell 5.x 기본 콘솔 인코딩은 CP949 → UTF-8 한글 주석/출력 깨짐. 강제 UTF-8.
+$OutputEncoding = [System.Text.Encoding]::UTF8
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 Set-Location D:\project\quantum-trader-agent
 
 function Get-DockerStatus {
@@ -19,9 +22,12 @@ function Get-DaemonLogs {
 Write-Host ""
 Write-Host "=== Containers ===" -ForegroundColor Cyan
 $containers = @(
-    @{ name = "qta-live-daemon";       label = "live-daemon" },
-    @{ name = "qta-report-cron";       label = "report-cron" },
-    @{ name = "qta-telegram-notifier"; label = "telegram-notifier" }
+    @{ name = "qta-live-daemon";         label = "live-daemon" },
+    @{ name = "qta-report-cron";         label = "report-cron" },
+    @{ name = "qta-telegram-notifier";   label = "telegram-notifier" },
+    @{ name = "qta-telegram-control";    label = "telegram-control" },
+    @{ name = "qta-kis-1m-fetch-cron";   label = "kis-1m-fetch-cron" },
+    @{ name = "qta-universe-rebal-cron"; label = "universe-rebal-cron" }
 )
 foreach ($c in $containers) {
     $status = Get-DockerStatus $c.name
@@ -94,6 +100,68 @@ foreach ($p in @("logs\shadow", "data\logs")) {
 }
 if (-not $walFound) {
     Write-Host "  no WAL yet (first signal will create wal.jsonl)" -ForegroundColor Yellow
+}
+
+Write-Host ""
+Write-Host "=== Universe-rebal (#218) ===" -ForegroundColor Cyan
+# last-run.txt 는 `krx=YYYY-MM-DD` / `crypto=YYYY-MM-DD` 라인을 append. 두 트랙 분리 표시.
+# 호스트 마운트: ./logs/universe-rebal/universe-rebal-last-run.txt (container: /data/logs/...)
+$lastRun = "logs\universe-rebal\universe-rebal-last-run.txt"
+if (Test-Path $lastRun) {
+    $krxLast    = (Get-Content $lastRun | Select-String "^krx="    | Select-Object -Last 1)
+    $cryptoLast = (Get-Content $lastRun | Select-String "^crypto=" | Select-Object -Last 1)
+    if ($krxLast)    { Write-Host ("  KRX last run:    {0}" -f $krxLast.ToString().Trim()) }
+    else             { Write-Host "  KRX last run:    (never — next: Friday 15:32 KST)" -ForegroundColor Yellow }
+    if ($cryptoLast) { Write-Host ("  Crypto last run: {0}" -f $cryptoLast.ToString().Trim()) }
+    else             { Write-Host "  Crypto last run: (never — next: Sunday 00:00 UTC)" -ForegroundColor Yellow }
+} else {
+    Write-Host "  last-run.txt 미생성 (컨테이너 첫 가동 직후)" -ForegroundColor Yellow
+}
+# strategy 별 paper WAL — cron_paper_universe_rebal.py 가 logs/shadow/cron-{sid}/wal.jsonl 로 분리 기록.
+$rebalWals = Get-ChildItem "logs\shadow\cron-*\wal.jsonl" -ErrorAction SilentlyContinue
+if ($rebalWals) {
+    foreach ($w in $rebalWals) {
+        $count = (Get-Content $w.FullName | Measure-Object).Count
+        $sid = Split-Path $w.Directory -Leaf
+        $color = if ($count -gt 2) { "Green" } else { "Yellow" }   # >2 = run_started/session_open 외 신호/주문 발생
+        Write-Host ("  {0,-40} {1} events" -f $sid, $count) -ForegroundColor $color
+    }
+} else {
+    Write-Host "  per-strategy WAL 0건 (발주 이력 없음 — 컨테이너 가동 후 첫 금/일 대기)" -ForegroundColor Yellow
+}
+
+Write-Host ""
+Write-Host "=== KIS 1m lake (#152) ===" -ForegroundColor Cyan
+# kis_1m_fetch_loop.sh 가 평일 16:00 KST 에 partitioned parquet 적재.
+# 구조: lake/ohlcv/freq=1m/year=YYYY/month=MM/symbol=<code>/part-0.parquet
+$lake = "lake"
+if (Test-Path $lake) {
+    $parquets = @(Get-ChildItem "$lake" -Recurse -Filter "*.parquet" -ErrorAction SilentlyContinue)
+    $symbols = @($parquets | ForEach-Object {
+        if ($_.FullName -match "symbol=([^\\]+)") { $matches[1] }
+    } | Select-Object -Unique)
+    $latest = $parquets | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    $color = if ($symbols.Count -gt 0) { "Green" } else { "Yellow" }
+    Write-Host ("  symbols cached: {0} (parquet files: {1})" -f $symbols.Count, $parquets.Count) -ForegroundColor $color
+    if ($latest) {
+        $sym = if ($latest.FullName -match "symbol=([^\\]+)") { $matches[1] } else { $latest.Name }
+        Write-Host ("  latest update:  symbol={0} ({1})" -f $sym, $latest.LastWriteTime.ToString('yyyy-MM-dd HH:mm'))
+    }
+} else {
+    Write-Host "  lake/ 미존재 (fetch 미실행)" -ForegroundColor Yellow
+}
+
+Write-Host ""
+Write-Host "=== Telegram-control audit (#216) ===" -ForegroundColor Cyan
+# telegram_control.py 가 /kill /release /status 등 명령 처리 후 audit WAL append.
+$ctlWal = "logs\shadow\telegram_control.wal.jsonl"
+if (Test-Path $ctlWal) {
+    $count = (Get-Content $ctlWal | Measure-Object).Count
+    $last  = (Get-Content $ctlWal -Tail 1 -ErrorAction SilentlyContinue)
+    Write-Host ("  audit events:   {0}" -f $count)
+    if ($last) { Write-Host ("  last command:   {0}" -f $last) }
+} else {
+    Write-Host "  audit WAL 없음 (명령 전송 이력 없음 — 정상)" -ForegroundColor Yellow
 }
 
 Write-Host ""

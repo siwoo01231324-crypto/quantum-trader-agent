@@ -33,6 +33,7 @@ import logging
 import sys
 from dataclasses import asdict, dataclass
 from decimal import Decimal
+from multiprocessing import Pool, cpu_count
 from pathlib import Path
 
 import numpy as np
@@ -309,9 +310,25 @@ def _load_binance_universe(period: str, *, bar: str = "1d") -> dict[str, pd.Data
 
 # --- Main --------------------------------------------------------------------
 
+def _replay_symbol_worker(args: tuple) -> list[dict]:
+    """Process-worker: loads strategy fresh + reads parquet + runs async replay.
+
+    Used by ``_run_bench`` when ``universe=binance`` and ``bar=1m`` — per-symbol
+    panels are ~100 MB each so we pass parquet paths (not DataFrames) and let
+    each worker load its own panel. Strategy state is process-local so each
+    worker re-loads the class (no cross-worker contamination).
+
+    Top-level function so it's pickle-able by ``multiprocessing.Pool``.
+    """
+    strategy_id, symbol, panel_path, cost_bps = args
+    strategy = _load_strategy(strategy_id)
+    panel = pd.read_parquet(panel_path)
+    return asyncio.run(_replay_symbol(strategy, symbol, panel, cost_bps=cost_bps))
+
+
 async def _run_bench(
     strategy_id: str, universe: str, period: str, cost_bps: float,
-    *, bar: str = "1d",
+    *, bar: str = "1d", workers: int | None = None,
 ) -> BenchResult:
     strategy = _load_strategy(strategy_id)
     if universe == "krx":
@@ -322,18 +339,55 @@ async def _run_bench(
         raise ValueError(f"unknown universe: {universe}")
 
     all_trades: list[dict] = []
-    for symbol, panel in panels.items():
-        trades = await _replay_symbol(
-            strategy, symbol, panel, cost_bps=cost_bps,
+
+    # Multiprocessing: Binance 1m only (panel size ~100 MB × 30 symbols would
+    # blow up sequential runs to 40+ min/strategy). KRX 1d stays sequential —
+    # panel is ~60 KB × 350 symbols, pickle overhead would dominate.
+    use_mp = (universe == "binance" and bar == "1m" and len(panels) > 1)
+    if use_mp:
+        import gc
+        cache_dir = _REPO_ROOT / "data" / "cache" / "binance_1m"
+        symbol_list = list(panels.keys())
+        # Release panel dict (~3 GB for 30×100MB) BEFORE pool spawn — each worker
+        # re-reads its own parquet. Failing to drop here OOMs at workers≥8 on
+        # 16 GB systems (observed 18:48 run with workers=20 → MemoryError after
+        # symbol 1 of 30 succeeded).
+        del panels
+        gc.collect()
+        args_list = [
+            (strategy_id, sym, str(cache_dir / f"{sym}.parquet"), cost_bps)
+            for sym in symbol_list
+        ]
+        # Default workers=4 — 100 MB panel × 4 workers + strategy state + pyarrow
+        # buffers ≈ 2 GB peak, comfortable on 16 GB. Override with --workers N.
+        n_workers = workers or min(4, cpu_count(), len(args_list))
+        logger.info(
+            "  multiprocessing pool: workers=%d tasks=%d", n_workers, len(args_list),
         )
-        all_trades.extend(trades)
+        with Pool(processes=n_workers) as pool:
+            for i, trades in enumerate(
+                pool.imap_unordered(_replay_symbol_worker, args_list), 1,
+            ):
+                all_trades.extend(trades)
+                logger.info(
+                    "    [%d/%d] symbol done (trades=%d cumulative=%d)",
+                    i, len(args_list), len(trades), len(all_trades),
+                )
+        n_symbols = len(args_list)
+    else:
+        for symbol, panel in panels.items():
+            trades = await _replay_symbol(
+                strategy, symbol, panel, cost_bps=cost_bps,
+            )
+            all_trades.extend(trades)
+        n_symbols = len(panels)
 
     metrics = _aggregate(all_trades)
     return BenchResult(
         strategy_id=strategy_id,
         universe=universe,
         period=period,
-        n_symbols=len(panels),
+        n_symbols=n_symbols,
         **metrics,
     )
 
@@ -366,6 +420,11 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="bar resolution for Binance universe; KRX is 1d only "
              "(1m cache requires fetch_binance_1m_5y.py first).",
     )
+    parser.add_argument(
+        "--workers", type=int, default=None,
+        help="multiprocessing pool size for Binance 1m runs "
+             "(default: min(cpu_count, n_symbols)). Set 1 to disable.",
+    )
     return parser.parse_args(argv)
 
 
@@ -390,7 +449,10 @@ def main(argv: list[str] | None = None) -> int:
         logger.info("running bench: strategy=%s universe=%s bar=%s",
                     sid, univ, args.bar)
         result = asyncio.run(
-            _run_bench(sid, univ, args.period, args.cost_bps, bar=args.bar),
+            _run_bench(
+                sid, univ, args.period, args.cost_bps,
+                bar=args.bar, workers=args.workers,
+            ),
         )
         logger.info(
             "  → trades=%d sharpe=%.3f ann=%.3f mdd=%.3f win_rate=%.2f",
