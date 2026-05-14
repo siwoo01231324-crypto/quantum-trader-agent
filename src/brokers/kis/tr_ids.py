@@ -43,3 +43,8 @@ TR_ID_STABILITY_RATIO    = "FHKST66430600"  # /finance/stability-ratio     — c
 TR_ID_INQUIRE_PRICE      = "FHKST01010100"  # /quotations/inquire-price    — PER/PBR/EPS/BPS (market multiples)
 TR_ID_DAILY_PRICE        = "FHKST03010100"  # /quotations/inquire-daily-itemchartprice — daily OHLCV bars
 TR_ID_INTRADAY_PRICE     = "FHKST03010200"  # /quotations/inquire-time-itemchartprice — intraday minute bars
+
+# KIS WebSocket realtime market-data TR-IDs (#227 KIS WS market subscribe).
+# 모의/실전 동일 (체결가 stream 은 paper/live 구분 없음). 종목별 subscribe.
+TR_ID_WS_KRX_TRADE       = "H0STCNT0"        # 실시간 주식 체결가 (KOSPI/KOSDAQ 보통주)
+TR_ID_WS_KRX_BIDASK      = "H0STASP0"        # 실시간 주식 호가 (옵션 — 본 issue 미사용)

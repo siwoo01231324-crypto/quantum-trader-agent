@@ -62,12 +62,31 @@ class KISMarketFeed:
         poll_interval_sec: float = 60.0,
         interval_min: str = "1",
         market_open_check: bool = True,
+        stagger: bool = False,
+        max_qpm: int | None = None,
     ) -> None:
+        """KIS REST polling feed.
+
+        Args:
+            stagger: when True, the per-cycle loop spreads the N symbol fetches
+                evenly across ``poll_interval_sec`` (sleep ``poll_interval_sec/N``
+                between calls) instead of bursting all N back-to-back at the
+                start of each minute. Required for #227 universe-scale runs
+                (350 KRX symbols / 60s = 5.83 calls/sec sustained — the burst
+                form would breach KIS ``EGW00201`` rate limits.)
+            max_qpm: hard ceiling on REST calls per minute. When set, the cycle
+                aborts after ``max_qpm`` symbols and resumes the remainder on
+                the next cycle (round-robin offset preserved). ``None`` (default)
+                means no ceiling.
+        """
         self._symbols: list[str] = list(symbols)
         self._client = client
         self._poll_interval_sec = float(poll_interval_sec)
         self._interval_min = interval_min
         self._market_open_check = market_open_check
+        self._stagger = bool(stagger)
+        self._max_qpm = max_qpm
+        self._cycle_offset = 0  # for round-robin under max_qpm
         self._last_bar_key: dict[str, tuple[str, str]] = {}
         self._closed = False
 
@@ -100,7 +119,25 @@ class KISMarketFeed:
                 await asyncio.sleep(self._poll_interval_sec)
                 continue
 
-            for symbol in list(self._symbols):
+            symbols = list(self._symbols)
+            n = len(symbols)
+            # #227 S5: under max_qpm, fetch a rotating window of size max_qpm
+            # so every symbol is eventually covered across multiple cycles.
+            if self._max_qpm is not None and n > self._max_qpm:
+                start = self._cycle_offset % n
+                window = symbols[start:start + self._max_qpm]
+                if len(window) < self._max_qpm:
+                    window += symbols[: self._max_qpm - len(window)]
+                self._cycle_offset = (start + self._max_qpm) % n
+                cycle_symbols = window
+            else:
+                cycle_symbols = symbols
+
+            stagger_delay = 0.0
+            if self._stagger and len(cycle_symbols) > 0:
+                stagger_delay = self._poll_interval_sec / len(cycle_symbols)
+
+            for idx, symbol in enumerate(cycle_symbols):
                 if self._closed:
                     return
                 today = datetime.now(KST).strftime("%Y%m%d")
@@ -115,17 +152,20 @@ class KISMarketFeed:
                         "KISMarketFeed.fetch_failed symbol=%s error=%s",
                         symbol, exc,
                     )
+                    if stagger_delay > 0 and idx < len(cycle_symbols) - 1:
+                        await asyncio.sleep(stagger_delay)
                     continue
-                if not bars:
-                    continue
-                latest = bars[-1]
-                key = (latest.date, latest.time)
-                if self._last_bar_key.get(symbol) == key:
-                    continue
-                self._last_bar_key[symbol] = key
-                yield self._bar_to_tick(symbol, latest)
+                if bars:
+                    latest = bars[-1]
+                    key = (latest.date, latest.time)
+                    if self._last_bar_key.get(symbol) != key:
+                        self._last_bar_key[symbol] = key
+                        yield self._bar_to_tick(symbol, latest)
+                if stagger_delay > 0 and idx < len(cycle_symbols) - 1:
+                    await asyncio.sleep(stagger_delay)
 
-            await asyncio.sleep(self._poll_interval_sec)
+            if not self._stagger:
+                await asyncio.sleep(self._poll_interval_sec)
 
     @staticmethod
     def _bar_to_tick(symbol: str, bar: Any) -> Tick:

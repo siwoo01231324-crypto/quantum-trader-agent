@@ -134,6 +134,34 @@ strategies:
   # cs-bb-macd-kr 는 5y bench Sharpe -0.32 → status: inactive, production 미등록.
   # 코드는 src/backtest/strategies/cs_bb_macd_kr.py 유지 — score 정의 재설계 후 활성화 검토.
 
+  # ── Live Universe Scanner strategies (#227) ──────────────────────────────
+  #
+  # **DEFAULT: ALL DISABLED.** 활성화는 다음 두 조건 모두 충족해야 한다:
+  #   1. 환경 변수 LIVE_SCANNER_ENABLED=1 (live_run.py 가 LivePositionRiskManager 와이어업)
+  #   2. 아래 entry 의 주석 해제 (config_loader 가 register_strategy 호출)
+  #
+  # 두 조건 모두 충족되면 orchestrator 가 LiveScannerMixin 전략을 universe 의 각
+  # 종목마다 dispatch + LivePositionRiskManager 가 stop_loss/take_profit/trailing
+  # 자동 청산. 활성화 전에는 universe-scan / single-ticker 전략만 동작 (zero impact).
+  #
+  # **5y backtest 미실시** — Sharpe ≥ 0.5 통과 검증 후 1건씩 활성화 권장 (#229 후속).
+  #
+  # - id: live-rsi-oversold-volume-spike
+  #   class: backtest.strategies.live_rsi_oversold_volume_spike.LiveRsiOversoldVolumeSpike
+  #   kwargs: {}
+  # - id: live-macd-bullish-cross-breakout
+  #   class: backtest.strategies.live_macd_bullish_cross_breakout.LiveMacdBullishCrossBreakout
+  #   kwargs: {}
+  # - id: live-bb-lower-bounce
+  #   class: backtest.strategies.live_bb_lower_bounce.LiveBbLowerBounce
+  #   kwargs: {}
+  # - id: live-breakout-with-atr-stop
+  #   class: backtest.strategies.live_breakout_with_atr_stop.LiveBreakoutWithAtrStop
+  #   kwargs: {}
+  # - id: live-oversold-with-divergence
+  #   class: backtest.strategies.live_oversold_with_divergence.LiveOversoldWithDivergence
+  #   kwargs: {}
+
   # ── 메타라벨러 활성화 (#85) — 운영자 절차 ─────────────────────────────────
   # 1. python scripts/train_metalabeler_btc.py --output-dir models/momo-btc-v2
   # 2. python scripts/promote_metalabeler.py --strategy momo-btc-v2 --version <ts>
@@ -149,3 +177,12 @@ strategies:
   #     metalabeler:
   #       load_path: models/momo-btc-v2/latest/
   #     metalabeler_threshold: 0.5
+
+# ── Capital allocation 정책 (#227 S7) ─────────────────────────────────────────
+# 두 paradigm 동시 운영 시 자본 분배 의도. 현재는 informational metadata —
+# 실제 강제는 risk evaluator 의 per-symbol concentration limit 가 담당.
+# 합산 ≤ 100%. live_scanner 활성화 (LIVE_SCANNER_ENABLED=1) 후 검토.
+capital_allocation:
+  universe_scan_pct: 0.70   # cs_*, breakout_donchian
+  live_scanner_pct: 0.30    # live_*  (활성화 전엔 0% 효과)
+  single_ticker_pct: 0.00   # legacy momo_kis_v1 / momo_btc_v2 — 비활성 시

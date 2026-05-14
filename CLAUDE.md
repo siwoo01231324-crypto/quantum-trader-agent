@@ -54,16 +54,18 @@
 - 백테스트·인시던트 초안 자동 생성은 `services/doc_agent/` (#53) — 출력은 항상 `.draft.md`, 정식 승격은 사람이 rename
 - 자동 커밋 금지 — 드래프트도 리뷰 후 수동 커밋
 
-## 새 전략 추가 시 필수 (#70 이후, #78 확장, 2026-05-06 universe-scan default)
-- **패턴 선택** — **universe-scan 이 신규 default** (`docs/specs/universe-scan-strategy-pattern.md`). 단일종목 고정으로 추가하려면 사유를 spec 문서에 명시.
-  - universe-scan: 종목 universe → 랭킹 → top-N 보유. 예: `breakout_donchian`, `cs_tsmom_kr_daily`.
-  - single-ticker (legacy): 사전 지정 1~3 종목. 신규는 예외 (사유 필수).
-- **Protocol 선택** — `Strategy` (sync `on_bar(bar, history, context)`) 또는 `AsyncStrategy` (async `on_bar(ctx)`) 중 하나를 준수 (`src/backtest/protocol.py`).
-- **orchestrator 등록** — `AsyncStrategyOrchestrator.register_strategy(strategy_id, strategy)` 호출 필수. 생략 시 tick driver 에 연결되지 않음.
-- **일수익률 시계열 export** — `orchestrator.register_strategy_returns(strategy_id, series)` 로 공급 필수. 생략 시 포트폴리오 CVaR·상관·ENB 체크가 침묵함.
-- **`docs/specs/strategies/<strategy_id>.md` 스펙 파일** — 프론트매터 `type: strategy`, "리스크 연동" 섹션에 register 호출 방법 명시. universe-scan 인 경우 universe pin-date 명시.
-- **단위 테스트 1건** — `tests/test_portfolio_orchestrator_async.py` 또는 전략-전용 테스트에서 수익률 → report 생성까지 검증.
-- **상세**: `src/backtest/strategies/.ai.md` "리스크 연동 (필수)" 섹션 + `docs/specs/universe-scan-strategy-pattern.md` "PR 체크리스트" 참조.
+## 새 전략 추가 시 필수 (#70 이후, #78 확장, 2026-05-06 universe-scan default, 2026-05-11 live-scanner 추가)
+- **패턴 선택 — 시간축에 따라 두 default 중 하나** (단일종목 고정은 legacy 예외).
+  - **`live-scanner`** (default for intraday — #227): 매 tick 종목별 임계값 평가 → 즉시 매수 → 손익비 자동 청산. 예: `live_rsi_oversold_volume_spike`, `live_macd_bullish_cross_breakout`, `live_bb_lower_bounce`, `live_breakout_with_atr_stop`, `live_oversold_with_divergence`. 상세 → `docs/specs/live-universe-scanner-paradigm.md`.
+  - **`universe-scan`** (default for daily/weekly — #218): 유니버스 → 랭킹 → top-N 보유, 주기적 리밸. 예: `breakout_donchian`, `cs_tsmom_kr_daily`, `cs_tsmom_crypto_daily`. 상세 → `docs/specs/universe-scan-strategy-pattern.md`.
+  - **single-ticker** (legacy): 사전 지정 1~3 종목. 신규 추가 시 사유 spec 명시.
+- **Protocol 선택** — `Strategy` (sync) 또는 `AsyncStrategy` (async) 중 하나 (`src/backtest/protocol.py`). live-scanner 는 추가로 `LiveScannerMixin` (`src/backtest/strategies/_live_scanner_helpers.py`) 상속 + `stop_loss_pct` / `take_profit_pct` / `trailing_stop_pct` (선택) 클래스 속성 명시.
+- **orchestrator 등록** — `AsyncStrategyOrchestrator.register_strategy(strategy_id, strategy)` 호출 필수.
+- **일수익률 시계열 export** — `orchestrator.register_strategy_returns(strategy_id, series)` 로 공급 필수.
+- **`docs/specs/strategies/<strategy_id>.md` 스펙 파일** — 프론트매터 `type: strategy`, `paradigm: universe-scan | live-scanner | single-ticker` 명시. universe-scan 은 pin-date, live-scanner 는 stop_loss_pct/take_profit_pct/trailing_stop_pct 명시. "리스크 연동" 섹션 필수.
+- **단위 테스트 1건** — synthetic OHLCV 로 buy path + warmup + boundary 검증.
+- **5y backtest** — Sharpe ≥ 0.5 (universe-scan) / ≥ 1.0 (live-scanner intraday 권장) 통과 시에만 `production.yaml` `enabled: true` 후보. 미통과 시 spec status `rejected`.
+- **상세**: `src/backtest/strategies/.ai.md` + paradigm 별 spec 의 "PR 체크리스트" 참조.
 
 ## 조사·리서치 규칙
 - 서베이·리서치 등 조사 작업은 팩트에 근거한 내용만 작성한다
