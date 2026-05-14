@@ -38,8 +38,10 @@ def test_solusdt_step1():
 
 
 def test_unknown_symbol_raises():
+    # EURUSD: USDT pair 도 KRX 6 자리도 아님 → fallback 없음 → ValueError.
+    # USDT 로 끝나는 심볼은 #227 default-step fallback 으로 통과되므로 쓰지 않는다.
     with pytest.raises(ValueError, match="Unsupported symbol"):
-        intent_to_order_request(_intent("DOGEUSDT", "buy", 1.0), idempotency_key="k6")
+        intent_to_order_request(_intent("EURUSD", "buy", 1.0), idempotency_key="k6")
 
 
 def test_side_mapping():
