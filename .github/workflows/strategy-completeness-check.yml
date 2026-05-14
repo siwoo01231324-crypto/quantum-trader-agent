@@ -1,0 +1,45 @@
+name: Strategy Completeness Check
+
+# 새 전략이 운영까지 가는 8개 레이어 (spec/코드/테스트/production.yaml/...) 모두에
+# 등록됐는지 정적 검증한다. `check_invariants.py` 다음 단계의 운영 invariant.
+#
+# Rollout:
+#   v1 (현재) — warn 모드. exit 0 보장 (--strict 미사용) → green check 유지.
+#                기존 전략의 누락이 PR 차단을 일으키지 않도록.
+#   v2 (예정) — 기존 전략 누락 정리 PR 머지 후 `--strict` 로 승격 → 머지 차단.
+
+on:
+  pull_request:
+    paths:
+      - "docs/specs/strategies/**"
+      - "configs/orchestrator/production.yaml"
+      - "src/backtest/strategies/**"
+      - "tests/**/test_*.py"
+      - "scripts/check_strategy_completeness.py"
+      - ".github/workflows/strategy-completeness-check.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Strategy 8-layer completeness
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install python-frontmatter pyyaml
+
+      - name: Run completeness check (warn mode — exit 0)
+        run: python scripts/check_strategy_completeness.py

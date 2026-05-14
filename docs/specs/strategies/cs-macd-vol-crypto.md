@@ -3,6 +3,7 @@ type: strategy
 id: cs-macd-vol-crypto
 name: Crypto Cross-Sectional MACD + Volatility Filter
 status: backtest
+paradigm: universe-scan
 instruments:
 - binance-usdt-spot-top30
 market: crypto
@@ -34,6 +35,8 @@ tags:
 # Crypto Cross-Sectional MACD + Volatility Filter
 
 `momo_vol_filtered` (BTC 4h MACD + realized_vol < 80%) 의 universe-scan 변환본 (#218).
+
+Universe pin-date: **2026-05-08** (현재 Binance USDT spot 24h 거래량 top-30 기준 → 스테이블/페그/레버리지 제외, 생존편향 인정).
 
 가설: "추세는 양수 + 변동성은 ceiling 미만" 조건이 동시 충족된 종목만 안전한 추세 추종.
 

@@ -3,6 +3,7 @@ type: strategy
 id: cs-adx-ma-kr
 name: KRX Cross-Sectional EMA Cross + ADX Filter
 status: backtest
+paradigm: universe-scan
 instruments:
 - kospi200+kosdaq150
 market: krx
@@ -34,6 +35,8 @@ tags:
 # KRX Cross-Sectional EMA Cross + ADX Filter
 
 `swing_kr_daily.swing_adx_ma` 의 universe-scan 변환본 (#218).
+
+Universe pin-date: **2026-05-08** (현재 시총 기준 KOSPI top-200 + KOSDAQ top-150 → 생존편향 인정).
 
 ## Score
 

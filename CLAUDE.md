@@ -65,6 +65,7 @@
 - **`docs/specs/strategies/<strategy_id>.md` 스펙 파일** — 프론트매터 `type: strategy`, `paradigm: universe-scan | live-scanner | single-ticker` 명시. universe-scan 은 pin-date, live-scanner 는 stop_loss_pct/take_profit_pct/trailing_stop_pct 명시. "리스크 연동" 섹션 필수.
 - **단위 테스트 1건** — synthetic OHLCV 로 buy path + warmup + boundary 검증.
 - **5y backtest** — Sharpe ≥ 0.5 (universe-scan) / ≥ 1.0 (live-scanner intraday 권장) 통과 시에만 `production.yaml` `enabled: true` 후보. 미통과 시 spec status `rejected`.
+- **PR 전 완전성 검증** — `python scripts/check_strategy_completeness.py` 실행. 8개 레이어(spec/코드/테스트/production.yaml/live-scanner stop·TP/universe-scan module·pin-date/5y backtest 결과/orphan) 누락을 정적 검출. CI `.github/workflows/strategy-completeness-check.yml` 가 PR 마다 동일 검증 실행 (현재 warn 모드, 정리 후 `--strict` 승격 예정).
 - **상세**: `src/backtest/strategies/.ai.md` + paradigm 별 spec 의 "PR 체크리스트" 참조.
 
 ## 조사·리서치 규칙

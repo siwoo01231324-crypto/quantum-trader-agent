@@ -3,6 +3,7 @@ type: strategy
 id: cs-tsmom-crypto-daily
 name: Binance Crypto Cross-Sectional TSMOM 12-1 Daily
 status: backtest
+paradigm: universe-scan
 instruments:
 - binance-usdt-spot-top30
 market: crypto

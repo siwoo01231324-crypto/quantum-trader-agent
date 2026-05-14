@@ -3,6 +3,7 @@ type: strategy
 id: cs-rsi-div-crypto
 name: Crypto Cross-Sectional RSI Bullish Divergence
 status: backtest
+paradigm: universe-scan
 instruments:
 - binance-usdt-spot-top30
 market: crypto

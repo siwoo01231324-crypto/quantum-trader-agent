@@ -3,6 +3,7 @@ type: strategy
 id: cs-rsi-div-kr
 name: KRX Cross-Sectional RSI Bullish Divergence
 status: backtest
+paradigm: universe-scan
 instruments:
 - kospi200+kosdaq150
 market: krx
