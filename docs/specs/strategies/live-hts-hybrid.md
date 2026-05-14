@@ -139,7 +139,7 @@ orchestrator.register_strategy_returns("live_hts_hybrid", daily_return_series)
 
 - [[live-universe-scanner-paradigm]] — 본 전략이 따르는 paradigm
 - [[live-rsi-oversold-volume-spike]] — 동일 paradigm 의 다른 사례
-- [[hts-cond-dts]] / [[hts-cond-wait5m]] / [[hts-cond-swing]] — 구성 검색식 (signals 등록 후속)
+- `hts-cond-dts` / `hts-cond-wait5m` / `hts-cond-swing` — 구성 검색식 (signals 등록 후속, 정식 노트 미존재)
 
 ## 출처
 
