@@ -76,3 +76,20 @@ def get_pool(
     codes = set(get_pool_codes(n, sectors=sectors, seed=seed))
     code_to_entry = {c["code"]: c for c in KOSPI200_CONSTITUENTS}
     return [code_to_entry[code] for code in get_pool_codes(n, sectors=sectors, seed=seed)]
+
+
+def get_full_universe_codes(*, sectors: list[str] | None = None) -> list[str]:
+    """#231 S7 — Full KOSPI200 universe (deterministic order, all constituents).
+
+    Replaces ``get_pool_codes(n=30, seed=42)`` for production cron operations
+    where data accumulation across the full universe is the goal. Current
+    size: 197 (KOSPI200 actual count). KOSDAQ150 integration is a follow-up
+    (static list or KIS REST snapshot source TBD).
+
+    Returns deterministic order — sorted by code (stable across days). Sector
+    filter optional.
+    """
+    constituents = KOSPI200_CONSTITUENTS
+    if sectors is not None:
+        constituents = [c for c in constituents if c["sector"] in sectors]
+    return sorted(c["code"] for c in constituents)
