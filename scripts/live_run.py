@@ -463,14 +463,23 @@ def _build_binance_adapter(broker_mode: str):
         return None
     from src.brokers.binance.async_adapter import AsyncBinanceFuturesAdapter
 
-    api_key = (
+    def _strip(v):
+        return (v or "").strip().strip('"').strip("'")
+    api_key = _strip(
         os.environ.get("BINANCE_DEMO_API_KEY")
         or os.environ.get("BINANCE_TESTNET_API_KEY")
         or os.environ.get("BINANCE_API_KEY")
     )
-    secret = (
-        os.environ.get("BINANCE_DEMO_API_SECRET")
+    # #238 — `BINANCE_DEMO__SECRET_API_KEY` (이중 underscore) + `BINANCE_DEMO_SECRET_API_KEY`
+    # 도 검출. account_info.py 가 이미 사용하는 fallback chain 과 일치시켜야 dashboard
+    # 잔고 조회와 거래 adapter 가 같은 secret 을 사용 — mismatch 시 Binance -1022
+    # "Signature invalid" 폭주 발생.
+    secret = _strip(
+        os.environ.get("BINANCE_DEMO__SECRET_API_KEY")
+        or os.environ.get("BINANCE_DEMO_SECRET_API_KEY")
+        or os.environ.get("BINANCE_DEMO_API_SECRET")
         or os.environ.get("BINANCE_TESTNET_API_SECRET")
+        or os.environ.get("BINANCE_API_SECRET")
         or os.environ.get("BINANCE_SECRET_KEY")
     )
     base_url = os.environ.get(

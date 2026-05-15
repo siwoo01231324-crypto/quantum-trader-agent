@@ -45,6 +45,18 @@ class AsyncOrderRouter:
         self._cost_estimator = cost_estimator or ExecutionCostEstimator()
         self._brokers: dict[str, AsyncBrokerAdapter] = {active.name: active}
 
+    @property
+    def name(self) -> str:
+        # #238 — executor.py 가 broker.name 으로 metrics 라벨링하는데 router 가
+        # adapter 아니라 wrapper 라 직접 name 속성 없었음 (AttributeError).
+        # active 브로커 name 으로 위임.
+        return self.active.name
+
+    @property
+    def paper(self) -> bool:
+        # executor.py 의 tracking_sample 가드에서도 broker.paper 접근.
+        return getattr(self.active, "paper", False)
+
     # ── broker registry ───────────────────────────────────────────────────────
 
     def register_broker(self, broker: AsyncBrokerAdapter) -> None:

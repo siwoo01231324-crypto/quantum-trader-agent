@@ -72,6 +72,22 @@ class OpsCounters:
                 self.order_submitted += 1
                 if ts:
                     self.last_order_ts = ts
+            elif event_type == "order_acked":
+                # #238 — Binance MARKET 주문은 ack 시점 status=NEW (instant fill 은
+                # user-data WS 후속). 통로 검증 단계에서는 ack 자체를 order_submitted
+                # 로 카운트해 dashboard 에 즉시 보이게.
+                self.order_submitted += 1
+                if ts:
+                    self.last_order_ts = ts
+                if payload.get("status") == "FILLED":
+                    self.order_filled += 1
+                    if ts:
+                        self.last_fill_ts = ts
+                    sym = payload.get("symbol", "?")
+                    side = payload.get("side", "?")
+                    qty = payload.get("qty") or payload.get("quantity") or ""
+                    price = payload.get("price") or payload.get("fill_price") or ""
+                    self.last_fill_detail = f"{side} {qty} {sym} @ {price}".strip()
             elif event_type in ("order_filled", "fill_received"):
                 self.order_filled += 1
                 if ts:

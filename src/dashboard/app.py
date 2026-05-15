@@ -886,19 +886,26 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
         for p in paths:
             events, _corruptions = wal_replay(p)
             for ev in events:
-                if ev.event_type not in ("order_filled", "fill_received", "order_submitted", "order_placed"):
+                # #238 — order_acked 도 포함 (Binance MARKET 의 NEW 응답이 broker 측에
+                # 주문이 들어갔다는 신호. instant fill 의 FILLED 은 user-data WS 후속).
+                if ev.event_type not in ("order_filled", "fill_received", "order_submitted", "order_placed", "order_acked"):
                     continue
                 pl = ev.payload or {}
+                # signal_emitted 같은 이벤트엔 symbol 이 없을 수 있으므로 order_acked 의 client_order_id 에서 추출.
+                cid = pl.get("client_order_id") or ""
+                inferred_symbol = pl.get("symbol")
+                if not inferred_symbol and ev.event_type == "order_acked":
+                    inferred_symbol = pl.get("strategy_id", "").split("-")[-1] if pl.get("strategy_id") else ""
                 rows.append({
                     "ts": ev.ts,
                     "event_type": ev.event_type,
                     "strategy_id": pl.get("strategy_id", ""),
-                    "symbol": pl.get("symbol", ""),
+                    "symbol": inferred_symbol or "",
                     "side": pl.get("side", ""),
                     "qty": pl.get("qty") or pl.get("quantity"),
                     "price": pl.get("price") or pl.get("fill_price"),
                     "broker": pl.get("broker", ""),
-                    "filled": ev.event_type in ("order_filled", "fill_received"),
+                    "filled": ev.event_type in ("order_filled", "fill_received") or (ev.event_type == "order_acked" and pl.get("status") == "FILLED"),
                 })
         rows.sort(key=lambda r: str(r.get("ts") or ""), reverse=True)
         return JSONResponse({"available": True, "trades": rows[:limit]})
