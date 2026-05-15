@@ -877,7 +877,12 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
         provider = state.account_info_provider
         if provider is None:
             return JSONResponse({"available": False})
-        return JSONResponse({"available": True, **provider.fetch()})
+        # #231 — sync I/O (KIS REST + Binance REST) 를 thread 로 분리해 FastAPI
+        # 이벤트 루프 block 방지. 단일 uvicorn worker 환경에서 가변 latency 의
+        # 다른 endpoint 까지 지연되던 패턴 fix.
+        import asyncio
+        data = await asyncio.to_thread(provider.fetch)
+        return JSONResponse({"available": True, **data})
 
     # ── Shadow Runs 뷰어 (#198) — read-only WAL 통합 표시 ───────────────────
     def _resolve_shadow_log_dir() -> Path:

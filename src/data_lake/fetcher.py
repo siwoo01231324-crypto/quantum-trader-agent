@@ -334,7 +334,37 @@ def save_ohlcv_parquet(
         part_dir.mkdir(parents=True, exist_ok=True)
         out_path = part_dir / "part-0.parquet"
 
-        table = pa.Table.from_pandas(group_df.reset_index(drop=True))
+        # #231 S7 — append + dedup. 기존 cron 패턴 (매일 같은 partition 에
+        # 새 데이터로 overwrite) → 데이터 손실. 누적 패턴 변경:
+        # 1) 기존 파일이 있으면 read → concat 후 (symbol, ts) dedup
+        # 2) merge 결과 ts 정렬 + 새 part-0.parquet 로 write
+        # 손상된 기존 파일 → overwrite (warn log) — fail-safe.
+        merged_df = group_df.reset_index(drop=True)
+        if out_path.exists():
+            try:
+                # ParquetFile (single file) — ParquetDataset 의 directory
+                # partition discovery 회피 (symbol/freq/year/month 를 directory
+                # 명으로 dictionary-cast 하다가 schema 충돌).
+                existing = pq.ParquetFile(out_path).read().to_pandas()
+                # pyarrow dictionary-encoded string columns 를 plain str 로 cast —
+                # 그렇지 않으면 concat 결과를 다시 write 할 때 schema 불일치 발생.
+                for col in ("symbol", "freq", "source"):
+                    if col in existing.columns:
+                        existing[col] = existing[col].astype(str)
+                combined = pd.concat([existing, merged_df], ignore_index=True)
+                combined = combined.drop_duplicates(
+                    subset=["symbol", "ts"], keep="last",
+                )
+                combined = combined.sort_values("ts").reset_index(drop=True)
+                merged_df = combined
+            except Exception as exc:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "save_ohlcv_parquet: existing %s read failed (%s) — "
+                    "overwriting (data loss possible)", out_path, exc,
+                )
+
+        table = pa.Table.from_pandas(merged_df)
         pq.write_table(table, out_path)
         written.append(out_path)
 

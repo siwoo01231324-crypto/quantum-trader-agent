@@ -103,6 +103,39 @@ if (-not $walFound) {
 }
 
 Write-Host ""
+Write-Host "=== Dispatch (#231 S5) ===" -ForegroundColor Cyan
+# AsyncStrategyOrchestrator.run_bar 가 매 strategy 평가 후 emit. on_bar 호출 가시화.
+# decision: buy / sell / hold (reason=no_signal | action_hold) / exception.
+# WAL 파일 직접 grep — 컨테이너 안에서도 호스트 마운트된 동일 경로.
+$dispatchTotal = 0
+$dispatchByDecision = @{ buy = 0; sell = 0; hold = 0; exception = 0 }
+foreach ($p in @("logs\shadow", "data\logs")) {
+    if (Test-Path $p) {
+        Get-ChildItem "$p\*\wal.jsonl" -ErrorAction SilentlyContinue | ForEach-Object {
+            $matches_count = (Select-String -Path $_.FullName -Pattern '"event_type":"strategy_evaluated"' -SimpleMatch).Count
+            $dispatchTotal += $matches_count
+            # decision 별 breakdown (정규식 한 번)
+            foreach ($d in @("buy", "sell", "hold", "exception")) {
+                $n = (Select-String -Path $_.FullName -Pattern ('"event_type":"strategy_evaluated".*"decision":"' + $d + '"')).Count
+                $dispatchByDecision[$d] += $n
+            }
+        }
+    }
+}
+if ($dispatchTotal -eq 0) {
+    Write-Host "  strategy_evaluated events: 0 (on_bar 호출 없음 — 시세 미수신 또는 strategy 미등록)" -ForegroundColor Red
+} else {
+    $color = if ($dispatchTotal -gt 100) { "Green" } else { "Yellow" }
+    Write-Host ("  strategy_evaluated events (lifetime): {0}" -f $dispatchTotal) -ForegroundColor $color
+    Write-Host ("    by decision:  buy={0}  sell={1}  hold={2}  exception={3}" -f
+        $dispatchByDecision.buy, $dispatchByDecision.sell,
+        $dispatchByDecision.hold, $dispatchByDecision.exception)
+    if ($dispatchByDecision.exception -gt 10) {
+        Write-Host "  ⚠ exception 누적 — strategy 코드 점검 필요" -ForegroundColor Red
+    }
+}
+
+Write-Host ""
 Write-Host "=== Universe-rebal (#218) ===" -ForegroundColor Cyan
 # last-run.txt 는 `krx=YYYY-MM-DD` / `crypto=YYYY-MM-DD` 라인을 append. 두 트랙 분리 표시.
 # 호스트 마운트: ./logs/universe-rebal/universe-rebal-last-run.txt (container: /data/logs/...)

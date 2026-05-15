@@ -298,9 +298,15 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--broker",
-        choices=["paper-only", "kis-paper", "kis-paper-shadow"],
+        choices=[
+            "paper-only",
+            "kis-paper",
+            "kis-paper-shadow",
+            "binance-testnet-shadow",  # #231 S1 — Binance shadow live-daemon
+        ],
         default="kis-paper-shadow",
-        help="브로커 모드 (default: kis-paper-shadow)",
+        help="브로커 모드 (default: kis-paper-shadow). "
+             "binance-testnet-shadow 는 별도 컨테이너 qta-live-daemon-binance 용.",
     )
     parser.add_argument(
         "--duration", default="0",
@@ -345,8 +351,10 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     # ── #177 EXE wiring ────────────────────────────────────────────────
     parser.add_argument(
-        "--feed", choices=["auto", "binance", "kis", "mock"], default="auto",
-        help="시세 feed 선택 (auto=KRX 종목이면 KIS REST, 그 외 Binance WS).",
+        "--feed", choices=["auto", "binance", "kis", "kis-ws", "mock"], default="auto",
+        help="시세 feed 선택. auto=KRX→KIS REST polling, 그 외→Binance WS. "
+             "kis-ws (#231 S3) = KIS 실시간 체결가 WS — 200종목 동시 subscribe "
+             "(단일 connection 40종 제한 → 5 connection rotation 또는 batched).",
     )
     parser.add_argument(
         "--mock-bars", type=int, default=30,
@@ -420,6 +428,105 @@ def _build_kis_adapter(broker_mode: str):
     )
 
 
+def _build_binance_adapter(broker_mode: str):
+    """#231 S1 — broker_mode 가 binance-testnet-shadow 면 Binance Futures testnet
+    adapter 생성. 별도 컨테이너 qta-live-daemon-binance 에서 호출.
+
+    Env vars (fallback chain — src/dashboard/account_info.py 동일 표준):
+      API key:    BINANCE_DEMO_API_KEY → BINANCE_TESTNET_API_KEY → BINANCE_API_KEY
+      API secret: BINANCE_DEMO_API_SECRET → BINANCE_TESTNET_API_SECRET → BINANCE_SECRET_KEY
+      Base URL:   BINANCE_BASE_URL (default: https://testnet.binancefuture.com)
+
+    KIS / paper-only 모드면 None 반환.
+    """
+    if broker_mode != "binance-testnet-shadow":
+        return None
+    from src.brokers.binance.async_adapter import AsyncBinanceFuturesAdapter
+
+    api_key = (
+        os.environ.get("BINANCE_DEMO_API_KEY")
+        or os.environ.get("BINANCE_TESTNET_API_KEY")
+        or os.environ.get("BINANCE_API_KEY")
+    )
+    secret = (
+        os.environ.get("BINANCE_DEMO_API_SECRET")
+        or os.environ.get("BINANCE_TESTNET_API_SECRET")
+        or os.environ.get("BINANCE_SECRET_KEY")
+    )
+    base_url = os.environ.get(
+        "BINANCE_BASE_URL", "https://testnet.binancefuture.com",
+    )
+    ws_base_url = os.environ.get(
+        "BINANCE_WS_BASE_URL", "wss://stream.binancefuture.com",
+    )
+    missing = [
+        k for k, v in [
+            ("BINANCE_DEMO_API_KEY (or BINANCE_TESTNET_API_KEY / BINANCE_API_KEY)", api_key),
+            ("BINANCE_DEMO_API_SECRET (or BINANCE_TESTNET_API_SECRET / BINANCE_SECRET_KEY)", secret),
+        ] if not v
+    ]
+    if missing:
+        raise SystemExit(
+            f"broker_mode='{broker_mode}' requires env vars: {', '.join(missing)}"
+        )
+    return AsyncBinanceFuturesAdapter(
+        api_key=api_key,
+        secret=secret,
+        base_url=base_url,
+        ws_base_url=ws_base_url,
+        paper=True,
+    )
+
+
+def _build_universe_quote_provider(broker_mode: str, kis_client, args):
+    """#231 S2 — broker_mode 기반 universe OHLCV provider 빌드.
+
+    SnapshotBuilder 에 주입되어 cs_async_wrapper 등 universe-scan 전략이
+    매 build_snapshot 마다 universe ohlcv_history 를 받게 함. TTL=300s
+    cache 가 호출 빈도 제한.
+
+    KIS 모드:    fetch_universe_snapshot(KIS REST, KOSPI200 + KOSDAQ150)
+    Binance:    fetch_universe_klines(Binance public, top-30 USDT)
+    paper-only / no-client: None — graceful hold path 유지.
+    """
+    if broker_mode in ("kis-paper", "kis-paper-shadow") and kis_client is not None:
+        from src.brokers.kis.universe_quote import fetch_universe_snapshot
+        from src.universe.krx_pool import get_pool_codes
+        import datetime
+
+        def _kis_provider():
+            try:
+                symbols = get_pool_codes(n=350)
+                today = datetime.date.today()
+                start = (today - datetime.timedelta(days=365)).strftime("%Y%m%d")
+                end = today.strftime("%Y%m%d")
+                return fetch_universe_snapshot(kis_client, symbols, start, end)
+            except Exception:
+                return {}
+        return _kis_provider
+
+    if broker_mode == "binance-testnet-shadow":
+        from src.brokers.binance.universe_quote import fetch_universe_klines
+        # Binance top-30 USDT — same universe as bench_cs_tsmom_crypto.
+        # Avoid expensive top_universe fetch on every refresh: hard-code subset.
+        _BINANCE_TOP30 = [
+            "BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "ADAUSDT",
+            "DOGEUSDT", "AVAXUSDT", "LINKUSDT", "TRXUSDT", "LTCUSDT", "UNIUSDT",
+            "NEARUSDT", "ICPUSDT", "AAVEUSDT", "INJUSDT", "TAOUSDT", "ONDOUSDT",
+            "TONUSDT", "SUIUSDT", "PEPEUSDT", "LAYERUSDT", "OSMOUSDT", "SAGAUSDT",
+            "EURUSDT", "ZECUSDT", "AIUSDT", "KITEUSDT", "SPKUSDT", "CHIPUSDT",
+        ]
+
+        def _binance_provider():
+            try:
+                return fetch_universe_klines(_BINANCE_TOP30, interval="1d")
+            except Exception:
+                return {}
+        return _binance_provider
+
+    return None
+
+
 def _build_kis_client(feed_mode: str, symbols: list[str]):
     """Build a sync KISClient for REST polling/warmup when KRX feed is active.
 
@@ -427,7 +534,8 @@ def _build_kis_client(feed_mode: str, symbols: list[str]):
     KRX symbols). Failures to construct (e.g. missing env vars) are surfaced
     as SystemExit so EXE smoke runs fail loudly.
     """
-    needs_kis = feed_mode == "kis" or (
+    # #231 S3: kis-ws 도 KISClient 필요 (warmup REST + auth source).
+    needs_kis = feed_mode in ("kis", "kis-ws") or (
         feed_mode == "auto" and any(s.isdigit() and len(s) == 6 for s in symbols)
     )
     if not needs_kis:
@@ -549,17 +657,21 @@ def _start_dashboard(state, port: int, logger):
 
 async def _run_pipeline_attached(
     state, config, kis_adapter, logger, duration_sec: float,
+    *, binance_adapter=None,
 ) -> None:
     """이미 떠있는 dashboard 에 attach — 거래만 시작 (#182 단계 2).
 
     dashboard 재기동 없이 state.timeline_broker 를 WAL fan-out observer 로 와이어링한 뒤
     run_shadow_loop 호출. RunController 가 이 함수를 background task 로 돌린다.
+
+    #231 S1: ``binance_adapter`` 는 broker_mode=binance-testnet-shadow 시 사용.
+    keyword-only 라 기존 호출자 (positional kis_adapter only) 영향 zero.
     """
     from dataclasses import asdict
     if state.timeline_broker is not None:
         config.wal_observer = lambda ev: state.timeline_broker.publish(asdict(ev))
     await _run_with_duration(
-        run_shadow_loop(config, kis_adapter=kis_adapter),
+        run_shadow_loop(config, kis_adapter=kis_adapter, binance_adapter=binance_adapter),
         duration_sec,
     )
 
@@ -600,14 +712,23 @@ def _build_pipeline_factory(state, logger):
         else:
             config.kis_client = _build_kis_client(args.feed, args.symbols)
         kis_adapter = _build_kis_adapter(args.broker)
+        binance_adapter = _build_binance_adapter(args.broker)  # #231 S1
+        # #231 S2 — universe-scan strategies 가 live dispatch 되도록 provider wire
+        config.universe_quote_provider = _build_universe_quote_provider(
+            args.broker, config.kis_client, args,
+        )
         duration_sec = _parse_duration(args.duration)
-        await _run_pipeline_attached(state, config, kis_adapter, logger, duration_sec)
+        await _run_pipeline_attached(
+            state, config, kis_adapter, logger, duration_sec,
+            binance_adapter=binance_adapter,
+        )
 
     return _factory
 
 
 async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
-                       duration_sec: float, auto_open_browser: bool = True):
+                       duration_sec: float, auto_open_browser: bool = True,
+                       *, binance_adapter=None):
     from dataclasses import asdict
     from src.dashboard.app import DashboardState
     from src.dashboard.timeline_broker import TimelineBroker
@@ -705,7 +826,9 @@ async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
 
     try:
         await _run_with_duration(
-            run_shadow_loop(config, kis_adapter=kis_adapter),
+            run_shadow_loop(
+                config, kis_adapter=kis_adapter, binance_adapter=binance_adapter,
+            ),
             duration_sec,
         )
     finally:
@@ -756,10 +879,16 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         kis_adapter = _build_kis_adapter(args.broker)
+        binance_adapter = _build_binance_adapter(args.broker)  # #231 S1
+        # #231 S2 — universe-scan strategies wire (KIS / Binance provider)
+        config.universe_quote_provider = _build_universe_quote_provider(
+            args.broker, config.kis_client, args,
+        )
         asyncio.run(
             _run_pipeline(
                 config, kis_adapter, args.dashboard_port, logger, duration_sec,
                 auto_open_browser=not args.no_browser,
+                binance_adapter=binance_adapter,
             )
         )
     except KeyboardInterrupt:

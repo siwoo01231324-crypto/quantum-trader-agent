@@ -59,6 +59,51 @@ services:
         limits:
           memory: 1G
 
+  # #231 S1 — Binance testnet shadow live-daemon (별도 컨테이너).
+  # KIS daemon 과 process / WAL / lock 모두 분리. 한쪽 fault 가 영향 0.
+  # 시세: BinancePublicFeed (24/7), 거래소 게이트 없음 (--schedule=always).
+  # 종목: BTCUSDT/ETHUSDT/ETHBTC/SOLUSDT 등 — momo-btc-v2, momo-vol-filtered,
+  # meanrev-pairs 3 strategy 활성화 (#231 AC0_broker_coverage).
+  live-daemon-binance:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: qta-phase2:latest
+    container_name: qta-live-daemon-binance
+    command:
+      - "scripts/live_run.py"
+      - "--broker=binance-testnet-shadow"
+      - "--symbols=${BINANCE_SYMBOLS:-BTCUSDT,ETHUSDT,ETHBTC,SOLUSDT}"
+      - "--duration=4w"
+      - "--max-orders=${BINANCE_MAX_ORDERS:-30}"
+      - "--auto-fallback"
+      - "--schedule=always"
+      - "--feed=binance"
+      - "--log-dir=/data/logs"
+      - "--no-browser"
+      - "--dashboard-port=0"  # KIS daemon 이 8000 점유, binance daemon 은 dashboard 비활성
+    env_file:
+      - ./.env
+    environment:
+      TZ: Asia/Seoul
+      # Binance testnet creds (fallback chain — live_run._build_binance_adapter)
+      # BINANCE_DEMO_API_KEY / BINANCE_TESTNET_API_KEY / BINANCE_API_KEY
+    volumes:
+      # logs/lock 디렉토리 분리 — KIS daemon 의 ProcessLock 과 충돌 방지
+      - ./logs/shadow-binance:/data/logs
+      - ./data/state-binance:/app/.omc/state
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "find /data/logs -name '.live_loop.lock' | grep -q ."]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
   report-cron:
     build:
       context: .
@@ -194,11 +239,21 @@ services:
       CRYPTO_STRATEGIES: "cs-tsmom-crypto-daily cs-rsi-div-crypto cs-macd-vol-crypto"
       LAST_RUN_FILE: /data/logs/universe-rebal-last-run.txt
       UNIVERSE_SCAN_LIVE_ENABLED: "1"
+      # #231 S6 — Python unbuffered stdout 으로 universe_rebal_loop.sh 의 echo
+      # 가 docker logs / tee 파일에 즉시 flush. 기존 stdout 손실 (#231 진단) fix.
+      PYTHONUNBUFFERED: "1"
     volumes:
       - ./logs/shadow:/app/logs/shadow
       - ./logs/universe-rebal:/data/logs
       - ./data/cache:/app/data/cache
     restart: unless-stopped
+    # #231 S6 — docker logs lifetime 보존 (기존 0 lines 진단 후속).
+    # max-size 10m × max-file 3 = 30m 보존 후 rotation.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     deploy:
       resources:
         limits:

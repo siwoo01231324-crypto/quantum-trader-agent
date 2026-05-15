@@ -41,11 +41,15 @@ class ShadowConfig:
     policy: object = None
     max_iterations: int | None = None  # None=infinite (실 운영), 정수=테스트용 종료 조건
     # Phase 2 broker mode (#105). Default "paper-only" preserves Phase 1 behaviour.
-    broker_mode: Literal["paper-only", "kis-paper-shadow", "kis-paper"] = "paper-only"
+    # #231 S1: binance-testnet-shadow added for Binance shadow live-daemon.
+    broker_mode: Literal[
+        "paper-only", "kis-paper-shadow", "kis-paper", "binance-testnet-shadow",
+    ] = "paper-only"
     # Phase 2 feed mode (#177).
     #   "auto"   — KIS REST polling for any 6-digit KRX symbol; Binance WS otherwise
-    #   "binance" / "kis" / "mock" — explicit override
-    feed_mode: Literal["auto", "binance", "kis", "mock"] = "auto"
+    #   "binance" / "kis" / "kis-ws" / "mock" — explicit override
+    #   "kis-ws" (#231 S3): KIS WS realtime trade stream (≥40 종목/conn 제한)
+    feed_mode: Literal["auto", "binance", "kis", "kis-ws", "mock"] = "auto"
     # Optional KIS REST client for snapshot warmup + KISMarketFeed; supplied by
     # caller (live_run.py builds via KISClient(...)). None disables warmup.
     kis_client: Any | None = None
@@ -54,6 +58,11 @@ class ShadowConfig:
     # Mock-mode feed payload (deterministic smoke tests, --feed mock).
     mock_ticks: list[Tick] | None = None
     snapshot_builder_config: SnapshotBuilderConfig | None = None
+    # #231 S2 — universe-scan strategies (cs_*) 를 위해 SnapshotBuilder 에
+    # 주입되는 universe OHLCV provider. live_run.py 의 _build_config 에서
+    # broker_mode 기반 closure 빌드 (KIS: fetch_universe_snapshot,
+    # Binance: fetch_universe_klines). None 이면 graceful hold path 유지.
+    universe_quote_provider: Callable[[], dict] | None = None
     # Callback invoked once the orchestrator instance is constructed (#180).
     # Used by live_run.py to wire `DashboardState.orchestrator` so that
     # `POST /api/strategies/{id}/toggle` reaches the live orchestrator.
@@ -121,12 +130,14 @@ def _build_router(
     metrics: Metrics,
     paper_broker: PaperBroker,
     kis_adapter=None,
+    binance_adapter=None,
 ):
     """Return the active broker/router for the given broker_mode.
 
-    broker_mode == "paper-only"       → PaperBroker directly (Phase 1 regression 0)
-    broker_mode == "kis-paper"        → AsyncOrderRouter(active=KIS adapter)
-    broker_mode == "kis-paper-shadow" → AsyncOrderRouter(active=KIS, fallback swap to PaperBroker)
+    broker_mode == "paper-only"              → PaperBroker directly (Phase 1 regression 0)
+    broker_mode == "kis-paper"               → AsyncOrderRouter(active=KIS adapter)
+    broker_mode == "kis-paper-shadow"        → AsyncOrderRouter(active=KIS, fallback swap to PaperBroker)
+    broker_mode == "binance-testnet-shadow"  → AsyncOrderRouter(active=Binance testnet, fallback swap to PaperBroker) (#231 S1)
     """
     if broker_mode == "paper-only":
         return paper_broker
@@ -137,6 +148,16 @@ def _build_router(
             )
         return AsyncOrderRouter(
             active=kis_adapter,
+            kill_switch=kill_switch,
+            metrics=metrics,
+        )
+    if broker_mode == "binance-testnet-shadow":
+        if binance_adapter is None:
+            raise ValueError(
+                f"broker_mode='{broker_mode}' requires binance_adapter to be provided"
+            )
+        return AsyncOrderRouter(
+            active=binance_adapter,
             kill_switch=kill_switch,
             metrics=metrics,
         )
@@ -197,6 +218,30 @@ def _select_feed(config: ShadowConfig) -> MarketDataFeed:
         # 못 해서 consumer 가 max_iterations 도달 전에 producer 완료 → FIRST_COMPLETED
         # 로 루프가 조기 종료되는 문제 방지 (#177 smoke 결정성).
         return MockReplayFeed(config.mock_ticks or [], gap_sec=0.02)
+    if mode == "kis-ws":
+        # #231 S3 — KIS realtime WS feed. Auto-select single vs multi connection
+        # based on symbol count (KIS WS single conn 40 종목 한도).
+        from src.live.feed_kis_ws import (
+            KISWebSocketMarketFeed, MultiConnectionKISWebSocketFeed,
+        )
+        if config.kis_client is None:
+            raise ValueError(
+                "feed_mode=kis-ws requires ShadowConfig.kis_client (auth source)"
+            )
+        # KISClient._auth / _app_key 추출 — private 이지만 같은 프로젝트 내 사용 안전.
+        # KIS WS single connection 한도 (40 종목/conn) — 초과 시 multi-conn.
+        if len(config.symbols) > MultiConnectionKISWebSocketFeed.BATCH_SIZE:
+            # >40 종목 → KOSPI200 200종 등 production 운영: multi-connection 분산.
+            return MultiConnectionKISWebSocketFeed(
+                config.symbols,
+                auth=config.kis_client._auth,
+                app_key=config.kis_client._app_key,
+            )
+        return KISWebSocketMarketFeed(
+            config.symbols,
+            auth=config.kis_client._auth,
+            app_key=config.kis_client._app_key,
+        )
     if mode == "kis" or (mode == "auto" and any(is_krx_symbol(s) for s in config.symbols)):
         from src.live.feed_kis import KISMarketFeed
         if config.kis_client is None:
@@ -244,6 +289,7 @@ async def run_shadow_loop(
     metrics: Metrics | None = None,
     kill_switch: KillSwitch | None = None,
     kis_adapter=None,
+    binance_adapter=None,  # #231 S1 — broker_mode=binance-testnet-shadow 용
     wait_for_session_fn: Callable[..., Any] = wait_until_session_open,
 ) -> None:
     """Phase 1 Shadow Live Loop.
@@ -289,7 +335,8 @@ async def run_shadow_loop(
             matching_engine=matching_engine, initial_balance=config.initial_balance,
         )
         router = _build_router(
-            config.broker_mode, kill_switch, metrics, paper_broker, kis_adapter
+            config.broker_mode, kill_switch, metrics, paper_broker,
+            kis_adapter=kis_adapter, binance_adapter=binance_adapter,
         )
         orchestrator = _load_orchestrator(config, paper_broker)
         if config.on_orchestrator_ready is not None:
@@ -304,6 +351,7 @@ async def run_shadow_loop(
             config.symbols,
             kis_client=config.kis_client,
             config=config.snapshot_builder_config,
+            universe_quote_provider=config.universe_quote_provider,  # #231 S2
         )
         await snapshot_builder.warmup()
 

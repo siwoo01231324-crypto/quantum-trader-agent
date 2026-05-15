@@ -109,13 +109,23 @@ def _count_lake_bars(lake_dir: Path, symbol: str, interval: str) -> int:
 
 
 def _resolve_symbols(args: argparse.Namespace) -> list[str]:
-    """Return the list of symbols to fetch based on args priority."""
+    """Return the list of symbols to fetch based on args priority.
+
+    Priority (highest first):
+    1. --symbols (explicit comma-separated list)
+    2. --universe full (#231 S7 — KOSPI200 전체 ~197 종목, 누적 운영용)
+    3. --n-pool N (deterministic seed=42 pool, legacy 단일종목 30종 mode)
+    4. --symbol (single-symbol fallback)
+    """
     if args.symbols:
         return [s.strip() for s in args.symbols.split(",") if s.strip()]
+    WORKTREE = Path(__file__).resolve().parent.parent
+    sys.path.insert(0, str(WORKTREE / "src"))
+    sys.path.insert(0, str(WORKTREE))
+    if getattr(args, "universe", None) == "full":
+        from universe.krx_pool import get_full_universe_codes
+        return get_full_universe_codes()
     if args.n_pool > 0:
-        WORKTREE = Path(__file__).resolve().parent.parent
-        sys.path.insert(0, str(WORKTREE / "src"))
-        sys.path.insert(0, str(WORKTREE))
         from universe.krx_pool import get_pool_codes
         return get_pool_codes(n=args.n_pool)
     return [args.symbol]
@@ -260,6 +270,13 @@ def main() -> int:
         "--symbol",
         default="005930",
         help="KRX stock code (6 digits). Default: 005930 (Samsung Electronics). Single-symbol mode.",
+    )
+    parser.add_argument(
+        "--universe",
+        choices=["pool", "full"],
+        default="pool",
+        help="#231 S7 — 'full' = KOSPI200 전체 ~197 종목 (production 누적 운영). "
+             "'pool' (기본) = --n-pool / --symbol 우선순위 사용 (legacy).",
     )
     parser.add_argument(
         "--n-pool",
