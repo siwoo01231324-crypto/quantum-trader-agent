@@ -476,6 +476,55 @@ def _build_binance_adapter(broker_mode: str):
     )
 
 
+def _build_universe_quote_provider(broker_mode: str, kis_client, args):
+    """#231 S2 — broker_mode 기반 universe OHLCV provider 빌드.
+
+    SnapshotBuilder 에 주입되어 cs_async_wrapper 등 universe-scan 전략이
+    매 build_snapshot 마다 universe ohlcv_history 를 받게 함. TTL=300s
+    cache 가 호출 빈도 제한.
+
+    KIS 모드:    fetch_universe_snapshot(KIS REST, KOSPI200 + KOSDAQ150)
+    Binance:    fetch_universe_klines(Binance public, top-30 USDT)
+    paper-only / no-client: None — graceful hold path 유지.
+    """
+    if broker_mode in ("kis-paper", "kis-paper-shadow") and kis_client is not None:
+        from src.brokers.kis.universe_quote import fetch_universe_snapshot
+        from src.universe.krx_pool import get_pool_codes
+        import datetime
+
+        def _kis_provider():
+            try:
+                symbols = get_pool_codes(n=350)
+                today = datetime.date.today()
+                start = (today - datetime.timedelta(days=365)).strftime("%Y%m%d")
+                end = today.strftime("%Y%m%d")
+                return fetch_universe_snapshot(kis_client, symbols, start, end)
+            except Exception:
+                return {}
+        return _kis_provider
+
+    if broker_mode == "binance-testnet-shadow":
+        from src.brokers.binance.universe_quote import fetch_universe_klines
+        # Binance top-30 USDT — same universe as bench_cs_tsmom_crypto.
+        # Avoid expensive top_universe fetch on every refresh: hard-code subset.
+        _BINANCE_TOP30 = [
+            "BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "ADAUSDT",
+            "DOGEUSDT", "AVAXUSDT", "LINKUSDT", "TRXUSDT", "LTCUSDT", "UNIUSDT",
+            "NEARUSDT", "ICPUSDT", "AAVEUSDT", "INJUSDT", "TAOUSDT", "ONDOUSDT",
+            "TONUSDT", "SUIUSDT", "PEPEUSDT", "LAYERUSDT", "OSMOUSDT", "SAGAUSDT",
+            "EURUSDT", "ZECUSDT", "AIUSDT", "KITEUSDT", "SPKUSDT", "CHIPUSDT",
+        ]
+
+        def _binance_provider():
+            try:
+                return fetch_universe_klines(_BINANCE_TOP30, interval="1d")
+            except Exception:
+                return {}
+        return _binance_provider
+
+    return None
+
+
 def _build_kis_client(feed_mode: str, symbols: list[str]):
     """Build a sync KISClient for REST polling/warmup when KRX feed is active.
 
@@ -661,6 +710,10 @@ def _build_pipeline_factory(state, logger):
             config.kis_client = _build_kis_client(args.feed, args.symbols)
         kis_adapter = _build_kis_adapter(args.broker)
         binance_adapter = _build_binance_adapter(args.broker)  # #231 S1
+        # #231 S2 — universe-scan strategies 가 live dispatch 되도록 provider wire
+        config.universe_quote_provider = _build_universe_quote_provider(
+            args.broker, config.kis_client, args,
+        )
         duration_sec = _parse_duration(args.duration)
         await _run_pipeline_attached(
             state, config, kis_adapter, logger, duration_sec,
@@ -824,6 +877,10 @@ def main(argv: list[str] | None = None) -> int:
     try:
         kis_adapter = _build_kis_adapter(args.broker)
         binance_adapter = _build_binance_adapter(args.broker)  # #231 S1
+        # #231 S2 — universe-scan strategies wire (KIS / Binance provider)
+        config.universe_quote_provider = _build_universe_quote_provider(
+            args.broker, config.kis_client, args,
+        )
         asyncio.run(
             _run_pipeline(
                 config, kis_adapter, args.dashboard_port, logger, duration_sec,

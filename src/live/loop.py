@@ -41,7 +41,10 @@ class ShadowConfig:
     policy: object = None
     max_iterations: int | None = None  # None=infinite (실 운영), 정수=테스트용 종료 조건
     # Phase 2 broker mode (#105). Default "paper-only" preserves Phase 1 behaviour.
-    broker_mode: Literal["paper-only", "kis-paper-shadow", "kis-paper"] = "paper-only"
+    # #231 S1: binance-testnet-shadow added for Binance shadow live-daemon.
+    broker_mode: Literal[
+        "paper-only", "kis-paper-shadow", "kis-paper", "binance-testnet-shadow",
+    ] = "paper-only"
     # Phase 2 feed mode (#177).
     #   "auto"   — KIS REST polling for any 6-digit KRX symbol; Binance WS otherwise
     #   "binance" / "kis" / "mock" — explicit override
@@ -54,6 +57,11 @@ class ShadowConfig:
     # Mock-mode feed payload (deterministic smoke tests, --feed mock).
     mock_ticks: list[Tick] | None = None
     snapshot_builder_config: SnapshotBuilderConfig | None = None
+    # #231 S2 — universe-scan strategies (cs_*) 를 위해 SnapshotBuilder 에
+    # 주입되는 universe OHLCV provider. live_run.py 의 _build_config 에서
+    # broker_mode 기반 closure 빌드 (KIS: fetch_universe_snapshot,
+    # Binance: fetch_universe_klines). None 이면 graceful hold path 유지.
+    universe_quote_provider: Callable[[], dict] | None = None
     # Callback invoked once the orchestrator instance is constructed (#180).
     # Used by live_run.py to wire `DashboardState.orchestrator` so that
     # `POST /api/strategies/{id}/toggle` reaches the live orchestrator.
@@ -318,6 +326,7 @@ async def run_shadow_loop(
             config.symbols,
             kis_client=config.kis_client,
             config=config.snapshot_builder_config,
+            universe_quote_provider=config.universe_quote_provider,  # #231 S2
         )
         await snapshot_builder.warmup()
 
