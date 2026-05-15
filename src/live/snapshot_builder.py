@@ -88,7 +88,11 @@ class SnapshotBuilder:
         self._universe_quote_provider = universe_quote_provider
         self._universe_ttl_sec = float(universe_ttl_sec)
         self._universe_cache: dict[str, pd.DataFrame] = {}
-        self._universe_cache_ts: float = 0.0
+        # `-inf` sentinel — `monotonic()` returns process/system uptime which can
+        # be small on fresh CI runners; using `0.0` made the "is stale?" check
+        # (`now - ts < ttl`) return True on first call, skipping the provider
+        # entirely (#236 follow-up: regression introduced in #231 S2).
+        self._universe_cache_ts: float = float("-inf")
 
     # ── Public surface ───────────────────────────────────────────────────
 

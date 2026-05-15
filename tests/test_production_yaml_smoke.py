@@ -57,7 +57,12 @@ def _build_history(n_bars: int = 60) -> pd.DataFrame:
 
 
 def test_production_yaml_registers_all_strategies():
-    """Single-ticker (5) + universe-scan (6, #218) = 11 등록 (cs-bb-macd-kr inactive 제외)."""
+    """Single-ticker (5) + universe-scan (6, #218) + smoke (2, #236) = 13 등록
+    (cs-bb-macd-kr inactive 제외).
+
+    Smoke entries 는 등록 자체는 항상 되지만 SMOKE_TEST_ENABLED env 가 없으면 매
+    bar `Signal(hold, reason="smoke_disabled")` 반환 — 운영 영향 zero.
+    """
     orch = load_orchestrator_from_yaml(
         _PRODUCTION_YAML,
         _make_policy(),
@@ -77,6 +82,9 @@ def test_production_yaml_registers_all_strategies():
         "cs-tsmom-crypto-daily",
         "cs-rsi-div-crypto",
         "cs-macd-vol-crypto",
+        # Smoke 통로 검증 (#236, env-gated — hold only without SMOKE_TEST_ENABLED)
+        "smoke-1m-roundtrip-kis",
+        "smoke-1m-roundtrip-binance",
     }
 
 
