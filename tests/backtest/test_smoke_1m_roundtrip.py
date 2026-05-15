@@ -37,7 +37,7 @@ def test_disabled_by_default_returns_hold(monkeypatch, history):
 
 def test_enabled_alternates_buy_sell(monkeypatch, history):
     monkeypatch.setenv("SMOKE_TEST_ENABLED", "1")
-    strat = Smoke1mRoundtrip()
+    strat = Smoke1mRoundtrip(interval_sec=0)  # disable throttle for unit test
     strat.on_init({})
     sigs = [strat.on_bar(_bar(), history, {"symbol": "005930"}) for _ in range(4)]
     assert [s.action for s in sigs] == ["buy", "sell", "buy", "sell"]
@@ -46,7 +46,7 @@ def test_enabled_alternates_buy_sell(monkeypatch, history):
 
 def test_per_symbol_independent_state(monkeypatch, history):
     monkeypatch.setenv("SMOKE_TEST_ENABLED", "1")
-    strat = Smoke1mRoundtrip()
+    strat = Smoke1mRoundtrip(interval_sec=0)
     strat.on_init({})
     a = strat.on_bar(_bar(), history, {"symbol": "005930"})
     b = strat.on_bar(_bar(), history, {"symbol": "BTCUSDT"})
@@ -57,6 +57,31 @@ def test_per_symbol_independent_state(monkeypatch, history):
     b2 = strat.on_bar(_bar(), history, {"symbol": "BTCUSDT"})
     assert a2.action == "sell"
     assert b2.action == "sell"
+
+
+def test_interval_throttles_rapid_ticks(monkeypatch, history):
+    """#238 사용자 보고 — Binance aggTrade tick 빈도로 매번 발사 차단."""
+    monkeypatch.setenv("SMOKE_TEST_ENABLED", "1")
+    strat = Smoke1mRoundtrip()  # default 60s interval
+    strat.on_init({})
+    first = strat.on_bar(_bar(), history, {"symbol": "BTCUSDT"})
+    second = strat.on_bar(_bar(), history, {"symbol": "BTCUSDT"})
+    third = strat.on_bar(_bar(), history, {"symbol": "BTCUSDT"})
+    assert first.action == "buy"
+    assert second.action == "hold"
+    assert second.reason == "smoke_interval"
+    assert third.action == "hold"
+
+
+def test_interval_env_override(monkeypatch, history):
+    monkeypatch.setenv("SMOKE_TEST_ENABLED", "1")
+    monkeypatch.setenv("SMOKE_INTERVAL_SEC", "0")
+    strat = Smoke1mRoundtrip()  # env-only override
+    strat.on_init({})
+    a = strat.on_bar(_bar(), history, {"symbol": "BTCUSDT"})
+    b = strat.on_bar(_bar(), history, {"symbol": "BTCUSDT"})
+    assert a.action == "buy"
+    assert b.action == "sell"
 
 
 def test_size_fraction_env_override(monkeypatch, history):

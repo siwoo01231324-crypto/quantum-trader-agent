@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 import os
+import time
 from typing import Any
 
 import pandas as pd
@@ -32,12 +33,23 @@ class Smoke1mRoundtrip:
     single `Bar` plus context; we infer symbol from `context["symbol"]` when
     present, else from the bar's optional `.symbol` attribute, else fall back
     to a sentinel.
+
+    Interval throttle (#238 사용자 보고): Binance WS aggTrade 는 초당 수십 건
+    tick 보내므로 on_bar 도 같은 빈도로 호출. wall-clock 인터벌 가드를 두지
+    않으면 매 tick 마다 buy/sell 발사 → 초당 수십 건 주문 → Binance order
+    rate-limit 위험. `interval_sec` (default 60s) 안에는 같은 symbol 에 새
+    신호 emit 안 함.
     """
 
     # No metalabeler hook, no win_probability — pure smoke.
     is_smoke: bool = True
 
-    def __init__(self, symbol: str | None = None, size_fraction: float | None = None) -> None:
+    def __init__(
+        self,
+        symbol: str | None = None,
+        size_fraction: float | None = None,
+        interval_sec: float | None = None,
+    ) -> None:
         # `symbol` mirrors momo_kis_v1 / momo_btc_v2 — config_loader passes it via
         # kwargs so two production.yaml entries (KIS + Binance) can share the same
         # class without state cross-talk. Not consumed for routing — orchestrator
@@ -46,11 +58,14 @@ class Smoke1mRoundtrip:
         # Allow per-instance override; default reads env at call-time to allow
         # operators to flip without restarting (cheap, no perf concern).
         self._size_override = size_fraction
+        self._interval_override = interval_sec
         self._holding: dict[str, bool] = {}
+        self._last_action_ts: dict[str, float] = {}  # symbol → monotonic ts
 
     def on_init(self, context: dict) -> None:
         # Reset on each run — fresh state.
         self._holding = {}
+        self._last_action_ts = {}
 
     def _enabled(self) -> bool:
         return os.environ.get("SMOKE_TEST_ENABLED", "").lower() in ("1", "true", "yes")
@@ -62,6 +77,14 @@ class Smoke1mRoundtrip:
             return float(os.environ.get("SMOKE_SIZE_FRACTION", "0.01"))
         except (TypeError, ValueError):
             return 0.01
+
+    def _interval_sec(self) -> float:
+        if self._interval_override is not None:
+            return float(self._interval_override)
+        try:
+            return float(os.environ.get("SMOKE_INTERVAL_SEC", "60.0"))
+        except (TypeError, ValueError):
+            return 60.0
 
     def _resolve_symbol(self, bar: Bar, context: dict) -> str:
         # context["symbol"] is set by the live loop when dispatching per-symbol.
@@ -83,7 +106,15 @@ class Smoke1mRoundtrip:
         # 종목 bar 면 hold (smoke-1m-roundtrip-kis 인스턴스가 BTCUSDT bar 받는 등).
         if self.symbol and symbol != self.symbol:
             return Signal(action="hold", size=0.0, reason="smoke_wrong_symbol")
+        # #238 사용자 보고 — Binance aggTrade tick 빈도 (초당 수십 건) 그대로
+        # buy/sell 발사 차단. 직전 신호 후 interval_sec 안 지났으면 hold.
+        now = time.monotonic()
+        interval = self._interval_sec()
+        last = self._last_action_ts.get(symbol, 0.0)
+        if last > 0 and (now - last) < interval:
+            return Signal(action="hold", size=0.0, reason="smoke_interval")
         size = self._size()
+        self._last_action_ts[symbol] = now
         if self._holding.get(symbol, False):
             self._holding[symbol] = False
             return Signal(action="sell", size=size, reason=f"smoke_sell_{symbol}")
