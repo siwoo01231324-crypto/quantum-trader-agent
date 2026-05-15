@@ -356,7 +356,12 @@ th{{color:#888;font-weight:600}}
         <tr><td>모드</td><td id="bnb-mode">-</td></tr>
         <tr><td>지갑 (USDT)</td><td id="bnb-wallet">-</td></tr>
         <tr><td>가용 (USDT)</td><td id="bnb-avail">-</td></tr>
+        <tr><td>미실현손익</td><td id="bnb-upnl">-</td></tr>
+        <tr><td>열린 포지션</td><td id="bnb-pos-n">-</td></tr>
       </tbody>
+    </table>
+    <table class="acct-table" style="margin-top:6px">
+      <tbody id="bnb-pos-rows"></tbody>
     </table>
     <div class="last-ts" id="bnb-detail">.env 의 BINANCE_API_KEY/SECRET 인증.</div>
   </div>
@@ -521,6 +526,26 @@ async function acctRefresh() {{
     document.getElementById('bnb-mode').textContent = b.ok ? (b.testnet ? 'testnet' : 'live') + ' · ' + (b.base_url_short||'') : '-';
     document.getElementById('bnb-wallet').textContent = b.ok ? fmtNum(b.wallet_balance_usdt) + ' USDT' : '-';
     document.getElementById('bnb-avail').textContent = b.ok ? fmtNum(b.available_usdt) + ' USDT' : '-';
+    // #238 — 실제 broker 포지션 + 미실현손익
+    const upnlEl = document.getElementById('bnb-upnl');
+    if (upnlEl) {{
+      const u = b.total_unrealized_pnl;
+      upnlEl.textContent = (b.ok && u != null) ? (u >= 0 ? '+' : '') + fmtNum(u) + ' USDT' : '-';
+      upnlEl.style.color = (u == null) ? '' : (u >= 0 ? '#2ecc71' : '#e74c3c');
+    }}
+    const posNEl = document.getElementById('bnb-pos-n');
+    if (posNEl) posNEl.textContent = b.ok ? (b.n_positions || 0) + ' 개' : '-';
+    const posRows = document.getElementById('bnb-pos-rows');
+    if (posRows) {{
+      const ps = (b.ok && b.positions) ? b.positions : [];
+      posRows.innerHTML = ps.map(p => {{
+        const sideCls = p.side === 'LONG' ? 'side-buy' : 'side-sell';
+        const pnlCls = p.unrealized_pnl >= 0 ? 'side-buy' : 'side-sell';
+        return `<tr><td class="${{sideCls}}">${{escHtml(p.symbol)}} ${{escHtml(p.side)}}</td>`
+          + `<td>${{escHtml(p.amt)}} @ ${{fmtNum(p.entry_price)}} `
+          + `<span class="${{pnlCls}}">(${{p.unrealized_pnl>=0?'+':''}}${{fmtNum(p.unrealized_pnl)}})</span></td></tr>`;
+      }}).join('');
+    }}
   }} catch (err) {{ console.warn('account', err); }}
 }}
 // 30s 간격 + in-flight 가드 — KIS 모의 초당 한도 보호 (5s 폴링이 retry chain 과

@@ -175,6 +175,29 @@ class AccountInfoProvider:
         wallet = float(getattr(usdt, "balance", 0)) if usdt else 0.0
         available = float(getattr(usdt, "available_balance", 0) or getattr(usdt, "availableBalance", 0) or 0) if usdt else 0.0
 
+        # #238 — 실제 broker 열린 포지션 + 미실현손익. 대시보드가 잔고만
+        # 보여주고 실제 포지션(폭주 잔재 포함)을 안 띄우던 문제 fix. WAL 집계
+        # "전략별 포지션"은 전략 *의도*, 이건 broker *실제 상태* (account truth).
+        positions: list[dict] = []
+        total_unrealized = 0.0
+        try:
+            for r in client.get_position_risk():
+                amt = float(r.positionAmt)
+                if amt == 0:
+                    continue
+                upnl = float(r.unRealizedProfit)
+                total_unrealized += upnl
+                positions.append({
+                    "symbol": r.symbol,
+                    "amt": amt,
+                    "side": "LONG" if amt > 0 else "SHORT",
+                    "entry_price": float(r.entryPrice),
+                    "mark_price": float(r.markPrice),
+                    "unrealized_pnl": round(upnl, 4),
+                })
+        except Exception as err:  # noqa: BLE001
+            logger.warning("Binance position_risk fetch failed: %s", err)
+
         api_key_masked = api_key[:4] + "****" + api_key[-4:] if len(api_key) >= 8 else api_key
         return {
             "ok": True,
@@ -183,6 +206,9 @@ class AccountInfoProvider:
             "api_key_masked": api_key_masked,
             "wallet_balance_usdt": round(wallet, 4),
             "available_usdt": round(available, 4),
+            "total_unrealized_pnl": round(total_unrealized, 4),
+            "positions": positions,
+            "n_positions": len(positions),
         }
 
 
