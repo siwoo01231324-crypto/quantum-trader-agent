@@ -747,11 +747,14 @@ def _build_pipeline_factory(
         return ["005930"]
 
     async def _factory(params: dict):
+        smoke_on = os.environ.get("SMOKE_TEST_ENABLED", "").lower() in ("1", "true", "yes")
         broker = params.get("broker")
         if not broker:
-            # SMOKE_TEST_ENABLED=1 → 대시보드 거래 시작 버튼이 KIS+Binance 둘 다
-            # 통로 검증으로 들어가도록 default 변경. 평소엔 기존 kis-paper-shadow 유지.
-            broker = "smoke-dual" if os.environ.get("SMOKE_TEST_ENABLED", "").lower() in ("1", "true", "yes") else "kis-paper-shadow"
+            # #238 hotfix — SMOKE_TEST_ENABLED=1 default 를 smoke-dual 에서 단일
+            # Binance testnet 으로 변경. KIS 모의 초당 한도 폭주가 통로 검증을
+            # 막아 (#238 분석) MVP 검증에 가장 확실한 한 경로만 default. KIS+Binance
+            # 동시 검증이 필요하면 explicit broker=smoke-dual 로 호출.
+            broker = "binance-testnet-shadow" if smoke_on else "kis-paper-shadow"
         duration = params.get("duration") or "0"
 
         if broker == "smoke-dual":
@@ -763,7 +766,14 @@ def _build_pipeline_factory(
             return
 
         symbols = _resolve_symbols(params)
-        argv = ["--symbols", ",".join(symbols), "--broker", broker, "--duration", duration]
+        # #238 — Binance broker + smoke 이면 BTCUSDT 강제 (KRX 코드 fallback 회피).
+        if smoke_on and broker == "binance-testnet-shadow" and not params.get("symbols"):
+            symbols = ["BTCUSDT"]
+        # #238 — Binance broker 에서는 KIS REST 진입 자체를 막아야 함 (feed=binance).
+        extra_argv: list[str] = []
+        if broker == "binance-testnet-shadow":
+            extra_argv = ["--feed", "binance"]
+        argv = ["--symbols", ",".join(symbols), "--broker", broker, "--duration", duration, *extra_argv]
         args = parse_args(argv)
         config = _build_config(args)
         if args.feed == "mock":
@@ -772,10 +782,15 @@ def _build_pipeline_factory(
             config.kis_client = _build_kis_client(args.feed, args.symbols)
         kis_adapter = _build_kis_adapter(args.broker)
         binance_adapter = _build_binance_adapter(args.broker)  # #231 S1
-        # #231 S2 — universe-scan strategies 가 live dispatch 되도록 provider wire
-        config.universe_quote_provider = _build_universe_quote_provider(
-            args.broker, config.kis_client, args,
-        )
+        # #231 S2 — universe-scan strategies 가 live dispatch 되도록 provider wire.
+        # #238 — smoke 검증 중에는 350종목 universe fetch 가 KIS 초당 한도를 폭주
+        # 시키므로 SMOKE_TEST_ENABLED=1 이면 provider 미주입 (cs-* 전략은 hold 폴백).
+        if smoke_on:
+            config.universe_quote_provider = None
+        else:
+            config.universe_quote_provider = _build_universe_quote_provider(
+                args.broker, config.kis_client, args,
+            )
         duration_sec = _parse_duration(args.duration)
         await _run_pipeline_attached(
             state, config, kis_adapter, logger, duration_sec,

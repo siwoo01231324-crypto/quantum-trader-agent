@@ -189,7 +189,6 @@ def _render_dashboard(state: DashboardState, catalog_items: list[dict] | None = 
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="refresh" content="5">
 <title>QTA Dashboard</title>
 <style>
 *{{box-sizing:border-box;margin:0;padding:0}}
@@ -501,8 +500,17 @@ async function acctRefresh() {{
     document.getElementById('bnb-avail').textContent = b.ok ? fmtNum(b.available_usdt) + ' USDT' : '-';
   }} catch (err) {{ console.warn('account', err); }}
 }}
-acctRefresh();
-setInterval(acctRefresh, 5000);
+// 30s 간격 + in-flight 가드 — KIS 모의 초당 한도 보호 (5s 폴링이 retry chain 과
+// 누적해 EGW00201 폭주시키던 #238 hotfix).
+let _acctInflight = false;
+async function acctRefreshGuarded() {{
+  if (_acctInflight) return;
+  _acctInflight = true;
+  try {{ await acctRefresh(); }}
+  finally {{ _acctInflight = false; }}
+}}
+acctRefreshGuarded();
+setInterval(acctRefreshGuarded, 30000);
 
 // 운영 진단 카드 — bars/evals/orders/fills 카운터 폴링
 async function opsRefresh() {{
@@ -1064,16 +1072,26 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
         return JSONResponse(result, status_code=code)
 
     # ── 내 계좌 정보 (#182) ────────────────────────────────────────────────
+    _acct_cache: dict[str, Any] = {"data": None, "inflight": False}
+
     @app.get("/api/account/info")
     async def api_account_info() -> JSONResponse:
         provider = state.account_info_provider
         if provider is None:
             return JSONResponse({"available": False})
+        # In-flight 가드 (#238 hotfix) — 이전 호출이 KIS retry 로 길어지면 새 호출
+        # 은 캐시된 값 반환. KIS 모의 초당 한도 보호.
+        if _acct_cache["inflight"] and _acct_cache["data"] is not None:
+            return JSONResponse({"available": True, **_acct_cache["data"], "stale": True})
+        _acct_cache["inflight"] = True
         # #231 — sync I/O (KIS REST + Binance REST) 를 thread 로 분리해 FastAPI
-        # 이벤트 루프 block 방지. 단일 uvicorn worker 환경에서 가변 latency 의
-        # 다른 endpoint 까지 지연되던 패턴 fix.
+        # 이벤트 루프 block 방지.
         import asyncio
-        data = await asyncio.to_thread(provider.fetch)
+        try:
+            data = await asyncio.to_thread(provider.fetch)
+            _acct_cache["data"] = data
+        finally:
+            _acct_cache["inflight"] = False
         return JSONResponse({"available": True, **data})
 
     # ── Shadow Runs 뷰어 (#198) — read-only WAL 통합 표시 ───────────────────
