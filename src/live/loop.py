@@ -249,7 +249,14 @@ def _select_feed(config: ShadowConfig) -> MarketDataFeed:
                 "feed_mode=kis (or auto with KRX symbols) requires ShadowConfig.kis_client"
             )
         return KISMarketFeed(config.symbols, config.kis_client)
-    return BinancePublicFeed(config.symbols)
+    # #238 hotfix — testnet broker 면 testnet WS endpoint 명시. 한국 IP 에서
+    # mainnet (fstream.binance.com) 은 connect 되지만 aggTrade 0건 push (지역 차단).
+    base_url = (
+        BinancePublicFeed.DEFAULT_TESTNET
+        if config.broker_mode == "binance-testnet-shadow"
+        else None
+    )
+    return BinancePublicFeed(config.symbols, base_url=base_url)
 
 
 def _tick_to_market_state(tick: Tick) -> MarketState:

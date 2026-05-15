@@ -140,6 +140,14 @@ class AsyncBinanceFuturesClient:
                 pass
             code = payload.get("code", 0)
             msg = payload.get("msg", resp.text)
+            # #238 — 400 폭주 시 Binance error code/msg 가시화. 이전엔 httpx 의
+            # status code 만 log 에 떴고 raise 된 exception 의 msg 도 caller 단
+            # 에서 swallow 되어 진단 불가능.
+            log.warning(
+                "Binance %s %s failed status=%d code=%s msg=%s params=%s",
+                method, path, resp.status_code, code, msg,
+                {k: v for k, v in raw_params.items() if k != "signature"},
+            )
             exc = map_error(int(code), msg)
             if isinstance(exc, TimestampError) and retry_on_timestamp:
                 log.warning("Timestamp error — resyncing clock and retrying")

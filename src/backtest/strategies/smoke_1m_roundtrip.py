@@ -79,6 +79,10 @@ class Smoke1mRoundtrip:
         if not self._enabled():
             return Signal(action="hold", size=0.0, reason="smoke_disabled")
         symbol = self._resolve_symbol(bar, context)
+        # #238 — orchestrator broadcast dispatch 차단. instance 의 symbol 과 다른
+        # 종목 bar 면 hold (smoke-1m-roundtrip-kis 인스턴스가 BTCUSDT bar 받는 등).
+        if self.symbol and symbol != self.symbol:
+            return Signal(action="hold", size=0.0, reason="smoke_wrong_symbol")
         size = self._size()
         if self._holding.get(symbol, False):
             self._holding[symbol] = False

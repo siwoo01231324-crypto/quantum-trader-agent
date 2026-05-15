@@ -115,6 +115,12 @@ async def execute_intents(
                         "status": ack.status,
                         "origin": "executor",
                         "strategy_id": intent.strategy_id,
+                        # #238 — dashboard /api/trades + ops 카드용 informational
+                        # fields. status=FILLED 이면 ops_counters 가 fill 로 카운트.
+                        "symbol": intent.symbol,
+                        "side": intent.side.value if hasattr(intent.side, "value") else str(intent.side),
+                        "qty": str(intent.qty),
+                        "broker": getattr(broker, "name", ""),
                     },
                 ))
             except WALWriteFailed:
