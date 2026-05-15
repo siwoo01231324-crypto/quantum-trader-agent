@@ -121,12 +121,14 @@ def _build_router(
     metrics: Metrics,
     paper_broker: PaperBroker,
     kis_adapter=None,
+    binance_adapter=None,
 ):
     """Return the active broker/router for the given broker_mode.
 
-    broker_mode == "paper-only"       → PaperBroker directly (Phase 1 regression 0)
-    broker_mode == "kis-paper"        → AsyncOrderRouter(active=KIS adapter)
-    broker_mode == "kis-paper-shadow" → AsyncOrderRouter(active=KIS, fallback swap to PaperBroker)
+    broker_mode == "paper-only"              → PaperBroker directly (Phase 1 regression 0)
+    broker_mode == "kis-paper"               → AsyncOrderRouter(active=KIS adapter)
+    broker_mode == "kis-paper-shadow"        → AsyncOrderRouter(active=KIS, fallback swap to PaperBroker)
+    broker_mode == "binance-testnet-shadow"  → AsyncOrderRouter(active=Binance testnet, fallback swap to PaperBroker) (#231 S1)
     """
     if broker_mode == "paper-only":
         return paper_broker
@@ -137,6 +139,16 @@ def _build_router(
             )
         return AsyncOrderRouter(
             active=kis_adapter,
+            kill_switch=kill_switch,
+            metrics=metrics,
+        )
+    if broker_mode == "binance-testnet-shadow":
+        if binance_adapter is None:
+            raise ValueError(
+                f"broker_mode='{broker_mode}' requires binance_adapter to be provided"
+            )
+        return AsyncOrderRouter(
+            active=binance_adapter,
             kill_switch=kill_switch,
             metrics=metrics,
         )
@@ -244,6 +256,7 @@ async def run_shadow_loop(
     metrics: Metrics | None = None,
     kill_switch: KillSwitch | None = None,
     kis_adapter=None,
+    binance_adapter=None,  # #231 S1 — broker_mode=binance-testnet-shadow 용
     wait_for_session_fn: Callable[..., Any] = wait_until_session_open,
 ) -> None:
     """Phase 1 Shadow Live Loop.
@@ -289,7 +302,8 @@ async def run_shadow_loop(
             matching_engine=matching_engine, initial_balance=config.initial_balance,
         )
         router = _build_router(
-            config.broker_mode, kill_switch, metrics, paper_broker, kis_adapter
+            config.broker_mode, kill_switch, metrics, paper_broker,
+            kis_adapter=kis_adapter, binance_adapter=binance_adapter,
         )
         orchestrator = _load_orchestrator(config, paper_broker)
         if config.on_orchestrator_ready is not None:

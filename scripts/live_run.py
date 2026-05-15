@@ -298,9 +298,15 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--broker",
-        choices=["paper-only", "kis-paper", "kis-paper-shadow"],
+        choices=[
+            "paper-only",
+            "kis-paper",
+            "kis-paper-shadow",
+            "binance-testnet-shadow",  # #231 S1 — Binance shadow live-daemon
+        ],
         default="kis-paper-shadow",
-        help="브로커 모드 (default: kis-paper-shadow)",
+        help="브로커 모드 (default: kis-paper-shadow). "
+             "binance-testnet-shadow 는 별도 컨테이너 qta-live-daemon-binance 용.",
     )
     parser.add_argument(
         "--duration", default="0",
@@ -416,6 +422,56 @@ def _build_kis_adapter(broker_mode: str):
         app_secret=app_secret,
         hts_id=hts_id,
         credit_number=credit_number,
+        paper=True,
+    )
+
+
+def _build_binance_adapter(broker_mode: str):
+    """#231 S1 — broker_mode 가 binance-testnet-shadow 면 Binance Futures testnet
+    adapter 생성. 별도 컨테이너 qta-live-daemon-binance 에서 호출.
+
+    Env vars (fallback chain — src/dashboard/account_info.py 동일 표준):
+      API key:    BINANCE_DEMO_API_KEY → BINANCE_TESTNET_API_KEY → BINANCE_API_KEY
+      API secret: BINANCE_DEMO_API_SECRET → BINANCE_TESTNET_API_SECRET → BINANCE_SECRET_KEY
+      Base URL:   BINANCE_BASE_URL (default: https://testnet.binancefuture.com)
+
+    KIS / paper-only 모드면 None 반환.
+    """
+    if broker_mode != "binance-testnet-shadow":
+        return None
+    from src.brokers.binance.async_adapter import AsyncBinanceFuturesAdapter
+
+    api_key = (
+        os.environ.get("BINANCE_DEMO_API_KEY")
+        or os.environ.get("BINANCE_TESTNET_API_KEY")
+        or os.environ.get("BINANCE_API_KEY")
+    )
+    secret = (
+        os.environ.get("BINANCE_DEMO_API_SECRET")
+        or os.environ.get("BINANCE_TESTNET_API_SECRET")
+        or os.environ.get("BINANCE_SECRET_KEY")
+    )
+    base_url = os.environ.get(
+        "BINANCE_BASE_URL", "https://testnet.binancefuture.com",
+    )
+    ws_base_url = os.environ.get(
+        "BINANCE_WS_BASE_URL", "wss://stream.binancefuture.com",
+    )
+    missing = [
+        k for k, v in [
+            ("BINANCE_DEMO_API_KEY (or BINANCE_TESTNET_API_KEY / BINANCE_API_KEY)", api_key),
+            ("BINANCE_DEMO_API_SECRET (or BINANCE_TESTNET_API_SECRET / BINANCE_SECRET_KEY)", secret),
+        ] if not v
+    ]
+    if missing:
+        raise SystemExit(
+            f"broker_mode='{broker_mode}' requires env vars: {', '.join(missing)}"
+        )
+    return AsyncBinanceFuturesAdapter(
+        api_key=api_key,
+        secret=secret,
+        base_url=base_url,
+        ws_base_url=ws_base_url,
         paper=True,
     )
 
@@ -549,17 +605,21 @@ def _start_dashboard(state, port: int, logger):
 
 async def _run_pipeline_attached(
     state, config, kis_adapter, logger, duration_sec: float,
+    *, binance_adapter=None,
 ) -> None:
     """이미 떠있는 dashboard 에 attach — 거래만 시작 (#182 단계 2).
 
     dashboard 재기동 없이 state.timeline_broker 를 WAL fan-out observer 로 와이어링한 뒤
     run_shadow_loop 호출. RunController 가 이 함수를 background task 로 돌린다.
+
+    #231 S1: ``binance_adapter`` 는 broker_mode=binance-testnet-shadow 시 사용.
+    keyword-only 라 기존 호출자 (positional kis_adapter only) 영향 zero.
     """
     from dataclasses import asdict
     if state.timeline_broker is not None:
         config.wal_observer = lambda ev: state.timeline_broker.publish(asdict(ev))
     await _run_with_duration(
-        run_shadow_loop(config, kis_adapter=kis_adapter),
+        run_shadow_loop(config, kis_adapter=kis_adapter, binance_adapter=binance_adapter),
         duration_sec,
     )
 
@@ -600,14 +660,19 @@ def _build_pipeline_factory(state, logger):
         else:
             config.kis_client = _build_kis_client(args.feed, args.symbols)
         kis_adapter = _build_kis_adapter(args.broker)
+        binance_adapter = _build_binance_adapter(args.broker)  # #231 S1
         duration_sec = _parse_duration(args.duration)
-        await _run_pipeline_attached(state, config, kis_adapter, logger, duration_sec)
+        await _run_pipeline_attached(
+            state, config, kis_adapter, logger, duration_sec,
+            binance_adapter=binance_adapter,
+        )
 
     return _factory
 
 
 async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
-                       duration_sec: float, auto_open_browser: bool = True):
+                       duration_sec: float, auto_open_browser: bool = True,
+                       *, binance_adapter=None):
     from dataclasses import asdict
     from src.dashboard.app import DashboardState
     from src.dashboard.timeline_broker import TimelineBroker
@@ -705,7 +770,9 @@ async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
 
     try:
         await _run_with_duration(
-            run_shadow_loop(config, kis_adapter=kis_adapter),
+            run_shadow_loop(
+                config, kis_adapter=kis_adapter, binance_adapter=binance_adapter,
+            ),
             duration_sec,
         )
     finally:
@@ -756,10 +823,12 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         kis_adapter = _build_kis_adapter(args.broker)
+        binance_adapter = _build_binance_adapter(args.broker)  # #231 S1
         asyncio.run(
             _run_pipeline(
                 config, kis_adapter, args.dashboard_port, logger, duration_sec,
                 auto_open_browser=not args.no_browser,
+                binance_adapter=binance_adapter,
             )
         )
     except KeyboardInterrupt:
