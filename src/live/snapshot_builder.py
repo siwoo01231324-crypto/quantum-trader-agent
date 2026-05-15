@@ -73,11 +73,22 @@ class SnapshotBuilder:
         kis_client: Any | None = None,
         *,
         config: SnapshotBuilderConfig | None = None,
+        universe_quote_provider: Any | None = None,
+        universe_ttl_sec: float = 300.0,
     ) -> None:
         self._symbols: list[str] = list(symbols)
         self._kis_client = kis_client
         self._config = config or SnapshotBuilderConfig()
         self._buffers: dict[str, pd.DataFrame] = {}
+        # #231 S2 — cs_async_wrapper 등 universe-scan strategies 가 dispatch
+        # 되도록 매 N초마다 broker.fetch_universe_snapshot 호출 + 결과를
+        # ohlcv_history dict 에 merge. provider 미주입 시 zero-impact
+        # (graceful hold path 유지 — production.yaml 주석에 명시).
+        # provider signature: () -> dict[symbol_code, pd.DataFrame(OHLCV)]
+        self._universe_quote_provider = universe_quote_provider
+        self._universe_ttl_sec = float(universe_ttl_sec)
+        self._universe_cache: dict[str, pd.DataFrame] = {}
+        self._universe_cache_ts: float = 0.0
 
     # ── Public surface ───────────────────────────────────────────────────
 
@@ -139,12 +150,45 @@ class SnapshotBuilder:
             merged = pd.concat([df, new_row])
         self._buffers[tick.symbol] = merged.iloc[-self._config.buffer_limit:]
 
+    def _refresh_universe_cache_if_stale(self) -> None:
+        """Pull universe OHLCV via provider when TTL elapsed (#231 S2).
+
+        Sync call (provider must be sync; for async brokers, caller wraps with
+        a thread-bridge). Failures are swallowed + logged — cs_async_wrapper
+        falls back to graceful hold if no data merged.
+        """
+        if self._universe_quote_provider is None:
+            return
+        import time
+        now = time.monotonic()
+        if now - self._universe_cache_ts < self._universe_ttl_sec:
+            return
+        try:
+            universe_data = self._universe_quote_provider()
+            if isinstance(universe_data, dict):
+                self._universe_cache = universe_data
+                self._universe_cache_ts = now
+                logger.info(
+                    "SnapshotBuilder.universe_refreshed symbols=%d",
+                    len(universe_data),
+                )
+        except Exception as exc:
+            logger.warning(
+                "SnapshotBuilder.universe_quote_failed error=%s — graceful hold path",
+                exc,
+            )
+
     def build_snapshot(self, tick: Tick) -> dict[str, Any]:
         """Construct the `market_snapshot` dict consumed by orchestrator strategies."""
         self.append_tick(tick)
         symbol = tick.symbol
         history_1m = self._buffers.get(symbol, _empty_ohlcv())
-        ohlcv_history = {sym: buf for sym, buf in self._buffers.items()}
+        # #231 S2 — universe-scan strategies (cs_*) 를 위해 universe OHLCV 를
+        # 별도 provider 로 fetch + cache. live buffers (3종 tick) 와 universe
+        # cache (350종 일봉) 를 merge — 같은 symbol 충돌 시 live buffer 우선.
+        self._refresh_universe_cache_if_stale()
+        ohlcv_history = {sym: buf for sym, buf in self._universe_cache.items()}
+        ohlcv_history.update(self._buffers)
 
         factors = self._compute_factors(history_1m)
 
