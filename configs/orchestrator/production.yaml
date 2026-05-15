@@ -165,21 +165,25 @@ strategies:
   #
   # **5y backtest 미실시** — Sharpe ≥ 0.5 통과 검증 후 1건씩 활성화 권장 (#229 후속).
   #
-  # - id: live-rsi-oversold-volume-spike
-  #   class: backtest.strategies.live_rsi_oversold_volume_spike.LiveRsiOversoldVolumeSpike
-  #   kwargs: {}
-  # - id: live-macd-bullish-cross-breakout
-  #   class: backtest.strategies.live_macd_bullish_cross_breakout.LiveMacdBullishCrossBreakout
-  #   kwargs: {}
-  # - id: live-bb-lower-bounce
-  #   class: backtest.strategies.live_bb_lower_bounce.LiveBbLowerBounce
-  #   kwargs: {}
-  # - id: live-breakout-with-atr-stop
-  #   class: backtest.strategies.live_breakout_with_atr_stop.LiveBreakoutWithAtrStop
-  #   kwargs: {}
-  # - id: live-oversold-with-divergence
-  #   class: backtest.strategies.live_oversold_with_divergence.LiveOversoldWithDivergence
-  #   kwargs: {}
+  # #238 uncomment — LIVE_SCANNER_ENABLED=1 env gate 가 여전히 zero-impact 보장.
+  # env 없으면 config_loader 는 register 하지만 LivePositionRiskManager 미구성 →
+  # universe-scan / single-ticker 만 동작. env=1 일 때만 universe 매 tick 스캔 +
+  # 자동 stop/TP 청산. 5y bench 미검증 — testnet 동작 검증 우선 (#238 A 옵션).
+  - id: live-rsi-oversold-volume-spike
+    class: backtest.strategies.live_rsi_oversold_volume_spike.LiveRsiOversoldVolumeSpike
+    kwargs: {}
+  - id: live-macd-bullish-cross-breakout
+    class: backtest.strategies.live_macd_bullish_cross_breakout.LiveMacdBullishCrossBreakout
+    kwargs: {}
+  - id: live-bb-lower-bounce
+    class: backtest.strategies.live_bb_lower_bounce.LiveBbLowerBounce
+    kwargs: {}
+  - id: live-breakout-with-atr-stop
+    class: backtest.strategies.live_breakout_with_atr_stop.LiveBreakoutWithAtrStop
+    kwargs: {}
+  - id: live-oversold-with-divergence
+    class: backtest.strategies.live_oversold_with_divergence.LiveOversoldWithDivergence
+    kwargs: {}
   #
   # HTS 검색식 hybrid (#230) — 단타·5분대기·스윙 OR 합성. KST ≤ 10:30 시간대 게이트.
   # KIS 1m 30일 한계로 5y bench 데이터 부족 → paper-only 운영 (5거래일 누적 후 검증).

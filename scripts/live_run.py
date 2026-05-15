@@ -720,6 +720,55 @@ async def _run_pipeline_attached(
             ops_counters.ingest(ev.event_type, ev.payload or {})
 
     config.wal_observer = _wal_observer
+
+    # #238 — dashboard 거래 시작 경로(_run_pipeline_attached)도 live-scanner
+    # 자동 stop/TP 청산을 지원해야 한다. 기존엔 _run_pipeline(CLI)에만 있어
+    # dashboard 버튼으로 live-scanner 를 켜면 매수만 되고 청산이 안 됐음.
+    risk_mgr = None
+    if os.environ.get("LIVE_SCANNER_ENABLED") == "1":
+        if position_store is not None and pnl_aggregator is not None:
+            from src.portfolio.live_position_risk import LivePositionRiskManager  # noqa: PLC0415
+            risk_mgr = LivePositionRiskManager(
+                position_store=position_store,
+                pnl_aggregator=pnl_aggregator,
+                wal_observer=_wal_observer,
+            )
+            config.position_risk_manager = risk_mgr
+            logger.info(
+                "LIVE_SCANNER_ENABLED=1 (attached) — LivePositionRiskManager constructed"
+            )
+        else:
+            logger.warning(
+                "LIVE_SCANNER_ENABLED=1 but position_store/pnl_aggregator 미주입 "
+                "— 자동 청산 비활성. _serve() wiring 확인 필요."
+            )
+    else:
+        logger.info(
+            "LIVE_SCANNER_ENABLED!=1 (attached) — universe-scan / single-ticker only"
+        )
+
+    def _on_orchestrator_ready(orch):
+        setattr(state, "orchestrator", orch)
+        if risk_mgr is None:
+            return
+        registered = 0
+        for sid, strategy in orch.strategies.items():
+            if not getattr(strategy, "is_live_scanner", False):
+                continue
+            risk_mgr.register_strategy_policy(
+                sid,
+                stop_loss_pct=float(getattr(strategy, "stop_loss_pct", 0.03)),
+                take_profit_pct=float(getattr(strategy, "take_profit_pct", 0.06)),
+                trailing_stop_pct=getattr(strategy, "trailing_stop_pct", None),
+            )
+            registered += 1
+            logger.info("live_scanner.policy_registered (attached) sid=%s", sid)
+        logger.info(
+            "live_scanner.policies_total (attached) registered=%d total=%d",
+            registered, len(orch.strategies),
+        )
+
+    config.on_orchestrator_ready = _on_orchestrator_ready
     await _run_with_duration(
         run_shadow_loop(config, kis_adapter=kis_adapter, binance_adapter=binance_adapter),
         duration_sec,
@@ -759,11 +808,19 @@ def _build_pipeline_factory(
         smoke_on = os.environ.get("SMOKE_TEST_ENABLED", "").lower() in ("1", "true", "yes")
         broker = params.get("broker")
         if not broker:
-            # #238 hotfix — SMOKE_TEST_ENABLED=1 default 를 smoke-dual 에서 단일
-            # Binance testnet 으로 변경. KIS 모의 초당 한도 폭주가 통로 검증을
-            # 막아 (#238 분석) MVP 검증에 가장 확실한 한 경로만 default. KIS+Binance
-            # 동시 검증이 필요하면 explicit broker=smoke-dual 로 호출.
-            broker = "binance-testnet-shadow" if smoke_on else "kis-paper-shadow"
+            # #238 — broker 선택을 smoke 와 분리. 우선순위:
+            #   1. params.broker (dashboard 가 명시 전달 시)
+            #   2. QTA_DEFAULT_BROKER env (운영자가 dashboard 버튼 default 지정)
+            #   3. SMOKE_TEST_ENABLED=1 → binance-testnet-shadow (smoke 통로검증)
+            #   4. fallback → kis-paper-shadow (legacy #182 default)
+            # 이전엔 SMOKE 끄면 무조건 KIS 라 BTC 전략을 dashboard 로 못 돌렸음.
+            env_broker = os.environ.get("QTA_DEFAULT_BROKER", "").strip()
+            if env_broker:
+                broker = env_broker
+            elif smoke_on:
+                broker = "binance-testnet-shadow"
+            else:
+                broker = "kis-paper-shadow"
         duration = params.get("duration") or "0"
 
         if broker == "smoke-dual":
@@ -775,8 +832,9 @@ def _build_pipeline_factory(
             return
 
         symbols = _resolve_symbols(params)
-        # #238 — Binance broker + smoke 이면 BTCUSDT 강제 (KRX 코드 fallback 회피).
-        if smoke_on and broker == "binance-testnet-shadow" and not params.get("symbols"):
+        # #238 — Binance broker 면 BTCUSDT 강제 (KRX 코드 fallback 회피). smoke 여부
+        # 무관 — binance-testnet-shadow 인데 005930 fallback 되면 feed 가 비어 무의미.
+        if broker == "binance-testnet-shadow" and not params.get("symbols"):
             symbols = ["BTCUSDT"]
         # #238 — Binance broker 에서는 KIS REST 진입 자체를 막아야 함 (feed=binance).
         extra_argv: list[str] = []
