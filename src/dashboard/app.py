@@ -364,6 +364,29 @@ th{{color:#888;font-weight:600}}
 </div>
 
 <div class="catalog-section">
+  <h2>전략별 포지션 (어떤 전략이 매수/매도했나)</h2>
+  <div class="card">
+    <table class="trades-table">
+      <thead>
+        <tr>
+          <th>전략</th>
+          <th>종목</th>
+          <th>매수 (건/수량)</th>
+          <th>매도 (건/수량)</th>
+          <th>순포지션</th>
+          <th>평단가</th>
+          <th>실현손익</th>
+          <th>최근</th>
+        </tr>
+      </thead>
+      <tbody id="stratpos-tbody">
+        <tr><td colspan="8" style="text-align:center;color:#888;padding:18px">조회 중…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="catalog-section">
   <h2>매수/매도 이력 (최근 50건)</h2>
   <div class="card">
     <table class="trades-table">
@@ -575,6 +598,42 @@ async function tradesRefresh() {{
 }}
 tradesRefresh();
 setInterval(tradesRefresh, 5000);
+
+// 전략별 포지션 — WAL strategy_id 집계 (5s)
+async function stratPosRefresh() {{
+  try {{
+    const r = await fetch('/api/strategy_positions');
+    const d = await r.json();
+    const tb = document.getElementById('stratpos-tbody');
+    if (!tb) return;
+    const rows = d.strategies || [];
+    if (rows.length === 0) {{
+      tb.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#888;padding:18px">아직 거래한 전략 없음</td></tr>';
+      return;
+    }}
+    tb.innerHTML = rows.map(s => {{
+      const net = s.net_qty || 0;
+      const netCls = net > 0 ? 'side-buy' : net < 0 ? 'side-sell' : '';
+      const pnl = s.realized_pnl;
+      const pnlCls = pnl == null ? '' : (pnl >= 0 ? 'side-buy' : 'side-sell');
+      const pnlTxt = pnl == null ? '-' : (pnl >= 0 ? '+' : '') + Number(pnl).toLocaleString('ko-KR');
+      const avg = s.avg_price == null ? '-' : Number(s.avg_price).toLocaleString('ko-KR');
+      const ts = (s.last_ts || '').slice(0,19).replace('T',' ');
+      return `<tr>
+        <td>${{escHtml(s.strategy_id)}}</td>
+        <td>${{escHtml(s.symbol)}}</td>
+        <td class="side-buy">${{s.buy_n}} / ${{escHtml(s.buy_qty)}}</td>
+        <td class="side-sell">${{s.sell_n}} / ${{escHtml(s.sell_qty)}}</td>
+        <td class="${{netCls}}">${{escHtml(net)}}</td>
+        <td>${{avg}}</td>
+        <td class="${{pnlCls}}">${{pnlTxt}}</td>
+        <td>${{escHtml(ts)}}</td>
+      </tr>`;
+    }}).join('');
+  }} catch (err) {{ console.warn('stratpos', err); }}
+}}
+stratPosRefresh();
+setInterval(stratPosRefresh, 5000);
 
 {_STRATEGY_TOGGLE_JS}
 </script>
@@ -909,6 +968,78 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
                 })
         rows.sort(key=lambda r: str(r.get("ts") or ""), reverse=True)
         return JSONResponse({"available": True, "trades": rows[:limit]})
+
+    @app.get("/api/strategy_positions")
+    async def api_strategy_positions() -> JSONResponse:
+        """전략별 매수/매도 집계 — "어떤 전략이 매수했나" 한눈에 (#238 후속).
+
+        WAL order_acked/order_filled 를 strategy_id 로 집계. 평단가는 fill price
+        있을 때만 (Binance MARKET ack 는 status=NEW 라 가격 미포함 → '-' 표시).
+        실현손익은 pnl_aggregator.by_strategy wired 시.
+        """
+        paths: list[Path] = []
+        if state.wal_path is not None and Path(state.wal_path).exists():
+            paths.append(Path(state.wal_path))
+        for p in state.extra_wal_paths or []:
+            if p is not None and Path(p).exists() and Path(p) not in paths:
+                paths.append(Path(p))
+        agg: dict[str, dict] = {}
+        for p in paths:
+            events, _ = wal_replay(p)
+            for ev in events:
+                if ev.event_type not in ("order_acked", "order_filled", "fill_received"):
+                    continue
+                pl = ev.payload or {}
+                sid = pl.get("strategy_id", "") or "?"
+                side = (pl.get("side") or "").lower()
+                try:
+                    qty = float(pl.get("qty") or pl.get("quantity") or 0)
+                except (TypeError, ValueError):
+                    qty = 0.0
+                try:
+                    px = float(pl.get("price") or pl.get("fill_price") or 0)
+                except (TypeError, ValueError):
+                    px = 0.0
+                a = agg.setdefault(sid, {
+                    "strategy_id": sid, "symbol": pl.get("symbol", ""),
+                    "buy_n": 0, "buy_qty": 0.0, "sell_n": 0, "sell_qty": 0.0,
+                    "_px_sum": 0.0, "_px_n": 0, "last_ts": "",
+                })
+                if not a["symbol"]:
+                    a["symbol"] = pl.get("symbol", "")
+                if side == "buy":
+                    a["buy_n"] += 1
+                    a["buy_qty"] += qty
+                elif side == "sell":
+                    a["sell_n"] += 1
+                    a["sell_qty"] += qty
+                if px > 0:
+                    a["_px_sum"] += px
+                    a["_px_n"] += 1
+                if ev.ts > a["last_ts"]:
+                    a["last_ts"] = ev.ts
+        pnl_by = {}
+        if state.pnl_aggregator is not None:
+            try:
+                pnl_by = dict(state.pnl_aggregator.by_strategy)
+            except Exception:
+                pnl_by = {}
+        out = []
+        for sid, a in sorted(agg.items()):
+            avg_px = (a["_px_sum"] / a["_px_n"]) if a["_px_n"] > 0 else None
+            out.append({
+                "strategy_id": sid,
+                "symbol": a["symbol"],
+                "buy_n": a["buy_n"],
+                "buy_qty": round(a["buy_qty"], 6),
+                "sell_n": a["sell_n"],
+                "sell_qty": round(a["sell_qty"], 6),
+                "net_qty": round(a["buy_qty"] - a["sell_qty"], 6),
+                "avg_price": round(avg_px, 4) if avg_px is not None else None,
+                "realized_pnl": pnl_by.get(sid),
+                "last_ts": a["last_ts"],
+            })
+        return JSONResponse({"available": True, "strategies": out})
 
     @app.get("/api/limits")
     async def api_limits() -> JSONResponse:
