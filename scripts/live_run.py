@@ -351,8 +351,10 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     # ── #177 EXE wiring ────────────────────────────────────────────────
     parser.add_argument(
-        "--feed", choices=["auto", "binance", "kis", "mock"], default="auto",
-        help="시세 feed 선택 (auto=KRX 종목이면 KIS REST, 그 외 Binance WS).",
+        "--feed", choices=["auto", "binance", "kis", "kis-ws", "mock"], default="auto",
+        help="시세 feed 선택. auto=KRX→KIS REST polling, 그 외→Binance WS. "
+             "kis-ws (#231 S3) = KIS 실시간 체결가 WS — 200종목 동시 subscribe "
+             "(단일 connection 40종 제한 → 5 connection rotation 또는 batched).",
     )
     parser.add_argument(
         "--mock-bars", type=int, default=30,
@@ -532,7 +534,8 @@ def _build_kis_client(feed_mode: str, symbols: list[str]):
     KRX symbols). Failures to construct (e.g. missing env vars) are surfaced
     as SystemExit so EXE smoke runs fail loudly.
     """
-    needs_kis = feed_mode == "kis" or (
+    # #231 S3: kis-ws 도 KISClient 필요 (warmup REST + auth source).
+    needs_kis = feed_mode in ("kis", "kis-ws") or (
         feed_mode == "auto" and any(s.isdigit() and len(s) == 6 for s in symbols)
     )
     if not needs_kis:

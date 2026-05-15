@@ -47,8 +47,9 @@ class ShadowConfig:
     ] = "paper-only"
     # Phase 2 feed mode (#177).
     #   "auto"   — KIS REST polling for any 6-digit KRX symbol; Binance WS otherwise
-    #   "binance" / "kis" / "mock" — explicit override
-    feed_mode: Literal["auto", "binance", "kis", "mock"] = "auto"
+    #   "binance" / "kis" / "kis-ws" / "mock" — explicit override
+    #   "kis-ws" (#231 S3): KIS WS realtime trade stream (≥40 종목/conn 제한)
+    feed_mode: Literal["auto", "binance", "kis", "kis-ws", "mock"] = "auto"
     # Optional KIS REST client for snapshot warmup + KISMarketFeed; supplied by
     # caller (live_run.py builds via KISClient(...)). None disables warmup.
     kis_client: Any | None = None
@@ -217,6 +218,20 @@ def _select_feed(config: ShadowConfig) -> MarketDataFeed:
         # 못 해서 consumer 가 max_iterations 도달 전에 producer 완료 → FIRST_COMPLETED
         # 로 루프가 조기 종료되는 문제 방지 (#177 smoke 결정성).
         return MockReplayFeed(config.mock_ticks or [], gap_sec=0.02)
+    if mode == "kis-ws":
+        # #231 S3 — KIS realtime WS feed. Single connection (≥40 종목 KIS 제한)
+        # — KOSPI200 200종목 운영은 후속 sub-commit (5-batch rotation 또는 multi-conn).
+        from src.live.feed_kis_ws import KISWebSocketMarketFeed
+        if config.kis_client is None:
+            raise ValueError(
+                "feed_mode=kis-ws requires ShadowConfig.kis_client (auth source)"
+            )
+        # KISClient._auth / _app_key 추출 — private 이지만 같은 프로젝트 내 사용 안전.
+        return KISWebSocketMarketFeed(
+            config.symbols,
+            auth=config.kis_client._auth,
+            app_key=config.kis_client._app_key,
+        )
     if mode == "kis" or (mode == "auto" and any(is_krx_symbol(s) for s in config.symbols)):
         from src.live.feed_kis import KISMarketFeed
         if config.kis_client is None:
