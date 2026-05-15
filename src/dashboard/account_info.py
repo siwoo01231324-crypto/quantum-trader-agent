@@ -23,7 +23,10 @@ class AccountInfoProvider:
     각 dict 의 ok=True/False 로 인증 상태 분기. 실패해도 다른 거래소는 정상 표시.
     """
 
-    def __init__(self, ttl_sec: float = 5.0) -> None:
+    def __init__(self, ttl_sec: float = 15.0) -> None:
+        # #231 — TTL 5s → 15s. JS polling 5s 와 동기화돼 매 polling 마다 실 API
+        # 호출 → KIS EGW00201 rate-limit / 가변 latency 가 ✓/✗ 토글로 사용자에게
+        # "조회중↔정보" 깜박임 보이던 패턴 fix. 15s 면 polling 3회 중 1회만 실 fetch.
         self._cache: dict[str, Any] | None = None
         self._cache_at: datetime | None = None
         self._ttl = ttl_sec
@@ -37,8 +40,22 @@ class AccountInfoProvider:
         ):
             return self._cache
 
+        # Per-broker fallback (#231) — 한쪽 거래소 fetch 실패 시 이전 cache 의
+        # 그 거래소 응답을 재사용. ok=False 로 덮어쓰던 패턴 → "잠깐 정보 →
+        # 조회중↔에러" 깜박임 방지.
         kis = self._safe(self._fetch_kis, "KIS")
+        if not kis.get("ok") and self._cache is not None:
+            prev_kis = self._cache.get("kis", {})
+            if prev_kis.get("ok"):
+                logger.debug("KIS fetch failed — reusing previous cache value")
+                kis = prev_kis
         binance = self._safe(self._fetch_binance, "Binance")
+        if not binance.get("ok") and self._cache is not None:
+            prev_bn = self._cache.get("binance", {})
+            if prev_bn.get("ok"):
+                logger.debug("Binance fetch failed — reusing previous cache value")
+                binance = prev_bn
+
         data = {"kis": kis, "binance": binance}
         self._cache = data
         self._cache_at = now
