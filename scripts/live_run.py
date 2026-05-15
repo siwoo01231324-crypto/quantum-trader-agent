@@ -255,10 +255,28 @@ def _run_dashboard_only_mode(port: int = 8000) -> int:
         from src.dashboard.timeline_broker import TimelineBroker  # noqa: PLC0415
         from src.dashboard.run_controller import RunController  # noqa: PLC0415
         from src.dashboard.account_info import AccountInfoProvider  # noqa: PLC0415
+        from src.dashboard.ops_counters import OpsCounters  # noqa: PLC0415
+        from src.live.pnl_aggregator import PnLAggregator  # noqa: PLC0415
+        from src.live.strategy_position_store import StrategyPositionStore  # noqa: PLC0415
 
+        # #182/#194 — pre-wire pnl_aggregator + position_store + ops_counters so
+        # the dashboard's "거래 시작" button gives the same observability as the
+        # CLI path (_run_pipeline). Without this, PnL gauges stay at 0, timeline
+        # replay returns empty, and the ops 진단 card stays at "조회 중…" even
+        # when trades are firing.
+        position_store = StrategyPositionStore()
+        pnl_aggregator = PnLAggregator()
+        ops_counters = OpsCounters()
         state = DashboardState(timeline_broker=TimelineBroker(), wal_path=None)
+        state.position_provider = position_store.get_positions
+        state.pnl_aggregator = pnl_aggregator
+        state.ops_counters = ops_counters
         state.run_controller = RunController(
-            _build_pipeline_factory(state, logging.getLogger("qta-pipeline"))
+            _build_pipeline_factory(
+                state, logging.getLogger("qta-pipeline"),
+                position_store=position_store, pnl_aggregator=pnl_aggregator,
+                ops_counters=ops_counters,
+            )
         )
         state.account_info_provider = AccountInfoProvider()
         app = create_app(state)
@@ -303,10 +321,12 @@ def _build_parser() -> argparse.ArgumentParser:
             "kis-paper",
             "kis-paper-shadow",
             "binance-testnet-shadow",  # #231 S1 — Binance shadow live-daemon
+            "smoke-dual",              # smoke test — KIS paper 005930 + Binance testnet BTCUSDT 동시
         ],
         default="kis-paper-shadow",
         help="브로커 모드 (default: kis-paper-shadow). "
-             "binance-testnet-shadow 는 별도 컨테이너 qta-live-daemon-binance 용.",
+             "binance-testnet-shadow 는 별도 컨테이너 qta-live-daemon-binance 용. "
+             "smoke-dual 은 KIS + Binance 둘 다 병렬 (SMOKE_TEST_ENABLED=1 필요).",
     )
     parser.add_argument(
         "--duration", default="0",
@@ -657,7 +677,8 @@ def _start_dashboard(state, port: int, logger):
 
 async def _run_pipeline_attached(
     state, config, kis_adapter, logger, duration_sec: float,
-    *, binance_adapter=None,
+    *, binance_adapter=None, position_store=None, pnl_aggregator=None,
+    ops_counters=None,
 ) -> None:
     """이미 떠있는 dashboard 에 attach — 거래만 시작 (#182 단계 2).
 
@@ -666,20 +687,45 @@ async def _run_pipeline_attached(
 
     #231 S1: ``binance_adapter`` 는 broker_mode=binance-testnet-shadow 시 사용.
     keyword-only 라 기존 호출자 (positional kis_adapter only) 영향 zero.
+
+    position_store / pnl_aggregator 가 주어지면 _run_pipeline 과 동일한 fan-out 패턴 —
+    timeline_broker.publish + position_store.ingest_fill_event + pnl_aggregator.ingest_fill_event.
+    이게 없으면 거래가 일어나도 대시보드 PnL/포지션이 갱신되지 않는다.
     """
     from dataclasses import asdict
-    if state.timeline_broker is not None:
-        config.wal_observer = lambda ev: state.timeline_broker.publish(asdict(ev))
+    # WAL path 를 state 에 노출 — WS replay 가 이 세션의 과거 이벤트를 복원할 수 있게.
+    state.wal_path = config.wal_path
+    # Pre-existing WAL replay (예: 같은 run_id 로 재시작) — fresh session 이면 no-op.
+    if pnl_aggregator is not None and config.wal_path and Path(config.wal_path).exists():
+        position_store.replay_from_wal(config.wal_path)
+        pnl_aggregator.replay_from_wal(config.wal_path)
+
+    def _wal_observer(ev) -> None:
+        if state.timeline_broker is not None:
+            state.timeline_broker.publish(asdict(ev))
+        if position_store is not None:
+            position_store.ingest_fill_event(ev.event_type, ev.payload or {})
+        if pnl_aggregator is not None:
+            pnl_aggregator.ingest_fill_event(ev.event_type, ev.payload or {})
+        if ops_counters is not None:
+            ops_counters.ingest(ev.event_type, ev.payload or {})
+
+    config.wal_observer = _wal_observer
     await _run_with_duration(
         run_shadow_loop(config, kis_adapter=kis_adapter, binance_adapter=binance_adapter),
         duration_sec,
     )
 
 
-def _build_pipeline_factory(state, logger):
+def _build_pipeline_factory(
+    state, logger, *, position_store=None, pnl_aggregator=None, ops_counters=None,
+):
     """RunController 의 pipeline_factory — 대시보드 시작 버튼 클릭 시 호출 (#182).
 
     params: {symbols?: list[str] | str, broker?: str, duration?: str}
+
+    position_store / pnl_aggregator 가 _serve() 에서 주입된 경우 _run_pipeline_attached
+    가 그것들에 fill 이벤트를 fan-out — 거래 시작 → 대시보드 PnL/포지션 즉시 가시화.
     """
     def _resolve_symbols(params):
         s = params.get("symbols")
@@ -701,9 +747,22 @@ def _build_pipeline_factory(state, logger):
         return ["005930"]
 
     async def _factory(params: dict):
-        symbols = _resolve_symbols(params)
-        broker = params.get("broker") or "kis-paper-shadow"
+        broker = params.get("broker")
+        if not broker:
+            # SMOKE_TEST_ENABLED=1 → 대시보드 거래 시작 버튼이 KIS+Binance 둘 다
+            # 통로 검증으로 들어가도록 default 변경. 평소엔 기존 kis-paper-shadow 유지.
+            broker = "smoke-dual" if os.environ.get("SMOKE_TEST_ENABLED", "").lower() in ("1", "true", "yes") else "kis-paper-shadow"
         duration = params.get("duration") or "0"
+
+        if broker == "smoke-dual":
+            await _run_smoke_dual(
+                state, logger, duration,
+                position_store=position_store, pnl_aggregator=pnl_aggregator,
+                ops_counters=ops_counters,
+            )
+            return
+
+        symbols = _resolve_symbols(params)
         argv = ["--symbols", ",".join(symbols), "--broker", broker, "--duration", duration]
         args = parse_args(argv)
         config = _build_config(args)
@@ -721,9 +780,106 @@ def _build_pipeline_factory(state, logger):
         await _run_pipeline_attached(
             state, config, kis_adapter, logger, duration_sec,
             binance_adapter=binance_adapter,
+            position_store=position_store, pnl_aggregator=pnl_aggregator,
+            ops_counters=ops_counters,
         )
 
     return _factory
+
+
+async def _run_smoke_dual(
+    state, logger, duration: str,
+    *, position_store=None, pnl_aggregator=None, ops_counters=None,
+) -> None:
+    """smoke-dual broker — KIS paper 005930 + Binance testnet BTCUSDT 병렬 실행.
+
+    "통로만 뚫어두는" 검증용. 두 개의 독립 `run_shadow_loop` 가 분리된 WAL 파일에
+    이벤트를 적재하지만, observability (timeline broker / pnl / position / ops)
+    는 공유 → 대시보드 한 화면에서 양쪽 거래 즉시 확인.
+
+    SMOKE_TEST_ENABLED env 미설정 시에도 entry 자체는 작동 (전략이 hold 만 반환).
+    """
+    if not os.environ.get("SMOKE_TEST_ENABLED"):
+        logger.warning(
+            "smoke-dual: SMOKE_TEST_ENABLED env 미설정 — 두 broker 가 연결되어도 "
+            "smoke 전략이 hold 만 반환합니다. .env 에 SMOKE_TEST_ENABLED=1 추가 후 재시작."
+        )
+
+    run_id = _build_run_id()
+
+    def _wal_observer(ev):
+        from dataclasses import asdict as _asdict  # noqa: PLC0415
+        if state.timeline_broker is not None:
+            state.timeline_broker.publish(_asdict(ev))
+        if position_store is not None:
+            position_store.ingest_fill_event(ev.event_type, ev.payload or {})
+        if pnl_aggregator is not None:
+            pnl_aggregator.ingest_fill_event(ev.event_type, ev.payload or {})
+        if ops_counters is not None:
+            ops_counters.ingest(ev.event_type, ev.payload or {})
+
+    # KIS branch — 005930 paper-shadow + KIS REST feed.
+    kis_argv = [
+        "--symbols", "005930", "--broker", "kis-paper-shadow",
+        "--feed", "auto", "--duration", duration,
+        "--run-id", f"{run_id}-kis", "--schedule", "always",
+        "--dashboard-port", "0",
+    ]
+    kis_args = parse_args(kis_argv)
+    kis_config = _build_config(kis_args)
+    try:
+        kis_config.kis_client = _build_kis_client(kis_args.feed, kis_args.symbols)
+        kis_adapter = _build_kis_adapter(kis_args.broker)
+    except SystemExit as err:
+        logger.error("smoke-dual KIS branch skipped — %s", err)
+        kis_config = None
+        kis_adapter = None
+    if kis_config is not None:
+        kis_config.wal_observer = _wal_observer
+        state.wal_path = kis_config.wal_path  # primary for WS replay
+
+    # Binance branch — BTCUSDT testnet-shadow + Binance public WS feed.
+    bnb_argv = [
+        "--symbols", "BTCUSDT", "--broker", "binance-testnet-shadow",
+        "--feed", "binance", "--duration", duration,
+        "--run-id", f"{run_id}-binance", "--schedule", "always",
+        "--dashboard-port", "0",
+    ]
+    bnb_args = parse_args(bnb_argv)
+    bnb_config = _build_config(bnb_args)
+    try:
+        binance_adapter = _build_binance_adapter(bnb_args.broker)
+    except SystemExit as err:
+        logger.error("smoke-dual Binance branch skipped — %s", err)
+        bnb_config = None
+        binance_adapter = None
+    if bnb_config is not None:
+        bnb_config.wal_observer = _wal_observer
+        # Surface to /api/trades so the dashboard trade-history card sees both.
+        if state.wal_path is None:
+            state.wal_path = bnb_config.wal_path
+        else:
+            state.extra_wal_paths = [bnb_config.wal_path]
+
+    coros = []
+    if kis_config is not None:
+        coros.append(run_shadow_loop(kis_config, kis_adapter=kis_adapter))
+    if bnb_config is not None:
+        coros.append(run_shadow_loop(bnb_config, binance_adapter=binance_adapter))
+    if not coros:
+        logger.error(
+            "smoke-dual: 두 branch 모두 자격증명 누락. .env 의 HANTOO_FAKE_* / "
+            "BINANCE_DEMO_API_KEY 를 확인하세요."
+        )
+        return
+
+    logger.info(
+        "smoke-dual starting: branches=%d run_id=%s wal_primary=%s wal_extra=%s",
+        len(coros), run_id, state.wal_path,
+        [str(p) for p in state.extra_wal_paths or []],
+    )
+    duration_sec = _parse_duration(duration)
+    await _run_with_duration(asyncio.gather(*coros), duration_sec)
 
 
 async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
@@ -731,6 +887,7 @@ async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
                        *, binance_adapter=None):
     from dataclasses import asdict
     from src.dashboard.app import DashboardState
+    from src.dashboard.ops_counters import OpsCounters
     from src.dashboard.timeline_broker import TimelineBroker
     from src.live.pnl_aggregator import PnLAggregator
     from src.live.strategy_position_store import StrategyPositionStore
@@ -741,6 +898,7 @@ async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
     # Replay any pre-existing WAL so that a daemon restart preserves both.
     position_store = StrategyPositionStore()
     pnl_aggregator = PnLAggregator()
+    ops_counters = OpsCounters()
     if config.wal_path and Path(config.wal_path).exists():
         position_store.replay_from_wal(config.wal_path)
         pnl_aggregator.replay_from_wal(config.wal_path)
@@ -750,11 +908,13 @@ async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
     )
     dashboard_state.position_provider = position_store.get_positions
     dashboard_state.pnl_aggregator = pnl_aggregator
+    dashboard_state.ops_counters = ops_counters
 
     def _wal_observer(ev) -> None:
         timeline_broker.publish(asdict(ev))
         position_store.ingest_fill_event(ev.event_type, ev.payload or {})
         pnl_aggregator.ingest_fill_event(ev.event_type, ev.payload or {})
+        ops_counters.ingest(ev.event_type, ev.payload or {})
 
     config.wal_observer = _wal_observer
 

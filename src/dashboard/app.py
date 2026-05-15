@@ -14,13 +14,17 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
+from zoneinfo import ZoneInfo
+
+_KST = ZoneInfo("Asia/Seoul")
 
 from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from prometheus_client import CONTENT_TYPE_LATEST, CollectorRegistry, generate_latest
 
+from src.dashboard.ops_counters import OpsCounters
 from src.dashboard.shadow_runs import discover_shadow_runs, load_run_detail
-from src.dashboard.strategy_catalog import load_strategy_catalog
+from src.dashboard.strategy_catalog import load_production_status, load_strategy_catalog
 from src.dashboard.timeline_broker import TimelineBroker
 from src.live.wal import replay as wal_replay
 from src.observability.metrics import Metrics
@@ -83,6 +87,16 @@ class DashboardState:
     # pnl_realtime / pnl_daily / pnl_monthly fields above (kept for
     # backwards compatibility with callers that set them directly).
     pnl_aggregator: Any | None = None
+
+    # Operational diagnostics — bars seen, dispatch counts, last signal/order/fill.
+    # Same WAL observer that feeds pnl/timeline updates these counters.
+    ops_counters: OpsCounters | None = None
+
+    # Multi-broker smoke runs (`smoke-dual`) write to a primary `wal_path`
+    # (KIS) and an auxiliary log under `extra_wal_paths` (Binance). /api/trades
+    # merges all of them. WS timeline replay still reads `wal_path` only —
+    # live events arrive via the shared timeline_broker regardless of WAL.
+    extra_wal_paths: list[Path] = field(default_factory=list)
 
 
 def _pnl_view(state: "DashboardState") -> dict:
@@ -220,11 +234,18 @@ th{{color:#888;font-weight:600}}
 .nav-link:hover{{background:#2a4a6c;color:#fff}}
 .catalog-section{{margin-top:14px}}
 .catalog-section > h2{{font-size:.85rem;color:#aaa;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px}}
+.trades-table{{width:100%;border-collapse:collapse;font-size:.78rem}}
+.trades-table th,.trades-table td{{padding:6px 8px;text-align:left;border-bottom:1px solid #2a2d3a;font-family:'Consolas','Menlo',monospace}}
+.trades-table th{{color:#888;font-weight:600;font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;font-family:'Segoe UI',sans-serif}}
+.side-buy{{color:#2ecc71;font-weight:700}}
+.side-sell{{color:#e74c3c;font-weight:700}}
+.state-filled{{color:#2ecc71}}
+.state-pending{{color:#f39c12}}
 {_STRATEGY_CARD_CSS}
 </style>
 </head>
 <body>
-<h1>QTA 로컬 대시보드 — {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}</h1>
+<h1>QTA 로컬 대시보드 — {datetime.now(_KST).strftime('%Y-%m-%d %H:%M:%S KST')}</h1>
 <div class="nav">
   <a href="/strategies" class="nav-link">📋 전략 카탈로그 →</a>
   <a href="/shadow_runs" class="nav-link">📊 Shadow Runs (#198) →</a>
@@ -306,6 +327,26 @@ th{{color:#888;font-weight:600}}
     <div class="last-ts" id="kis-detail">.env 의 HANTOO_FAKE_* 인증.</div>
   </div>
 
+  <!-- Q8: 운영 진단 (강제 가시화 — 거래 시작 후 무슨 일이 일어났나) -->
+  <div class="card" id="ops-card">
+    <h2>운영 진단 (Ops)</h2>
+    <div id="ops-summary" class="run-status">조회 중…</div>
+    <table class="acct-table">
+      <tbody>
+        <tr><td>bars 수신</td><td id="ops-bars">-</td></tr>
+        <tr><td>strategy_evaluated</td><td id="ops-evals">-</td></tr>
+        <tr><td>  └ buy/sell/hold/exc</td><td id="ops-decisions">-</td></tr>
+        <tr><td>signal_emitted</td><td id="ops-signals">-</td></tr>
+        <tr><td>order_submitted</td><td id="ops-orders">-</td></tr>
+        <tr><td>order_filled</td><td id="ops-fills">-</td></tr>
+        <tr><td>errors</td><td id="ops-errors">-</td></tr>
+        <tr><td>마지막 fill</td><td id="ops-last-fill">-</td></tr>
+        <tr><td>마지막 bar 시각</td><td id="ops-last-bar">-</td></tr>
+      </tbody>
+    </table>
+    <div class="last-ts" id="ops-detail">거래 시작 후 카운터가 0 이상이면 정상.</div>
+  </div>
+
   <!-- Q7: Binance Futures 계좌 (#182) -->
   <div class="card" id="account-card-binance">
     <h2>Binance Futures (USDS-M)</h2>
@@ -321,6 +362,29 @@ th{{color:#888;font-weight:600}}
     <div class="last-ts" id="bnb-detail">.env 의 BINANCE_API_KEY/SECRET 인증.</div>
   </div>
 
+</div>
+
+<div class="catalog-section">
+  <h2>매수/매도 이력 (최근 50건)</h2>
+  <div class="card">
+    <table class="trades-table">
+      <thead>
+        <tr>
+          <th>시각</th>
+          <th>전략</th>
+          <th>종목</th>
+          <th>방향</th>
+          <th>수량</th>
+          <th>가격</th>
+          <th>상태</th>
+          <th>브로커</th>
+        </tr>
+      </thead>
+      <tbody id="trades-tbody">
+        <tr><td colspan="8" style="text-align:center;color:#888;padding:18px">조회 중…</td></tr>
+      </tbody>
+    </table>
+  </div>
 </div>
 
 <div class="catalog-section">
@@ -440,6 +504,70 @@ async function acctRefresh() {{
 acctRefresh();
 setInterval(acctRefresh, 5000);
 
+// 운영 진단 카드 — bars/evals/orders/fills 카운터 폴링
+async function opsRefresh() {{
+  try {{
+    const r = await fetch('/api/ops');
+    const d = await r.json();
+    if (!d.available) return;
+    const set = (id, v) => {{ const el = document.getElementById(id); if (el) el.textContent = v; }};
+    set('ops-bars',    fmtNum(d.bars_seen));
+    set('ops-evals',   fmtNum(d.strategy_evaluated));
+    const dec = d.decisions || {{}};
+    set('ops-decisions', `${{fmtNum(dec.buy||0)}} / ${{fmtNum(dec.sell||0)}} / ${{fmtNum(dec.hold||0)}} / ${{fmtNum(dec.exception||0)}}`);
+    set('ops-signals', fmtNum(d.signal_emitted));
+    set('ops-orders',  fmtNum(d.order_submitted));
+    set('ops-fills',   fmtNum(d.order_filled));
+    set('ops-errors',  fmtNum(d.errors));
+    set('ops-last-fill', d.last_fill_detail || '-');
+    set('ops-last-bar',  d.last_bar_ts ? d.last_bar_ts.slice(0,19).replace('T',' ') : '-');
+    const summaryEl = document.getElementById('ops-summary');
+    if (summaryEl) {{
+      const trading = (d.order_filled||0) > 0 || (d.order_submitted||0) > 0;
+      summaryEl.textContent = trading ? '✓ 거래 발생 중' : ((d.strategy_evaluated||0) > 0 ? '⏳ 시그널 대기' : '대기 중 (시세 미수신)');
+      summaryEl.style.color = trading ? '#2ecc71' : '#bbb';
+    }}
+  }} catch (err) {{ console.warn('ops', err); }}
+}}
+opsRefresh();
+setInterval(opsRefresh, 3000);
+
+// 거래 이력 — WAL order_filled/order_submitted 폴링 (5s)
+function escHtml(s) {{
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}})[c]);
+}}
+async function tradesRefresh() {{
+  try {{
+    const r = await fetch('/api/trades?limit=50');
+    const d = await r.json();
+    const tb = document.getElementById('trades-tbody');
+    if (!tb) return;
+    const trades = d.trades || [];
+    if (trades.length === 0) {{
+      tb.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#888;padding:18px">거래 이력 없음 (거래 시작 후 첫 체결을 기다리는 중)</td></tr>';
+      return;
+    }}
+    tb.innerHTML = trades.map(t => {{
+      const sideCls = t.side === 'buy' ? 'side-buy' : t.side === 'sell' ? 'side-sell' : '';
+      const stateCls = t.filled ? 'state-filled' : 'state-pending';
+      const stateTxt = t.filled ? '체결' : '제출';
+      const ts = (t.ts || '').slice(0,19).replace('T',' ');
+      return `<tr>
+        <td>${{escHtml(ts)}}</td>
+        <td>${{escHtml(t.strategy_id)}}</td>
+        <td>${{escHtml(t.symbol)}}</td>
+        <td class="${{sideCls}}">${{escHtml((t.side || '').toUpperCase())}}</td>
+        <td>${{escHtml(t.qty)}}</td>
+        <td>${{escHtml(t.price)}}</td>
+        <td class="${{stateCls}}">${{stateTxt}}</td>
+        <td>${{escHtml(t.broker)}}</td>
+      </tr>`;
+    }}).join('');
+  }} catch (err) {{ console.warn('trades', err); }}
+}}
+tradesRefresh();
+setInterval(tradesRefresh, 5000);
+
 {_STRATEGY_TOGGLE_JS}
 </script>
 </body>
@@ -456,6 +584,10 @@ _STRATEGY_CARD_CSS = """
 .strat-name{color:#fff;font-weight:700;font-size:1rem;text-decoration:none}
 .strat-name:hover{color:#7ecef4}
 .strat-status{font-size:.7rem;background:#2a2d3a;border-radius:3px;padding:2px 6px;color:#bbb;text-transform:uppercase}
+.strat-prod{font-size:.65rem;border-radius:3px;padding:2px 5px;font-weight:700;letter-spacing:.04em}
+.prod-active{background:#1a3a1a;color:#7ef47e;border:1px solid #2a5a2a}
+.prod-commented{background:#3a2a1a;color:#f4b07e;border:1px solid #5a3a1a}
+.prod-absent{background:#2a2a2a;color:#888;border:1px dashed #444}
 .strat-meta{display:flex;gap:12px;flex-wrap:wrap;font-size:.75rem;color:#aaa}
 .strat-summary{font-size:.78rem;color:#cfd5e0;line-height:1.45;background:#0f1117;border-left:3px solid #7ecef4;padding:8px 10px;border-radius:4px;white-space:pre-line}
 .strat-metrics{display:grid;grid-template-columns:1fr 1fr;gap:6px}
@@ -548,10 +680,17 @@ def _strategy_card(item: dict) -> str:
     state_label = "ON" if enabled else "OFF"
     state_cls = "strat-on" if enabled else "strat-off"
     checked_attr = " checked" if enabled else ""
+    prod_status = str(item.get("production_status", "absent"))
+    prod_label, prod_cls = {
+        "active":    ("REGISTERED",      "prod-active"),
+        "commented": ("INACTIVE",        "prod-commented"),
+        "absent":    ("DRAFT",           "prod-absent"),
+    }.get(prod_status, ("DRAFT", "prod-absent"))
     return f"""
     <div class="{card_cls}" data-strategy-id="{sid}">
       <div class="strat-head">
         <a class="strat-name" href="/strategies/{sid}">{name}</a>
+        <span class="strat-prod {prod_cls}" title="production.yaml: {prod_status}">{prod_label}</span>
         <span class="strat-status">{status}</span>
       </div>
       <div class="strat-meta">
@@ -694,6 +833,9 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
     if state.timeline_broker is None:
         state.timeline_broker = TimelineBroker()
 
+    if state.ops_counters is None:
+        state.ops_counters = OpsCounters()
+
     app = FastAPI(title="QTA Dashboard", docs_url=None, redoc_url=None)
 
     @app.get("/", response_class=HTMLResponse)
@@ -708,6 +850,50 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
     @app.get("/api/pnl")
     async def api_pnl() -> JSONResponse:
         return JSONResponse(_pnl_view(state))
+
+    @app.get("/api/ops")
+    async def api_ops() -> JSONResponse:
+        oc = state.ops_counters
+        if oc is None:
+            return JSONResponse({"available": False})
+        return JSONResponse({"available": True, **oc.snapshot()})
+
+    @app.get("/api/trades")
+    async def api_trades(limit: int = Query(default=50, ge=1, le=500)) -> JSONResponse:
+        """Recent buy/sell fills + submitted orders, newest-first.
+
+        Reads `state.wal_path` plus every `state.extra_wal_paths` entry — the
+        `smoke-dual` runtime writes two WAL files (KIS + Binance) and both must
+        surface in the dashboard. Read-only — does not mutate any aggregator.
+        """
+        paths: list[Path] = []
+        if state.wal_path is not None and Path(state.wal_path).exists():
+            paths.append(Path(state.wal_path))
+        for p in state.extra_wal_paths or []:
+            if p is not None and Path(p).exists() and Path(p) not in paths:
+                paths.append(Path(p))
+        if not paths:
+            return JSONResponse({"available": True, "trades": []})
+        rows: list[dict] = []
+        for p in paths:
+            events, _corruptions = wal_replay(p)
+            for ev in events:
+                if ev.event_type not in ("order_filled", "fill_received", "order_submitted", "order_placed"):
+                    continue
+                pl = ev.payload or {}
+                rows.append({
+                    "ts": ev.ts,
+                    "event_type": ev.event_type,
+                    "strategy_id": pl.get("strategy_id", ""),
+                    "symbol": pl.get("symbol", ""),
+                    "side": pl.get("side", ""),
+                    "qty": pl.get("qty") or pl.get("quantity"),
+                    "price": pl.get("price") or pl.get("fill_price"),
+                    "broker": pl.get("broker", ""),
+                    "filled": ev.event_type in ("order_filled", "fill_received"),
+                })
+        rows.sort(key=lambda r: str(r.get("ts") or ""), reverse=True)
+        return JSONResponse({"available": True, "trades": rows[:limit]})
 
     @app.get("/api/limits")
     async def api_limits() -> JSONResponse:
@@ -750,8 +936,12 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
         # Default: docs/specs/strategies relative to repo root.
         return Path(__file__).resolve().parents[2] / "docs" / "specs" / "strategies"
 
+    def _resolve_production_yaml() -> Path:
+        return Path(__file__).resolve().parents[2] / "configs" / "orchestrator" / "production.yaml"
+
     def _enriched_catalog() -> list[dict]:
         items = load_strategy_catalog(_resolve_specs_dir())
+        prod_status = load_production_status(_resolve_production_yaml())
         orch = state.orchestrator
         agg = state.pnl_aggregator
         for it in items:
@@ -760,6 +950,8 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
             else:
                 it["enabled"] = True
             it["pnl_today"] = float(agg.daily_for(it["id"])) if agg is not None else 0.0
+            # production.yaml registration visibility (18 specs vs 11 active).
+            it["production_status"] = prod_status.get(it["id"], "absent")
         return items
 
     @app.get("/api/strategies")

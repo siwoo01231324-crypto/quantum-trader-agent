@@ -91,3 +91,37 @@ def load_strategy_catalog(specs_dir: Path | str) -> list[dict]:
             continue
         items.append(_normalize(fm))
     return items
+
+
+# Pattern for `- id: <id>` entries in production.yaml — handles indentation
+# and optional quotes. Commented detection re-anchors with leading `#`.
+_PROD_ACTIVE_RE = re.compile(r"^\s*-\s+id:\s*['\"]?([a-zA-Z0-9_-]+)['\"]?\s*$")
+_PROD_COMMENT_RE = re.compile(r"^\s*#\s*-\s+id:\s*['\"]?([a-zA-Z0-9_-]+)['\"]?\s*$")
+
+
+def load_production_status(yaml_path: Path | str) -> dict[str, str]:
+    """Return {strategy_id: "active" | "commented"} from production.yaml.
+
+    Active = uncommented `- id: <id>` under strategies. Commented = `# - id: <id>`.
+    Missing-from-yaml strategies are absent from the returned dict (caller should
+    treat as "absent" / draft-only). File missing → empty dict (no crash).
+    """
+    p = Path(yaml_path)
+    if not p.is_file():
+        return {}
+    try:
+        text = p.read_text(encoding="utf-8")
+    except OSError as err:
+        logger.warning("production.yaml read failed: %s", err)
+        return {}
+    out: dict[str, str] = {}
+    for line in text.splitlines():
+        m = _PROD_ACTIVE_RE.match(line)
+        if m:
+            out[m.group(1)] = "active"
+            continue
+        m = _PROD_COMMENT_RE.match(line)
+        if m:
+            # Don't overwrite an active entry with a stray commented duplicate.
+            out.setdefault(m.group(1), "commented")
+    return out

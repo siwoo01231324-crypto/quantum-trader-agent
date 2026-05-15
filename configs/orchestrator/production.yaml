@@ -134,6 +134,25 @@ strategies:
   # cs-bb-macd-kr 는 5y bench Sharpe -0.32 → status: inactive, production 미등록.
   # 코드는 src/backtest/strategies/cs_bb_macd_kr.py 유지 — score 정의 재설계 후 활성화 검토.
 
+  # ── Smoke 전략 (operator-only — 대시보드 거래 통로 검증) ───────────────────
+  #
+  # SMOKE_TEST_ENABLED=1 env 가 설정돼 있어야 신호 emit. 그 외에는 hold 반환 →
+  # 등록만 되고 거래 zero. 대시보드 "거래 시작" 후 매 1분 round-trip 발생을
+  # 운영 진단 카드 + 거래 이력 카드에서 즉시 확인 가능.
+  #
+  # **운영 사용 금지** — 알파 0, 매 분 거래 비용만 누적.
+  # 검증 완료 후 SMOKE_TEST_ENABLED env 제거 또는 두 entry 재주석.
+  - id: smoke-1m-roundtrip-kis
+    class: backtest.strategies.smoke_1m_roundtrip.Smoke1mRoundtrip
+    kwargs:
+      symbol: "005930"
+      size_fraction: 0.01
+  - id: smoke-1m-roundtrip-binance
+    class: backtest.strategies.smoke_1m_roundtrip.Smoke1mRoundtrip
+    kwargs:
+      symbol: BTCUSDT
+      size_fraction: 0.01
+
   # ── Live Universe Scanner strategies (#227) ──────────────────────────────
   #
   # **DEFAULT: ALL DISABLED.** 활성화는 다음 두 조건 모두 충족해야 한다:
