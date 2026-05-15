@@ -1,9 +1,10 @@
 ---
 type: work-done
-id: 000236-dashboard-observability-smoke-dual
+id: 00_issue
+name: "#236 — 대시보드 실거래 가시화 + smoke-dual 통로 검증"
+status: done
 issue: 236
 branch: feat/000236-dashboard-observability-smoke-dual
-status: done
 owner: 성시우
 started: 2026-05-15
 finished: 2026-05-15
