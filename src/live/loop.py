@@ -219,14 +219,24 @@ def _select_feed(config: ShadowConfig) -> MarketDataFeed:
         # 로 루프가 조기 종료되는 문제 방지 (#177 smoke 결정성).
         return MockReplayFeed(config.mock_ticks or [], gap_sec=0.02)
     if mode == "kis-ws":
-        # #231 S3 — KIS realtime WS feed. Single connection (≥40 종목 KIS 제한)
-        # — KOSPI200 200종목 운영은 후속 sub-commit (5-batch rotation 또는 multi-conn).
-        from src.live.feed_kis_ws import KISWebSocketMarketFeed
+        # #231 S3 — KIS realtime WS feed. Auto-select single vs multi connection
+        # based on symbol count (KIS WS single conn 40 종목 한도).
+        from src.live.feed_kis_ws import (
+            KISWebSocketMarketFeed, MultiConnectionKISWebSocketFeed,
+        )
         if config.kis_client is None:
             raise ValueError(
                 "feed_mode=kis-ws requires ShadowConfig.kis_client (auth source)"
             )
         # KISClient._auth / _app_key 추출 — private 이지만 같은 프로젝트 내 사용 안전.
+        # KIS WS single connection 한도 (40 종목/conn) — 초과 시 multi-conn.
+        if len(config.symbols) > MultiConnectionKISWebSocketFeed.BATCH_SIZE:
+            # >40 종목 → KOSPI200 200종 등 production 운영: multi-connection 분산.
+            return MultiConnectionKISWebSocketFeed(
+                config.symbols,
+                auth=config.kis_client._auth,
+                app_key=config.kis_client._app_key,
+            )
         return KISWebSocketMarketFeed(
             config.symbols,
             auth=config.kis_client._auth,

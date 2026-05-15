@@ -3,7 +3,10 @@ from __future__ import annotations
 
 import pytest
 
-from src.live.feed_kis_ws import KISWebSocketMarketFeed
+from src.live.feed_kis_ws import (
+    KISWebSocketMarketFeed,
+    MultiConnectionKISWebSocketFeed,
+)
 from src.live.loop import ShadowConfig, _select_feed
 
 
@@ -63,3 +66,57 @@ def test_auto_mode_unaffected_by_kis_ws_addition():
     )
     feed = _select_feed(config)
     assert isinstance(feed, KISMarketFeed)
+
+
+# ── #231 S3-part2: multi-connection for >40 symbols ─────────────────────────
+
+
+def test_kis_ws_40_symbols_uses_single_connection():
+    """Exactly 40 symbols → single KISWebSocketMarketFeed (no multi-conn)."""
+    config = ShadowConfig(
+        symbols=[f"{i:06d}" for i in range(40)],
+        feed_mode="kis-ws",
+        kis_client=_StubKISClient(),
+    )
+    feed = _select_feed(config)
+    assert isinstance(feed, KISWebSocketMarketFeed)
+    assert not isinstance(feed, MultiConnectionKISWebSocketFeed)
+
+
+def test_kis_ws_200_symbols_uses_multi_connection():
+    """200 symbols → MultiConnectionKISWebSocketFeed with 5 connections."""
+    config = ShadowConfig(
+        symbols=[f"{i:06d}" for i in range(200)],
+        feed_mode="kis-ws",
+        kis_client=_StubKISClient(),
+    )
+    feed = _select_feed(config)
+    assert isinstance(feed, MultiConnectionKISWebSocketFeed)
+    assert feed.n_connections == 5
+
+
+def test_kis_ws_41_symbols_uses_multi_connection():
+    """Boundary: 41 symbols → 2-connection split (40 + 1)."""
+    config = ShadowConfig(
+        symbols=[f"{i:06d}" for i in range(41)],
+        feed_mode="kis-ws",
+        kis_client=_StubKISClient(),
+    )
+    feed = _select_feed(config)
+    assert isinstance(feed, MultiConnectionKISWebSocketFeed)
+    assert feed.n_connections == 2
+
+
+def test_multi_conn_shares_auth_and_app_key():
+    """All sub-connections reuse the same KISAuth + app_key (single token)."""
+    config = ShadowConfig(
+        symbols=[f"{i:06d}" for i in range(80)],
+        feed_mode="kis-ws",
+        kis_client=_StubKISClient(),
+    )
+    feed = _select_feed(config)
+    assert isinstance(feed, MultiConnectionKISWebSocketFeed)
+    auths = {id(f._auth) for f in feed.feeds}
+    app_keys = {f._app_key for f in feed.feeds}
+    assert len(auths) == 1
+    assert len(app_keys) == 1
