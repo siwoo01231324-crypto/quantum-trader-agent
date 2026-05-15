@@ -65,10 +65,14 @@ class LivePositionRiskManager:
         position_store: StrategyPositionStore,
         pnl_aggregator: PnLAggregator,
         wal_observer: Callable[[WALEvent], None] | None = None,
+        on_exit: Callable[[str, str], None] | None = None,
     ) -> None:
         self._position_store = position_store
         self._pnl = pnl_aggregator
         self._wal_observer = wal_observer
+        # #238 — 청산 시 (strategy_id, symbol) 콜백. orchestrator.release_live_position
+        # 에 연결되어 live-scanner 재진입을 허용 (미연결 시 1회 진입 fail-safe 유지).
+        self._on_exit = on_exit
         self._policies: dict[str, StopTpPolicy] = {}
         # high-water mark for trailing stop, keyed by (strategy_id, symbol)
         self._high_water: dict[tuple[str, str], Decimal] = {}
@@ -252,3 +256,12 @@ class LivePositionRiskManager:
                 "live_position_risk.wal_observer_error sid=%s sym=%s trigger=%s error=%s",
                 strategy_id, symbol, trigger, err,
             )
+        # #238 — 청산 완료 → orchestrator 진입 기록 해제 (재진입 허용).
+        if self._on_exit is not None:
+            try:
+                self._on_exit(strategy_id, symbol)
+            except Exception as err:
+                logger.warning(
+                    "live_position_risk.on_exit_error sid=%s sym=%s error=%s",
+                    strategy_id, symbol, err,
+                )

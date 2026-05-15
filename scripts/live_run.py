@@ -751,6 +751,8 @@ async def _run_pipeline_attached(
         setattr(state, "orchestrator", orch)
         if risk_mgr is None:
             return
+        # #238 — 청산 시 orchestrator 진입 기록 해제 → live-scanner 재진입 허용.
+        risk_mgr._on_exit = orch.release_live_position
         registered = 0
         for sid, strategy in orch.strategies.items():
             if not getattr(strategy, "is_live_scanner", False):
@@ -1027,6 +1029,8 @@ async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
         setattr(dashboard_state, "orchestrator", orch)
         if risk_mgr is None:
             return
+        # #238 — 청산 시 orchestrator 진입 기록 해제 → live-scanner 재진입 허용.
+        risk_mgr._on_exit = orch.release_live_position
         registered = 0
         for sid, strategy in orch.strategies.items():
             if not getattr(strategy, "is_live_scanner", False):

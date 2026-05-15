@@ -55,6 +55,11 @@ class AsyncStrategyOrchestrator:
         self._quarantined: set[str] = set()
         self._disabled: set[str] = set()
         self._fail_count: dict[str, int] = {}
+        # #238 — live-scanner 포지션 중복 진입 차단. ATR breakout 등 조건이
+        # 지속되는 동안 매 tick(초당 수 건) 재매수하던 폭주 버그 fix. (sid,
+        # symbol) 진입 시 기록, LivePositionRiskManager 가 청산하면
+        # release_live_position() 으로 해제 → 재진입 허용.
+        self._live_entered: set[tuple[str, str]] = set()
         self._report_lock = asyncio.Lock()
         self._refresh_task: asyncio.Task | None = None
         self._bar_count = 0
@@ -70,6 +75,12 @@ class AsyncStrategyOrchestrator:
     def register_strategy_returns(self, strategy_id: str, series: pd.Series) -> None:
         self._sync.register_strategy_returns(strategy_id, series)
         self._recent_returns[strategy_id] = series
+
+    def release_live_position(self, strategy_id: str, symbol: str) -> None:
+        """#238 — LivePositionRiskManager 가 stop/TP 청산 시 호출. (sid, symbol)
+        진입 기록을 해제해 다음 조건 충족 시 재진입 허용. 미호출 시 해당
+        strategy-symbol 은 프로세스 수명 동안 1회만 진입 (안전 측 fail-safe)."""
+        self._live_entered.discard((strategy_id, symbol))
 
     def refresh_portfolio_risk(self, ts=None) -> Optional[PortfolioRiskReport]:
         return self._sync.refresh_portfolio_risk(ts)
@@ -351,6 +362,22 @@ class AsyncStrategyOrchestrator:
                     reason="action_hold", ts=ts,
                 )
                 continue
+
+            # #238 — live-scanner 포지션 중복 진입 차단. 조건(ATR breakout 등)이
+            # 지속되면 매 tick buy 신호가 나오는데, 이미 (sid, symbol) 포지션을
+            # 보유 중이면 추가 매수하지 않는다 (1 position per strategy-symbol).
+            # 청산은 LivePositionRiskManager 가 stop/TP 로 수행 →
+            # release_live_position() 호출 시 재진입 가능.
+            is_live = getattr(self._strategies.get(sid), "is_live_scanner", False)
+            if is_live and signal.action == "buy":
+                key = (sid, order_symbol)
+                if key in self._live_entered:
+                    self._emit_strategy_evaluated(
+                        sid, symbol=order_symbol, decision="hold",
+                        reason="live_position_open", ts=ts,
+                    )
+                    continue
+                self._live_entered.add(key)
 
             # buy/sell — emit before order routing so the event captures
             # strategy intent regardless of downstream risk-gate decision.
