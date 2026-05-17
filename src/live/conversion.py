@@ -70,4 +70,7 @@ def intent_to_order_request(
         order_type=order_type,
         price=None,
         tif=TimeInForce.GTC,
+        # #238 Item 7 — carry the long-only-exit guard to the broker so a
+        # "sell with no long" is no-opped, not turned into a naked short.
+        reduce_only=intent.reduce_only,
     )

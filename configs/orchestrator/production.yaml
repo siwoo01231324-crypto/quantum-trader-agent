@@ -9,6 +9,15 @@
 # via ShadowConfig.policy. See docs/specs/risk-rule-dsl.md and §7-2 of the
 # whitepaper for the boilerplate Phase 1-2 policy.
 #
+# #238 Item 3b — orchestrator-level duplicate-order backstop. Item 1 throttles
+# momo at the strategy layer (900s); this is the defense-in-depth net for ANY
+# non-live-scanner strategy (momo-kis-v1, future single-ticker) flooding an
+# identical (sid, symbol, side) every WS tick. 60s: kills a tick-flood while
+# never suppressing legitimate ≥15m signals. live-scanner is excluded (its
+# own _live_entered lifecycle governs re-entry). Absent → 0.0 = disabled.
+orchestrator:
+  min_order_interval_sec: 60
+
 # 5 baseline strategies + 메타라벨러 (#85) opt-in entry (commented).
 strategies:
   # ── Crypto sleeve (Binance USDT-M Futures, 15m bars) ─────────────────────
@@ -17,6 +26,20 @@ strategies:
     kwargs:
       symbol: BTCUSDT      # cross-asset gate (#177); strategy holds on non-BTC bars
       sizing_mode: full
+      # #238 — Binance aggTrade WS drives on_bar at dozens/sec. momo is a 15m
+      # strategy; without this it re-emits an identical SELL every tick while
+      # bearish divergence persists → -2019 Margin-insufficient order flood.
+      # 900s = at most one signal per intended 15m bar. Default (0.0) is OFF
+      # so backtests/Sharpe gate stay bit-identical; live opts in here.
+      min_signal_interval_sec: 900
+      # #238 — momo is single-ticker (NOT a LiveScannerMixin) so it had NO
+      # auto stop/TP. Root incident: a naked -1 BTC short that ran with ZERO
+      # stop because LivePositionRiskManager was long-only AND momo declared
+      # no thresholds. scripts/live_run._register_exit_policies reads these
+      # and builds a StopTpPolicy (handles long AND short). on_bar/backtest
+      # never read them → 5y Sharpe gate stays bit-identical.
+      stop_loss_pct: 0.03
+      take_profit_pct: 0.06
 
   # ── Crypto sleeve (Binance USDT-M Futures, 4h bars, vol-filtered) ────────
   - id: momo-vol-filtered

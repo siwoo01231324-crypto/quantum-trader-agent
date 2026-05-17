@@ -124,7 +124,7 @@ def _pnl_view(state: "DashboardState") -> dict:
 
 def _gauge_html(name: str, value: float) -> str:
     pct = min(max(value * 100, 0), 100)
-    color = "#e74c3c" if pct >= 80 else "#f39c12" if pct >= 60 else "#2ecc71"
+    color = "#f6465d" if pct >= 80 else "#f0a500" if pct >= 60 else "#0ecb81"
     return f"""
     <div class="gauge-row">
       <span class="gauge-label">{html.escape(name)}</span>
@@ -141,7 +141,7 @@ def _timeline_row(ev: dict[str, Any]) -> str:
     detail = html.escape(str(ev.get("detail", "")))
     type_class = {"signal": "tl-signal", "metalabel": "tl-meta",
                   "order": "tl-order", "fill": "tl-fill"}.get(ev.get("type", ""), "")
-    return f'<tr><td>{ts}</td><td><span class="tl-badge {type_class}">{typ}</span></td><td>{detail}</td></tr>'
+    return f'<tr><td class="tl-ts">{ts}</td><td><span class="tl-badge {type_class}">{typ}</span></td><td class="tl-detail">{detail}</td></tr>'
 
 
 def _kill_row(name: str, active: bool) -> str:
@@ -182,244 +182,623 @@ def _render_dashboard(state: DashboardState, catalog_items: list[dict] | None = 
     ks_rows = "".join(_kill_row(k, v) for k, v in state.kill_switch_triggers.items())
     last_ts = html.escape(state.kill_switch_last_triggered or "없음")
     any_active = any(state.kill_switch_triggers.values())
-    ks_overall_cls = "ks-active" if any_active else "ks-normal"
+    ks_overall_cls = "ks-err" if any_active else "ks-ok"
     ks_overall_txt = "비상정지 발동 중" if any_active else "정상 운영"
 
     return f"""<!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>QTA Dashboard</title>
 <style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap');
+
+/* ── CSS 변수 (Binance Futures 팔레트) ── */
+:root{{
+  --bg:        #0b0e11;
+  --surface:   #161a1e;
+  --surface2:  #1e2329;
+  --border:    #2b3139;
+  --border2:   #363c45;
+  --text:      #eaecef;
+  --text2:     #848e9c;
+  --text3:     #5e6673;
+  --green:     #0ecb81;
+  --green-dim: #0a9060;
+  --red:       #f6465d;
+  --red-dim:   #b03040;
+  --yellow:    #f0a500;
+  --blue:      #1890ff;
+  --blue-dim:  #1565c0;
+  --mono:      'IBM Plex Mono', 'Consolas', 'Menlo', monospace;
+  --sans:      'IBM Plex Sans KR', 'Segoe UI', sans-serif;
+}}
+
 *{{box-sizing:border-box;margin:0;padding:0}}
-body{{font-family:'Segoe UI',sans-serif;background:#0f1117;color:#e0e0e0;padding:12px}}
-h1{{font-size:1.1rem;color:#7ecef4;margin-bottom:10px}}
-.grid{{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:auto auto;gap:10px}}
-.card{{background:#1a1d27;border:1px solid #2a2d3a;border-radius:8px;padding:14px}}
-.card h2{{font-size:.85rem;color:#aaa;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px}}
-.pnl-row{{display:flex;gap:20px;flex-wrap:wrap}}
-.pnl-item{{background:#0f1117;border-radius:6px;padding:8px 12px;min-width:120px}}
-.pnl-label{{font-size:.7rem;color:#888}}
-.pnl-value{{font-size:1.2rem;font-weight:700;color:#2ecc71}}
-.gauge-row{{display:flex;align-items:center;gap:8px;margin-bottom:6px}}
-.gauge-label{{width:110px;font-size:.75rem;color:#bbb;flex-shrink:0}}
-.gauge-bar-bg{{flex:1;height:14px;background:#2a2d3a;border-radius:7px;overflow:hidden}}
-.gauge-bar{{height:100%;border-radius:7px;transition:width .3s}}
-.gauge-pct{{width:40px;font-size:.75rem;text-align:right;color:#ddd}}
-table{{width:100%;border-collapse:collapse;font-size:.78rem}}
-th,td{{padding:5px 8px;text-align:left;border-bottom:1px solid #2a2d3a}}
-th{{color:#888;font-weight:600}}
-.tl-badge{{border-radius:3px;padding:1px 5px;font-size:.7rem;font-weight:700}}
-.tl-signal{{background:#1a3a5c;color:#7ecef4}}
-.tl-meta{{background:#2a1a5c;color:#b07ef4}}
-.tl-order{{background:#2a3a1a;color:#7ef47e}}
-.tl-fill{{background:#3a2a1a;color:#f4b07e}}
-.ks-active{{color:#e74c3c;font-weight:700}}
-.ks-normal{{color:#2ecc71}}
-.ks-overall{{font-size:1rem;font-weight:700;margin-bottom:8px}}
-.btn{{border:none;border-radius:4px;padding:6px 14px;cursor:pointer;font-size:.8rem;margin:3px}}
-.btn-trigger{{background:#c0392b;color:#fff}}
-.btn-reset{{background:#27ae60;color:#fff}}
-.btn-trigger:hover{{background:#e74c3c}}
-.btn-reset:hover{{background:#2ecc71}}
-.ks-controls{{margin-top:10px;display:flex;gap:6px;flex-wrap:wrap}}
-.last-ts{{font-size:.72rem;color:#888;margin-top:6px}}
-.run-status{{font-size:1rem;font-weight:700;margin-bottom:8px;color:#bbb}}
-.acct-table td{{padding:4px 8px;font-size:.78rem}}
-.acct-table td:first-child{{color:#888;width:90px}}
-.acct-table td:last-child{{color:#e0e0e0;font-family:'Consolas','Menlo',monospace}}
-.nav{{margin-bottom:10px}}
-.nav-link{{display:inline-block;background:#1a3a5c;color:#7ecef4;padding:6px 14px;border-radius:5px;text-decoration:none;font-size:.85rem;font-weight:600}}
-.nav-link:hover{{background:#2a4a6c;color:#fff}}
-.catalog-section{{margin-top:14px}}
-.catalog-section > h2{{font-size:.85rem;color:#aaa;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px}}
-.trades-table{{width:100%;border-collapse:collapse;font-size:.78rem}}
-.trades-table th,.trades-table td{{padding:6px 8px;text-align:left;border-bottom:1px solid #2a2d3a;font-family:'Consolas','Menlo',monospace}}
-.trades-table th{{color:#888;font-weight:600;font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;font-family:'Segoe UI',sans-serif}}
-.side-buy{{color:#2ecc71;font-weight:700}}
-.side-sell{{color:#e74c3c;font-weight:700}}
-.state-filled{{color:#2ecc71}}
-.state-pending{{color:#f39c12}}
+html{{scroll-behavior:smooth}}
+body{{
+  font-family:var(--sans);
+  background:var(--bg);
+  color:var(--text);
+  font-size:13px;
+  line-height:1.5;
+  padding:0;
+  min-height:100vh;
+}}
+
+/* ── 상단 헤더 바 ── */
+.topbar{{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  background:var(--surface);
+  border-bottom:1px solid var(--border);
+  padding:0 20px;
+  height:52px;
+  position:sticky;
+  top:0;
+  z-index:100;
+}}
+.topbar-brand{{
+  font-family:var(--mono);
+  font-weight:600;
+  font-size:15px;
+  color:var(--green);
+  letter-spacing:.02em;
+}}
+.topbar-ts{{
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--text3);
+}}
+.topbar-nav{{display:flex;gap:6px;align-items:center}}
+.nav-pill{{
+  display:inline-block;
+  background:var(--surface2);
+  border:1px solid var(--border);
+  color:var(--text2);
+  padding:4px 12px;
+  border-radius:4px;
+  text-decoration:none;
+  font-size:11px;
+  font-weight:500;
+  letter-spacing:.02em;
+  transition:border-color .15s,color .15s;
+}}
+.nav-pill:hover{{border-color:var(--blue);color:var(--blue)}}
+
+/* ── 메인 레이아웃 ── */
+.page{{padding:16px 20px;display:flex;flex-direction:column;gap:16px}}
+
+/* ── 섹션 헤더 ── */
+.section-hdr{{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-bottom:10px;
+}}
+.section-hdr h2{{
+  font-family:var(--sans);
+  font-size:11px;
+  font-weight:600;
+  color:var(--text2);
+  text-transform:uppercase;
+  letter-spacing:.1em;
+}}
+.section-hdr-line{{flex:1;height:1px;background:var(--border)}}
+
+/* ── 카드 ── */
+.card{{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:6px;
+  padding:16px;
+}}
+.card-sm{{padding:12px 16px}}
+
+/* ── 그리드 레이아웃 ── */
+.grid-3{{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}}
+.grid-2{{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}}
+.grid-4{{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}}
+@media(max-width:960px){{
+  .grid-3,.grid-4{{grid-template-columns:1fr 1fr}}
+  .grid-2{{grid-template-columns:1fr}}
+}}
+@media(max-width:600px){{
+  .grid-3,.grid-4,.grid-2{{grid-template-columns:1fr}}
+}}
+
+/* ── PnL 숫자 카드 ── */
+.pnl-card{{
+  background:var(--surface2);
+  border:1px solid var(--border);
+  border-radius:6px;
+  padding:14px 16px;
+}}
+.pnl-label{{
+  font-size:10px;
+  font-weight:600;
+  color:var(--text3);
+  text-transform:uppercase;
+  letter-spacing:.08em;
+  margin-bottom:6px;
+}}
+.pnl-value{{
+  font-family:var(--mono);
+  font-size:22px;
+  font-weight:600;
+  color:var(--green);
+  letter-spacing:-.01em;
+  font-variant-numeric:tabular-nums;
+}}
+.pnl-value.neg{{color:var(--red)}}
+.pnl-value.zero{{color:var(--text2)}}
+
+/* ── 계좌 요약 카드 (Binance-style 강조) ── */
+.acct-hero{{
+  display:grid;
+  grid-template-columns:1fr 1fr 1fr;
+  gap:0;
+  border:1px solid var(--border);
+  border-radius:6px;
+  overflow:hidden;
+}}
+.acct-hero-cell{{
+  padding:14px 18px;
+  border-right:1px solid var(--border);
+  background:var(--surface2);
+}}
+.acct-hero-cell:last-child{{border-right:none}}
+.acct-hero-label{{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px}}
+.acct-hero-val{{font-family:var(--mono);font-size:18px;font-weight:600;color:var(--text);font-variant-numeric:tabular-nums}}
+.acct-hero-sub{{font-family:var(--mono);font-size:10px;color:var(--text3);margin-top:2px}}
+
+/* ── 포지션 테이블 (Binance-style) ── */
+.pos-table{{width:100%;border-collapse:collapse;font-size:12px}}
+.pos-table thead th{{
+  font-family:var(--sans);
+  font-size:10px;
+  font-weight:600;
+  color:var(--text3);
+  text-transform:uppercase;
+  letter-spacing:.06em;
+  padding:8px 10px;
+  text-align:right;
+  border-bottom:1px solid var(--border);
+  white-space:nowrap;
+  background:var(--surface);
+  position:sticky;
+  top:52px;
+}}
+.pos-table thead th:first-child{{text-align:left}}
+.pos-table tbody tr{{border-bottom:1px solid var(--border);transition:background .1s}}
+.pos-table tbody tr:last-child{{border-bottom:none}}
+.pos-table tbody tr:hover{{background:rgba(255,255,255,.025)}}
+.pos-table tbody tr:nth-child(even){{background:rgba(255,255,255,.012)}}
+.pos-table td{{
+  padding:9px 10px;
+  font-family:var(--mono);
+  font-size:12px;
+  text-align:right;
+  font-variant-numeric:tabular-nums;
+  white-space:nowrap;
+  color:var(--text);
+}}
+.pos-table td:first-child{{text-align:left;font-family:var(--sans);font-weight:600}}
+.pos-table td.null-val{{color:var(--text3)}}
+
+/* ── 전략 포지션 테이블 ── */
+.stratpos-sym{{font-family:var(--mono);font-weight:600;font-size:13px;color:var(--text)}}
+.stratpos-id{{font-size:10px;color:var(--text3);margin-top:1px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+.side-badge{{
+  display:inline-block;
+  font-family:var(--mono);
+  font-size:10px;
+  font-weight:600;
+  padding:2px 7px;
+  border-radius:3px;
+  letter-spacing:.04em;
+}}
+.side-long{{background:rgba(14,203,129,.12);color:var(--green);border:1px solid rgba(14,203,129,.25)}}
+.side-short{{background:rgba(246,70,93,.12);color:var(--red);border:1px solid rgba(246,70,93,.25)}}
+.side-flat{{background:var(--surface2);color:var(--text3);border:1px solid var(--border)}}
+.col-green{{color:var(--green)}}
+.col-red{{color:var(--red)}}
+.col-dim{{color:var(--text3)}}
+
+/* ── 게이지 ── */
+.gauge-row{{display:flex;align-items:center;gap:8px;margin-bottom:7px}}
+.gauge-label{{width:100px;font-size:11px;color:var(--text2);flex-shrink:0;font-family:var(--mono)}}
+.gauge-bar-bg{{flex:1;height:4px;background:var(--border);border-radius:2px;overflow:hidden}}
+.gauge-bar{{height:100%;border-radius:2px;transition:width .4s cubic-bezier(.4,0,.2,1)}}
+.gauge-pct{{width:38px;font-size:11px;text-align:right;color:var(--text2);font-family:var(--mono);font-variant-numeric:tabular-nums}}
+
+/* ── 킬스위치 ── */
+.ks-active{{color:var(--red);font-weight:700}}
+.ks-normal{{color:var(--green)}}
+.ks-overall{{font-size:13px;font-weight:700;margin-bottom:10px;padding:8px 12px;border-radius:4px;display:inline-block}}
+.ks-overall.ks-ok{{background:rgba(14,203,129,.08);color:var(--green);border:1px solid rgba(14,203,129,.2)}}
+.ks-overall.ks-err{{background:rgba(246,70,93,.1);color:var(--red);border:1px solid rgba(246,70,93,.25);animation:ks-pulse 1.2s infinite}}
+@keyframes ks-pulse{{0%,100%{{opacity:1}}50%{{opacity:.6}}}}
+
+/* ── 버튼 ── */
+.btn{{
+  border:1px solid var(--border2);
+  border-radius:4px;
+  padding:6px 16px;
+  cursor:pointer;
+  font-size:12px;
+  font-weight:600;
+  font-family:var(--sans);
+  transition:all .15s;
+}}
+.btn-danger{{background:rgba(246,70,93,.1);color:var(--red);border-color:rgba(246,70,93,.3)}}
+.btn-danger:hover{{background:var(--red);color:#fff}}
+.btn-success{{background:rgba(14,203,129,.1);color:var(--green);border-color:rgba(14,203,129,.3)}}
+.btn-success:hover{{background:var(--green);color:#000}}
+.btn-neutral{{background:var(--surface2);color:var(--text2);border-color:var(--border2)}}
+.btn-neutral:hover{{color:var(--text);border-color:var(--text2)}}
+.ks-controls{{margin-top:12px;display:flex;gap:8px;flex-wrap:wrap}}
+
+/* ── 상태 텍스트 ── */
+.status-chip{{
+  display:inline-flex;align-items:center;gap:5px;
+  font-size:11px;font-weight:600;
+  padding:3px 9px;border-radius:3px;
+  font-family:var(--mono);
+}}
+.status-ok{{background:rgba(14,203,129,.1);color:var(--green)}}
+.status-err{{background:rgba(246,70,93,.1);color:var(--red)}}
+.status-warn{{background:rgba(240,165,0,.1);color:var(--yellow)}}
+.status-idle{{background:var(--surface2);color:var(--text3)}}
+.dot{{width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0}}
+
+/* ── 운영 진단 stat 그리드 ── */
+.ops-grid{{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}}
+.ops-stat{{background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:8px 10px}}
+.ops-stat-label{{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px}}
+.ops-stat-val{{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--text);font-variant-numeric:tabular-nums}}
+
+/* ── 계좌 KV 테이블 ── */
+.kv-table{{width:100%;border-collapse:collapse;margin-top:10px}}
+.kv-table td{{padding:5px 0;border-bottom:1px solid var(--border);font-size:12px}}
+.kv-table tr:last-child td{{border-bottom:none}}
+.kv-table td:first-child{{color:var(--text3);width:110px}}
+.kv-table td:last-child{{font-family:var(--mono);color:var(--text);text-align:right;font-variant-numeric:tabular-nums}}
+
+/* ── 타임라인 ── */
+.tl-wrap{{max-height:340px;overflow-y:auto;border:1px solid var(--border);border-radius:4px}}
+.tl-table{{width:100%;border-collapse:collapse;font-size:11px}}
+.tl-table th{{
+  font-size:10px;font-weight:600;color:var(--text3);
+  text-transform:uppercase;letter-spacing:.06em;
+  padding:6px 10px;border-bottom:1px solid var(--border);
+  background:var(--surface);
+  position:sticky;top:0;
+  text-align:left;
+}}
+.tl-table td{{
+  padding:5px 10px;
+  border-bottom:1px solid var(--border);
+  vertical-align:top;
+}}
+.tl-table tbody tr:last-child td{{border-bottom:none}}
+.tl-table tbody tr:hover{{background:rgba(255,255,255,.02)}}
+.tl-ts{{font-family:var(--mono);font-size:10px;color:var(--text3);white-space:nowrap}}
+.tl-detail{{font-family:var(--mono);font-size:10px;color:var(--text2);word-break:break-all;max-width:400px}}
+.tl-badge{{
+  display:inline-block;border-radius:3px;
+  padding:1px 6px;font-size:10px;font-weight:600;
+  font-family:var(--mono);letter-spacing:.02em;white-space:nowrap;
+}}
+.tl-signal{{background:rgba(24,144,255,.12);color:#4da6ff;border:1px solid rgba(24,144,255,.2)}}
+.tl-meta{{background:rgba(153,102,255,.12);color:#b07ef4;border:1px solid rgba(153,102,255,.2)}}
+.tl-order{{background:rgba(240,165,0,.12);color:var(--yellow);border:1px solid rgba(240,165,0,.2)}}
+.tl-fill{{background:rgba(14,203,129,.12);color:var(--green);border:1px solid rgba(14,203,129,.2)}}
+.tl-group{{background:rgba(91,95,100,.1);color:var(--text3);border:1px solid var(--border);cursor:pointer}}
+.tl-group:hover{{background:rgba(91,95,100,.2)}}
+
+/* ── 거래 이력 테이블 ── */
+.trades-wrap{{max-height:320px;overflow-y:auto;border:1px solid var(--border);border-radius:4px}}
+.trades-table{{width:100%;border-collapse:collapse;font-size:11px}}
+.trades-table th{{
+  font-size:10px;font-weight:600;color:var(--text3);
+  text-transform:uppercase;letter-spacing:.06em;
+  padding:7px 10px;border-bottom:1px solid var(--border);
+  background:var(--surface);
+  position:sticky;top:0;text-align:left;
+}}
+.trades-table th.num{{text-align:right}}
+.trades-table td{{
+  padding:6px 10px;border-bottom:1px solid var(--border);
+  vertical-align:middle;
+}}
+.trades-table tbody tr:last-child td{{border-bottom:none}}
+.trades-table tbody tr:hover{{background:rgba(255,255,255,.025)}}
+.trades-table tbody tr:nth-child(even){{background:rgba(255,255,255,.012)}}
+.td-mono{{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}}
+.td-sym{{font-family:var(--mono);font-weight:600;font-size:12px}}
+.td-dim{{color:var(--text3);font-size:10px}}
+.side-buy{{color:var(--green);font-weight:700}}
+.side-sell{{color:var(--red);font-weight:700}}
+.state-filled{{color:var(--green);font-size:10px}}
+.state-pending{{color:var(--yellow);font-size:10px}}
+
+/* ── run-status ── */
+.run-status{{font-size:13px;font-weight:700;margin-bottom:8px;color:var(--text2)}}
+.last-ts{{font-size:10px;color:var(--text3);margin-top:6px;font-family:var(--mono)}}
+
+/* ── 전략 카탈로그 섹션 ── */
+.catalog-section{{}}
 {_STRATEGY_CARD_CSS}
 </style>
 </head>
 <body>
-<h1>QTA 로컬 대시보드 — {datetime.now(_KST).strftime('%Y-%m-%d %H:%M:%S KST')}</h1>
-<div class="nav">
-  <a href="/strategies" class="nav-link">📋 전략 카탈로그 →</a>
-  <a href="/shadow_runs" class="nav-link">📊 Shadow Runs (#198) →</a>
-</div>
-<div class="grid">
 
-  <!-- Q1: 손익 그래프 -->
-  <div class="card">
-    <h2>손익 (PnL)</h2>
-    <div class="pnl-row">
-      <div class="pnl-item">
+<!-- 상단 헤더 바 -->
+<div class="topbar">
+  <span class="topbar-brand">QTA TERMINAL</span>
+  <div class="topbar-nav">
+    <a href="/strategies" class="nav-pill">전략 카탈로그</a>
+    <a href="/shadow_runs" class="nav-pill">Shadow Runs</a>
+  </div>
+  <span class="topbar-ts">{datetime.now(_KST).strftime('%Y-%m-%d %H:%M:%S KST')}</span>
+</div>
+
+<div class="page">
+
+  <!-- ── 섹션 1: PnL 요약 ── -->
+  <div>
+    <div class="section-hdr"><h2>손익 (PnL)</h2><div class="section-hdr-line"></div></div>
+    <div class="grid-3">
+      <div class="pnl-card">
         <div class="pnl-label">실시간</div>
-        <div class="pnl-value">{pnl_realtime_fmt}</div>
+        <div class="pnl-value" id="pnl-realtime">{pnl_realtime_fmt}</div>
       </div>
-      <div class="pnl-item">
+      <div class="pnl-card">
         <div class="pnl-label">일간</div>
-        <div class="pnl-value">{pnl_daily_fmt}</div>
+        <div class="pnl-value" id="pnl-daily">{pnl_daily_fmt}</div>
       </div>
-      <div class="pnl-item">
+      <div class="pnl-card">
         <div class="pnl-label">월간</div>
-        <div class="pnl-value">{pnl_monthly_fmt}</div>
+        <div class="pnl-value" id="pnl-monthly">{pnl_monthly_fmt}</div>
       </div>
     </div>
   </div>
 
-  <!-- Q2: 한도 사용률 게이지 -->
-  <div class="card">
-    <h2>한도 사용률 (6종)</h2>
-    {gauges_html}
-  </div>
+  <!-- ── 섹션 2: Binance 계좌 + KIS 계좌 나란히 ── -->
+  <div>
+    <div class="section-hdr"><h2>계좌 / 실제 포지션</h2><div class="section-hdr-line"></div></div>
+    <div class="grid-2">
 
-  <!-- Q3: 타임라인 -->
-  <div class="card">
-    <h2>신호 → 메타라벨러 → 주문 → 체결 타임라인</h2>
-    <table>
-      <thead><tr><th>시각</th><th>유형</th><th>상세</th></tr></thead>
-      <tbody id="timeline">{rows_html}</tbody>
-    </table>
-  </div>
+      <!-- Binance Futures 계좌 카드 (강조) -->
+      <div class="card card-sm" id="account-card-binance">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <span style="font-size:12px;font-weight:600;color:var(--text)">Binance Futures <span style="font-size:10px;color:var(--text3);font-weight:400">USDS-M</span></span>
+          <span id="bnb-status" class="status-chip status-idle"><span class="dot"></span>조회 중</span>
+        </div>
+        <!-- 지갑/가용/uPnL 히어로 셀 -->
+        <div class="acct-hero">
+          <div class="acct-hero-cell">
+            <div class="acct-hero-label">지갑 잔고</div>
+            <div class="acct-hero-val" id="bnb-wallet">—</div>
+            <div class="acct-hero-sub">USDT</div>
+          </div>
+          <div class="acct-hero-cell">
+            <div class="acct-hero-label">가용 증거금</div>
+            <div class="acct-hero-val" id="bnb-avail">—</div>
+            <div class="acct-hero-sub">USDT</div>
+          </div>
+          <div class="acct-hero-cell">
+            <div class="acct-hero-label">미실현 손익</div>
+            <div class="acct-hero-val" id="bnb-upnl">—</div>
+            <div class="acct-hero-sub" id="bnb-pos-n">포지션 —</div>
+          </div>
+        </div>
+        <!-- 열린 포지션 테이블 -->
+        <div style="margin-top:12px;max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:4px" id="bnb-pos-wrap">
+          <table class="pos-table">
+            <thead>
+              <tr>
+                <th>심볼 / 방향</th>
+                <th>수량</th>
+                <th>진입가</th>
+                <th>미실현 PnL</th>
+              </tr>
+            </thead>
+            <tbody id="bnb-pos-rows">
+              <tr><td colspan="4" style="text-align:center;color:var(--text3);padding:14px;font-family:var(--sans);font-size:11px">포지션 없음</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="last-ts" id="bnb-detail">API Key: <span id="bnb-key">—</span> &nbsp;|&nbsp; <span id="bnb-mode">—</span></div>
+      </div>
 
-  <!-- Q4: 비상정지 -->
-  <div class="card">
-    <h2>비상정지 상태</h2>
-    <div class="ks-overall {ks_overall_cls}">{ks_overall_txt}</div>
-    <table>
-      <thead><tr><th>트리거</th><th>상태</th></tr></thead>
-      <tbody>{ks_rows}</tbody>
-    </table>
-    <div class="last-ts">마지막 발동: {last_ts}</div>
-    <div class="ks-controls">
-      <button class="btn btn-trigger" onclick="triggerKS('manual')">수동 발동 (trigger)</button>
-      <button class="btn btn-reset" onclick="resetKS('manual')">수동 해제 (reset)</button>
+      <!-- KIS 계좌 카드 -->
+      <div class="card card-sm" id="account-card-kis">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <span style="font-size:12px;font-weight:600;color:var(--text)">KIS <span style="font-size:10px;color:var(--text3);font-weight:400">paper · KRX</span></span>
+          <span id="kis-status" class="status-chip status-idle"><span class="dot"></span>조회 중</span>
+        </div>
+        <table class="kv-table">
+          <tbody>
+            <tr><td>계좌번호</td><td id="kis-cano">—</td></tr>
+            <tr><td>현금 (KRW)</td><td id="kis-cash">—</td></tr>
+            <tr><td>평가금액</td><td id="kis-eval">—</td></tr>
+            <tr><td>보유 종목</td><td id="kis-positions">—</td></tr>
+          </tbody>
+        </table>
+        <div class="last-ts" id="kis-detail">.env 의 HANTOO_FAKE_* 인증.</div>
+
+        <!-- 거래 시작/정지 — KIS 카드 아래 -->
+        <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px">
+          <div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">거래 제어</div>
+          <div id="run-status" class="run-status" style="font-size:12px">상태 조회 중…</div>
+          <div class="ks-controls" style="margin-top:8px">
+            <button id="btn-run-start" class="btn btn-success" onclick="runStart()">거래 시작</button>
+            <button id="btn-run-stop" class="btn btn-danger" onclick="runStop()">거래 정지</button>
+          </div>
+          <div class="last-ts" id="run-detail">production.yaml 의 등록 전략으로 시작합니다.</div>
+        </div>
+      </div>
+
     </div>
   </div>
 
-  <!-- Q5: 거래 시작/정지 (#182 단계 2) -->
-  <div class="card" id="run-control-card">
-    <h2>거래 시작/정지</h2>
-    <div id="run-status" class="run-status">상태 조회 중…</div>
-    <div class="ks-controls">
-      <button id="btn-run-start" class="btn btn-reset" onclick="runStart()">거래 시작</button>
-      <button id="btn-run-stop" class="btn btn-trigger" onclick="runStop()">거래 정지</button>
+  <!-- ── 섹션 3: 전략별 포지션 ── -->
+  <div>
+    <div class="section-hdr"><h2>전략별 포지션</h2><div class="section-hdr-line"></div></div>
+    <div class="card" style="padding:0">
+      <div class="trades-wrap">
+        <table class="pos-table">
+          <thead>
+            <tr>
+              <th style="text-align:left;padding-left:16px">전략 / 종목</th>
+              <th>방향</th>
+              <th>매수 건/수량</th>
+              <th>매도 건/수량</th>
+              <th>순포지션</th>
+              <th>평단가</th>
+              <th>실현손익</th>
+              <th style="padding-right:16px">최근 체결</th>
+            </tr>
+          </thead>
+          <tbody id="stratpos-tbody">
+            <tr><td colspan="8" style="text-align:center;color:var(--text3);padding:20px;font-family:var(--sans);font-size:11px">조회 중…</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
-    <div class="last-ts" id="run-detail">production.yaml 의 등록 전략으로 시작합니다.</div>
   </div>
 
-  <!-- Q6: KIS 계좌 (#182) -->
-  <div class="card" id="account-card-kis">
-    <h2>KIS 계좌 (paper, KRX)</h2>
-    <div id="kis-status" class="run-status">조회 중…</div>
-    <table class="acct-table">
-      <tbody>
-        <tr><td>계좌</td><td id="kis-cano">-</td></tr>
-        <tr><td>현금 (KRW)</td><td id="kis-cash">-</td></tr>
-        <tr><td>평가금액</td><td id="kis-eval">-</td></tr>
-        <tr><td>보유 종목</td><td id="kis-positions">-</td></tr>
-      </tbody>
-    </table>
-    <div class="last-ts" id="kis-detail">.env 의 HANTOO_FAKE_* 인증.</div>
+  <!-- ── 섹션 4: 타임라인 + 한도/킬스위치 2열 ── -->
+  <div class="grid-2" style="align-items:start">
+
+    <!-- 타임라인 -->
+    <div>
+      <div class="section-hdr"><h2>매매 타임라인</h2><div class="section-hdr-line"></div></div>
+      <div class="card" style="padding:0">
+        <div class="tl-wrap">
+          <table class="tl-table">
+            <thead><tr><th>시각</th><th>유형</th><th>상세</th></tr></thead>
+            <tbody id="timeline">{rows_html}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- 한도 + 킬스위치 + 운영진단 수직 적층 -->
+    <div style="display:flex;flex-direction:column;gap:12px">
+
+      <!-- 한도 사용률 -->
+      <div>
+        <div class="section-hdr"><h2>한도 사용률</h2><div class="section-hdr-line"></div></div>
+        <div class="card card-sm">
+          {gauges_html}
+        </div>
+      </div>
+
+      <!-- 비상정지 -->
+      <div>
+        <div class="section-hdr"><h2>비상정지</h2><div class="section-hdr-line"></div></div>
+        <div class="card card-sm">
+          <div class="ks-overall {ks_overall_cls}">{ks_overall_txt}</div>
+          <table class="kv-table">
+            <tbody>{ks_rows}</tbody>
+          </table>
+          <div class="last-ts">마지막 발동: {last_ts}</div>
+          <div class="ks-controls">
+            <button class="btn btn-danger" onclick="triggerKS('manual')">수동 발동</button>
+            <button class="btn btn-success" onclick="resetKS('manual')">수동 해제</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 운영 진단 -->
+      <div>
+        <div class="section-hdr"><h2>운영 진단 (Ops)</h2><div class="section-hdr-line"></div></div>
+        <div class="card card-sm" id="ops-card">
+          <div id="ops-summary" class="status-chip status-idle" style="margin-bottom:10px"><span class="dot"></span>조회 중</div>
+          <div class="ops-grid">
+            <div class="ops-stat"><div class="ops-stat-label">Bars 수신</div><div class="ops-stat-val" id="ops-bars">—</div></div>
+            <div class="ops-stat"><div class="ops-stat-label">전략 평가</div><div class="ops-stat-val" id="ops-evals">—</div></div>
+            <div class="ops-stat"><div class="ops-stat-label">시그널 발생</div><div class="ops-stat-val" id="ops-signals">—</div></div>
+            <div class="ops-stat"><div class="ops-stat-label">주문 제출</div><div class="ops-stat-val" id="ops-orders">—</div></div>
+            <div class="ops-stat"><div class="ops-stat-label">체결</div><div class="ops-stat-val" id="ops-fills">—</div></div>
+            <div class="ops-stat"><div class="ops-stat-label">오류</div><div class="ops-stat-val" id="ops-errors">—</div></div>
+          </div>
+          <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
+            <span class="last-ts">buy/sell/hold/exc: <span id="ops-decisions" style="color:var(--text2)">—</span></span>
+          </div>
+          <div class="last-ts" style="margin-top:4px">마지막 bar: <span id="ops-last-bar" style="color:var(--text2)">—</span></div>
+          <div class="last-ts">마지막 fill: <span id="ops-last-fill" style="color:var(--text2)">—</span></div>
+        </div>
+      </div>
+
+    </div>
   </div>
 
-  <!-- Q8: 운영 진단 (강제 가시화 — 거래 시작 후 무슨 일이 일어났나) -->
-  <div class="card" id="ops-card">
-    <h2>운영 진단 (Ops)</h2>
-    <div id="ops-summary" class="run-status">조회 중…</div>
-    <table class="acct-table">
-      <tbody>
-        <tr><td>bars 수신</td><td id="ops-bars">-</td></tr>
-        <tr><td>strategy_evaluated</td><td id="ops-evals">-</td></tr>
-        <tr><td>  └ buy/sell/hold/exc</td><td id="ops-decisions">-</td></tr>
-        <tr><td>signal_emitted</td><td id="ops-signals">-</td></tr>
-        <tr><td>order_submitted</td><td id="ops-orders">-</td></tr>
-        <tr><td>order_filled</td><td id="ops-fills">-</td></tr>
-        <tr><td>errors</td><td id="ops-errors">-</td></tr>
-        <tr><td>마지막 fill</td><td id="ops-last-fill">-</td></tr>
-        <tr><td>마지막 bar 시각</td><td id="ops-last-bar">-</td></tr>
-      </tbody>
-    </table>
-    <div class="last-ts" id="ops-detail">거래 시작 후 카운터가 0 이상이면 정상.</div>
+  <!-- ── 섹션 5: 거래 이력 ── -->
+  <div>
+    <div class="section-hdr"><h2>매수/매도 이력 (최근 50건)</h2><div class="section-hdr-line"></div></div>
+    <div class="card" style="padding:0">
+      <div class="trades-wrap">
+        <table class="trades-table">
+          <thead>
+            <tr>
+              <th>시각</th>
+              <th>전략</th>
+              <th>종목</th>
+              <th>방향</th>
+              <th class="num">수량</th>
+              <th class="num">가격</th>
+              <th>상태</th>
+              <th>브로커</th>
+            </tr>
+          </thead>
+          <tbody id="trades-tbody">
+            <tr><td colspan="8" style="text-align:center;color:var(--text3);padding:20px;font-family:var(--sans);font-size:11px">조회 중…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
 
-  <!-- Q7: Binance Futures 계좌 (#182) -->
-  <div class="card" id="account-card-binance">
-    <h2>Binance Futures (USDS-M)</h2>
-    <div id="bnb-status" class="run-status">조회 중…</div>
-    <table class="acct-table">
-      <tbody>
-        <tr><td>API Key</td><td id="bnb-key">-</td></tr>
-        <tr><td>모드</td><td id="bnb-mode">-</td></tr>
-        <tr><td>지갑 (USDT)</td><td id="bnb-wallet">-</td></tr>
-        <tr><td>가용 (USDT)</td><td id="bnb-avail">-</td></tr>
-        <tr><td>미실현손익</td><td id="bnb-upnl">-</td></tr>
-        <tr><td>열린 포지션</td><td id="bnb-pos-n">-</td></tr>
-      </tbody>
-    </table>
-    <table class="acct-table" style="margin-top:6px">
-      <tbody id="bnb-pos-rows"></tbody>
-    </table>
-    <div class="last-ts" id="bnb-detail">.env 의 BINANCE_API_KEY/SECRET 인증.</div>
+  <!-- ── 섹션 6: 전략 카탈로그 ── -->
+  <div class="catalog-section">
+    <div class="section-hdr"><h2>전략 카탈로그</h2><div class="section-hdr-line"></div></div>
+    <div class="strat-grid">{catalog_cards_html}</div>
   </div>
 
-</div>
-
-<div class="catalog-section">
-  <h2>전략별 포지션 (어떤 전략이 매수/매도했나)</h2>
-  <div class="card">
-    <table class="trades-table">
-      <thead>
-        <tr>
-          <th>전략</th>
-          <th>종목</th>
-          <th>매수 (건/수량)</th>
-          <th>매도 (건/수량)</th>
-          <th>순포지션</th>
-          <th>평단가</th>
-          <th>실현손익</th>
-          <th>최근</th>
-        </tr>
-      </thead>
-      <tbody id="stratpos-tbody">
-        <tr><td colspan="8" style="text-align:center;color:#888;padding:18px">조회 중…</td></tr>
-      </tbody>
-    </table>
-  </div>
-</div>
-
-<div class="catalog-section">
-  <h2>매수/매도 이력 (최근 50건)</h2>
-  <div class="card">
-    <table class="trades-table">
-      <thead>
-        <tr>
-          <th>시각</th>
-          <th>전략</th>
-          <th>종목</th>
-          <th>방향</th>
-          <th>수량</th>
-          <th>가격</th>
-          <th>상태</th>
-          <th>브로커</th>
-        </tr>
-      </thead>
-      <tbody id="trades-tbody">
-        <tr><td colspan="8" style="text-align:center;color:#888;padding:18px">조회 중…</td></tr>
-      </tbody>
-    </table>
-  </div>
-</div>
-
-<div class="catalog-section">
-  <h2>전략 카탈로그</h2>
-  <div class="strat-grid">{catalog_cards_html}</div>
-</div>
+</div><!-- /page -->
 
 <script>
+// ── 유틸 ──────────────────────────────────────────────────────────
+function escHtml(s) {{
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}})[c]);
+}}
+function fmtNum(n, dec) {{
+  if (n == null || n === '') return '—';
+  const v = Number(n);
+  if (isNaN(v)) return String(n);
+  if (dec != null) return v.toFixed(dec).replace(/\\B(?=(\\d{{3}})+(?!\\d))/g, ',');
+  return v.toLocaleString('ko-KR');
+}}
+function fmtPnl(v, suffix) {{
+  if (v == null) return '<span style="color:var(--text3)">—</span>';
+  const n = Number(v);
+  const cls = n > 0 ? 'col-green' : n < 0 ? 'col-red' : 'col-dim';
+  const sign = n > 0 ? '+' : '';
+  return `<span class="${{cls}}">${{sign}}${{fmtNum(n,2)}}${{suffix||''}}</span>`;
+}}
+function colorEl(el, v) {{
+  if (el == null) return;
+  const n = Number(v);
+  el.style.color = n > 0 ? 'var(--green)' : n < 0 ? 'var(--red)' : 'var(--text2)';
+}}
+
+// ── 킬스위치 ──────────────────────────────────────────────────────
 async function triggerKS(reason){{
   await fetch('/api/kill-switch/trigger',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{reason}})}});
   location.reload();
@@ -429,31 +808,72 @@ async function resetKS(reason){{
   location.reload();
 }}
 
-// /ws/timeline live + replay (#181). 메타 새로고침과 충돌하지만 5초 사이 incremental update 가능.
+// ── 타임라인 WS + 이벤트 그룹화 ─────────────────────────────────
 const TYPE_CLASS = {{
-  signal_emitted: 'tl-signal',
+  signal_emitted:       'tl-signal',
   metalabeler_decision: 'tl-meta',
-  order_placed: 'tl-order',
-  fill_received: 'tl-fill',
+  order_placed:         'tl-order',
+  order_submitted:      'tl-order',
+  fill_received:        'tl-fill',
+  order_filled:         'tl-fill',
 }};
-const TIMELINE_MAX_ROWS = 100;
-function tlEscape(s){{
-  return String(s).replace(/[&<>"']/g, c => ({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}})[c]);
-}}
-function tlAppend(ev){{
-  const tbody = document.getElementById('timeline');
-  if(!tbody) return;
-  if(ev.phase === 'live_ready') return;
-  const cls = TYPE_CLASS[ev.event_type] || '';
-  const detail = ev.payload ? tlEscape(JSON.stringify(ev.payload)) : '';
-  const row = document.createElement('tr');
-  row.innerHTML = `<td>${{tlEscape(ev.ts || '')}}</td><td><span class="tl-badge ${{cls}}">${{tlEscape(ev.event_type || '')}}</span></td><td>${{detail}}</td>`;
-  tbody.insertBefore(row, tbody.firstChild);
-  while(tbody.rows.length > TIMELINE_MAX_ROWS){{
-    tbody.deleteRow(tbody.rows.length - 1);
+const TIMELINE_MAX_ROWS = 120;
+let _tlBuffer = [];  // {{event_type, ts, payload, count}}
+
+function tlFlushBuffer(tbody) {{
+  // 같은 event_type 이 연속으로 반복되면 "×N" 그룹 행으로 접기
+  const grouped = [];
+  for (const ev of _tlBuffer) {{
+    const last = grouped[grouped.length - 1];
+    if (last && last.event_type === ev.event_type) {{
+      last.count = (last.count || 1) + 1;
+      last.ts_last = ev.ts;
+    }} else {{
+      grouped.push({{...ev, count: 1}});
+    }}
   }}
+  _tlBuffer = [];
+  for (const ev of grouped) {{
+    _tlInsertRow(tbody, ev);
+  }}
+  // DOM cap
+  while (tbody.rows.length > TIMELINE_MAX_ROWS) tbody.deleteRow(tbody.rows.length - 1);
 }}
-function tlConnect(){{
+
+function _tlInsertRow(tbody, ev) {{
+  const cls = TYPE_CLASS[ev.event_type] || '';
+  let labelHtml;
+  if (ev.count > 1) {{
+    labelHtml = `<span class="tl-badge tl-group" title="연속 ${{ev.count}}건 — 클릭해서 펼치기" onclick="tlExpand(this,${{escHtml(JSON.stringify(ev))}})">`
+      + `${{escHtml(ev.event_type)}} <b>×${{ev.count}}</b></span>`;
+  }} else {{
+    labelHtml = `<span class="tl-badge ${{cls}}">${{escHtml(ev.event_type || '')}}</span>`;
+  }}
+  const detail = ev.payload ? escHtml(JSON.stringify(ev.payload)).slice(0, 200) : '';
+  const tsStr = ev.count > 1
+    ? escHtml((ev.ts||'').slice(0,19).replace('T',' ')) + ' … ' + escHtml((ev.ts_last||'').slice(11,19))
+    : escHtml((ev.ts||'').slice(0,19).replace('T',' '));
+  const row = document.createElement('tr');
+  row.innerHTML = `<td class="tl-ts">${{tsStr}}</td><td>${{labelHtml}}</td><td class="tl-detail">${{detail}}</td>`;
+  tbody.insertBefore(row, tbody.firstChild);
+}}
+
+function tlExpand(el, evJson) {{
+  // no-op placeholder: groups are read-only in this version
+  const ev = typeof evJson === 'string' ? JSON.parse(evJson) : evJson;
+  window.alert(`event_type: ${{ev.event_type}}\\ncount: ${{ev.count}}\\nfirst: ${{ev.ts}}\\nlast: ${{ev.ts_last||ev.ts}}`);
+}}
+
+let _tlFlushTimer = null;
+function tlAppend(ev) {{
+  const tbody = document.getElementById('timeline');
+  if (!tbody) return;
+  if (ev.phase === 'live_ready') return;
+  _tlBuffer.push(ev);
+  clearTimeout(_tlFlushTimer);
+  _tlFlushTimer = setTimeout(() => tlFlushBuffer(tbody), 80);
+}}
+function tlConnect() {{
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   const ws = new WebSocket(`${{proto}}//${{location.host}}/ws/timeline?replay=${{TIMELINE_MAX_ROWS}}`);
   ws.onmessage = (e) => {{
@@ -464,48 +884,49 @@ function tlConnect(){{
 }}
 if (typeof WebSocket !== 'undefined') {{ tlConnect(); }}
 
-// 거래 시작/정지 컨트롤 (#182 단계 2)
-async function runStart(){{
+// ── 거래 시작/정지 ──────────────────────────────────────────────
+async function runStart() {{
   document.getElementById('run-status').textContent = '시작 중…';
   const r = await fetch('/api/run/start', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body:JSON.stringify({{}})}});
   const d = await r.json();
   runRefresh();
-  if(!d.ok) alert('시작 실패: '+(d.reason || JSON.stringify(d)));
+  if (!d.ok) alert('시작 실패: ' + (d.reason || JSON.stringify(d)));
 }}
-async function runStop(){{
+async function runStop() {{
   document.getElementById('run-status').textContent = '정지 중…';
   const r = await fetch('/api/run/stop', {{method:'POST'}});
   await r.json();
   runRefresh();
 }}
-async function runRefresh(){{
+async function runRefresh() {{
   try {{
     const r = await fetch('/api/run/status');
     const d = await r.json();
     const el = document.getElementById('run-status');
     const det = document.getElementById('run-detail');
-    if(!d.available){{
+    if (!d.available) {{
       el.textContent = '컨트롤러 미주입 (cmd 모드)';
-      det.textContent = '거래 시작 시 cmd 에서 실행하세요: qta.exe --symbols 005930 --broker kis-paper-shadow';
+      if (det) det.textContent = 'qta.exe --symbols 005930 --broker kis-paper-shadow';
       return;
     }}
     const status = d.status || '?';
     el.textContent = '상태: ' + status;
-    el.style.color = status === 'running' ? '#2ecc71' : status === 'error' ? '#e74c3c' : '#bbb';
-    if(d.last_error) det.textContent = 'Error: ' + d.last_error;
-    else if(d.started_at) det.textContent = '시작: ' + d.started_at + (d.stopped_at ? ' · 종료: ' + d.stopped_at : '');
+    el.style.color = status === 'running' ? 'var(--green)' : status === 'error' ? 'var(--red)' : 'var(--text2)';
+    if (det) {{
+      if (d.last_error) det.textContent = 'Error: ' + d.last_error;
+      else if (d.started_at) det.textContent = '시작: ' + d.started_at + (d.stopped_at ? ' · 종료: ' + d.stopped_at : '');
+    }}
   }} catch(err) {{ console.warn('run-status', err); }}
 }}
 runRefresh();
 setInterval(runRefresh, 3000);
 
-// 내 계좌 (#182) — KIS + Binance 동시 폴링
-function fmtNum(n) {{ return (n||0).toLocaleString('ko-KR'); }}
-function setOk(elId, ok, txtOk, txtBad) {{
+// ── 계좌 폴링 (30s + in-flight guard) ──────────────────────────
+function setStatusChip(elId, ok, okTxt, failTxt) {{
   const el = document.getElementById(elId);
   if (!el) return;
-  el.textContent = ok ? txtOk : txtBad;
-  el.style.color = ok ? '#2ecc71' : '#e74c3c';
+  el.className = 'status-chip ' + (ok ? 'status-ok' : 'status-err');
+  el.innerHTML = `<span class="dot"></span>${{ok ? okTxt : failTxt}}`;
 }}
 async function acctRefresh() {{
   try {{
@@ -514,42 +935,59 @@ async function acctRefresh() {{
     if (!d.available) return;
     // KIS
     const k = d.kis || {{}};
-    setOk('kis-status', !!k.ok, '✓ 연결됨 (paper)', '✗ ' + (k.error || '실패'));
-    document.getElementById('kis-cano').textContent = k.cano_masked || '-';
-    document.getElementById('kis-cash').textContent = k.ok ? fmtNum(k.cash_balance) + ' 원' : '-';
-    document.getElementById('kis-eval').textContent = k.ok ? fmtNum(k.eval_amount) + ' 원' : '-';
-    document.getElementById('kis-positions').textContent = k.ok ? (k.n_positions || 0) + ' 종목' : '-';
+    setStatusChip('kis-status', !!k.ok, '연결됨 (paper)', k.error || '실패');
+    const set = (id, v) => {{ const e = document.getElementById(id); if (e) e.textContent = v; }};
+    set('kis-cano', k.cano_masked || '—');
+    set('kis-cash', k.ok ? fmtNum(k.cash_balance) + ' 원' : '—');
+    set('kis-eval', k.ok ? fmtNum(k.eval_amount) + ' 원' : '—');
+    set('kis-positions', k.ok ? (k.n_positions || 0) + ' 종목' : '—');
     // Binance
     const b = d.binance || {{}};
-    setOk('bnb-status', !!b.ok, '✓ 연결됨', '✗ ' + (b.error || '실패'));
-    document.getElementById('bnb-key').textContent = b.api_key_masked || '-';
-    document.getElementById('bnb-mode').textContent = b.ok ? (b.testnet ? 'testnet' : 'live') + ' · ' + (b.base_url_short||'') : '-';
-    document.getElementById('bnb-wallet').textContent = b.ok ? fmtNum(b.wallet_balance_usdt) + ' USDT' : '-';
-    document.getElementById('bnb-avail').textContent = b.ok ? fmtNum(b.available_usdt) + ' USDT' : '-';
-    // #238 — 실제 broker 포지션 + 미실현손익
+    setStatusChip('bnb-status', !!b.ok, '연결됨', b.error || '실패');
+    set('bnb-key', b.api_key_masked || '—');
+    set('bnb-mode', b.ok ? (b.testnet ? 'Testnet' : 'Live') + ' · ' + (b.base_url_short || '') : '—');
+    // 지갑
+    const walEl = document.getElementById('bnb-wallet');
+    if (walEl) {{ walEl.textContent = b.ok ? fmtNum(b.wallet_balance_usdt, 2) : '—'; }}
+    const avEl = document.getElementById('bnb-avail');
+    if (avEl) {{ avEl.textContent = b.ok ? fmtNum(b.available_usdt, 2) : '—'; }}
+    // uPnL
     const upnlEl = document.getElementById('bnb-upnl');
     if (upnlEl) {{
       const u = b.total_unrealized_pnl;
-      upnlEl.textContent = (b.ok && u != null) ? (u >= 0 ? '+' : '') + fmtNum(u) + ' USDT' : '-';
-      upnlEl.style.color = (u == null) ? '' : (u >= 0 ? '#2ecc71' : '#e74c3c');
+      if (b.ok && u != null) {{
+        const sign = u >= 0 ? '+' : '';
+        upnlEl.textContent = sign + fmtNum(u, 2);
+        colorEl(upnlEl, u);
+      }} else {{
+        upnlEl.textContent = '—';
+        upnlEl.style.color = 'var(--text2)';
+      }}
     }}
-    const posNEl = document.getElementById('bnb-pos-n');
-    if (posNEl) posNEl.textContent = b.ok ? (b.n_positions || 0) + ' 개' : '-';
+    set('bnb-pos-n', b.ok ? (b.n_positions || 0) + ' 개 포지션' : '포지션 —');
+    // 포지션 테이블
     const posRows = document.getElementById('bnb-pos-rows');
     if (posRows) {{
       const ps = (b.ok && b.positions) ? b.positions : [];
-      posRows.innerHTML = ps.map(p => {{
-        const sideCls = p.side === 'LONG' ? 'side-buy' : 'side-sell';
-        const pnlCls = p.unrealized_pnl >= 0 ? 'side-buy' : 'side-sell';
-        return `<tr><td class="${{sideCls}}">${{escHtml(p.symbol)}} ${{escHtml(p.side)}}</td>`
-          + `<td>${{escHtml(p.amt)}} @ ${{fmtNum(p.entry_price)}} `
-          + `<span class="${{pnlCls}}">(${{p.unrealized_pnl>=0?'+':''}}${{fmtNum(p.unrealized_pnl)}})</span></td></tr>`;
-      }}).join('');
+      if (ps.length === 0) {{
+        posRows.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text3);padding:14px;font-family:var(--sans);font-size:11px">열린 포지션 없음</td></tr>';
+      }} else {{
+        posRows.innerHTML = ps.map(p => {{
+          const isLong = p.side === 'LONG';
+          const sideCls = isLong ? 'side-long' : 'side-short';
+          const sideTxt = isLong ? 'LONG' : 'SHORT';
+          const pnlHtml = fmtPnl(p.unrealized_pnl, ' USDT');
+          return `<tr>
+            <td><span class="stratpos-sym">${{escHtml(p.symbol)}}</span><br><span class="side-badge ${{sideCls}}">${{sideTxt}}</span></td>
+            <td style="text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums">${{escHtml(p.amt)}}</td>
+            <td style="text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums">${{fmtNum(p.entry_price,2)}}</td>
+            <td style="text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums">${{pnlHtml}}</td>
+          </tr>`;
+        }}).join('');
+      }}
     }}
   }} catch (err) {{ console.warn('account', err); }}
 }}
-// 30s 간격 + in-flight 가드 — KIS 모의 초당 한도 보호 (5s 폴링이 retry chain 과
-// 누적해 EGW00201 폭주시키던 #238 hotfix).
 let _acctInflight = false;
 async function acctRefreshGuarded() {{
   if (_acctInflight) return;
@@ -560,13 +998,13 @@ async function acctRefreshGuarded() {{
 acctRefreshGuarded();
 setInterval(acctRefreshGuarded, 30000);
 
-// 운영 진단 카드 — bars/evals/orders/fills 카운터 폴링
+// ── 운영 진단 ──────────────────────────────────────────────────
 async function opsRefresh() {{
   try {{
     const r = await fetch('/api/ops');
     const d = await r.json();
     if (!d.available) return;
-    const set = (id, v) => {{ const el = document.getElementById(id); if (el) el.textContent = v; }};
+    const set = (id, v) => {{ const e = document.getElementById(id); if (e) e.textContent = v; }};
     set('ops-bars',    fmtNum(d.bars_seen));
     set('ops-evals',   fmtNum(d.strategy_evaluated));
     const dec = d.decisions || {{}};
@@ -575,23 +1013,29 @@ async function opsRefresh() {{
     set('ops-orders',  fmtNum(d.order_submitted));
     set('ops-fills',   fmtNum(d.order_filled));
     set('ops-errors',  fmtNum(d.errors));
-    set('ops-last-fill', d.last_fill_detail || '-');
-    set('ops-last-bar',  d.last_bar_ts ? d.last_bar_ts.slice(0,19).replace('T',' ') : '-');
+    set('ops-last-fill', d.last_fill_detail || '—');
+    set('ops-last-bar',  d.last_bar_ts ? d.last_bar_ts.slice(0,19).replace('T',' ') : '—');
     const summaryEl = document.getElementById('ops-summary');
     if (summaryEl) {{
       const trading = (d.order_filled||0) > 0 || (d.order_submitted||0) > 0;
-      summaryEl.textContent = trading ? '✓ 거래 발생 중' : ((d.strategy_evaluated||0) > 0 ? '⏳ 시그널 대기' : '대기 중 (시세 미수신)');
-      summaryEl.style.color = trading ? '#2ecc71' : '#bbb';
+      const scanning = (d.strategy_evaluated||0) > 0;
+      if (trading) {{
+        summaryEl.className = 'status-chip status-ok';
+        summaryEl.innerHTML = '<span class="dot"></span>거래 발생 중';
+      }} else if (scanning) {{
+        summaryEl.className = 'status-chip status-warn';
+        summaryEl.innerHTML = '<span class="dot"></span>시그널 대기';
+      }} else {{
+        summaryEl.className = 'status-chip status-idle';
+        summaryEl.innerHTML = '<span class="dot"></span>대기 중 (시세 미수신)';
+      }}
     }}
   }} catch (err) {{ console.warn('ops', err); }}
 }}
 opsRefresh();
 setInterval(opsRefresh, 3000);
 
-// 거래 이력 — WAL order_filled/order_submitted 폴링 (5s)
-function escHtml(s) {{
-  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}})[c]);
-}}
+// ── 거래 이력 ──────────────────────────────────────────────────
 async function tradesRefresh() {{
   try {{
     const r = await fetch('/api/trades?limit=50');
@@ -600,7 +1044,7 @@ async function tradesRefresh() {{
     if (!tb) return;
     const trades = d.trades || [];
     if (trades.length === 0) {{
-      tb.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#888;padding:18px">거래 이력 없음 (거래 시작 후 첫 체결을 기다리는 중)</td></tr>';
+      tb.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:20px;font-size:11px">거래 이력 없음 — 거래 시작 후 첫 체결을 기다리는 중</td></tr>';
       return;
     }}
     tb.innerHTML = trades.map(t => {{
@@ -608,15 +1052,17 @@ async function tradesRefresh() {{
       const stateCls = t.filled ? 'state-filled' : 'state-pending';
       const stateTxt = t.filled ? '체결' : '제출';
       const ts = (t.ts || '').slice(0,19).replace('T',' ');
+      const qtyStr = t.qty != null ? fmtNum(t.qty, 6).replace(/\\.?0+$/, '') : '—';
+      const pxStr  = t.price != null ? fmtNum(t.price, 2) : '—';
       return `<tr>
-        <td>${{escHtml(ts)}}</td>
-        <td>${{escHtml(t.strategy_id)}}</td>
-        <td>${{escHtml(t.symbol)}}</td>
-        <td class="${{sideCls}}">${{escHtml((t.side || '').toUpperCase())}}</td>
-        <td>${{escHtml(t.qty)}}</td>
-        <td>${{escHtml(t.price)}}</td>
-        <td class="${{stateCls}}">${{stateTxt}}</td>
-        <td>${{escHtml(t.broker)}}</td>
+        <td class="tl-ts">${{escHtml(ts)}}</td>
+        <td class="td-dim">${{escHtml(t.strategy_id)}}</td>
+        <td class="td-sym">${{escHtml(t.symbol)}}</td>
+        <td><span class="${{sideCls}}">${{escHtml((t.side || '').toUpperCase())}}</span></td>
+        <td class="td-mono">${{qtyStr}}</td>
+        <td class="td-mono">${{pxStr}}</td>
+        <td><span class="${{stateCls}}">${{stateTxt}}</span></td>
+        <td class="td-dim">${{escHtml(t.broker)}}</td>
       </tr>`;
     }}).join('');
   }} catch (err) {{ console.warn('trades', err); }}
@@ -624,7 +1070,7 @@ async function tradesRefresh() {{
 tradesRefresh();
 setInterval(tradesRefresh, 5000);
 
-// 전략별 포지션 — WAL strategy_id 집계 (5s)
+// ── 전략별 포지션 ──────────────────────────────────────────────
 async function stratPosRefresh() {{
   try {{
     const r = await fetch('/api/strategy_positions');
@@ -633,26 +1079,33 @@ async function stratPosRefresh() {{
     if (!tb) return;
     const rows = d.strategies || [];
     if (rows.length === 0) {{
-      tb.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#888;padding:18px">아직 거래한 전략 없음</td></tr>';
+      tb.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:20px;font-size:11px">아직 거래한 전략 없음</td></tr>';
       return;
     }}
     tb.innerHTML = rows.map(s => {{
       const net = s.net_qty || 0;
-      const netCls = net > 0 ? 'side-buy' : net < 0 ? 'side-sell' : '';
-      const pnl = s.realized_pnl;
-      const pnlCls = pnl == null ? '' : (pnl >= 0 ? 'side-buy' : 'side-sell');
-      const pnlTxt = pnl == null ? '-' : (pnl >= 0 ? '+' : '') + Number(pnl).toLocaleString('ko-KR');
-      const avg = s.avg_price == null ? '-' : Number(s.avg_price).toLocaleString('ko-KR');
-      const ts = (s.last_ts || '').slice(0,19).replace('T',' ');
+      let sideBadge;
+      if (net > 0)       sideBadge = '<span class="side-badge side-long">LONG</span>';
+      else if (net < 0)  sideBadge = '<span class="side-badge side-short">SHORT</span>';
+      else               sideBadge = '<span class="side-badge side-flat">FLAT</span>';
+      const netStr = net !== 0 ? fmtNum(Math.abs(net), 6).replace(/\\.?0+$/, '') : '<span class="col-dim">0</span>';
+      const avg    = s.avg_price != null ? fmtNum(s.avg_price, 4) : '<span class="col-dim">—</span>';
+      const pnlHtml = fmtPnl(s.realized_pnl);
+      const ts = (s.last_ts || '').slice(0, 19).replace('T', ' ');
+      const buyQtyStr  = fmtNum(s.buy_qty,  6).replace(/\\.?0+$/, '');
+      const sellQtyStr = fmtNum(s.sell_qty, 6).replace(/\\.?0+$/, '');
       return `<tr>
-        <td>${{escHtml(s.strategy_id)}}</td>
-        <td>${{escHtml(s.symbol)}}</td>
-        <td class="side-buy">${{s.buy_n}} / ${{escHtml(s.buy_qty)}}</td>
-        <td class="side-sell">${{s.sell_n}} / ${{escHtml(s.sell_qty)}}</td>
-        <td class="${{netCls}}">${{escHtml(net)}}</td>
-        <td>${{avg}}</td>
-        <td class="${{pnlCls}}">${{pnlTxt}}</td>
-        <td>${{escHtml(ts)}}</td>
+        <td style="padding-left:16px">
+          <div class="stratpos-sym">${{escHtml(s.symbol || '—')}}</div>
+          <div class="stratpos-id" title="${{escHtml(s.strategy_id)}}">${{escHtml(s.strategy_id)}}</div>
+        </td>
+        <td style="text-align:center">${{sideBadge}}</td>
+        <td><span class="col-green">${{s.buy_n}}</span> <span class="col-dim">건</span> / <span style="font-family:var(--mono);font-variant-numeric:tabular-nums">${{buyQtyStr}}</span></td>
+        <td><span class="col-red">${{s.sell_n}}</span> <span class="col-dim">건</span> / <span style="font-family:var(--mono);font-variant-numeric:tabular-nums">${{sellQtyStr}}</span></td>
+        <td style="font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right">${{netStr}}</td>
+        <td style="font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right">${{avg}}</td>
+        <td style="text-align:right">${{pnlHtml}}</td>
+        <td style="font-family:var(--mono);font-size:10px;color:var(--text3);padding-right:16px;text-align:right">${{escHtml(ts)}}</td>
       </tr>`;
     }}).join('');
   }} catch (err) {{ console.warn('stratpos', err); }}
@@ -668,34 +1121,34 @@ setInterval(stratPosRefresh, 5000);
 
 # ---- Shared CSS/JS used by both / (main dashboard) and /strategies ---------
 
-_STRATEGY_CARD_CSS = """
-.strat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}
-.strat-card{background:#1a1d27;border:1px solid #2a2d3a;border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:10px}
-.strat-card-disabled{opacity:.55;border-color:#5a2a2a}
-.strat-head{display:flex;justify-content:space-between;align-items:baseline}
-.strat-name{color:#fff;font-weight:700;font-size:1rem;text-decoration:none}
-.strat-name:hover{color:#7ecef4}
-.strat-status{font-size:.7rem;background:#2a2d3a;border-radius:3px;padding:2px 6px;color:#bbb;text-transform:uppercase}
-.strat-prod{font-size:.65rem;border-radius:3px;padding:2px 5px;font-weight:700;letter-spacing:.04em}
-.prod-active{background:#1a3a1a;color:#7ef47e;border:1px solid #2a5a2a}
-.prod-commented{background:#3a2a1a;color:#f4b07e;border:1px solid #5a3a1a}
-.prod-absent{background:#2a2a2a;color:#888;border:1px dashed #444}
-.strat-meta{display:flex;gap:12px;flex-wrap:wrap;font-size:.75rem;color:#aaa}
-.strat-summary{font-size:.78rem;color:#cfd5e0;line-height:1.45;background:#0f1117;border-left:3px solid #7ecef4;padding:8px 10px;border-radius:4px;white-space:pre-line}
-.strat-metrics{display:grid;grid-template-columns:1fr 1fr;gap:6px}
-.strat-metrics > div{background:#0f1117;border-radius:5px;padding:6px 8px;display:flex;justify-content:space-between;font-size:.78rem}
-.m-label{color:#888}
-.m-val{color:#ddd;font-weight:600}
-.strat-toggle-row{display:flex;justify-content:space-between;align-items:center;border-top:1px solid #2a2d3a;padding-top:10px}
-.strat-state{font-size:.78rem;font-weight:700}
-.strat-on{color:#2ecc71}
-.strat-off{color:#e74c3c}
-.switch{position:relative;display:inline-block;width:46px;height:24px}
+_STRATEGY_CARD_CSS = r"""
+.strat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.strat-card{background:#161a1e;border:1px solid #2b3139;border-radius:6px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.strat-card-disabled{opacity:.5;border-color:#3a2020}
+.strat-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
+.strat-name{color:#eaecef;font-weight:700;font-size:.95rem;text-decoration:none;font-family:'IBM Plex Sans KR','Segoe UI',sans-serif}
+.strat-name:hover{color:#0ecb81}
+.strat-status{font-size:.65rem;background:#1e2329;border-radius:3px;padding:2px 6px;color:#848e9c;text-transform:uppercase;letter-spacing:.04em;font-family:'IBM Plex Mono',monospace}
+.strat-prod{font-size:.62rem;border-radius:3px;padding:2px 5px;font-weight:700;letter-spacing:.04em;font-family:'IBM Plex Mono',monospace}
+.prod-active{background:rgba(14,203,129,.1);color:#0ecb81;border:1px solid rgba(14,203,129,.25)}
+.prod-commented{background:rgba(240,165,0,.1);color:#f0a500;border:1px solid rgba(240,165,0,.25)}
+.prod-absent{background:#1e2329;color:#5e6673;border:1px dashed #2b3139}
+.strat-meta{display:flex;gap:10px;flex-wrap:wrap;font-size:.72rem;color:#848e9c;font-family:'IBM Plex Mono',monospace}
+.strat-summary{font-size:.75rem;color:#b7bdc8;line-height:1.5;background:#0b0e11;border-left:3px solid #1890ff;padding:8px 10px;border-radius:4px;white-space:pre-line}
+.strat-metrics{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.strat-metrics > div{background:#0b0e11;border:1px solid #2b3139;border-radius:4px;padding:6px 8px;display:flex;justify-content:space-between;font-size:.75rem}
+.m-label{color:#5e6673}
+.m-val{color:#eaecef;font-weight:600;font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums}
+.strat-toggle-row{display:flex;justify-content:space-between;align-items:center;border-top:1px solid #2b3139;padding-top:10px}
+.strat-state{font-size:.75rem;font-weight:700;font-family:'IBM Plex Mono',monospace}
+.strat-on{color:#0ecb81}
+.strat-off{color:#f6465d}
+.switch{position:relative;display:inline-block;width:44px;height:22px}
 .switch input{opacity:0;width:0;height:0}
-.slider{position:absolute;cursor:pointer;inset:0;background:#3a3f4d;border-radius:24px;transition:.2s}
-.slider:before{content:"";position:absolute;height:18px;width:18px;left:3px;bottom:3px;background:#e0e0e0;border-radius:50%;transition:.2s}
-input:checked + .slider{background:#2ecc71}
-input:checked + .slider:before{transform:translateX(22px)}
+.slider{position:absolute;cursor:pointer;inset:0;background:#2b3139;border-radius:22px;transition:.2s}
+.slider:before{content:"";position:absolute;height:16px;width:16px;left:3px;bottom:3px;background:#848e9c;border-radius:50%;transition:.2s}
+input:checked + .slider{background:#0ecb81}
+input:checked + .slider:before{transform:translateX(22px);background:#fff}
 """
 
 _STRATEGY_TOGGLE_JS = """

@@ -111,26 +111,34 @@ class LivePositionRiskManager:
         intents: list[OrderIntent] = []
         for strategy_id, policy in self._policies.items():
             held, avg_cost = self._lookup_position(strategy_id, symbol)
-            if held <= 0 or avg_cost <= 0:
+            if held == 0 or avg_cost <= 0:
                 # No position — clear any stale high-water tracking.
                 self._high_water.pop((strategy_id, symbol), None)
                 continue
 
-            # Trailing stop: track the highest price seen since entry.
+            is_short = held < 0
+
+            # Trailing-stop water mark. LONG tracks the HIGH-water (peak
+            # since entry); SHORT tracks the LOW-water (trough since entry).
             if policy.trailing_stop_pct is not None:
                 key = (strategy_id, symbol)
-                prev_high = self._high_water.get(key, avg_cost)
-                if last_price > prev_high:
-                    prev_high = last_price
-                self._high_water[key] = prev_high
+                prev_mark = self._high_water.get(key, avg_cost)
+                if is_short:
+                    if last_price < prev_mark:
+                        prev_mark = last_price
+                else:
+                    if last_price > prev_mark:
+                        prev_mark = last_price
+                self._high_water[key] = prev_mark
             else:
-                prev_high = avg_cost  # unused when trailing disabled
+                prev_mark = avg_cost  # unused when trailing disabled
 
             triggered_reason = self._check_thresholds(
                 policy=policy,
                 avg_cost=avg_cost,
                 last_price=last_price,
-                high_water=prev_high,
+                water_mark=prev_mark,
+                is_short=is_short,
             )
             if triggered_reason is None:
                 continue
@@ -140,11 +148,12 @@ class LivePositionRiskManager:
                 f"live_{triggered_reason}:"
                 f"entry={avg_cost},last={last_price},pct={pct_change:+.4f}"
             )
+            # LONG exit = SELL the held qty; SHORT exit = BUY (cover) abs(qty).
             intents.append(OrderIntent(
                 strategy_id=strategy_id,
                 symbol=symbol,
-                side="sell",
-                qty=float(held),
+                side="buy" if is_short else "sell",
+                qty=float(abs(held)),
                 reason=reason,
             ))
             self._emit_stop_event(
@@ -153,11 +162,11 @@ class LivePositionRiskManager:
                 trigger=triggered_reason,
                 avg_cost=avg_cost,
                 last_price=last_price,
-                qty=held,
+                qty=abs(held),
                 pct_change=pct_change,
                 ts=ts,
             )
-            # Reset high-water for the next entry into this (sid, symbol).
+            # Reset water mark for the next entry into this (sid, symbol).
             self._high_water.pop((strategy_id, symbol), None)
 
         return intents
@@ -173,15 +182,16 @@ class LivePositionRiskManager:
         strategy_id: str,
         symbol: str,
     ) -> tuple[Decimal, Decimal]:
-        """Return (held_qty, avg_cost) for *(strategy_id, symbol)*; (0, 0) if absent.
+        """Return (held_qty, avg_cost) for *(strategy_id, symbol)*; (0, 0) if flat.
 
-        Position store is the source of truth for qty (matches what the
-        broker has filled); PnL aggregator's ``_cost_basis`` carries the
+        ``held`` is SIGNED — positive for a long, negative for a short
+        (#238). Position store is the source of truth for qty (matches what
+        the broker has filled); PnL aggregator's ``_cost_basis`` carries the
         entry price. We cross-check qty consistency but trust the store.
         """
         bucket = self._position_store._positions.get(strategy_id, {})
         held = bucket.get(symbol, Decimal("0"))
-        if held <= 0:
+        if held == 0:
             return Decimal("0"), Decimal("0")
         cb_held, avg_cost = self._pnl._cost_basis.get(
             (strategy_id, symbol), (Decimal("0"), Decimal("0"))
@@ -200,23 +210,50 @@ class LivePositionRiskManager:
         policy: StopTpPolicy,
         avg_cost: Decimal,
         last_price: Decimal,
-        high_water: Decimal,
+        water_mark: Decimal,
+        is_short: bool = False,
     ) -> str | None:
         """Return the trigger name if any threshold breached, else None.
 
         Order matters: stop_loss first (worst case), then take_profit, then
         trailing_stop. Stop and TP are absolute distances from entry;
-        trailing is a distance from the running high since entry.
+        trailing is a distance from the running water mark since entry.
+
+        LONG (default): stop fires on price DOWN, take_profit on price UP,
+        trailing tracks the HIGH-water and fires on a drop from it.
+
+        SHORT (#238, ``is_short=True``): everything inverts — stop fires on
+        price UP ``stop_loss_pct`` above entry, take_profit on price DOWN
+        ``take_profit_pct`` below entry, trailing tracks the LOW-water and
+        fires on a rise ``trailing_stop_pct`` above it (only once price has
+        moved below entry, mirroring the long break-above gate).
         """
-        sl = avg_cost * (Decimal("1") - Decimal(str(policy.stop_loss_pct)))
+        sl_pct = Decimal(str(policy.stop_loss_pct))
+        tp_pct = Decimal(str(policy.take_profit_pct))
+        if is_short:
+            sl = avg_cost * (Decimal("1") + sl_pct)
+            if last_price >= sl:
+                return "stop_loss"
+            tp = avg_cost * (Decimal("1") - tp_pct)
+            if last_price <= tp:
+                return "take_profit"
+            if policy.trailing_stop_pct is not None:
+                trail = water_mark * (
+                    Decimal("1") + Decimal(str(policy.trailing_stop_pct))
+                )
+                if last_price >= trail and water_mark < avg_cost:
+                    return "trailing_stop"
+            return None
+
+        sl = avg_cost * (Decimal("1") - sl_pct)
         if last_price <= sl:
             return "stop_loss"
-        tp = avg_cost * (Decimal("1") + Decimal(str(policy.take_profit_pct)))
+        tp = avg_cost * (Decimal("1") + tp_pct)
         if last_price >= tp:
             return "take_profit"
         if policy.trailing_stop_pct is not None:
-            trail = high_water * (Decimal("1") - Decimal(str(policy.trailing_stop_pct)))
-            if last_price <= trail and high_water > avg_cost:
+            trail = water_mark * (Decimal("1") - Decimal(str(policy.trailing_stop_pct)))
+            if last_price <= trail and water_mark > avg_cost:
                 # Only fire trailing once price has moved above entry — avoids
                 # double-counting against the stop_loss check above.
                 return "trailing_stop"

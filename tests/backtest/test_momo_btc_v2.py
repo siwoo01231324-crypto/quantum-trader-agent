@@ -79,24 +79,15 @@ def test_buy_on_bullish_divergence():
 
 
 def test_sell_on_bearish_divergence():
-    """on_bar returns Signal(action='sell') when divergence is 'bearish'."""
+    """on_bar returns Signal(action='sell') when divergence is 'bearish'.
+
+    Uses the deterministic seed-scanning fixture so the core SELL path is
+    actually exercised (the old single-seed n=200 form was permanently
+    skipped — seed 42 has no bearish divergence).
+    """
     strategy = MomoBtcV2()
     strategy.on_init({})
-
-    n = 200
-    ohlcv = _make_ohlcv(n)
-    close = ohlcv["close"]
-    rsi = compute_rsi(close, strategy.RSI_PERIOD)
-    div = detect_divergence(close, rsi, strategy.LOOKBACK)
-
-    bearish_indices = [i for i in range(len(div)) if div.iloc[i] == "bearish"]
-    if not bearish_indices:
-        pytest.skip("No bearish divergence in synthetic data; increase n or change seed")
-
-    idx = bearish_indices[0]
-    history = ohlcv.iloc[: idx + 1]
-    bar = _make_bar(history["close"].iloc[-1])
-    context = {"factors": {"rsi": rsi.iloc[: idx + 1]}}
+    history, bar, context = _bearish_fixture()
     signal = strategy.on_bar(bar, history, context)
     assert signal.action == "sell", f"Expected 'sell', got '{signal.action}'"
     assert signal.size == 1.0
@@ -168,3 +159,146 @@ def test_strategy_with_engine_produces_results():
     assert isinstance(result.metrics, dict)
     # Equity should be positive throughout
     assert (result.equity_curve > 0).all(), "Equity went to zero or negative"
+
+
+# ---------------------------------------------------------------------------
+# #238 — live signal-flood throttle
+#
+# In live (Binance aggTrade WS) on_bar is driven by ticks at dozens/sec. While
+# bearish divergence persists, momo emits an identical SELL every tick → the
+# orchestrator submits each to Binance → -2019 Margin-insufficient flood.
+# Same defect class as the smoke fix (dffd2bc) and live-scanner fix (fbd28b0),
+# but momo (single-ticker legacy) was outside both. The throttle is a
+# wall-clock interval guard, DEFAULT-OFF so backtests stay bit-identical and
+# the 5y Sharpe production gate is preserved; live config opts in.
+# ---------------------------------------------------------------------------
+
+def _bearish_fixture(n: int = 400):
+    """Return (history, bar, context) positioned at the first bearish bar.
+
+    Deterministic: scans seeds in fixed order and returns the first that
+    produces a bearish divergence (avoids the single-seed fragility that
+    leaves test_sell_on_bearish_divergence permanently skipped).
+    """
+    for seed in range(200):
+        ohlcv = _make_ohlcv(n, seed=seed)
+        close = ohlcv["close"]
+        rsi = compute_rsi(close, MomoBtcV2.RSI_PERIOD)
+        div = detect_divergence(close, rsi, MomoBtcV2.LOOKBACK)
+        bearish = [i for i in range(len(div)) if div.iloc[i] == "bearish"]
+        if bearish:
+            idx = bearish[0]
+            history = ohlcv.iloc[: idx + 1]
+            bar = _make_bar(history["close"].iloc[-1])
+            context = {"factors": {"rsi": rsi.iloc[: idx + 1]}}
+            return history, bar, context
+    pytest.skip("No bearish divergence across 200 seeds; widen scan")
+
+
+def test_default_disabled_emits_every_tick_backtest_bit_identical():
+    """Default (min_signal_interval_sec=0.0) → NO throttle.
+
+    Backtest path must be untouched (5y Sharpe gate). Rapid identical bearish
+    ticks each still emit SELL exactly like before the throttle existed.
+    """
+    strategy = MomoBtcV2()  # default → throttle disabled
+    strategy.on_init({})
+    history, bar, context = _bearish_fixture()
+    sigs = [strategy.on_bar(bar, history, context) for _ in range(5)]
+    assert all(s.action == "sell" for s in sigs), [s.action for s in sigs]
+    assert all(s.reason == "bearish divergence" for s in sigs)
+
+
+def test_interval_throttles_rapid_bearish_ticks():
+    """With interval enabled, only the first bearish tick emits; rest hold."""
+    strategy = MomoBtcV2(min_signal_interval_sec=60.0)
+    strategy.on_init({})
+    history, bar, context = _bearish_fixture()
+    first = strategy.on_bar(bar, history, context)
+    second = strategy.on_bar(bar, history, context)
+    third = strategy.on_bar(bar, history, context)
+    assert first.action == "sell"
+    assert second.action == "hold"
+    assert second.reason == "momo_interval_throttle"
+    assert third.action == "hold"
+    assert third.reason == "momo_interval_throttle"
+
+
+def test_throttle_window_elapsed_allows_next_signal(monkeypatch):
+    """After the interval elapses, the next actionable tick emits again."""
+    import backtest.strategies.momo_btc_v2 as mod
+
+    fake = {"t": 1000.0}
+    monkeypatch.setattr(mod.time, "monotonic", lambda: fake["t"])
+    strategy = MomoBtcV2(min_signal_interval_sec=60.0)
+    strategy.on_init({})
+    history, bar, context = _bearish_fixture()
+    assert strategy.on_bar(bar, history, context).action == "sell"
+    fake["t"] += 30.0  # within window
+    assert strategy.on_bar(bar, history, context).action == "hold"
+    fake["t"] += 31.0  # now > 60s since first emit
+    again = strategy.on_bar(bar, history, context)
+    assert again.action == "sell", "signal must resume after interval elapses"
+
+
+def test_throttle_does_not_consume_on_hold():
+    """Warmup/no-signal holds must not start the throttle window."""
+    strategy = MomoBtcV2(min_signal_interval_sec=60.0)
+    strategy.on_init({})
+    # Warmup hold (insufficient bars) — unrelated to throttle.
+    warm = strategy.on_bar(_make_bar(100.0), _make_ohlcv(10), {})
+    assert warm.action == "hold"
+    assert warm.reason == "warmup"
+    # First real bearish tick must still emit (hold did not consume window).
+    history, bar, context = _bearish_fixture()
+    assert strategy.on_bar(bar, history, context).action == "sell"
+
+
+# ---------------------------------------------------------------------------
+# #238 — stop_loss_pct / take_profit_pct / trailing_stop_pct kwargs
+#
+# momo-btc-v2 is single-ticker (NOT a LiveScannerMixin) so it had no exit
+# thresholds — root incident: a naked -1 BTC short with ZERO auto-stop. The
+# new kwargs let scripts/live_run.py source a StopTpPolicy from the strategy
+# (production.yaml supplies the values). DEFAULT None → no behavior change;
+# the 5y backtest / Sharpe gate stays bit-identical (on_bar untouched).
+# ---------------------------------------------------------------------------
+
+def test_stop_tp_kwargs_default_none():
+    strategy = MomoBtcV2()
+    assert strategy.stop_loss_pct is None
+    assert strategy.take_profit_pct is None
+    assert strategy.trailing_stop_pct is None
+
+
+def test_stop_tp_kwargs_stored_when_supplied():
+    strategy = MomoBtcV2(
+        stop_loss_pct=0.03, take_profit_pct=0.06, trailing_stop_pct=0.02,
+    )
+    assert strategy.stop_loss_pct == 0.03
+    assert strategy.take_profit_pct == 0.06
+    assert strategy.trailing_stop_pct == 0.02
+
+
+def test_stop_tp_kwargs_do_not_alter_backtest_bit_identical():
+    """Supplying stop/TP kwargs must NOT change on_bar output anywhere —
+    the thresholds are consumed by the live risk manager, not the strategy.
+    Backtest path must stay bit-identical (Sharpe production gate)."""
+    ohlcv = _make_ohlcv(300)
+    config = BacktestConfig(initial_cash=10_000.0)
+
+    baseline = run_backtest(ohlcv, MomoBtcV2(), config)
+    with_thresholds = run_backtest(
+        ohlcv,
+        MomoBtcV2(stop_loss_pct=0.03, take_profit_pct=0.06, trailing_stop_pct=0.02),
+        config,
+    )
+    pd.testing.assert_series_equal(
+        baseline.equity_curve, with_thresholds.equity_curve
+    )
+    assert len(baseline.trades) == len(with_thresholds.trades)
+
+
+def test_strategy_still_conforms_to_protocol_with_kwargs():
+    strategy = MomoBtcV2(stop_loss_pct=0.03, take_profit_pct=0.06)
+    assert isinstance(strategy, Strategy)

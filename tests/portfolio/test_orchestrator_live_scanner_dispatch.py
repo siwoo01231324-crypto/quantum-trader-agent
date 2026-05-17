@@ -103,10 +103,14 @@ class TestLiveScannerDispatch:
         legacy = _LegacyAlwaysBuy()
         orch.register_strategy("legacy", legacy)
 
+        # #238 — BTCUSDT sizes against USDT equity; equity_usdt supplied so
+        # size_to_qty yields a real qty (this test asserts dispatch routing,
+        # not sizing — pre-#238 it relied on raw fraction emitted as qty).
         snapshot = {
             "symbol": "BTCUSDT",
             "price": 50000.0,
             "equity_krw": 1_000_000.0,
+            "equity_usdt": 1_000_000.0,
             "ohlcv_history": {
                 "005930": _ohlcv("005930"),
                 "000660": _ohlcv("000660"),
@@ -126,10 +130,14 @@ class TestLiveScannerDispatch:
         orch.register_strategy("legacy", legacy)
 
         universe = {"005930": _ohlcv("005930"), "000660": _ohlcv("000660")}
+        # #238 — legacy leg is BTCUSDT (USDT equity); scanner leg is KRX (KRW
+        # equity). Both supplied so size_to_qty yields real qtys. This test
+        # asserts mixed dispatch routing, not sizing semantics.
         snapshot = {
             "symbol": "BTCUSDT",
             "price": 50000.0,
             "equity_krw": 1_000_000.0,
+            "equity_usdt": 1_000_000.0,
             "ohlcv_history": universe,
         }
         intents = asyncio.run(orch.run_bar(pd.Timestamp("2026-01-01"), snapshot))
@@ -147,8 +155,13 @@ class TestLiveScannerDispatch:
         scanner = _AlwaysBuyLiveScanner()
         orch.register_strategy("scanner", scanner)
 
+        # #238 — symbol must be a venue-recognized code so size_to_qty
+        # resolves a step (the arbitrary "TEST" placeholder is unsupported and
+        # would be dropped). 005930 (KRX) keeps the test's actual subject —
+        # live-scanner with no universe falls back to legacy single-dispatch
+        # on the top-level symbol — unchanged.
         snapshot = {
-            "symbol": "TEST",
+            "symbol": "005930",
             "price": 100.0,
             "equity_krw": 1_000_000.0,
             # ohlcv_history absent → fall back to legacy single dispatch
@@ -156,9 +169,9 @@ class TestLiveScannerDispatch:
         intents = asyncio.run(orch.run_bar(pd.Timestamp("2026-01-01"), snapshot))
         # Legacy path used — single dispatch with top-level symbol
         assert len(scanner.calls) == 1
-        assert scanner.calls[0] == "TEST"
+        assert scanner.calls[0] == "005930"
         assert len(intents) == 1
-        assert intents[0].symbol == "TEST"
+        assert intents[0].symbol == "005930"
 
     def test_quarantine_dedup_per_tick(self):
         """If a live-scanner throws across N symbols in one tick, fail_count

@@ -117,6 +117,20 @@ def _parse_duration(s: str) -> float:
     return float(s)
 
 
+def _wire_balance_provider(cfg) -> None:
+    """#238 Item 9 — inject real venue balances into the SnapshotBuilder path.
+
+    Without this the #238-Item-8 fraction→qty conversion sees equity_usdt=0
+    and safely DROPS every Binance order (inert). AccountInfoProvider is
+    internally 15s-cached, so a fresh per-pipeline instance is cheap and
+    keeps the snapshot path decoupled from the dashboard's own instance.
+    """
+    if cfg is None:
+        return
+    from src.dashboard.account_info import AccountInfoProvider  # noqa: PLC0415
+    cfg.balance_provider = AccountInfoProvider()
+
+
 def _build_config(args: argparse.Namespace) -> ShadowConfig:
     run_id = args.run_id or _build_run_id()
     base = Path(args.log_dir) / run_id
@@ -654,6 +668,54 @@ def _build_mock_ticks(symbols: list[str], n_bars: int):
     return ticks
 
 
+def _register_exit_policies(orch, risk_mgr, logger) -> int:
+    """Register a LivePositionRiskManager StopTpPolicy for every strategy
+    that needs auto stop/TP — returns the number registered.
+
+    Two sources of thresholds (#227 S3 + #238):
+      1. live-scanner strategies (``is_live_scanner`` truthy) — read the
+         LiveScannerMixin class attrs, default 0.03 / 0.06 if absent.
+      2. single-ticker / universe-scan strategies that EXPLICITLY declare
+         ``stop_loss_pct`` AND ``take_profit_pct`` instance/class attrs
+         (e.g. momo-btc-v2 via production.yaml kwargs). Root incident:
+         momo opened a naked -1 BTC short with ZERO auto-stop because the
+         old loop skipped every non-live-scanner strategy outright.
+
+    A strategy that is neither a live-scanner nor declares both stop AND
+    take_profit is skipped — we never invent thresholds.
+    """
+    registered = 0
+    for sid, strategy in orch.strategies.items():
+        if getattr(strategy, "is_live_scanner", False):
+            risk_mgr.register_strategy_policy(
+                sid,
+                stop_loss_pct=float(getattr(strategy, "stop_loss_pct", 0.03)),
+                take_profit_pct=float(getattr(strategy, "take_profit_pct", 0.06)),
+                trailing_stop_pct=getattr(strategy, "trailing_stop_pct", None),
+            )
+            registered += 1
+            logger.info("live_scanner.policy_registered sid=%s", sid)
+            continue
+        # Non-live-scanner: only if it explicitly declares stop AND TP.
+        sl = getattr(strategy, "stop_loss_pct", None)
+        tp = getattr(strategy, "take_profit_pct", None)
+        if sl is None or tp is None:
+            continue
+        risk_mgr.register_strategy_policy(
+            sid,
+            stop_loss_pct=float(sl),
+            take_profit_pct=float(tp),
+            trailing_stop_pct=getattr(strategy, "trailing_stop_pct", None),
+        )
+        registered += 1
+        logger.info("single_ticker.policy_registered sid=%s", sid)
+    logger.info(
+        "exit_policies.total registered=%d total_strategies=%d",
+        registered, len(orch.strategies),
+    )
+    return registered
+
+
 def _start_dashboard(state, port: int, logger):
     """Start uvicorn FastAPI dashboard in the current event loop as a Task.
 
@@ -720,6 +782,7 @@ async def _run_pipeline_attached(
             ops_counters.ingest(ev.event_type, ev.payload or {})
 
     config.wal_observer = _wal_observer
+    _wire_balance_provider(config)  # #238 Item 9
 
     # #238 — dashboard 거래 시작 경로(_run_pipeline_attached)도 live-scanner
     # 자동 stop/TP 청산을 지원해야 한다. 기존엔 _run_pipeline(CLI)에만 있어
@@ -753,22 +816,7 @@ async def _run_pipeline_attached(
             return
         # #238 — 청산 시 orchestrator 진입 기록 해제 → live-scanner 재진입 허용.
         risk_mgr._on_exit = orch.release_live_position
-        registered = 0
-        for sid, strategy in orch.strategies.items():
-            if not getattr(strategy, "is_live_scanner", False):
-                continue
-            risk_mgr.register_strategy_policy(
-                sid,
-                stop_loss_pct=float(getattr(strategy, "stop_loss_pct", 0.03)),
-                take_profit_pct=float(getattr(strategy, "take_profit_pct", 0.06)),
-                trailing_stop_pct=getattr(strategy, "trailing_stop_pct", None),
-            )
-            registered += 1
-            logger.info("live_scanner.policy_registered (attached) sid=%s", sid)
-        logger.info(
-            "live_scanner.policies_total (attached) registered=%d total=%d",
-            registered, len(orch.strategies),
-        )
+        _register_exit_policies(orch, risk_mgr, logger)
 
     config.on_orchestrator_ready = _on_orchestrator_ready
     await _run_with_duration(
@@ -920,6 +968,7 @@ async def _run_smoke_dual(
         kis_adapter = None
     if kis_config is not None:
         kis_config.wal_observer = _wal_observer
+        _wire_balance_provider(kis_config)  # #238 Item 9
         state.wal_path = kis_config.wal_path  # primary for WS replay
 
     # Binance branch — BTCUSDT testnet-shadow + Binance public WS feed.
@@ -939,6 +988,7 @@ async def _run_smoke_dual(
         binance_adapter = None
     if bnb_config is not None:
         bnb_config.wal_observer = _wal_observer
+        _wire_balance_provider(bnb_config)  # #238 Item 9
         # Surface to /api/trades so the dashboard trade-history card sees both.
         if state.wal_path is None:
             state.wal_path = bnb_config.wal_path
@@ -1001,6 +1051,7 @@ async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
         ops_counters.ingest(ev.event_type, ev.payload or {})
 
     config.wal_observer = _wal_observer
+    _wire_balance_provider(config)  # #238 Item 9
 
     # #227 S3: env-gated Live Universe Scanner — when LIVE_SCANNER_ENABLED=1,
     # construct LivePositionRiskManager + register exit policies for every
@@ -1031,22 +1082,7 @@ async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
             return
         # #238 — 청산 시 orchestrator 진입 기록 해제 → live-scanner 재진입 허용.
         risk_mgr._on_exit = orch.release_live_position
-        registered = 0
-        for sid, strategy in orch.strategies.items():
-            if not getattr(strategy, "is_live_scanner", False):
-                continue
-            risk_mgr.register_strategy_policy(
-                sid,
-                stop_loss_pct=float(getattr(strategy, "stop_loss_pct", 0.03)),
-                take_profit_pct=float(getattr(strategy, "take_profit_pct", 0.06)),
-                trailing_stop_pct=getattr(strategy, "trailing_stop_pct", None),
-            )
-            registered += 1
-            logger.info("live_scanner.policy_registered sid=%s", sid)
-        logger.info(
-            "live_scanner.policies_total registered=%d total_strategies=%d",
-            registered, len(orch.strategies),
-        )
+        _register_exit_policies(orch, risk_mgr, logger)
 
     config.on_orchestrator_ready = _on_orchestrator_ready
 

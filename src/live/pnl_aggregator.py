@@ -161,14 +161,50 @@ class PnLAggregator:
         key = (strategy_id, symbol)
         held, avg = self._cost_basis.get(key, (Decimal("0"), Decimal("0")))
         if side.lower() == "buy":
-            new_qty = held + qty
-            if new_qty > 0:
-                avg = (held * avg + qty * price) / new_qty
-            held = new_qty
-            realized = -float(fee)
+            if held < 0:
+                # Covering a SHORT (#238): realize (entry - cover) * qty on the
+                # portion that closes the short; any excess opens a long.
+                cover_qty = min(qty, -held)
+                realized = float((avg - price) * cover_qty - fee)
+                held = held + qty
+                if held > 0:
+                    # Flipped net long — the residual long's basis is `price`.
+                    avg = price
+            else:
+                new_qty = held + qty
+                if new_qty > 0:
+                    avg = (held * avg + qty * price) / new_qty
+                held = new_qty
+                realized = -float(fee)
         else:  # sell
-            realized = float((price - avg) * qty - fee)
-            held = held - qty
+            if held <= 0:
+                # Opening / adding to a SHORT (#238). Mirror the buy averaging
+                # on the negative side so LivePositionRiskManager has an entry
+                # price to gate against (root incident: naked short, no stop).
+                new_qty = held - qty
+                # Guard the divide the same way the long-add path guards
+                # `if new_qty > 0` (#238 review MEDIUM): a broker zero-qty
+                # correction / liquidation-ack sell with held==0 would make
+                # -new_qty==0 → ZeroDivisionError, silently killing the
+                # aggregator (→ all P&L / risk-gating halts). qty==0 is then a
+                # -fee no-op; the short entry avg is left untouched.
+                if -new_qty > 0:
+                    avg = ((-held) * avg + qty * price) / (-new_qty)
+                held = new_qty
+                realized = -float(fee)
+            else:
+                # Selling a LONG. For qty <= held this is byte-identical to
+                # the legacy path. For an oversized sell (qty > held) the long
+                # portion realizes (price-avg)*held and the excess opens a
+                # SHORT at `price` — symmetric to the buy-side cover→flip
+                # above. (#238 review: the old code used the full qty here,
+                # over-realizing P&L and leaving the new short on the stale
+                # long avg.)
+                close_qty = min(qty, held)
+                realized = float((price - avg) * close_qty - fee)
+                held = held - qty
+                if held < 0:
+                    avg = price
         self._cost_basis[key] = (held, avg)
         return realized
 

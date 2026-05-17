@@ -240,3 +240,145 @@ def test_legacy_payload_falls_back_to_client_order_id_prefix():
         "fees": "5",
     })
     assert agg.by_strategy == {"alpha": -5.0}
+
+
+# ---------------------------------------------------------------------------
+# #238 — SHORT cost-basis tracking
+#
+# Opening a naked short (sell with no prior long) previously left avg=0 in
+# _cost_basis, so LivePositionRiskManager had no entry price to gate against
+# (root incident: momo-btc-v2 -1 BTC naked short with ZERO auto-stop). The
+# sell branch now records the short's average entry price (mirrors the buy
+# averaging on the negative side). LONG behavior stays bit-identical.
+# ---------------------------------------------------------------------------
+
+def test_short_open_records_entry_avg_cost():
+    """sell with no prior position → short opened, _cost_basis carries avg."""
+    agg = _aggregator(_kst("2026-05-06T14:00:00"))
+    agg.record_fill(
+        strategy_id="momo", symbol="BTCUSDT", side="sell",
+        qty=Decimal("1"), price=Decimal("60000"), fee=Decimal("0"),
+        ts=_kst("2026-05-06T14:00:00"),
+    )
+    held, avg = agg._cost_basis[("momo", "BTCUSDT")]
+    assert held == Decimal("-1")
+    assert avg == Decimal("60000")
+    # Opening a short realizes nothing (only -fee).
+    assert agg.realtime == 0.0
+
+
+def test_short_add_averages_entry_price():
+    """Two shorts at different prices → weighted average entry on the short."""
+    agg = _aggregator(_kst("2026-05-06T14:00:00"))
+    agg.record_fill(
+        strategy_id="momo", symbol="BTCUSDT", side="sell",
+        qty=Decimal("1"), price=Decimal("60000"), fee=Decimal("0"),
+        ts=_kst("2026-05-06T14:00:00"),
+    )
+    agg.record_fill(
+        strategy_id="momo", symbol="BTCUSDT", side="sell",
+        qty=Decimal("1"), price=Decimal("62000"), fee=Decimal("0"),
+        ts=_kst("2026-05-06T14:00:00"),
+    )
+    held, avg = agg._cost_basis[("momo", "BTCUSDT")]
+    assert held == Decimal("-2")
+    assert avg == Decimal("61000")  # (60000 + 62000) / 2
+
+
+def test_short_cover_realizes_profit_on_price_drop():
+    """Short @ 60000, cover (buy) @ 57000 → realized = (60000-57000)*1."""
+    agg = _aggregator(_kst("2026-05-06T14:00:00"))
+    agg.record_fill(
+        strategy_id="momo", symbol="BTCUSDT", side="sell",
+        qty=Decimal("1"), price=Decimal("60000"), fee=Decimal("0"),
+        ts=_kst("2026-05-06T14:00:00"),
+    )
+    agg.record_fill(
+        strategy_id="momo", symbol="BTCUSDT", side="buy",
+        qty=Decimal("1"), price=Decimal("57000"), fee=Decimal("0"),
+        ts=_kst("2026-05-06T14:00:00"),
+    )
+    assert agg.realtime == 3000.0
+    held, _ = agg._cost_basis[("momo", "BTCUSDT")]
+    assert held == Decimal("0")
+
+
+# #238 review pass — the buy-side cover-then-flip-to-long is handled, but the
+# symmetric sell-side flip (long → short via an oversized sell) fell through
+# to the legacy long branch: it over-realized P&L on the FULL qty (not just
+# the long portion) and left the new short carrying the OLD LONG avg. A live
+# P&L mis-accounting bug.
+
+def test_long_to_short_flip_realizes_only_long_portion():
+    """Long 1 @ 100, sell 3 @ 110 → realize only the 1 long (=10), open short 2 @ 110."""
+    agg = _aggregator(_kst("2026-05-06T14:00:00"))
+    agg.record_fill(
+        strategy_id="momo", symbol="BTCUSDT", side="buy",
+        qty=Decimal("1"), price=Decimal("100"), fee=Decimal("0"),
+        ts=_kst("2026-05-06T14:00:00"),
+    )
+    agg.record_fill(
+        strategy_id="momo", symbol="BTCUSDT", side="sell",
+        qty=Decimal("3"), price=Decimal("110"), fee=Decimal("0"),
+        ts=_kst("2026-05-06T14:00:00"),
+    )
+    # Only the 1-unit long realizes (110-100)*1; NOT (110-100)*3.
+    assert agg.realtime == 10.0
+    held, avg = agg._cost_basis[("momo", "BTCUSDT")]
+    assert held == Decimal("-2"), "residual 2 units must be net short"
+    assert avg == Decimal("110"), "new short basis = flip price, not stale long avg"
+
+
+def test_zero_qty_sell_does_not_crash_short_open():
+    """#238 review (MEDIUM): a broker zero-qty correction/liquidation-ack
+    `sell` with no position must NOT ZeroDivisionError (would kill the
+    aggregator → silently halt all P&L / risk gating for the session).
+    """
+    agg = _aggregator(_kst("2026-05-06T14:00:00"))
+    agg.record_fill(
+        strategy_id="momo", symbol="BTCUSDT", side="sell",
+        qty=Decimal("0"), price=Decimal("60000"), fee=Decimal("2"),
+        ts=_kst("2026-05-06T14:00:00"),
+    )
+    assert agg.realtime == -2.0  # only the fee
+    held, avg = agg._cost_basis[("momo", "BTCUSDT")]
+    assert held == Decimal("0")
+    assert avg == Decimal("0")
+
+
+def test_zero_qty_sell_on_existing_short_keeps_avg():
+    """Zero-qty sell while holding a short leaves the entry avg untouched."""
+    agg = _aggregator(_kst("2026-05-06T14:00:00"))
+    agg.record_fill(
+        strategy_id="momo", symbol="BTCUSDT", side="sell",
+        qty=Decimal("2"), price=Decimal("60000"), fee=Decimal("0"),
+        ts=_kst("2026-05-06T14:00:00"),
+    )
+    agg.record_fill(
+        strategy_id="momo", symbol="BTCUSDT", side="sell",
+        qty=Decimal("0"), price=Decimal("99999"), fee=Decimal("1"),
+        ts=_kst("2026-05-06T14:00:00"),
+    )
+    held, avg = agg._cost_basis[("momo", "BTCUSDT")]
+    assert held == Decimal("-2")
+    assert avg == Decimal("60000"), "zero-qty fill must not move short entry"
+
+
+def test_partial_long_sell_below_held_is_bit_identical():
+    """qty < held → no flip; legacy long behavior must be byte-identical."""
+    agg = _aggregator(_kst("2026-05-06T14:00:00"))
+    agg.record_fill(
+        strategy_id="momo", symbol="BTCUSDT", side="buy",
+        qty=Decimal("2"), price=Decimal("100"), fee=Decimal("1"),
+        ts=_kst("2026-05-06T14:00:00"),
+    )
+    agg.record_fill(
+        strategy_id="momo", symbol="BTCUSDT", side="sell",
+        qty=Decimal("1"), price=Decimal("110"), fee=Decimal("1"),
+        ts=_kst("2026-05-06T14:00:00"),
+    )
+    # buy: -1 fee; sell: (110-100)*1 - 1 = 9 → total 8.
+    assert agg.realtime == 8.0
+    held, avg = agg._cost_basis[("momo", "BTCUSDT")]
+    assert held == Decimal("1")
+    assert avg == Decimal("100"), "remaining long keeps original avg"

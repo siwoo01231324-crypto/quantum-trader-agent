@@ -26,7 +26,7 @@ from src.brokers.base import AsyncBrokerAdapter
 from src.live.types import EVENT_STRATEGY_EVALUATED, EVENT_STRATEGY_TOGGLED, WALEvent
 from .orchestrator import _SyncStrategyOrchestrator
 from .order_intent import OrderIntent
-from .sizing import resolve_size
+from .sizing import resolve_size, size_to_qty
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +46,7 @@ class AsyncStrategyOrchestrator:
         min_reliability: float = 0.0,
         broker: AsyncBrokerAdapter | None = None,
         wal_observer: Callable[[WALEvent], None] | None = None,
+        min_order_interval_sec: float = 0.0,
     ) -> None:
         self._sync = _SyncStrategyOrchestrator(policy)
         self._policy = policy
@@ -60,6 +61,14 @@ class AsyncStrategyOrchestrator:
         # symbol) 진입 시 기록, LivePositionRiskManager 가 청산하면
         # release_live_position() 으로 해제 → 재진입 허용.
         self._live_entered: set[tuple[str, str]] = set()
+        # #238 — orchestrator-level duplicate-order backstop (Item 3). Item 1
+        # throttles momo at the strategy layer; this catches ANY non-live-
+        # scanner strategy flooding identical (sid, symbol, side) intents per
+        # WS tick. DEFAULT 0.0 = DISABLED → every existing test / backtest /
+        # universe-scan rebalance stays bit-identical; live config opts in.
+        # Live-scanner is excluded (keeps its own _live_entered lifecycle).
+        self._min_order_interval_sec = min_order_interval_sec
+        self._last_order_ts: dict[tuple[str, str, str], float] = {}
         self._report_lock = asyncio.Lock()
         self._refresh_task: asyncio.Task | None = None
         self._bar_count = 0
@@ -259,6 +268,12 @@ class AsyncStrategyOrchestrator:
         _universe_ohlcv = _snap_dict.get("ohlcv_history")
         _universe_factors = _snap_dict.get("universe_factors", {}) or {}
         _equity_krw = _snap_dict.get("equity_krw", 0.0)
+        # #238 — venue-correct available equity for fraction→qty conversion.
+        # Binance positions are USDT; the snapshot historically carried only
+        # `equity_krw` (a KRW/placeholder value). A Binance `*USDT` symbol must
+        # size against USDT equity, never KRW. Absent key → 0.0 → conversion
+        # drops the order (safe: no order beats a wrong-currency order).
+        _equity_usdt = _snap_dict.get("equity_usdt", 0.0)
 
         tasks = []
         sids = []
@@ -379,6 +394,25 @@ class AsyncStrategyOrchestrator:
                     continue
                 self._live_entered.add(key)
 
+            # #238 Item 3 — orchestrator-level duplicate-order backstop for
+            # non-live-scanner strategies. While a strategy's condition
+            # persists it re-emits an identical (sid, symbol, side) every WS
+            # tick; suppress repeats within the wall-clock window so we stop
+            # re-submitting the same order to the broker. A *different* action
+            # (reversal/exit) uses a different key and is never throttled.
+            # DEFAULT 0.0 → block skipped entirely (bit-identical).
+            if self._min_order_interval_sec > 0.0 and not is_live:
+                dup_key = (sid, order_symbol, signal.action)
+                now = time.monotonic()
+                last = self._last_order_ts.get(dup_key, 0.0)
+                if last > 0.0 and (now - last) < self._min_order_interval_sec:
+                    self._emit_strategy_evaluated(
+                        sid, symbol=order_symbol, decision="hold",
+                        reason="duplicate_order_throttled", ts=ts,
+                    )
+                    continue
+                self._last_order_ts[dup_key] = now
+
             # buy/sell — emit before order routing so the event captures
             # strategy intent regardless of downstream risk-gate decision.
             self._emit_strategy_evaluated(
@@ -387,12 +421,38 @@ class AsyncStrategyOrchestrator:
             )
 
             recent = self._recent_returns.get(sid)
-            qty = resolve_size(signal, recent)
+            fraction = resolve_size(signal, recent)
             order_price = (
                 _snap_dict.get("price", 0.0)
                 if sym_override is None
                 else float(_universe_ohlcv[sym_override]["close"].iloc[-1])
             )
+            # #238 — `resolve_size` returns a *fraction of available equity*.
+            # The orchestrator previously used that fraction DIRECTLY as the
+            # coin qty (size=0.05 → 0.05 coins; momo full size=1.0 → 1.0 BTC
+            # ≈ $80k → the -2019 Margin-insufficient flood). Convert it to a
+            # real coin/share qty against the venue-correct equity, then apply
+            # exchange filters (step ROUND_DOWN, min-notional, zero-qty drop).
+            # Venue rule: KRX 6-digit → KRW equity; Binance `*USDT` → USDT
+            # equity. A dropped (None) conversion emits NO OrderIntent — a
+            # guaranteed-rejected order is exactly the bug class #238 fixed.
+            if order_symbol.endswith("USDT") and len(order_symbol) > len("USDT"):
+                venue_equity = _equity_usdt
+            else:
+                venue_equity = _equity_krw
+            qty = size_to_qty(
+                fraction,
+                equity=venue_equity,
+                price=order_price,
+                symbol=order_symbol,
+            )
+            if qty is None:
+                logger.info(
+                    "portfolio.orchestrator.size_drop strategy_id=%s symbol=%s "
+                    "fraction=%s equity=%s price=%s",
+                    sid, order_symbol, fraction, venue_equity, order_price,
+                )
+                continue
             order = Order(
                 symbol=order_symbol,
                 side=signal.action,
@@ -413,6 +473,11 @@ class AsyncStrategyOrchestrator:
                     side=signal.action,
                     qty=qty,
                     reason=signal.reason,
+                    # #238 Item 7 — strategies are long-only; a SELL is always
+                    # an exit, never a short entry. reduceOnly makes the
+                    # exchange no-op a "sell with no long" instead of opening
+                    # a naked short (the root incident).
+                    reduce_only=(signal.action == "sell"),
                 ))
             else:
                 logger.info(

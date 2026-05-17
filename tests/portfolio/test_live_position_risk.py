@@ -52,6 +52,47 @@ def _setup(
     return mgr, captured_events
 
 
+def _setup_short(
+    *,
+    sid: str = "momo",
+    symbol: str = "BTCUSDT",
+    entry_price: float = 60_000.0,
+    qty: float = 1.0,
+    stop_loss_pct: float = 0.03,
+    take_profit_pct: float = 0.06,
+    trailing_stop_pct: float | None = None,
+) -> tuple[LivePositionRiskManager, list[Any]]:
+    """Open a SHORT: sell with no prior long → store qty negative, pnl avg set."""
+    store = StrategyPositionStore()
+    pnl = PnLAggregator()
+    pnl.record_fill(
+        strategy_id=sid,
+        symbol=symbol,
+        side="sell",
+        qty=Decimal(str(qty)),
+        price=Decimal(str(entry_price)),
+    )
+    store.record_fill(
+        strategy_id=sid,
+        symbol=symbol,
+        side="sell",
+        qty=Decimal(str(qty)),
+    )
+    captured_events: list[Any] = []
+    mgr = LivePositionRiskManager(
+        position_store=store,
+        pnl_aggregator=pnl,
+        wal_observer=captured_events.append,
+    )
+    mgr.register_strategy_policy(
+        sid,
+        stop_loss_pct=stop_loss_pct,
+        take_profit_pct=take_profit_pct,
+        trailing_stop_pct=trailing_stop_pct,
+    )
+    return mgr, captured_events
+
+
 def _now() -> datetime:
     return datetime(2026, 5, 11, 14, 30, tzinfo=timezone.utc)
 
@@ -203,3 +244,132 @@ class TestMultipleStrategies:
         intents = mgr.evaluate("005930", Decimal("77600"), _now())
         assert len(intents) == 1
         assert intents[0].strategy_id == "strat_tight"
+
+
+# ---------------------------------------------------------------------------
+# #238 — SHORT (negative qty) position management.
+#
+# Root incident: momo-btc-v2 opened a naked -1 BTC short with ZERO auto-stop
+# because the risk manager was long-only (held <= 0 discarded the position).
+# Short handling is ADDITIVE — the long path above stays bit-identical.
+#
+# SHORT semantics (inverted from long):
+#   - stop_loss   fires when price RISES stop_loss_pct ABOVE entry
+#   - take_profit fires when price FALLS take_profit_pct BELOW entry
+#   - trailing    tracks the LOW-water mark; fires when price rises
+#                 trailing_stop_pct above that low (only after price has
+#                 moved below entry, mirroring the long break-above gate)
+#   - exit intent is a BUY (cover) for qty = abs(held)
+# ---------------------------------------------------------------------------
+
+
+class TestShortStopLoss:
+    def test_short_stop_loss_triggers_on_price_rise(self):
+        mgr, events = _setup_short()
+        # entry 60000, stop_loss 0.03 → 60000 * (1 + 0.03) = 61800.
+        intents = mgr.evaluate("BTCUSDT", Decimal("62000"), _now())
+        assert len(intents) == 1
+        intent = intents[0]
+        assert intent.side == "buy"  # cover the short
+        assert intent.symbol == "BTCUSDT"
+        assert intent.strategy_id == "momo"
+        assert intent.qty == 1.0  # abs(held)
+        assert "live_stop_loss" in intent.reason
+        assert "entry=60000" in intent.reason
+        assert len(events) == 1
+        assert events[0].payload["trigger"] == "stop_loss"
+
+    def test_short_stop_loss_at_exact_threshold(self):
+        mgr, _ = _setup_short()
+        intents = mgr.evaluate("BTCUSDT", Decimal("61800"), _now())  # exactly +3%
+        assert len(intents) == 1
+
+    def test_short_stop_loss_no_trigger_below_threshold(self):
+        mgr, events = _setup_short()
+        # 61000 < 61800 → short still in profit-ish range, no stop.
+        intents = mgr.evaluate("BTCUSDT", Decimal("61000"), _now())
+        assert intents == []
+        assert events == []
+
+
+class TestShortTakeProfit:
+    def test_short_take_profit_triggers_on_price_fall(self):
+        mgr, events = _setup_short()
+        # entry 60000, take_profit 0.06 → 60000 * (1 - 0.06) = 56400.
+        intents = mgr.evaluate("BTCUSDT", Decimal("56000"), _now())
+        assert len(intents) == 1
+        assert intents[0].side == "buy"
+        assert intents[0].qty == 1.0
+        assert "live_take_profit" in intents[0].reason
+        assert events[0].payload["trigger"] == "take_profit"
+
+    def test_short_take_profit_no_trigger_above(self):
+        mgr, _ = _setup_short()
+        # 58000 > 56400 → not enough downside yet.
+        intents = mgr.evaluate("BTCUSDT", Decimal("58000"), _now())
+        assert intents == []
+
+
+class TestShortTrailingStop:
+    def test_short_trailing_tracks_low_water_and_fires_on_rebound(self):
+        # Wide stop_loss so the rebound tick doesn't fire stop_loss first.
+        mgr, events = _setup_short(stop_loss_pct=0.30, trailing_stop_pct=0.02)
+        # Tick 1 — price falls to 54000 (below entry, sets low water).
+        # 54000/60000 = -10% → not at take_profit? take_profit_pct default 0.06
+        # → tp = 56400; 54000 <= 56400 would fire TP. Use wide take_profit.
+        mgr2, events2 = _setup_short(
+            stop_loss_pct=0.30, take_profit_pct=0.30, trailing_stop_pct=0.02,
+        )
+        assert mgr2.evaluate("BTCUSDT", Decimal("54000"), _now()) == []
+        # Tick 2 — price rebounds to 55080 (= 54000 * (1 + 0.02)) → trailing.
+        intents = mgr2.evaluate("BTCUSDT", Decimal("55080"), _now())
+        assert len(intents) == 1
+        assert intents[0].side == "buy"
+        assert "live_trailing_stop" in intents[0].reason
+        assert events2[0].payload["trigger"] == "trailing_stop"
+
+    def test_short_trailing_does_not_fire_before_breaking_below_entry(self):
+        """Trailing must not fire while price stays at-or-above entry —
+        stop_loss owns that range for shorts."""
+        mgr, _ = _setup_short(stop_loss_pct=0.05, trailing_stop_pct=0.02)
+        # 60500 above entry but below stop (60000*1.05=63000). low_water still
+        # entry (60000); trailing band = 60000*1.02 = 61200; 60500 < 61200 → no.
+        intents = mgr.evaluate("BTCUSDT", Decimal("60500"), _now())
+        assert intents == []
+
+
+class TestShortExitIntent:
+    def test_short_exit_intent_is_buy_qty_abs(self):
+        mgr, _ = _setup_short(entry_price=60_000.0, qty=2.0)
+        intents = mgr.evaluate("BTCUSDT", Decimal("62000"), _now())
+        assert len(intents) == 1
+        assert intents[0].side == "buy"
+        assert intents[0].qty == 2.0  # abs(-2)
+
+    def test_short_flat_after_cover_clears_high_water(self):
+        mgr, _ = _setup_short(
+            stop_loss_pct=0.30, take_profit_pct=0.30, trailing_stop_pct=0.02,
+        )
+        mgr.evaluate("BTCUSDT", Decimal("54000"), _now())  # set low water
+        intents = mgr.evaluate("BTCUSDT", Decimal("55080"), _now())  # trailing
+        assert len(intents) == 1
+        store: StrategyPositionStore = mgr._position_store
+        # Cover the short (buy back) → store flat.
+        store.record_fill(
+            strategy_id="momo", symbol="BTCUSDT", side="buy", qty=Decimal("1"),
+        )
+        assert mgr.evaluate("BTCUSDT", Decimal("55000"), _now()) == []
+        assert ("momo", "BTCUSDT") not in mgr._high_water
+
+
+class TestLongPathRegression:
+    """The long path must remain bit-identical after short support added."""
+
+    def test_long_stop_loss_still_sell_qty_positive(self):
+        mgr, events = _setup()
+        intents = mgr.evaluate("005930", Decimal("76400"), _now())
+        assert len(intents) == 1
+        assert intents[0].side == "sell"
+        assert intents[0].qty == 100.0
+        assert "live_stop_loss" in intents[0].reason
+        assert events[0].payload["trigger"] == "stop_loss"

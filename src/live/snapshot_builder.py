@@ -75,10 +75,19 @@ class SnapshotBuilder:
         config: SnapshotBuilderConfig | None = None,
         universe_quote_provider: Any | None = None,
         universe_ttl_sec: float = 300.0,
+        balance_provider: Any | None = None,
     ) -> None:
         self._symbols: list[str] = list(symbols)
         self._kis_client = kis_client
         self._config = config or SnapshotBuilderConfig()
+        # #238 Item 9 — real venue balances → snapshot equity. Without this
+        # the orchestrator's #238-Item-8 fraction→qty conversion sees
+        # equity_usdt=0 and safely DROPS every Binance order (inert). Inject
+        # the existing AccountInfoProvider (internally 15s-cached, so a
+        # per-tick fetch() is cheap). provider.fetch() →
+        # {"binance": {"ok", "available_usdt"}, "kis": {"ok", "cash_balance"}}.
+        # None (default) → config placeholder only → byte-identical to pre-#238.
+        self._balance_provider = balance_provider
         self._buffers: dict[str, pd.DataFrame] = {}
         # #231 S2 — cs_async_wrapper 등 universe-scan strategies 가 dispatch
         # 되도록 매 N초마다 broker.fetch_universe_snapshot 호출 + 결과를
@@ -205,7 +214,29 @@ class SnapshotBuilder:
             "ohlcv_history": ohlcv_history,
             "factors": factors,
         }
+        self._inject_real_equity(snapshot)
         return snapshot
+
+    def _inject_real_equity(self, snapshot: dict[str, Any]) -> None:
+        """Overlay real venue balances onto the snapshot (#238 Item 9).
+
+        Best-effort: any failure leaves the config placeholder in place
+        (equity_usdt stays unset → Item-8 conversion safely drops Binance
+        orders). MUST NOT raise into the per-tick hot loop.
+        """
+        if self._balance_provider is None:
+            return
+        try:
+            bal = self._balance_provider.fetch() or {}
+        except Exception as err:  # noqa: BLE001 — never kill the tick loop
+            logger.warning("snapshot.balance_provider_error: %s", err)
+            return
+        binance = bal.get("binance") or {}
+        if binance.get("ok") and binance.get("available_usdt") is not None:
+            snapshot["equity_usdt"] = float(binance["available_usdt"])
+        kis = bal.get("kis") or {}
+        if kis.get("ok") and kis.get("cash_balance") is not None:
+            snapshot["equity_krw"] = float(kis["cash_balance"])
 
     @property
     def buffers(self) -> dict[str, pd.DataFrame]:

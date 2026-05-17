@@ -95,6 +95,20 @@ def test_production_yaml_registers_all_strategies():
     }
 
 
+def test_production_yaml_arms_orchestrator_dup_backstop():
+    """#238 Item 3b — the top-level `orchestrator:` block must wire the
+    duplicate-order backstop into the live orchestrator (config_loader path
+    that qta.exe uses). Locks the wiring so it can't silently regress to the
+    dormant 0.0 default the review flagged.
+    """
+    orch = load_orchestrator_from_yaml(
+        _PRODUCTION_YAML,
+        _make_policy(),
+        on_metalabeler_missing="skip",
+    )
+    assert orch._min_order_interval_sec == 60.0
+
+
 @pytest.mark.asyncio
 async def test_momo_kis_v1_emits_signal_with_sufficient_history():
     """At a KRX 15-min boundary with 60 bars of synthesised divergence-pattern

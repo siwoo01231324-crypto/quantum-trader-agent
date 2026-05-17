@@ -19,3 +19,9 @@ class OrderIntent:
     qty: float
     reason: str
     meta: dict | None = field(default=None)
+    # #238 Item 7 — when True the broker order is submitted reduceOnly so it
+    # can only shrink an existing position, never open/extend one. Set for
+    # every strategy SELL: our strategies are long-only, so a sell is always
+    # an exit, and reduceOnly makes the exchange itself refuse to turn a
+    # "sell with no long" into a naked short (the root incident).
+    reduce_only: bool = False

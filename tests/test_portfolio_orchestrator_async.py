@@ -68,7 +68,14 @@ def _register(orch: AsyncStrategyOrchestrator, strat) -> None:
     orch.register_strategy(strat.strategy_id, strat)
 
 
-SNAP = {"symbol": "BTC", "price": 50000.0, "equity_krw": 1_000_000}
+# #238 — "BTC" was an unrecognized placeholder symbol; size_to_qty needs a
+# venue-resolvable symbol. "BTCUSDT" sizes against equity_usdt. These tests
+# assert dispatch/quarantine/exception-isolation, not sizing — pre-#238 they
+# relied on the raw resolve_size fraction being emitted directly as qty.
+SNAP = {
+    "symbol": "BTCUSDT", "price": 50000.0,
+    "equity_krw": 1_000_000, "equity_usdt": 1_000_000,
+}
 
 
 def _run_in_loop(loop: asyncio.AbstractEventLoop, coro):

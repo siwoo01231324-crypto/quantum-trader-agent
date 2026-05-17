@@ -63,6 +63,12 @@ class ShadowConfig:
     # broker_mode 기반 closure 빌드 (KIS: fetch_universe_snapshot,
     # Binance: fetch_universe_klines). None 이면 graceful hold path 유지.
     universe_quote_provider: Callable[[], dict] | None = None
+    # #238 Item 9 — real venue balance provider (AccountInfoProvider) injected
+    # into SnapshotBuilder so build_snapshot carries equity_usdt/equity_krw.
+    # None → SnapshotBuilder uses the config placeholder → Item-8 conversion
+    # safely drops Binance orders (inert, not flooding). live_run.py sets this
+    # to the already-constructed AccountInfoProvider.
+    balance_provider: object | None = None
     # Callback invoked once the orchestrator instance is constructed (#180).
     # Used by live_run.py to wire `DashboardState.orchestrator` so that
     # `POST /api/strategies/{id}/toggle` reaches the live orchestrator.
@@ -359,6 +365,7 @@ async def run_shadow_loop(
             kis_client=config.kis_client,
             config=config.snapshot_builder_config,
             universe_quote_provider=config.universe_quote_provider,  # #231 S2
+            balance_provider=config.balance_provider,  # #238 Item 9
         )
         await snapshot_builder.warmup()
 

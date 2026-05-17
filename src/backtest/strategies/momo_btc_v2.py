@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING, ClassVar, Literal, Optional
 
 import pandas as pd
@@ -66,9 +67,17 @@ class MomoBtcV2:
         consensus_k_max: float = 0.75,
         metalabeler: Optional["MetaLabeler"] = None,
         metalabeler_threshold: float = 0.5,
+        min_signal_interval_sec: float = 0.0,
+        stop_loss_pct: Optional[float] = None,
+        take_profit_pct: Optional[float] = None,
+        trailing_stop_pct: Optional[float] = None,
     ) -> None:
         if sizing_lookback < 2:
             raise ValueError(f"sizing_lookback must be >= 2, got {sizing_lookback}")
+        if min_signal_interval_sec < 0:
+            raise ValueError(
+                f"min_signal_interval_sec must be >= 0, got {min_signal_interval_sec}"
+            )
         self.symbol = symbol
         self.sizing_mode: SizingMode = sizing_mode
         self.sizing_lookback = sizing_lookback
@@ -82,9 +91,41 @@ class MomoBtcV2:
         self.consensus_k_max = consensus_k_max
         self._metalabeler = metalabeler
         self._metalabeler_threshold = metalabeler_threshold
+        # #238 — live signal-flood throttle. Binance aggTrade WS drives on_bar
+        # at dozens/sec; while bearish divergence persists momo emits an
+        # identical SELL every tick → orchestrator submits each → -2019
+        # Margin-insufficient flood. Wall-clock interval guard, per-symbol.
+        # DEFAULT 0.0 = DISABLED so the 5y backtest stays bit-identical and
+        # the Sharpe production gate is preserved; live config opts in.
+        self._min_signal_interval_sec = min_signal_interval_sec
+        self._last_signal_ts: dict[str, float] = {}
+        # #238 — single-ticker exit thresholds. momo is NOT a LiveScannerMixin
+        # so it never had auto stop/TP (root incident: a naked -1 BTC short
+        # with ZERO auto-stop). These are READ by scripts/live_run.py to build
+        # a LivePositionRiskManager StopTpPolicy; on_bar / backtest never reads
+        # them, so DEFAULT None keeps the 5y backtest / Sharpe gate
+        # bit-identical. production.yaml supplies the live values.
+        self.stop_loss_pct = stop_loss_pct
+        self.take_profit_pct = take_profit_pct
+        self.trailing_stop_pct = trailing_stop_pct
 
     def on_init(self, context: dict) -> None:
-        pass
+        # Fresh per-run state — mirrors the live loop reset.
+        self._last_signal_ts = {}
+
+    def _throttled(self, symbol: str) -> bool:
+        """True if an actionable signal for *symbol* was emitted < interval ago.
+
+        No-op when ``min_signal_interval_sec == 0`` (default / backtest path).
+        """
+        if self._min_signal_interval_sec <= 0.0:
+            return False
+        last = self._last_signal_ts.get(symbol, 0.0)
+        now = time.monotonic()
+        if last > 0.0 and (now - last) < self._min_signal_interval_sec:
+            return True
+        self._last_signal_ts[symbol] = now
+        return False
 
     def _compute_confidence(
         self,
@@ -173,6 +214,13 @@ class MomoBtcV2:
         div = detect_divergence(close, rsi, self.LOOKBACK)
 
         latest = div.iloc[-1]
+        # #238 — actionable signal (buy/sell). Gate the live tick-flood: while
+        # divergence persists, suppress repeats within the wall-clock interval
+        # so the orchestrator stops re-submitting identical orders to Binance.
+        if latest in ("bullish", "bearish") and self._throttled(
+            ctx_symbol or self.symbol
+        ):
+            return Signal(action="hold", size=0.0, reason="momo_interval_throttle")
         if latest == "bullish":
             size = self._entry_size(close)
             if size <= 0.0:

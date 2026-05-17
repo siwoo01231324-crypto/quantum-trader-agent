@@ -103,7 +103,15 @@ def load_orchestrator_from_yaml(
     entries = config.get("strategies", []) or []
     seen_ids: set[str] = set()
 
-    orch = AsyncStrategyOrchestrator(policy)
+    # #238 Item 3b — optional top-level `orchestrator:` block arms the
+    # duplicate-order backstop in the live deployment (qta.exe loads this
+    # path). Absent key → 0.0 → bit-identical (every existing yaml/test).
+    orch_cfg = config.get("orchestrator", {}) or {}
+    min_order_interval_sec = float(orch_cfg.get("min_order_interval_sec", 0.0))
+
+    orch = AsyncStrategyOrchestrator(
+        policy, min_order_interval_sec=min_order_interval_sec
+    )
 
     for entry in entries:
         sid: str = entry["id"]
