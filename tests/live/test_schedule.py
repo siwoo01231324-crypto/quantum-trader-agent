@@ -11,7 +11,7 @@ from src.universe.krx_calendar import KST
 
 
 def kst(y: int, m: int, d: int, h: int = 0, mn: int = 0) -> datetime:
-    return KST.localize(datetime(y, m, d, h, mn))
+    return datetime(y, m, d, h, mn).replace(tzinfo=KST)
 
 
 class TestWaitUntilSessionOpen:

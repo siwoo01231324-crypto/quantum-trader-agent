@@ -7,9 +7,15 @@ from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta
 
-import pytz
+from zoneinfo import ZoneInfo
 
-KST = pytz.timezone("Asia/Seoul")
+# stdlib zoneinfo, not pytz: `pytz.timezone()` forces a lazy scan of the ENTIRE
+# tz database at import (open() every zone file) — pathologically slow on
+# Python 3.14, blocking `python scripts/live_run.py` startup. ZoneInfo is
+# instant and is already what src/live/pnl_aggregator.py uses for this tz.
+# Korea has no DST (UTC+9 year-round) so `KST.localize(naive)` is exactly
+# `naive.replace(tzinfo=KST)`.
+KST = ZoneInfo("Asia/Seoul")
 
 # KRX official holidays 2025-2026 (static, pin-date 2026-04-25)
 # Sources: KRX annual market holiday announcements
@@ -105,12 +111,12 @@ def next_session_open(now: datetime) -> datetime:
 
     now_kst = now.astimezone(KST)
     today = now_kst.date()
-    today_close_kst = KST.localize(datetime.combine(today, _MARKET_CLOSE))
+    today_close_kst = datetime.combine(today, _MARKET_CLOSE).replace(tzinfo=KST)
 
     if _is_business_day(today) and now_kst <= today_close_kst:
-        return KST.localize(datetime.combine(today, _MARKET_OPEN))
+        return datetime.combine(today, _MARKET_OPEN).replace(tzinfo=KST)
 
     candidate = today + timedelta(days=1)
     while not _is_business_day(candidate):
         candidate += timedelta(days=1)
-    return KST.localize(datetime.combine(candidate, _MARKET_OPEN))
+    return datetime.combine(candidate, _MARKET_OPEN).replace(tzinfo=KST)

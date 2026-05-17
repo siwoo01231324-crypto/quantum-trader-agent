@@ -52,7 +52,7 @@ class TestEmitStartupEvents:
     def test_run_started_plus_session_open_for_krx(self, tmp_path):
         config = _make_config(tmp_path, "krx")
         wal = WAL(config.wal_path)
-        gate_at = KST.localize(datetime(2026, 5, 11, 9, 0))
+        gate_at = datetime(2026, 5, 11, 9, 0).replace(tzinfo=KST)
         emit_startup_events(wal, config, gate_resumed_at=gate_at)
 
         events, corruptions = replay(config.wal_path)
@@ -65,7 +65,7 @@ class TestEmitStartupEvents:
     def test_session_open_skipped_for_always_schedule(self, tmp_path):
         config = _make_config(tmp_path, "always")
         wal = WAL(config.wal_path)
-        gate_at = KST.localize(datetime(2026, 5, 11, 9, 0))
+        gate_at = datetime(2026, 5, 11, 9, 0).replace(tzinfo=KST)
         emit_startup_events(wal, config, gate_resumed_at=gate_at)
 
         events, _ = replay(config.wal_path)

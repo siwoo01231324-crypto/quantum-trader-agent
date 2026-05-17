@@ -2,13 +2,17 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 import pytest
-import pytz
+import pytz  # still used for pytz.utc below
 
 from src.universe.krx_calendar import is_krx_holiday, is_krx_trading_hours
 
-KST = pytz.timezone("Asia/Seoul")
+# #238 follow-up — zoneinfo, matching the production krx_calendar swap. With
+# pytz, `datetime(...).replace(tzinfo=KST)` yields the LMT+8:28 offset (the
+# classic pytz footgun); ZoneInfo gives the correct +09:00 (Korea has no DST).
+KST = ZoneInfo("Asia/Seoul")
 
 
 class TestIsKrxHoliday:
@@ -58,42 +62,42 @@ class TestIsKrxHoliday:
 class TestIsKrxTradingHours:
     def test_weekday_during_trading_hours_kst(self):
         # Wednesday 2025-04-02 10:00 KST
-        ts = KST.localize(datetime(2025, 4, 2, 10, 0, 0))
+        ts = datetime(2025, 4, 2, 10, 0, 0).replace(tzinfo=KST)
         assert is_krx_trading_hours(ts) is True
 
     def test_weekday_at_market_open_kst(self):
         # 09:00 KST exactly
-        ts = KST.localize(datetime(2025, 4, 2, 9, 0, 0))
+        ts = datetime(2025, 4, 2, 9, 0, 0).replace(tzinfo=KST)
         assert is_krx_trading_hours(ts) is True
 
     def test_weekday_at_market_close_kst(self):
         # 15:30 KST exactly — included
-        ts = KST.localize(datetime(2025, 4, 2, 15, 30, 0))
+        ts = datetime(2025, 4, 2, 15, 30, 0).replace(tzinfo=KST)
         assert is_krx_trading_hours(ts) is True
 
     def test_weekday_before_market_open(self):
         # 08:59 KST
-        ts = KST.localize(datetime(2025, 4, 2, 8, 59, 0))
+        ts = datetime(2025, 4, 2, 8, 59, 0).replace(tzinfo=KST)
         assert is_krx_trading_hours(ts) is False
 
     def test_weekday_after_market_close(self):
         # 15:31 KST
-        ts = KST.localize(datetime(2025, 4, 2, 15, 31, 0))
+        ts = datetime(2025, 4, 2, 15, 31, 0).replace(tzinfo=KST)
         assert is_krx_trading_hours(ts) is False
 
     def test_saturday_during_normal_hours(self):
         # Saturday 2025-04-05 10:00 KST
-        ts = KST.localize(datetime(2025, 4, 5, 10, 0, 0))
+        ts = datetime(2025, 4, 5, 10, 0, 0).replace(tzinfo=KST)
         assert is_krx_trading_hours(ts) is False
 
     def test_sunday_during_normal_hours(self):
         # Sunday 2025-04-06 10:00 KST
-        ts = KST.localize(datetime(2025, 4, 6, 10, 0, 0))
+        ts = datetime(2025, 4, 6, 10, 0, 0).replace(tzinfo=KST)
         assert is_krx_trading_hours(ts) is False
 
     def test_holiday_weekday_during_normal_hours(self):
         # 2025-01-01 (New Year) is Wednesday, 10:00 KST
-        ts = KST.localize(datetime(2025, 1, 1, 10, 0, 0))
+        ts = datetime(2025, 1, 1, 10, 0, 0).replace(tzinfo=KST)
         assert is_krx_trading_hours(ts) is False
 
     def test_utc_timestamp_converted_correctly(self):
