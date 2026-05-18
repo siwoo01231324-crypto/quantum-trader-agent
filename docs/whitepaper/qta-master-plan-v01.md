@@ -930,27 +930,133 @@ python scripts/promote_metalabeler.py --strategy momo-btc-v2 --version <ts>
 ### §11-3. 86개 이슈 진척도 (백서 v0.1 발행 후 신규 21건 추가 반영)
 
 <!-- progress-table:start -->
-| 분류 | 머지 (52) | 진행/백로그 (34) | % |
-|------|----------|-----------------|---|
-| 사전 리서치 (32 노트) | #1-9, #19-23, #29-31, #60-62, #84 | — | 100 |
-| 지식 인프라 | #45, #47, #48, #51-55 | — | 100 |
-| Phase 0 엔진+신호+전략 | #20, #67, #68, #71, #76, #78, #79, #81 | #99 | 89 |
-| 메타라벨러 | #85, #94, #95 | #97, #122 | 60 |
-| KRX 분봉 | #96 | — | 100 |
-| 리스크·사이징 | #24, #69, #70, #87 | #120, #121 | 67 |
-| 실행 알고리즘 | #25, #73 | — | 100 |
-| Phase 1 그림자 | #80, #106 | — | 100 |
-| Phase 2 모의계좌 | — | #105, #133 | 0 |
-| Phase 3 실자금 | — | #107 | 0 |
-| 운영·관측·세금 | #26, #27, #28 | #108 | 75 |
-| 실행 알고리즘 고도화 | — | #109-114 | 0 |
-| Phase 4 EXE 배포·보안 | — | #123, #124, #127, #128, #129, #134 | 0 |
-| 모니터링·운영 가시성 | — | #125, #126 | 0 |
-| 사용자 목표 정렬 (월 10%) | — | #119 | 0 |
-| VC 사업화 보완 (시장·법무·수익·Moat) | — | #130, #131, #135, #136 | 0 |
-| 코드 품질·자문·외부 검증 | — | #132, #137, #138, #139, #140 | 0 |
-| 본 이슈 (Whitepaper v0.1) | — | #86 | 95 (PR 대기) |
-| **합계** | **52** | **34** | **60** |
+| # | 상태 | 라벨 | 제목 |
+|---|------|------|------|
+| #238 | ✅ |  | fix: smoke MVP 통로 검증 — KIS 한도 폭주 + Binance testnet endpoint + 8개 결함 |
+| #236 | ✅ |  | feat: 대시보드 실거래 가시화 + smoke-dual 통로 검증 |
+| #231 | ✅ | enhancement | feat: 운영 인프라 통합 리팩토링 — 11전략 실가동 + AC0 검증 게이트 + Lake 누적 (#105/#218/#227 후속) |
+| #230 | ✅ |  | chore: HTS 검색식 3종 (5분대기/단타/스윙) 채택 평가 — 1주 분봉 백테스트 |
+| #229 | ✅ | enhancement | eval: HTS 검색식 3종 (5분대기/단타/스윙) 채택 평가 — 1주 분봉 백테스트 |
+| #227 | ✅ |  | feat: Live Universe Scanner 패러다임 — 장중 실시간 검색식 자동매매 (검색식 + 손익비 청산) |
+| #225 | ✅ |  | feat: universe-scan paper rebal cron — 매주 금/일 자동 발주 (#218 후속) |
+| #221 | ✅ |  | feat: telegram_control 거래 현황 명령어 (/today /positions /fills /account) + configs/policy.yaml 운영 정책 작성 (#126/#216 후속) |
+| #218 | ✅ |  | feat: universe-scan 패턴 전면 전환 — 풀 스캔 매매 + 통합 카탈로그 + 대시보드 토글·전략별 페이지 + 데몬·Telegram·Docker·daily_check 일괄 리팩토링 |
+| #217 | ✅ |  | fix: KIS Pydantic 스키마 case-insensitive — paper 응답 소문자 키로 잔고 카드 깨짐 |
+| #216 | ✅ |  | bug: live_run paper KIS warmup→WS→tick→WAL 흐름 미작동 — --schedule=krx 미구현 + 마감 후 warmup 무한 retry (#133/#152 후속) |
+| #215 | 🔄 |  | chore: qta.exe 자동 배포 (Releases latest 롤링) + --check-bundle 검증 단계 |
+| #206 | ✅ |  | feat: #185 후속 — bench multi-asset 확장 + multi_tf/turning_point/metalabeler 실 연결 |
+| #199 | ✅ |  | feat: R6 (R4 의 1시간봉 변형) — backtest + paper 30일 병렬 운영 (#143 후속) |
+| #198 | ✅ |  | feat: 대시보드 "Shadow Runs" 뷰어 — Binance/KIS WAL read-only 통합 표시 (#143/#133 후속) |
+| #194 | ✅ |  | feat: DashboardState 라이브 PnL 와이어링 (전체·일간·전략별, KST 09:00 일일 리셋) |
+| #193 | 🔄 |  | feat: 전략별 체결 이력 필터 — REST + 상세 페이지 라이브 타임라인 |
+| #192 | ✅ |  | feat: 전략별 포지션 추적 (strategy_id 태깅) + position_provider 라이브 와이어링 |
+| #191 | 🔄 |  | feat: 전략 상세 페이지 (/strategies/{id}) — 종목·실시간 가격·summary·토글 |
+| #185 | ✅ |  | feat: Iranyi 12룰 풀 구현 + 5m TF 다중자산 백테스트 — VWMA 진입 시점 강화 (#147 후속) |
+| #182 | ✅ |  | feat: qta.exe 첫 실행 UX — 자동 브라우저 열기 + 콘솔창 유지 |
+| #181 | ✅ |  | feat: 매매 타임라인 실시간 스트리밍 (WebSocket) — 신호→메타라벨러→주문→체결 |
+| #180 | ✅ |  | feat: 전략 ON/OFF 토글 UI + REST API (runtime orchestrator 제어) |
+| #179 | 🔄 |  | feat: 전략 상세 페이지 (마크다운 렌더링 + 신호·리스크룰 인라인) |
+| #178 | ✅ |  | feat: FastAPI 대시보드 — 전략 카탈로그 페이지 + 백테스트 수익률 표시 |
+| #177 | ✅ |  | chore: configs/orchestrator/production.yaml 작성 + EXE 재빌드 (전략 5종 등록 활성화) |
+| #175 | ✅ |  | feat: 1-month paper trading shadow run for S2c (vol-target Donchian, #172 후속) |
+| #174 | ✅ |  | feat: Hourly funding carry + multi-exchange arbitrage (S4 mhr 보강, #172 후속) |
+| #173 | ✅ |  | feat: HMM regime detection + S2c/S4 strategy switching (#172 후속) |
+| #155 | ✅ |  | fix: cross_asset_compare.py manifest path / format 정합성 (#97 후속) |
+| #154 | ✅ |  | feat: bench_metalabeler_kis.py 에 equity-curve 기반 Sharpe/MDD/DSR 출력 (#97 후속) |
+| #153 | 🔄 |  | feat: KIS 90일 누적 후 momo-kis-v1-pooled 가설 본판정 (#97 Phase B) |
+| #152 | ✅ |  | chore: KIS 1분봉 cron 운영 시작 + 누적 데이터 모니터링 (#97 후속) |
+| #147 | ✅ |  | feat: VWMA + 추세 필터 + stop-loss/take-profit 통합 backtest (#99 후속) |
+| #145 | ✅ |  | research: 오더플로우·ICT 시그널 카탈로그 평가 (sleeve B 알파 보강) |
+| #143 | ✅ |  | chore: Phase 1 Shadow Paper 데몬 실가동 + 30거래일 누적 운영 |
+| #142 | 🔄 |  | chore: Whitepaper v0.1.1 — 지난 30거래일 백테스트 fast-forward 발행 (#138 보다 빠른 임시판) |
+| #140 | 🔄 |  | chore: 외부 자문 1-2명 확보 (퀀트 트레이딩·핀테크 법무) |
+| #139 | ✅ |  | chore: 진척도 자동 갱신 스크립트 (gh issue list → 백서 §11-3 재생성) |
+| #138 | 🔄 |  | chore: Whitepaper v0.2 발행 (Phase 1 30거래일 누적 후) |
+| #137 | 🔄 |  | feat: 대체 데이터 소스 1개 이상 확보 (Binance/KIS 의존 완화) |
+| #136 | 🔄 |  | research: Moat 분석 + 경쟁 우위 지속성 논거 |
+| #135 | 🔄 |  | research: 수익 모델 단위 경제학 (B2C 구독 / B2B 라이선싱 / 자기자본 운용) |
+| #134 | 🔄 |  | chore: EV Code Signing 인증서 발급·예산 확정 |
+| #133 | ✅ |  | chore: Phase 2 KIS 모의계좌 4주 실측 운영 (#105 Stage 7b 후속) |
+| #132 | ✅ |  | chore: 테스트 커버리지 지표 + 3계층 전략 (단위·통합·백테스트) |
+| #131 | 🔄 |  | research: 시장 규모(TAM/SAM/SOM) + 경쟁자 비교 + 페르소나 인터뷰 검증 |
+| #130 | 🔄 |  | chore: 법무 검토 — 자본시장법·특금법·KRX 시장교란 외부 배포 시 |
+| #129 | 🔄 |  | feat: 온보딩 마법사 + 거래소 API 키 발급 가이드 + 권한 체크리스트 |
+| #128 | ✅ |  | chore: 자동 업데이트 채널 (GitHub Release + SHA256 + 다중 서명 + 롤백) |
+| #127 | ✅ |  | feat: Binance OCO + KIS 조건부 주문 사전 등록 (PC 다운 포지션 보호) |
+| #126 | ✅ |  | feat: 텔레그램 봇 양방향 제어 (/kill /release /status /policy) |
+| #125 | ✅ |  | feat: FastAPI 로컬 대시보드 (4사분면 + Prometheus 메트릭 endpoint) |
+| #124 | ✅ |  | feat: DPAPI 기반 API 키 저장소 + 키 회전 UI |
+| #123 | ✅ |  | feat: EXE 패키징 PoC (PyInstaller 단일 .exe 빌드 파이프라인) |
+| #122 | ✅ |  | feat: 메타라벨러 재학습 윈도우 + 자동 롤백 조건 검증 |
+| #121 | ✅ |  | chore: extreme_fear_threshold 가격 기반 프록시 백테스트 검증 |
+| #120 | ✅ |  | chore: per_portfolio_risk 주기 평가기 watchdog + 알림 |
+| #119 | ✅ |  | research: 월 10% 수익률 목표 가능성 평가 + 전략·리스크·사이징 재설계 |
+| #114 | ✅ | enhancement | feat: Implementation Shortfall 사전 추정 + TCA 메트릭 (특허 #84-4 차용) |
+| #113 | ✅ | enhancement | feat: TWAP 볼라틸리티 레짐 적응 + KRX VI 게이트 (특허 #84-3 차용) |
+| #112 | ✅ | enhancement | feat: OrderRouter 비용 기반 동적 라우팅 (특허 #84-2 차용) |
+| #111 | ✅ | enhancement | feat: VWAP 볼륨 프로파일 실시간 blend (특허 #84-1 차용) |
+| #110 | ✅ | enhancement | feat: Partial fill 지원 (MockMatchingEngine partial_fill_enabled=True) |
+| #109 | ✅ | enhancement | feat: 슬리피지 모델 활성화 (SquareRootImpact) — MockMatchingEngine Phase 2+ 확장 |
+| #108 | ✅ | enhancement | chore: KillSwitch threading.Lock → asyncio.Lock 전환 (Phase 3+ 멀티스레드 대비) |
+| #107 | 🔄 | enhancement | feat: 라이브 실행 프레임워크 Phase 3 Live Pilot — 실자금 5% (#105 후속) |
+| #106 | ✅ | enhancement | chore: Binance Futures historical data loader (#80 Phase E Sharpe 비교 의존) |
+| #105 | ✅ | enhancement | feat: 라이브 실행 프레임워크 Phase 2 — KIS 모의계좌 + AsyncOrderRouter (#80 후속) |
+| #99 | ✅ | enhancement | feat: 신규 전략 — 이랑이 VWMA100 단타 기법 카탈로그 (research + vwma-cross-v1) |
+| #97 | ✅ |  | feat: 메타라벨러 × KIS 교차 검증 — BTC/KRX 두 자산군 DSR·PR 비교 |
+| #96 | ✅ |  | feat: KIS 분봉 시세 fetcher + momo_kis_v1 전략 (KRX 메타라벨러 선행) |
+| #95 | ✅ |  | feat: 메타라벨러 월별 자동 재학습 + 드리프트 감지 파이프라인 |
+| #94 | ✅ |  | feat: 메타라벨러 프로덕션 활성화 (오케스트레이터 주입 + A/B 등록) |
+| #87 | ✅ | enhancement | chore: 특허 조사(#84) 차용 리팩토링 일괄 — 리스크·유니버스 강화 |
+| #86 | ✅ |  | chore: 엔드투엔드 프로젝트 기획서 작성 (docs/whitepaper/qta-master-plan-v01.md) |
+| #85 | ✅ | enhancement | feat: 메타라벨링 레이어 (LightGBM 2차 필터 + purged CV + walk-forward) |
+| #84 | ✅ | documentation | chore: 타 AI/자동매매 특허 리서치 — 시스템 강화 + 회피설계 근거 |
+| #81 | ✅ |  | chore: 팩터 점증 계산 + momo-btc-v2 훅 마이그레이션 |
+| #80 | ✅ | enhancement | feat: 라이브 실행 프레임워크 (PaperBroker + Phase 1 Shadow Paper) |
+| #79 | ✅ | enhancement | feat: 전략 카탈로그 확장 (Mean Reversion + Channel Breakout + Vol-filtered Momentum) |
+| #78 | ✅ | enhancement | feat: 멀티 전략 비동기 실행 오케스트레이터 (전략 스케줄링 + 리스크/사이저 배선) |
+| #76 | ✅ | enhancement | feat: Signal 인터페이스 확장 — 전략 확신도·기대수익·승률을 sizer로 전달 |
+| #74 | ✅ |  | feat: 기업가치 분석 (밸류에이션) research + KIS API 재무 조회 연동 |
+| #73 | ✅ | enhancement | feat: 브로커 어댑터 async 마이그레이션 (#68 후행) |
+| #71 | ✅ | enhancement | feat: 알파 팩터 파이프라인 (피처 엔지니어링 프레임워크) |
+| #70 | ✅ | enhancement | feat: 포트폴리오 리스크 관리 (CVaR + 상관 매트릭스) |
+| #69 | ✅ | enhancement | feat: 포지션 사이징 구현 (Kelly + vol targeting) |
+| #68 | ✅ | enhancement | feat: 브로커 API 커넥터 (Binance Futures / KIS) |
+| #67 | ✅ | enhancement | feat: 마켓 데이터 수집 + Zipline 백테스트 + momo-btc-v2 실행 |
+| #62 | ✅ |  | chore: 리서치 스프린트 3 — PIT · Corporate Actions · Paper-to-Live · Market Regime |
+| #61 | ✅ |  | chore: 리서치 스프린트 2 — GraphRAG · LLM 실무 가드레일 · FIBO 대조 |
+| #60 | ✅ |  | chore: 리서치 스프린트 1 — 볼트 위키링크 백필 + 진짜 퀀트 갭 (position sizing · portfolio risk) |
+| #55 | ✅ | enhancement | feat: Protégé + GraphDB 연동 (온톨로지 GUI 편집·SPARQL 서버) |
+| #54 | ✅ | enhancement | feat: SHACL 제약 기반 고급 검증 (CI fail 모드) |
+| #53 | ✅ | enhancement | feat: LLM 에이전트 자동 노트 생성 (백테스트·인시던트·포스트모템) |
+| #52 | ✅ | documentation,enhancement | chore: docs 전체 프론트매터 일괄 마이그레이션 + CI strict 전환 |
+| #51 | ✅ | enhancement | feat: Obsidian 볼트 MCP 서버 노출 (LLM 에이전트 연동) |
+| #48 | ✅ |  | [chore] 누락 .ai.md 2건 추가 (docs/runbooks, grafana/dashboards) |
+| #47 | ✅ | documentation,enhancement | feat: Obsidian 지식볼트 + 트레이딩 온톨로지 구현 |
+| #45 | ✅ |  | [chore] AGENTS.md 레포 구조 트리 최신화 |
+| #31 | ✅ |  | [research] Snowflake UGM 2026 대체데이터 트레이딩 데모 참고 자료 기록 |
+| #30 | ✅ |  | [research] LLM 에이전트 레이어 탐색 (Agentic Trading) |
+| #29 | ✅ |  | [research] 양자 PoC 설계 (Phase 4 옵션, QAOA 포트폴리오 최적화) |
+| #28 | ✅ |  | [feat] 세금·회계 자동화 (KR 개인 양도세·연말 신고) |
+| #27 | ✅ |  | [feat] Kill Switch & DR 런북 |
+| #26 | ✅ |  | [feat] 관측성 스택 (Prometheus/Grafana/Loki/알림) |
+| #25 | ✅ |  | [feat] 실행 알고리즘 (TWAP/VWAP/지정가·KRX 단일가 구간) |
+| #24 | ✅ |  | [feat] 리스크 룰 DSL 설계 (YAML 기반 한도 정책) |
+| #23 | ✅ |  | [research] 피처·알파 소스 카탈로그 |
+| #22 | ✅ |  | [research] 백테스트 검증 프로토콜 (walk-forward·purged K-fold) |
+| #21 | ✅ |  | [research] 백테스트 엔진 선택·비교 (Zipline/Backtrader/LEAN/Nautilus) |
+| #20 | ✅ |  | [feat] 데이터 레이크 스키마 설계 (OHLCV·호가·체결·팩터) |
+| #19 | ✅ |  | [research] 브로커 Open API 비교·선정 (KIS / 키움 / LS) |
+| #9 | ✅ |  | 자동매매 시스템 구성요소 개괄 (데이터→신호→주문→리스크→모니터링) |
+| #8 | ✅ |  | 트레이딩 전략 패러다임 개괄 (규칙기반/통계/ML/양자) |
+| #7 | ✅ |  | 주식 시장 구조 기초 리서치 (호가·체결·유동성·KRX 특성) |
+| #6 | ✅ |  | 왜 지금 퀀텀 트레이딩인가 — 필요성·한계·현실성 (2026) |
+| #5 | ✅ |  | 자동매매 vs 퀀트 vs 퀀텀 — 차이와 관계 정리 |
+| #4 | ✅ |  | 주식 자동매매(Algorithmic Trading)란 무엇인가 — 정의·분류·개인 투자자 관점 |
+| #3 | ✅ |  | 퀀텀 트레이딩(Quantum Trading)이란 무엇인가 — 현재 수준과 풀려는 문제 |
+| #2 | ✅ |  | 용어 정의 리서치: 퀀트(Quant) vs 퀀텀(Quantum) 트레이딩 |
+| #1 | ✅ |  | 자동매매 프로그램 구현을 위한 선행 리서치 + 구현 플랜 초안 |
+
+**진척도: 107/123 완료 (87.0%)**
 <!-- progress-table:end -->
 
 > v0.1 발행 후 부록 B Known Concerns 와 VC 검증 체크리스트에서 21건 신규 백로그 (#119-#140, #133 제외) 도출. 진행/백로그 12건 → 34건. 진행률은 81% 에서 60% 로 재계산 (분모 확장).
