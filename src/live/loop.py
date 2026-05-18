@@ -73,6 +73,11 @@ class ShadowConfig:
     # Used by live_run.py to wire `DashboardState.orchestrator` so that
     # `POST /api/strategies/{id}/toggle` reaches the live orchestrator.
     on_orchestrator_ready: Callable[[AsyncStrategyOrchestrator], None] | None = None
+    # #238 follow-up — invoked once the SnapshotBuilder is constructed. Used
+    # by live_run.py to wire `DashboardState.snapshot_builder` so that
+    # `GET /api/venue_equity_status` can surface which venue is INERT (real
+    # equity unavailable → orders dropped). None → no-op (legacy/tests).
+    on_snapshot_builder_ready: Callable[[Any], None] | None = None
     # #216 trading-session schedule gate. "krx" blocks startup until next KRX
     # open (09:00 KST) when current time is outside session, preventing
     # warmup-time EGW00201 floods that previously stalled the WS connect step.
@@ -367,6 +372,13 @@ async def run_shadow_loop(
             universe_quote_provider=config.universe_quote_provider,  # #231 S2
             balance_provider=config.balance_provider,  # #238 Item 9
         )
+        if config.on_snapshot_builder_ready is not None:
+            try:
+                config.on_snapshot_builder_ready(snapshot_builder)
+            except Exception as err:
+                logger.warning(
+                    "live.loop.on_snapshot_builder_ready_failed error=%s", err,
+                )
         await snapshot_builder.warmup()
 
         if feed is None:

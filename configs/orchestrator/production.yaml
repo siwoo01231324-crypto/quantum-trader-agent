@@ -169,7 +169,11 @@ strategies:
     class: backtest.strategies.smoke_1m_roundtrip.Smoke1mRoundtrip
     kwargs:
       symbol: "005930"
-      size_fraction: 0.01
+      # #238 — KIS 통로 검증용. size_to_qty(#238-8) 도입 후 size_fraction 은
+      # "자본 대비 %". 0.01×~973만원÷7만원 ≈ 1.39 → 1주(edge, 주가↑/잔고↓ 시
+      # 0주 drop 위험). 0.02 → 2주 마진 확보 (코인 smoke 와 동일한 통로
+      # 검증 신뢰도). SMOKE_TEST_ENABLED=1 일 때만 발사.
+      size_fraction: 0.02
   - id: smoke-1m-roundtrip-binance
     class: backtest.strategies.smoke_1m_roundtrip.Smoke1mRoundtrip
     kwargs:

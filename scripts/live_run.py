@@ -117,15 +117,31 @@ def _parse_duration(s: str) -> float:
     return float(s)
 
 
-def _wire_balance_provider(cfg) -> None:
+def _wire_balance_provider(cfg, existing=None) -> None:
     """#238 Item 9 — inject real venue balances into the SnapshotBuilder path.
 
     Without this the #238-Item-8 fraction→qty conversion sees equity_usdt=0
-    and safely DROPS every Binance order (inert). AccountInfoProvider is
-    internally 15s-cached, so a fresh per-pipeline instance is cheap and
-    keeps the snapshot path decoupled from the dashboard's own instance.
+    and safely DROPS every order (inert).
+
+    #238 follow-up root cause: a freshly-constructed AccountInfoProvider does
+    its own KIS auth + balance REST call. In the live KIS daemon that call
+    contends with the feed/warmup REST traffic and transiently rate-limits
+    (EGW00201) → ok:False → (pre-fix) equity_krw regressed to the placeholder
+    → every KIS order dropped → "0 trades", while standalone (no contention)
+    the same fetch succeeds. Two-part mitigation:
+
+      1. SnapshotBuilder now holds last-known-good equity across transient
+         failures (the structural fix — applies to every path).
+      2. Reuse the dashboard's already-running AccountInfoProvider when one
+         is available (`existing`): its 15s cache is kept warm by the
+         dashboard's own /api/account/info polling, so the snapshot path
+         rides a successful cached value instead of issuing a fresh,
+         contended balance call per pipeline.
     """
     if cfg is None:
+        return
+    if existing is not None:
+        cfg.balance_provider = existing
         return
     from src.dashboard.account_info import AccountInfoProvider  # noqa: PLC0415
     cfg.balance_provider = AccountInfoProvider()
@@ -282,6 +298,11 @@ def _run_dashboard_only_mode(port: int = 8000) -> int:
         pnl_aggregator = PnLAggregator()
         ops_counters = OpsCounters()
         state = DashboardState(timeline_broker=TimelineBroker(), wal_path=None)
+        # #238 follow-up Issue 2 — standalone dashboard (no active pipeline)
+        # must still show PERMANENT cross-run trade history. Seed log_dir to
+        # the `--log-dir` default so prior runs under logs/live/ surface
+        # immediately on boot (a later pipeline overwrites with its own).
+        state.log_dir = Path("logs/live")
         state.position_provider = position_store.get_positions
         state.pnl_aggregator = pnl_aggregator
         state.ops_counters = ops_counters
@@ -782,7 +803,19 @@ async def _run_pipeline_attached(
             ops_counters.ingest(ev.event_type, ev.payload or {})
 
     config.wal_observer = _wal_observer
-    _wire_balance_provider(config)  # #238 Item 9
+    # #238 follow-up root cause — reuse the dashboard's already-warm
+    # AccountInfoProvider (15s cache kept fresh by /api/account/info polling)
+    # so the KIS snapshot path rides a successful cached balance instead of a
+    # fresh contended REST call that the live KIS daemon transiently
+    # rate-limits (→ equity_krw was regressing to placeholder → 0 trades).
+    _wire_balance_provider(
+        config, existing=getattr(state, "account_info_provider", None),
+    )
+    # Surface the live SnapshotBuilder so /api/venue_equity_status can show
+    # which venue is INERT (real equity 미확보 → 주문 전량 보류).
+    config.on_snapshot_builder_ready = lambda sb: setattr(
+        state, "snapshot_builder", sb,
+    )
 
     # #238 — dashboard 거래 시작 경로(_run_pipeline_attached)도 live-scanner
     # 자동 stop/TP 청산을 지원해야 한다. 기존엔 _run_pipeline(CLI)에만 있어
@@ -968,8 +1001,17 @@ async def _run_smoke_dual(
         kis_adapter = None
     if kis_config is not None:
         kis_config.wal_observer = _wal_observer
-        _wire_balance_provider(kis_config)  # #238 Item 9
+        # #238 follow-up root cause — reuse the dashboard's warm provider.
+        _wire_balance_provider(
+            kis_config, existing=getattr(state, "account_info_provider", None),
+        )
+        kis_config.on_snapshot_builder_ready = lambda sb: setattr(
+            state, "snapshot_builder", sb,
+        )
         state.wal_path = kis_config.wal_path  # primary for WS replay
+        # Issue 2 — permanent cross-run history for the smoke-dual path too.
+        if kis_config.wal_path is not None:
+            state.log_dir = Path(kis_config.wal_path).parent.parent
 
     # Binance branch — BTCUSDT testnet-shadow + Binance public WS feed.
     bnb_argv = [
@@ -988,7 +1030,9 @@ async def _run_smoke_dual(
         binance_adapter = None
     if bnb_config is not None:
         bnb_config.wal_observer = _wal_observer
-        _wire_balance_provider(bnb_config)  # #238 Item 9
+        _wire_balance_provider(
+            bnb_config, existing=getattr(state, "account_info_provider", None),
+        )
         # Surface to /api/trades so the dashboard trade-history card sees both.
         if state.wal_path is None:
             state.wal_path = bnb_config.wal_path
@@ -1043,6 +1087,16 @@ async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
     dashboard_state.position_provider = position_store.get_positions
     dashboard_state.pnl_aggregator = pnl_aggregator
     dashboard_state.ops_counters = ops_counters
+    # #238 follow-up Issue 2 — trade history / 전략별 포지션은 영구·누적이어야
+    # 한다. config.wal_path = {log_dir}/{run_id}/wal.jsonl 이므로 log_dir 은
+    # 항상 parent.parent. 이 한 줄이 없으면 _resolve_log_dir 이 None →
+    # 거래 이력이 매 run 마다 사라졌다 (사용자 보고 결함).
+    if config.wal_path is not None:
+        dashboard_state.log_dir = Path(config.wal_path).parent.parent
+    # #238 follow-up Issue 1 — live SnapshotBuilder 노출 → venue INERT 가시화.
+    config.on_snapshot_builder_ready = lambda sb: setattr(
+        dashboard_state, "snapshot_builder", sb,
+    )
 
     def _wal_observer(ev) -> None:
         timeline_broker.publish(asdict(ev))

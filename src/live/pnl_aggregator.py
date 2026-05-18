@@ -33,6 +33,30 @@ logger = logging.getLogger(__name__)
 KST = ZoneInfo("Asia/Seoul")
 
 
+def classify_venue(symbol: str) -> str:
+    """Map a symbol to its trading venue (currency domain).
+
+    SAME predicate used by `src/portfolio/_async_orchestrator.py` and
+    `src/live/conversion.py`:
+
+      - ``"...USDT"`` with ``len > len("USDT")``  -> ``"binance"`` (USDT)
+      - 6-digit numeric KRX code                  -> ``"kis"``     (KRW)
+      - anything else                             -> ``"unknown"``
+
+    The ``"unknown"`` bucket is intentionally defensive: an unrecognised
+    symbol must never crash the aggregator (it feeds live P&L / dashboards
+    and a raise here would silently halt every venue's accounting). Mixing
+    KRW and USDT into one float is the bug this split exists to fix, so an
+    unclassifiable symbol gets its own bucket rather than polluting a real
+    venue total.
+    """
+    if symbol.endswith("USDT") and len(symbol) > len("USDT"):
+        return "binance"
+    if len(symbol) == 6 and symbol.isdigit():
+        return "kis"
+    return "unknown"
+
+
 class PnLAggregator:
     def __init__(self, *, kst_now: Callable[[], datetime] | None = None) -> None:
         self._cum_realized: float = 0.0
@@ -40,6 +64,13 @@ class PnLAggregator:
         self._monthly: float = 0.0
         self._by_strategy: dict[str, float] = {}
         self._daily_by_strategy: dict[str, float] = {}
+        # Per-venue realized P&L (currency-correct — never cross-summed).
+        # Keyed by classify_venue(symbol): "binance" (USDT) / "kis" (KRW) /
+        # "unknown". Mirrors the cumulative/daily/monthly scalar lifecycle
+        # incl. the SAME KST-09:00 business-window resets.
+        self._cum_by_venue: dict[str, float] = {}
+        self._daily_by_venue: dict[str, float] = {}
+        self._monthly_by_venue: dict[str, float] = {}
         # (strategy_id, symbol) → (qty held, avg cost)
         self._cost_basis: dict[tuple[str, str], tuple[Decimal, Decimal]] = {}
         # Track the BD/month last seen so we can auto-reset on rollover.
@@ -61,10 +92,12 @@ class PnLAggregator:
         ts: datetime | None = None,
     ) -> None:
         realized = self._apply_to_cost_basis(strategy_id, symbol, side, qty, price, fee)
+        venue = classify_venue(symbol)
 
         # Cumulative buckets (always accumulate)
         self._cum_realized += realized
         self._by_strategy[strategy_id] = self._by_strategy.get(strategy_id, 0.0) + realized
+        self._cum_by_venue[venue] = self._cum_by_venue.get(venue, 0.0) + realized
 
         # Daily / monthly only when fill belongs to current BD/month.
         # Resolve "current" with a fresh check so we don't credit yesterday's
@@ -77,8 +110,14 @@ class PnLAggregator:
             self._daily_by_strategy[strategy_id] = (
                 self._daily_by_strategy.get(strategy_id, 0.0) + realized
             )
+            self._daily_by_venue[venue] = (
+                self._daily_by_venue.get(venue, 0.0) + realized
+            )
         if (fill_bd.year, fill_bd.month) == self._cached_business_month:
             self._monthly += realized
+            self._monthly_by_venue[venue] = (
+                self._monthly_by_venue.get(venue, 0.0) + realized
+            )
 
     def ingest_fill_event(self, event_type: str, payload: dict) -> None:
         if event_type != "order_filled":
@@ -146,6 +185,28 @@ class PnLAggregator:
     def daily_for(self, strategy_id: str) -> float:
         self._refresh_business_window()
         return self._daily_by_strategy.get(strategy_id, 0.0)
+
+    def realtime_by_venue(self) -> dict[str, float]:
+        """Cumulative realized P&L split by venue (currency-correct).
+
+        Keys: "binance" (USDT) / "kis" (KRW) / "unknown". Never cross-sums
+        currencies — the fix for the scalar `realtime` mixing KRW+USDT.
+        """
+        return dict(self._cum_by_venue)
+
+    def daily_by_venue(self) -> dict[str, float]:
+        """Per-venue daily realized P&L. Honors the SAME KST-09:00
+        business-date reset as the `daily` scalar (auto-clears on rollover).
+        """
+        self._refresh_business_window()
+        return dict(self._daily_by_venue)
+
+    def monthly_by_venue(self) -> dict[str, float]:
+        """Per-venue monthly realized P&L. Honors the SAME KST-09:00
+        business-month reset as the `monthly` scalar.
+        """
+        self._refresh_business_window()
+        return dict(self._monthly_by_venue)
 
     # -- internals ---------------------------------------------------------
 
@@ -218,9 +279,11 @@ class PnLAggregator:
         if bd != self._cached_business_date:
             self._daily = 0.0
             self._daily_by_strategy.clear()
+            self._daily_by_venue.clear()
             self._cached_business_date = bd
         if ym != self._cached_business_month:
             self._monthly = 0.0
+            self._monthly_by_venue.clear()
             self._cached_business_month = ym
 
     @staticmethod

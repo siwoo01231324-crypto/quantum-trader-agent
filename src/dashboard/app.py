@@ -26,6 +26,7 @@ from src.dashboard.ops_counters import OpsCounters
 from src.dashboard.shadow_runs import discover_shadow_runs, load_run_detail
 from src.dashboard.strategy_catalog import load_production_status, load_strategy_catalog
 from src.dashboard.timeline_broker import TimelineBroker
+from src.live.trade_history import discover_wal_files, reconstruct_trades
 from src.live.wal import replay as wal_replay
 from src.observability.metrics import Metrics
 
@@ -79,6 +80,13 @@ class DashboardState:
     # KIS + Binance 계좌 정보 provider (#182 — "내 계좌" 카드)
     account_info_provider: object | None = None
 
+    # #238 follow-up — live SnapshotBuilder. Read-only; the dashboard surfaces
+    # `.last_equity_status` so a venue that is silently INERT (real equity
+    # unavailable → every order dropped by the Item-8 conversion) is visible
+    # instead of presenting as an unexplained "0 trades". Wired the same way
+    # as `orchestrator` (via a ShadowConfig ready-callback in live_run.py).
+    snapshot_builder: Any | None = None
+
     # Shadow Runs 뷰어 (#198) — logs/shadow/{run_id}/wal.jsonl 디렉토리 루트
     shadow_log_dir: Path | None = None
 
@@ -98,6 +106,13 @@ class DashboardState:
     # live events arrive via the shared timeline_broker regardless of WAL.
     extra_wal_paths: list[Path] = field(default_factory=list)
 
+    # Root directory that contains per-run sub-dirs (each holding a wal.jsonl).
+    # Used by /api/trade_history → discover_wal_files(log_dir) → reconstruct_trades.
+    # When None, derived automatically from wal_path.parent.parent (i.e. the run
+    # dir's grandparent) if wal_path is set; otherwise returns an empty list
+    # (boot before any run has written a WAL is normal/safe).
+    log_dir: Path | None = None
+
 
 def _pnl_view(state: "DashboardState") -> dict:
     """Resolve the dashboard PnL snapshot.
@@ -105,6 +120,10 @@ def _pnl_view(state: "DashboardState") -> dict:
     Prefers the live `PnLAggregator` (#194). Falls back to the static
     `pnl_realtime / pnl_daily / pnl_monthly` fields when no aggregator is
     wired (legacy callers, dashboard-only mode).
+
+    The *_by_venue dicts are keyed "binance" (USDT), "kis" (KRW), "unknown".
+    They are NEVER cross-summed — each value is in the venue's own currency.
+    Legacy scalar realtime/daily/monthly are kept for backward compatibility.
     """
     agg = state.pnl_aggregator
     if agg is not None:
@@ -113,12 +132,19 @@ def _pnl_view(state: "DashboardState") -> dict:
             "daily": float(agg.daily),
             "monthly": float(agg.monthly),
             "by_strategy": {k: float(v) for k, v in agg.by_strategy.items()},
+            # Per-venue splits — currency-correct, never cross-summed.
+            "realtime_by_venue": {k: float(v) for k, v in agg.realtime_by_venue().items()},
+            "daily_by_venue": {k: float(v) for k, v in agg.daily_by_venue().items()},
+            "monthly_by_venue": {k: float(v) for k, v in agg.monthly_by_venue().items()},
         }
     return {
         "realtime": state.pnl_realtime,
         "daily": state.pnl_daily,
         "monthly": state.pnl_monthly,
         "by_strategy": {},
+        "realtime_by_venue": {},
+        "daily_by_venue": {},
+        "monthly_by_venue": {},
     }
 
 
@@ -158,11 +184,43 @@ def _render_dashboard(state: DashboardState, catalog_items: list[dict] | None = 
     # 전략 카탈로그 카드 (#178+#180 인라인)
     catalog_cards_html = "".join(_strategy_card(it) for it in (catalog_items or []))
 
-    # Q1: 손익
+    # Q1: 손익 — scalar + per-venue splits
     pnl = _pnl_view(state)
     pnl_realtime_fmt = f"{pnl['realtime']:,.2f}"
     pnl_daily_fmt = f"{pnl['daily']:,.2f}"
     pnl_monthly_fmt = f"{pnl['monthly']:,.2f}"
+
+    def _venue_val(d: dict, key: str) -> str | None:
+        """Return formatted value from a by_venue dict, or None if absent."""
+        v = d.get(key)
+        return f"{v:,.2f}" if v is not None else None
+
+    # KIS (KRW) per-period values
+    kis_rt  = _venue_val(pnl["realtime_by_venue"],  "kis")
+    kis_day = _venue_val(pnl["daily_by_venue"],     "kis")
+    kis_mon = _venue_val(pnl["monthly_by_venue"],   "kis")
+    # Binance (USDT) per-period values
+    bnb_rt  = _venue_val(pnl["realtime_by_venue"],  "binance")
+    bnb_day = _venue_val(pnl["daily_by_venue"],     "binance")
+    bnb_mon = _venue_val(pnl["monthly_by_venue"],   "binance")
+
+    def _pnl_color_cls(fmt_val: str | None) -> str:
+        if fmt_val is None:
+            return "zero"
+        raw = fmt_val.replace(",", "")
+        try:
+            n = float(raw)
+        except ValueError:
+            return "zero"
+        return "neg" if n < 0 else ("zero" if n == 0 else "")
+
+    def _pnl_cell(fmt_val: str | None, currency: str) -> str:
+        """Return HTML for one venue PnL number cell."""
+        if fmt_val is None:
+            return f'<span class="pnl-venue-val zero">—</span><span class="pnl-venue-cur">{currency}</span>'
+        cls = _pnl_color_cls(fmt_val)
+        sign = "+" if not fmt_val.startswith("-") and fmt_val.replace(",", "") != "0.00" else ""
+        return f'<span class="pnl-venue-val {cls}">{sign}{fmt_val}</span><span class="pnl-venue-cur">{currency}</span>'
 
     # Q2: 한도 게이지
     limits = [
@@ -296,6 +354,81 @@ body{{
   padding:16px;
 }}
 .card-sm{{padding:12px 16px}}
+
+/* ── venue PnL 분할 카드 ── */
+.pnl-venue-grid{{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}}
+.pnl-venue-card{{
+  background:var(--bg);
+  border:1px solid var(--border);
+  border-radius:5px;
+  padding:10px 12px;
+}}
+.pnl-venue-header{{
+  display:flex;align-items:center;gap:6px;
+  margin-bottom:8px;
+  font-size:10px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.08em;color:var(--text3);
+}}
+.pnl-venue-flag{{font-size:13px;line-height:1}}
+.pnl-venue-name{{color:var(--text2)}}
+.pnl-venue-currency{{
+  margin-left:auto;
+  font-family:var(--mono);font-size:10px;font-weight:600;
+  color:var(--text3);background:var(--surface2);
+  border:1px solid var(--border);border-radius:3px;
+  padding:1px 6px;
+}}
+.pnl-venue-rows{{display:flex;flex-direction:column;gap:4px}}
+.pnl-venue-row{{display:flex;align-items:baseline;justify-content:space-between;gap:6px}}
+.pnl-venue-period{{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;flex-shrink:0}}
+.pnl-venue-val{{
+  font-family:var(--mono);font-size:13px;font-weight:600;
+  font-variant-numeric:tabular-nums;color:var(--green);
+}}
+.pnl-venue-val.neg{{color:var(--red)}}
+.pnl-venue-val.zero{{color:var(--text3)}}
+.pnl-venue-cur{{font-family:var(--mono);font-size:9px;color:var(--text3);margin-left:3px}}
+.pnl-no-sum-note{{
+  font-size:9px;color:var(--text3);
+  text-align:center;margin-top:6px;
+  padding:3px 0;border-top:1px solid var(--border);
+  letter-spacing:.02em;
+}}
+
+/* ── 거래 내역 테이블 (round-trip) ── */
+.th-history-wrap{{max-height:360px;overflow-y:auto;border:1px solid var(--border);border-radius:4px}}
+.th-table{{width:100%;border-collapse:collapse;font-size:11px}}
+.th-table thead th{{
+  font-size:10px;font-weight:600;color:var(--text3);
+  text-transform:uppercase;letter-spacing:.06em;
+  padding:7px 10px;border-bottom:1px solid var(--border);
+  background:var(--surface);
+  position:sticky;top:0;text-align:left;white-space:nowrap;
+}}
+.th-table thead th.num{{text-align:right}}
+.th-table tbody tr{{border-bottom:1px solid var(--border);transition:background .1s}}
+.th-table tbody tr:last-child{{border-bottom:none}}
+.th-table tbody tr:hover{{background:rgba(255,255,255,.025)}}
+.th-table tbody tr:nth-child(even){{background:rgba(255,255,255,.012)}}
+.th-table tbody tr.th-open{{background:rgba(240,165,0,.04)}}
+.th-table tbody tr.th-open:hover{{background:rgba(240,165,0,.07)}}
+.th-table td{{padding:7px 10px;vertical-align:middle;white-space:nowrap}}
+.th-mono{{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums;color:var(--text)}}
+.th-dim{{color:var(--text3);font-size:10px;font-family:var(--mono)}}
+.th-sym{{font-family:var(--mono);font-weight:600;font-size:12px;color:var(--text)}}
+.th-strategy{{font-size:10px;color:var(--text3);max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+.th-venue{{font-family:var(--mono);font-size:9px;font-weight:600;padding:1px 5px;border-radius:3px;background:var(--surface2);color:var(--text3);border:1px solid var(--border)}}
+.th-open-badge{{
+  display:inline-block;font-family:var(--mono);font-size:9px;font-weight:700;
+  padding:2px 7px;border-radius:3px;letter-spacing:.04em;
+  background:rgba(240,165,0,.12);color:var(--yellow);border:1px solid rgba(240,165,0,.25);
+}}
+.th-closed-badge{{
+  display:inline-block;font-family:var(--mono);font-size:9px;font-weight:600;
+  padding:2px 7px;border-radius:3px;letter-spacing:.04em;
+  background:rgba(14,203,129,.08);color:var(--green-dim);border:1px solid rgba(14,203,129,.15);
+}}
+.th-truncnote{{font-size:10px;color:var(--text3);text-align:center;padding:6px;border-top:1px solid var(--border)}}
 
 /* ── 그리드 레이아웃 ── */
 .grid-3{{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}}
@@ -548,28 +681,80 @@ body{{
 
 <div class="page">
 
-  <!-- ── 섹션 1: PnL 요약 ── -->
+  <!-- ── 섹션 1: PnL 요약 (venue 분리) ── -->
   <div>
     <div class="section-hdr"><h2>손익 (PnL)</h2><div class="section-hdr-line"></div></div>
-    <div class="grid-3">
+    <!-- 통합 스칼라 (레거시 호환 / 단일 venue 운영 시 참조) -->
+    <div class="grid-3" style="margin-bottom:10px">
       <div class="pnl-card">
-        <div class="pnl-label">실시간</div>
-        <div class="pnl-value" id="pnl-realtime">{pnl_realtime_fmt}</div>
+        <div class="pnl-label">실시간 (통합)</div>
+        <div class="pnl-value {('neg' if pnl['realtime'] < 0 else 'zero' if pnl['realtime'] == 0 else '')}" id="pnl-realtime">{pnl_realtime_fmt}</div>
       </div>
       <div class="pnl-card">
-        <div class="pnl-label">일간</div>
-        <div class="pnl-value" id="pnl-daily">{pnl_daily_fmt}</div>
+        <div class="pnl-label">일간 (통합)</div>
+        <div class="pnl-value {('neg' if pnl['daily'] < 0 else 'zero' if pnl['daily'] == 0 else '')}" id="pnl-daily">{pnl_daily_fmt}</div>
       </div>
       <div class="pnl-card">
-        <div class="pnl-label">월간</div>
-        <div class="pnl-value" id="pnl-monthly">{pnl_monthly_fmt}</div>
+        <div class="pnl-label">월간 (통합)</div>
+        <div class="pnl-value {('neg' if pnl['monthly'] < 0 else 'zero' if pnl['monthly'] == 0 else '')}" id="pnl-monthly">{pnl_monthly_fmt}</div>
       </div>
     </div>
+    <!-- venue 분리 카드: KIS (KRW) + Binance (USDT) — 통화가 달라 합산 불가 -->
+    <div class="pnl-venue-grid">
+      <!-- KIS KRW -->
+      <div class="pnl-venue-card">
+        <div class="pnl-venue-header">
+          <span class="pnl-venue-flag">&#127472;&#127479;</span>
+          <span class="pnl-venue-name">KIS</span>
+          <span class="pnl-venue-currency">KRW</span>
+        </div>
+        <div class="pnl-venue-rows" id="pnl-venue-kis">
+          <div class="pnl-venue-row">
+            <span class="pnl-venue-period">실시간</span>
+            <span>{_pnl_cell(kis_rt, 'KRW')}</span>
+          </div>
+          <div class="pnl-venue-row">
+            <span class="pnl-venue-period">일간</span>
+            <span>{_pnl_cell(kis_day, 'KRW')}</span>
+          </div>
+          <div class="pnl-venue-row">
+            <span class="pnl-venue-period">월간</span>
+            <span>{_pnl_cell(kis_mon, 'KRW')}</span>
+          </div>
+        </div>
+      </div>
+      <!-- Binance USDT -->
+      <div class="pnl-venue-card">
+        <div class="pnl-venue-header">
+          <span class="pnl-venue-flag">&#9651;</span>
+          <span class="pnl-venue-name">Binance Futures</span>
+          <span class="pnl-venue-currency">USDT</span>
+        </div>
+        <div class="pnl-venue-rows" id="pnl-venue-binance">
+          <div class="pnl-venue-row">
+            <span class="pnl-venue-period">실시간</span>
+            <span>{_pnl_cell(bnb_rt, 'USDT')}</span>
+          </div>
+          <div class="pnl-venue-row">
+            <span class="pnl-venue-period">일간</span>
+            <span>{_pnl_cell(bnb_day, 'USDT')}</span>
+          </div>
+          <div class="pnl-venue-row">
+            <span class="pnl-venue-period">월간</span>
+            <span>{_pnl_cell(bnb_mon, 'USDT')}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="pnl-no-sum-note">KRW · USDT 는 별개 통화 — 합산 불가. 각 venue 수치는 해당 통화 기준입니다.</div>
   </div>
 
   <!-- ── 섹션 2: Binance 계좌 + KIS 계좌 나란히 ── -->
   <div>
     <div class="section-hdr"><h2>계좌 / 실제 포지션</h2><div class="section-hdr-line"></div></div>
+    <!-- #238 follow-up — venue 실증 상태. INERT = real equity 미확보로
+         해당 venue 주문이 전량 보류 중 ("0 trades" 의 진짜 이유). -->
+    <div id="venue-equity-banner" style="display:none;gap:8px;flex-wrap:wrap;margin-bottom:10px"></div>
     <div class="grid-2">
 
       <!-- Binance Futures 계좌 카드 (강조) -->
@@ -765,7 +950,39 @@ body{{
     </div>
   </div>
 
-  <!-- ── 섹션 6: 전략 카탈로그 ── -->
+  <!-- ── 섹션 6: 거래 내역 (round-trip 재구성) ── -->
+  <div>
+    <div class="section-hdr"><h2>거래 내역 (round-trip)</h2><div class="section-hdr-line"></div></div>
+    <div class="pnl-no-sum-note">실현손익은 <b>청산 수수료만</b> 반영합니다. 상단 venue 손익 카드는 진입 수수료까지 포함하므로 두 수치가 미세하게 다를 수 있습니다 (둘 다 정상 — 정의 차이).</div>
+    <div class="card" style="padding:0">
+      <div class="th-history-wrap">
+        <table class="th-table">
+          <thead>
+            <tr>
+              <th>진입시각</th>
+              <th>청산시각</th>
+              <th>보유시간</th>
+              <th>전략</th>
+              <th>종목</th>
+              <th>venue</th>
+              <th>방향</th>
+              <th class="num">수량</th>
+              <th class="num">진입가</th>
+              <th class="num">청산가</th>
+              <th class="num">실현손익</th>
+              <th>상태</th>
+            </tr>
+          </thead>
+          <tbody id="th-tbody">
+            <tr><td colspan="12" style="text-align:center;color:var(--text3);padding:20px;font-family:var(--sans);font-size:11px">조회 중…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div id="th-truncnote" class="th-truncnote" style="display:none"></div>
+    </div>
+  </div>
+
+  <!-- ── 섹션 7: 전략 카탈로그 ── -->
   <div class="catalog-section">
     <div class="section-hdr"><h2>전략 카탈로그</h2><div class="section-hdr-line"></div></div>
     <div class="strat-grid">{catalog_cards_html}</div>
@@ -998,6 +1215,37 @@ async function acctRefreshGuarded() {{
 acctRefreshGuarded();
 setInterval(acctRefreshGuarded, 30000);
 
+// ── venue 실증 상태 (#238 follow-up) ───────────────────────────
+// INERT venue = real equity 미확보 → 해당 venue 주문 전량 보류.
+// "0 trades" 의 근본 이유를 빨강 배너로 노출 (silent-drop 가시화).
+async function venueEquityRefresh() {{
+  try {{
+    const r = await fetch('/api/venue_equity_status');
+    const d = await r.json();
+    const el = document.getElementById('venue-equity-banner');
+    if (!el) return;
+    if (!d.available || !d.venues || Object.keys(d.venues).length === 0) {{
+      el.style.display = 'none';
+      el.innerHTML = '';
+      return;
+    }}
+    const chips = Object.keys(d.venues).sort().map(v => {{
+      const s = d.venues[v] || {{}};
+      if (s.ok) {{
+        return `<span class="status-chip status-ok"><span class="dot"></span>`
+          + `${{escHtml(v)}} 정상 (equity=${{fmtNum(s.equity, 2)}})</span>`;
+      }}
+      return `<span class="status-chip status-err"><span class="dot"></span>`
+        + `${{escHtml(v)}} INERT — ${{escHtml(s.reason || '실증 미확보')}} `
+        + `(주문 전량 보류)</span>`;
+    }});
+    el.innerHTML = chips.join('');
+    el.style.display = 'flex';
+  }} catch (err) {{ console.warn('venue-equity', err); }}
+}}
+venueEquityRefresh();
+setInterval(venueEquityRefresh, 10000);
+
 // ── 운영 진단 ──────────────────────────────────────────────────
 async function opsRefresh() {{
   try {{
@@ -1112,6 +1360,119 @@ async function stratPosRefresh() {{
 }}
 stratPosRefresh();
 setInterval(stratPosRefresh, 5000);
+
+// ── PnL venue 분리 갱신 ───────────────────────────────────────────
+function fmtPnlVenue(v, currency) {{
+  if (v == null) return '<span class="pnl-venue-val zero">—</span><span class="pnl-venue-cur">' + currency + '</span>';
+  const n = Number(v);
+  const cls = n < 0 ? 'neg' : n === 0 ? 'zero' : '';
+  const sign = n > 0 ? '+' : '';
+  return '<span class="pnl-venue-val ' + cls + '">' + sign + fmtNum(n, 2) + '</span>'
+       + '<span class="pnl-venue-cur">' + escHtml(currency) + '</span>';
+}}
+function renderVenueRows(containerId, data, currency) {{
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  const periods = [['실시간','realtime_by_venue'],['일간','daily_by_venue'],['월간','monthly_by_venue']];
+  el.innerHTML = periods.map(([label, key]) => {{
+    const venueKey = containerId.includes('kis') ? 'kis' : 'binance';
+    const val = (data[key] || {{}})[venueKey];
+    return '<div class="pnl-venue-row"><span class="pnl-venue-period">' + label + '</span>'
+         + '<span>' + fmtPnlVenue(val != null ? val : null, currency) + '</span></div>';
+  }}).join('');
+}}
+async function pnlVenueRefresh() {{
+  try {{
+    const r = await fetch('/api/pnl');
+    const d = await r.json();
+    // Legacy scalar highlights (top 3-card row)
+    const setColor = (id, v) => {{
+      const el = document.getElementById(id);
+      if (!el) return;
+      const n = Number(v);
+      el.style.color = n > 0 ? 'var(--green)' : n < 0 ? 'var(--red)' : 'var(--text2)';
+      el.textContent = (n > 0 ? '+' : '') + fmtNum(n, 2);
+    }};
+    setColor('pnl-realtime', d.realtime);
+    setColor('pnl-daily',    d.daily);
+    setColor('pnl-monthly',  d.monthly);
+    // Venue split rows
+    renderVenueRows('pnl-venue-kis',     d, 'KRW');
+    renderVenueRows('pnl-venue-binance', d, 'USDT');
+  }} catch(err) {{ console.warn('pnlVenue', err); }}
+}}
+pnlVenueRefresh();
+setInterval(pnlVenueRefresh, 5000);
+
+// ── 거래 내역 (round-trip) ─────────────────────────────────────────
+const TH_ROW_CAP = 200;
+function fmtHoldingTime(secs) {{
+  if (secs == null) return '—';
+  const s = Math.round(Number(secs));
+  if (s < 60) return s + 's';
+  if (s < 3600) return Math.floor(s/60) + 'm ' + (s%60) + 's';
+  if (s < 86400) return Math.floor(s/3600) + 'h ' + Math.floor((s%3600)/60) + 'm';
+  return Math.floor(s/86400) + 'd ' + Math.floor((s%86400)/3600) + 'h';
+}}
+function fmtTs(ts) {{
+  if (!ts) return '—';
+  return String(ts).slice(0, 19).replace('T', ' ');
+}}
+async function tradeHistoryRefresh() {{
+  try {{
+    const r = await fetch('/api/trade_history?limit=' + TH_ROW_CAP);
+    const d = await r.json();
+    const tb = document.getElementById('th-tbody');
+    const note = document.getElementById('th-truncnote');
+    if (!tb) return;
+    const trades = d.trades || [];
+    if (trades.length === 0) {{
+      tb.innerHTML = '<tr><td colspan="12" style="text-align:center;color:var(--text3);padding:20px;font-size:11px">거래 내역 없음 — WAL 미기록 또는 첫 진입 대기 중</td></tr>';
+      if (note) note.style.display = 'none';
+      return;
+    }}
+    if (note) {{
+      if (d.truncated) {{
+        note.style.display = '';
+        note.textContent = '최근 ' + TH_ROW_CAP + '건만 표시 · 전체 ' + d.total + '건';
+      }} else {{
+        note.style.display = 'none';
+      }}
+    }}
+    tb.innerHTML = trades.map(t => {{
+      const isOpen = t.status === 'open';
+      const rowCls = isOpen ? 'th-open' : '';
+      const sideCls = t.side === 'long' ? 'side-badge side-long' : 'side-badge side-short';
+      const sideTxt = (t.side || '').toUpperCase();
+      const venueTxt = escHtml(t.venue || '—');
+      const pnlHtml = isOpen
+        ? '<span class="th-dim">보유중</span>'
+        : fmtPnl(t.realized_pnl, '&nbsp;' + escHtml(t.venue === 'binance' ? 'USDT' : t.venue === 'kis' ? 'KRW' : ''));
+      const statusBadge = isOpen
+        ? '<span class="th-open-badge">보유중</span>'
+        : '<span class="th-closed-badge">청산됨</span>';
+      const exitTs = isOpen ? '<span class="th-dim">—</span>' : escHtml(fmtTs(t.exit_ts));
+      const exitPx = isOpen ? '<span class="th-dim">—</span>' : fmtNum(t.exit_price, 2);
+      const qtyStr = t.qty != null ? String(fmtNum(t.qty, 6)).replace(/\\.?0+$/, '') : '—';
+      return '<tr class="' + rowCls + '">'
+        + '<td class="th-dim">' + escHtml(fmtTs(t.entry_ts)) + '</td>'
+        + '<td class="th-dim">' + exitTs + '</td>'
+        + '<td class="th-dim">' + escHtml(fmtHoldingTime(t.holding_seconds)) + '</td>'
+        + '<td><div class="th-strategy" title="' + escHtml(t.strategy_id) + '">' + escHtml(t.strategy_id) + '</div></td>'
+        + '<td class="th-sym">' + escHtml(t.symbol) + '</td>'
+        + '<td><span class="th-venue">' + venueTxt + '</span></td>'
+        + '<td><span class="' + sideCls + '">' + sideTxt + '</span></td>'
+        + '<td class="th-mono">' + qtyStr + '</td>'
+        + '<td class="th-mono">' + fmtNum(t.entry_price, 2) + '</td>'
+        + '<td class="th-mono">' + exitPx + '</td>'
+        + '<td style="text-align:right">' + pnlHtml + '</td>'
+        + '<td>' + statusBadge + '</td>'
+        + '</tr>';
+    }}).join('');
+  }} catch(err) {{ console.warn('tradeHistory', err); }}
+}}
+tradeHistoryRefresh();
+setInterval(tradeHistoryRefresh, 10000);
 
 {_STRATEGY_TOGGLE_JS}
 </script>
@@ -1454,9 +1815,22 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
         WAL order_acked/order_filled 를 strategy_id 로 집계. 평단가는 fill price
         있을 때만 (Binance MARKET ack 는 status=NEW 라 가격 미포함 → '-' 표시).
         실현손익은 pnl_aggregator.by_strategy wired 시.
+
+        #238 follow-up — 전략별 포지션은 *영구·누적* 이어야 한다 (run 마다
+        wipe 되면 안 됨). /api/trade_history 와 동일하게 _resolve_log_dir()
+        + discover_wal_files() 로 모든 run 의 WAL 을 합산하고, 현재 run 의
+        wal_path/extra_wal_paths 가 discover glob 밖이면 union.
+        Robust: 디렉토리 부재/빈 경우 빈 리스트 반환, 절대 500 금지.
         """
         paths: list[Path] = []
-        if state.wal_path is not None and Path(state.wal_path).exists():
+        log_dir = _resolve_log_dir()
+        if log_dir is not None:
+            try:
+                paths.extend(discover_wal_files(log_dir))
+            except Exception:  # noqa: BLE001 — never 500 the dashboard
+                paths = []
+        if state.wal_path is not None and Path(state.wal_path).exists() \
+                and Path(state.wal_path) not in paths:
             paths.append(Path(state.wal_path))
         for p in state.extra_wal_paths or []:
             if p is not None and Path(p).exists() and Path(p) not in paths:
@@ -1518,6 +1892,80 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
                 "last_ts": a["last_ts"],
             })
         return JSONResponse({"available": True, "strategies": out})
+
+    def _resolve_log_dir() -> Path | None:
+        """Resolve the WAL log directory root for discover_wal_files.
+
+        Priority:
+        1. state.log_dir — explicitly set by the caller (e.g. live_run.py).
+        2. Derived from state.wal_path: a run WAL lives at
+           {log_dir}/{run_id}/wal.jsonl, so log_dir = wal_path.parent.parent.
+        3. ./logs/live — the `--log-dir` CLI default. Lets a STANDALONE
+           dashboard (no active pipeline) still surface prior runs' history.
+        4. None — nothing resolved and no default dir on disk.
+        """
+        if state.log_dir is not None:
+            return Path(state.log_dir)
+        if state.wal_path is not None:
+            p = Path(state.wal_path)
+            # parent = run_dir, parent.parent = log_dir
+            candidate = p.parent.parent
+            if candidate.is_dir():
+                return candidate
+        default_dir = Path("logs/live")
+        if default_dir.is_dir():
+            return default_dir
+        return None
+
+    @app.get("/api/trade_history")
+    async def api_trade_history(limit: int = Query(default=200, ge=1, le=2000)) -> JSONResponse:
+        """Reconstruct round-trip trades from all run WALs under log_dir.
+
+        Uses discover_wal_files(log_dir) → reconstruct_trades → sorted newest
+        entry first.  realized_pnl is in the venue's own currency (USDT for
+        binance, KRW for kis) and is NEVER cross-summed across venues.
+        Returns: {trades, total, truncated, log_dir_used}.
+        """
+        log_dir = _resolve_log_dir()
+        if log_dir is None:
+            return JSONResponse({
+                "trades": [],
+                "total": 0,
+                "truncated": False,
+                "log_dir_used": None,
+                "note": "log_dir 미설정 — WAL 경로가 아직 없습니다.",
+            })
+        import asyncio as _asyncio
+        wal_paths = await _asyncio.to_thread(discover_wal_files, log_dir)
+        trades = await _asyncio.to_thread(reconstruct_trades, wal_paths)
+        # Sort newest entry first
+        trades_sorted = sorted(trades, key=lambda t: t.entry_ts, reverse=True)
+        total = len(trades_sorted)
+        truncated = total > limit
+        page = trades_sorted[:limit]
+
+        def _trade_dict(t) -> dict:
+            return {
+                "strategy_id": t.strategy_id,
+                "symbol": t.symbol,
+                "venue": t.venue,
+                "side": t.side,
+                "qty": t.qty,
+                "entry_ts": t.entry_ts,
+                "entry_price": t.entry_price,
+                "exit_ts": t.exit_ts,
+                "exit_price": t.exit_price,
+                "realized_pnl": t.realized_pnl,
+                "holding_seconds": t.holding_seconds,
+                "status": t.status,
+            }
+
+        return JSONResponse({
+            "trades": [_trade_dict(t) for t in page],
+            "total": total,
+            "truncated": truncated,
+            "log_dir_used": str(log_dir),
+        })
 
     @app.get("/api/limits")
     async def api_limits() -> JSONResponse:
@@ -1709,6 +2157,32 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
         finally:
             _acct_cache["inflight"] = False
         return JSONResponse({"available": True, **data})
+
+    # ── venue 실증 가시화 (#238 follow-up) ───────────────────────────────
+    @app.get("/api/venue_equity_status")
+    async def api_venue_equity_status() -> JSONResponse:
+        """Per-venue real-equity status from the live SnapshotBuilder.
+
+        ok=False means that venue is INERT — the orchestrator's fraction→qty
+        conversion drops EVERY order there because real equity is unavailable
+        (creds missing, provider error, or cash<=0). Surfacing this turns a
+        silent "0 trades" into an explained one. Read-only & robust: any
+        missing/odd builder yields {available, venues:{}} — never 500.
+        """
+        builder = state.snapshot_builder
+        status = getattr(builder, "last_equity_status", None)
+        if builder is None or not isinstance(status, dict):
+            return JSONResponse({"available": False, "venues": {}})
+        venues: dict[str, Any] = {}
+        for venue, info in status.items():
+            if not isinstance(info, dict):
+                continue
+            venues[str(venue)] = {
+                "ok": bool(info.get("ok")),
+                "reason": str(info.get("reason") or ""),
+                "equity": float(info.get("equity") or 0.0),
+            }
+        return JSONResponse({"available": True, "venues": venues})
 
     # ── Shadow Runs 뷰어 (#198) — read-only WAL 통합 표시 ───────────────────
     def _resolve_shadow_log_dir() -> Path:

@@ -88,6 +88,30 @@ class SnapshotBuilder:
         # {"binance": {"ok", "available_usdt"}, "kis": {"ok", "cash_balance"}}.
         # None (default) → config placeholder only → byte-identical to pre-#238.
         self._balance_provider = balance_provider
+        # #238 follow-up — venue-inert visibility. Mirrors the venue keys
+        # emitted by AccountInfoProvider.fetch() ("binance", "kis"). Each
+        # value: {"ok": bool, "reason": str, "equity": float}. The dashboard
+        # reads this so a silently-dropped venue (equity unavailable → every
+        # order dropped by the Item-8 conversion) is no longer invisible.
+        # Empty when balance_provider is None (default) → byte-identical.
+        self.last_equity_status: dict[str, dict[str, Any]] = {}
+        # Last *ok* flag reported per venue, so the WARNING only fires on a
+        # state-change (mirrors the project's throttle ethos — no per-tick
+        # log flood). None = never reported yet.
+        self._last_equity_ok: dict[str, bool] = {}
+        # Last-known-GOOD real equity per venue (#238 follow-up root cause).
+        # The live KIS daemon hammers KIS REST (warmup + feed) which
+        # transiently rate-limits (EGW00201) a freshly-constructed
+        # AccountInfoProvider's balance call. Standalone (no contention) the
+        # same fetch succeeds. WITHOUT this, a single transient ok:False
+        # regressed equity_krw back to the tiny placeholder → the Item-8
+        # conversion dropped EVERY KIS order → operator saw "0 trades".
+        # Once a venue has reported real (>0) equity we keep overlaying that
+        # value across later transient failures (the venue stays trading on
+        # last-known-good) while still surfacing the degraded status. We
+        # never FABRICATE equity: a venue that was never observed stays on
+        # the placeholder so the conversion safely drops (no naked sizing).
+        self._last_good_equity: dict[str, float] = {}
         self._buffers: dict[str, pd.DataFrame] = {}
         # #231 S2 — cs_async_wrapper 등 universe-scan strategies 가 dispatch
         # 되도록 매 N초마다 broker.fetch_universe_snapshot 호출 + 결과를
@@ -220,9 +244,13 @@ class SnapshotBuilder:
     def _inject_real_equity(self, snapshot: dict[str, Any]) -> None:
         """Overlay real venue balances onto the snapshot (#238 Item 9).
 
-        Best-effort: any failure leaves the config placeholder in place
-        (equity_usdt stays unset → Item-8 conversion safely drops Binance
-        orders). MUST NOT raise into the per-tick hot loop.
+        Best-effort + last-known-good: once a venue has reported real (>0)
+        equity we keep overlaying that value across later TRANSIENT provider
+        failures so the live daemon does not silently stop trading on a
+        single rate-limited balance call. A venue that was NEVER observed
+        leaves the config placeholder (equity_usdt unset → Item-8 conversion
+        safely drops — no fabricated/naked sizing). MUST NOT raise into the
+        per-tick hot loop.
         """
         if self._balance_provider is None:
             return
@@ -230,13 +258,103 @@ class SnapshotBuilder:
             bal = self._balance_provider.fetch() or {}
         except Exception as err:  # noqa: BLE001 — never kill the tick loop
             logger.warning("snapshot.balance_provider_error: %s", err)
+            # The provider blew up → degraded this tick. Re-overlay any
+            # last-known-good equity so a transient failure does not stop
+            # trading; surface the degraded status regardless.
+            reason = f"balance_provider_error: {type(err).__name__}: {err}"
+            self._apply_venue(snapshot, "binance", "equity_usdt",
+                              ok=False, reason=reason, fresh_equity=None)
+            self._apply_venue(snapshot, "kis", "equity_krw",
+                              ok=False, reason=reason, fresh_equity=None)
             return
+
         binance = bal.get("binance") or {}
-        if binance.get("ok") and binance.get("available_usdt") is not None:
-            snapshot["equity_usdt"] = float(binance["available_usdt"])
+        usdt = binance.get("available_usdt")
+        bn_ok = bool(binance.get("ok") and usdt is not None and float(usdt) > 0)
+        self._apply_venue(
+            snapshot, "binance", "equity_usdt",
+            ok=bn_ok,
+            reason="" if bn_ok else self._inert_reason(binance, usdt),
+            fresh_equity=float(usdt) if bn_ok else None,
+        )
+
         kis = bal.get("kis") or {}
-        if kis.get("ok") and kis.get("cash_balance") is not None:
-            snapshot["equity_krw"] = float(kis["cash_balance"])
+        cash = kis.get("cash_balance")
+        kis_ok = bool(kis.get("ok") and cash is not None and float(cash) > 0)
+        self._apply_venue(
+            snapshot, "kis", "equity_krw",
+            ok=kis_ok,
+            reason="" if kis_ok else self._inert_reason(kis, cash),
+            fresh_equity=float(cash) if kis_ok else None,
+        )
+
+    def _apply_venue(
+        self, snapshot: dict[str, Any], venue: str, equity_key: str,
+        *, ok: bool, reason: str, fresh_equity: float | None,
+    ) -> None:
+        """Overlay one venue's equity + record status (last-known-good aware).
+
+        - fresh real equity (>0) → overlay it, remember it as known-good.
+        - degraded (ok:False) but a prior known-good exists → re-overlay the
+          last-known-good value (the venue keeps trading through a transient
+          provider failure) while reporting the degraded status.
+        - degraded and NEVER observed → leave the placeholder untouched so
+          the Item-8 conversion safely drops (no fabricated sizing).
+        """
+        if ok and fresh_equity is not None:
+            snapshot[equity_key] = fresh_equity
+            self._last_good_equity[venue] = fresh_equity
+            self._record_equity_status(venue, ok=True, reason="",
+                                       equity=fresh_equity)
+            return
+        last_good = self._last_good_equity.get(venue)
+        if last_good is not None:
+            # Transient failure — hold last-known-good so trading continues.
+            snapshot[equity_key] = last_good
+            self._record_equity_status(
+                venue, ok=False,
+                reason=f"{reason} (last-known-good equity={last_good} 유지)",
+                equity=last_good,
+            )
+            return
+        # Never observed real equity → leave placeholder (safe drop).
+        self._record_equity_status(venue, ok=False, reason=reason, equity=0.0)
+
+    @staticmethod
+    def _inert_reason(venue_block: dict[str, Any], balance: Any) -> str:
+        """Human-readable reason a venue is inert (no real equity)."""
+        if not venue_block.get("ok"):
+            return str(venue_block.get("error") or "venue ok:False")
+        if balance is None:
+            return "balance missing"
+        return "cash_balance<=0"
+
+    def _record_equity_status(
+        self, venue: str, *, ok: bool, reason: str, equity: float,
+    ) -> None:
+        """Stash structured status + emit a throttled WARNING on state-change.
+
+        The WARNING fires only when *ok* transitions for this venue (or on
+        the first observation while inert), never per-tick — mirroring the
+        project's throttle ethos so the log does not flood at tick frequency.
+        """
+        self.last_equity_status[venue] = {
+            "ok": ok, "reason": reason, "equity": equity,
+        }
+        prev = self._last_equity_ok.get(venue)
+        if prev != ok:
+            self._last_equity_ok[venue] = ok
+            if not ok:
+                logger.warning(
+                    "snapshot.venue_equity INERT venue=%s reason=%s "
+                    "— 해당 venue 주문 전량 보류 (real equity 미확보)",
+                    venue, reason,
+                )
+            else:
+                logger.info(
+                    "snapshot.venue_equity RECOVERED venue=%s equity=%s",
+                    venue, equity,
+                )
 
     @property
     def buffers(self) -> dict[str, pd.DataFrame]:

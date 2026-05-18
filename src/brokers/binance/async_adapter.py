@@ -23,7 +23,8 @@ from src.brokers.base import (
 )
 from src.brokers.binance.async_http import AsyncBinanceFuturesClient
 from src.brokers.binance.async_ws import AsyncBinanceUserDataStream, OverflowPolicy
-from src.brokers.errors import BrokerClosedError, BrokerStartupError
+from src.brokers.binance.symbol_filters import SymbolFilters
+from src.brokers.errors import BrokerClosedError, BrokerStartupError, InvalidOrderError
 from src.brokers.types import BrokerFill
 
 log = logging.getLogger(__name__)
@@ -64,6 +65,13 @@ class AsyncBinanceFuturesAdapter:
             base_url=base_url,
             rate_limiter=rate_limiter,
         )
+        # #238 Bug A — real exchangeInfo LOT_SIZE source (TTL-cached). The
+        # conversion layer only quantizes to a coarse 0.001 fallback for
+        # non-whitelisted USDT pairs; the live exchange step for many perps
+        # (TRX/KITE/...) is coarser (e.g. 1), so an unfloored qty (832.840,
+        # 1373.141) is rejected by Binance with -1111 every time. Mirrors the
+        # sync BinanceFuturesAdapter (adapter.py:55).
+        self._symbol_filters = SymbolFilters(base_url=base_url)
         self._hedge_mode: bool | None = None
         self._ws_stream: AsyncBinanceUserDataStream | None = None
         self._inflight: list[asyncio.Task] = []
@@ -99,6 +107,15 @@ class AsyncBinanceFuturesAdapter:
                 cid,
             )
 
+        # #238 Bug A — floor req.qty DOWN to the real exchangeInfo LOT_SIZE
+        # stepSize (authoritative, covers ALL symbols — not a whitelist).
+        # Without this, a non-whitelisted USDT pair (TRX/KITE) carries the
+        # conversion-layer 0.001 fallback (e.g. 832.840) while its real step is
+        # coarser → Binance rejects every order with -1111 ("Precision is over
+        # the maximum"). A sub-minQty result must NOT be submitted: a
+        # guaranteed-reject flood is exactly the #238 incident class.
+        req = self._quantize_qty_to_lot(req)
+
         resp = await self._client.place_order(req, cid)
         return OrderAck(
             broker_order_id=str(resp.orderId),
@@ -109,6 +126,58 @@ class AsyncBinanceFuturesAdapter:
             qty=resp.origQty,
             price=resp.price if resp.price != Decimal("0") else None,
         )
+
+    def _quantize_qty_to_lot(self, req: OrderRequest) -> OrderRequest:
+        """Floor ``req.qty`` DOWN to the symbol's real LOT_SIZE stepSize.
+
+        Returns a new ``OrderRequest`` with the floored qty (the caller's
+        request is left untouched — mirrors how ``cid`` is threaded separately
+        from ``req``).
+
+        - quantized qty < minQty (incl. floored-to-zero) → raise
+          ``InvalidOrderError`` so the executor down-grades to a REJECTED ack.
+          NEVER submit a guaranteed-reject (the -1111/-4164 flood = #238).
+        - ``SymbolFilters`` can't resolve the symbol (unknown / exchangeInfo
+          fetch failed) → safe fallback: keep the current qty + log, never
+          crash the order path.
+        """
+        from dataclasses import replace  # noqa: PLC0415
+
+        try:
+            step = self._symbol_filters.lot_step(req.symbol)
+            min_qty = self._symbol_filters.min_qty(req.symbol)
+        except Exception as exc:  # noqa: BLE001 — see below
+            # Safe fallback (task contract): SymbolFilters can't resolve the
+            # symbol — unknown symbol (BrokerError/ValidationError) OR the
+            # exchangeInfo HTTP fetch failed (requests.ConnectionError /
+            # Timeout, JSON/validation error). A filter-fetch failure must
+            # NEVER break live order submission, so we deliberately catch
+            # broadly here and preserve pre-#238 behaviour (submit current
+            # qty); the exchange may still reject, but we never crash the
+            # order path nor flood it.
+            log.warning(
+                "lot-size filter unavailable for %s (%s); submitting un-floored "
+                "qty %s — broker may still reject",
+                req.symbol, exc, req.qty,
+            )
+            return req
+
+        floored = (req.qty // step) * step
+        floored = floored.quantize(step)
+
+        if floored < min_qty:
+            raise InvalidOrderError(
+                f"{req.symbol}: qty {req.qty} floored to {floored} "
+                f"(step {step}) < minQty {min_qty}; order dropped (not submitted)"
+            )
+
+        if floored == req.qty:
+            return req  # already aligned — byte-identical, no allocation churn
+        log.info(
+            "quantized %s qty %s → %s (LOT_SIZE step %s)",
+            req.symbol, req.qty, floored, step,
+        )
+        return replace(req, qty=floored)
 
     async def cancel_order(
         self,

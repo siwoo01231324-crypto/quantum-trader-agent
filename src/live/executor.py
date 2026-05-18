@@ -4,6 +4,7 @@ import time
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Iterable
 
+from src.brokers import client_id as client_id_mod
 from src.brokers.base import AsyncBrokerAdapter, OrderAck
 from src.brokers.errors import BrokerError
 from src.execution.base import MarketState
@@ -85,6 +86,21 @@ async def execute_intents(
             continue
 
         # 3. broker 호출 + latency 메트릭
+        # #238 Bug B — register the coid→strategy map BEFORE place_order, keyed
+        # on the EXACT coid we built (req.client_order_id == idempotency_key).
+        # _make_key now yields a Binance-valid coid so the adapter keeps it
+        # as-is (no opaque-sha256 re-generation), giving the invariant
+        # `registered == submitted == returned-fill coid`. Registering up front
+        # (vs. on the ack) makes StrategyPositionStore's explicit map authoritative
+        # even when the fill arrives out-of-band via the WS stream — and is
+        # harmless on a REJECTED ack (a map entry never yields a position
+        # without a fill).
+        if position_store is not None:
+            position_store.register_order(
+                client_order_id=req.client_order_id,
+                strategy_id=intent.strategy_id,
+            )
+
         t0 = time.monotonic()
         try:
             ack = await broker.place_order(req)
@@ -98,11 +114,6 @@ async def execute_intents(
         # 4. order_acked WAL append — 정상 ack 만 (Architect note #2)
         # WAL writes serialized via single consumer task (loop.py:167); WS fill listener writes via asyncio.Queue (Stage 5)
         if ack.status not in ("REJECTED",):
-            if position_store is not None:
-                position_store.register_order(
-                    client_order_id=ack.client_order_id,
-                    strategy_id=intent.strategy_id,
-                )
             ts_now = datetime.now(timezone.utc).isoformat()
             try:
                 wal.write(WALEvent(
@@ -189,9 +200,29 @@ def _write_tracking_sample(
 
 
 def _make_key(intent: OrderIntent, idx: int) -> str:
-    """idempotency-key: f'{strategy_id}:{symbol}:{ts_epoch_ms}:{idx}'."""
+    """Binance-valid deterministic client_order_id (#238 Bug B).
+
+    Previously this returned ``f'{strategy_id}:{symbol}:{ts_ms}:{idx}'``. For a
+    real long strategy (e.g. ``live-breakout-with-atr-stop``, 27 chars) that
+    string exceeds Binance's 36-char ``newClientOrderId`` cap, so the adapter
+    silently discarded the strategy and submitted an opaque sha256 — the
+    returned fill could then no longer be attributed to a strategy (per-strategy
+    positions / trade-history / pnl all lost). Strategy names are too long to
+    cram ``{strategy}:{symbol}:{ts}:{idx}`` into 36 chars, so instead we emit
+    the Binance-valid sha256 coid HERE, register THAT exact coid → strategy_id
+    in StrategyPositionStore (explicit map — no prefix parsing needed), and the
+    adapter keeps an already-valid coid as-is. ``client_id.generate`` is
+    deterministic in its inputs, so retrying the same intent in the same
+    millisecond yields the same coid (idempotent). ``idx`` is folded into the
+    side component so multiple intents emitted in one batch stay distinct.
+    """
     ts_ms = int(time.time() * 1000)
-    return f"{intent.strategy_id}:{intent.symbol}:{ts_ms}:{idx}"
+    return client_id_mod.generate(
+        strategy=intent.strategy_id,
+        symbol=intent.symbol,
+        side=f"{intent.side}:{idx}",
+        ts_ms=ts_ms,
+    )
 
 
 def _reject(intent: OrderIntent, key: str, reason: str) -> OrderAck:
