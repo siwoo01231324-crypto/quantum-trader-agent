@@ -13,11 +13,16 @@ per (strategy_id, symbol) into round-trip trades using the SAME long/short
   - any unclosed remainder at end-of-replay → one `status="open"` trade
     (entry only; no exit_ts / exit_price / realized_pnl / holding_seconds)
 
-strategy_id resolution mirrors `StrategyPositionStore._resolve_strategy` /
-`PnLAggregator._resolve_strategy`: explicit payload ``strategy_id`` wins,
-else the ``{strategy}:{symbol}:{ts}:{idx}`` prefix is parsed from
-``client_order_id``. A fill that resolves to neither is dropped (logged)
-— it cannot be attributed to a strategy.
+strategy_id resolution: the explicit ``strategy_id`` persisted in the
+`order_filled` WAL payload is authoritative (PaperBroker copies
+`OrderRequest.strategy_id`, threaded from `OrderIntent.strategy_id`). Because
+this field is persisted in the WAL it is cross-run-correct here — the
+in-memory `StrategyPositionStore` coid→strategy map is lost across runs and
+is NOT consulted by this replay path. The legacy ``{strategy}:`` prefix
+parse of ``client_order_id`` is kept ONLY for old WAL events; the post-#238
+coid is a strategy-opaque sha256 (no ``:`` — by design, Binance's 36-char
+cap) so it no longer resolves new fills. A fill that resolves to neither is
+dropped (logged) — it cannot be attributed to a strategy.
 
 The only I/O is reading the supplied WAL paths via the existing
 `src.live.wal.replay`. No new dependencies; no engine touched.
@@ -75,10 +80,12 @@ def discover_wal_files(log_dir: Path | str) -> list[Path]:
 
 
 def _resolve_strategy(payload: dict) -> str | None:
-    """Same fallback as StrategyPositionStore / PnLAggregator.
+    """Explicit persisted ``strategy_id`` is authoritative (cross-run-safe).
 
-    Explicit ``strategy_id`` wins; else parse the ``{strategy}:...`` prefix
-    of ``client_order_id`` (requires a ``:`` separator).
+    The ``{strategy}:`` ``client_order_id`` prefix parse is a legacy-only
+    fallback: the post-#238 coid is a strategy-opaque sha256 (no ``:``), so
+    it resolves nothing for new fills — kept solely so old WAL events that
+    happened to carry a prefixed coid still attribute on replay.
     """
     explicit = payload.get("strategy_id")
     if explicit:

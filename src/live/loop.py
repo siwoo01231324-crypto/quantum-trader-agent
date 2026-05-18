@@ -18,6 +18,7 @@ from src.execution.mock_matching import MockMatchingEngine
 from src.execution.paper_broker import PaperBroker
 from src.live.executor import execute_intents
 from src.live.feed import MarketDataFeed, BinancePublicFeed
+from src.live.fill_consumer import run_binance_fill_consumer
 from src.live.process_lock import ProcessLock
 from src.live.reconnect import backoff_delay
 from src.live.schedule import wait_until_session_open
@@ -88,6 +89,17 @@ class ShadowConfig:
     # routing any returned SELL intents through the same broker/WAL pipeline.
     # None (default) leaves the legacy single-paradigm path untouched.
     position_risk_manager: Any | None = None
+    # Binance fill-stream wiring. The live `binance-testnet-shadow` path had
+    # NO production consumer of binance/async_ws.stream_fills() — the
+    # executor only wrote `order_acked` (intent; Binance MARKET ack is
+    # status=NEW, no price). When this StrategyPositionStore is supplied AND
+    # broker_mode == "binance-testnet-shadow" with a binance_adapter, a
+    # background task consumes the fill stream and emits `order_filled` WAL
+    # events through the existing wal_observer fan-out. The store also lets
+    # execute_intents register the coid→(symbol, side, strategy_id) context
+    # the fill consumer needs. None (default) → no fill-stream task; the
+    # paper / kis paths are byte-identical.
+    position_store: Any | None = None
 
 
 def _load_orchestrator(config: ShadowConfig, broker: PaperBroker) -> AsyncStrategyOrchestrator:
@@ -465,6 +477,19 @@ async def run_shadow_loop(
                 ms = _tick_to_market_state(tick)
                 paper_broker.update_market(ms)
                 ts = datetime.fromisoformat(tick.ts)
+                # #3 (prior-review MEDIUM) — refresh the (15s-cached) balance
+                # provider OFF the event-loop thread BEFORE the sync
+                # build_snapshot. The provider's cache-miss does KIS+Binance
+                # REST; running it inline in _inject_real_equity blocked the
+                # tick loop (the #18 KIS contention area). asyncio.to_thread
+                # moves only that cache-miss REST off-loop; build_snapshot's
+                # _inject_real_equity then does a pure non-blocking peek.
+                # Guarded on a provider being wired so the default
+                # (balance_provider=None) path is byte-identical — no thread
+                # hop, no extra await point that would perturb the
+                # producer/consumer scheduling (legacy/tests).
+                if config.balance_provider is not None:
+                    await asyncio.to_thread(snapshot_builder.refresh_balance)
                 snapshot = snapshot_builder.build_snapshot(tick)
                 intents = await orchestrator.run_bar(ts, snapshot)
                 if intents:
@@ -493,6 +518,7 @@ async def run_shadow_loop(
                     await execute_intents(
                         intents, broker=router, kill_switch=kill_switch,
                         wal=wal, metrics=metrics, market_state=ms,
+                        position_store=config.position_store,
                     )
                 # #227 S3: position-level stop/TP evaluation. Runs even when
                 # the strategy dispatch produced no intents (the price tick is
@@ -525,6 +551,7 @@ async def run_shadow_loop(
                         await execute_intents(
                             risk_intents, broker=router, kill_switch=kill_switch,
                             wal=wal, metrics=metrics, market_state=ms,
+                            position_store=config.position_store,
                         )
                 iter_count += 1
                 if config.max_iterations is not None and iter_count >= config.max_iterations:
@@ -533,6 +560,39 @@ async def run_shadow_loop(
 
         producer_task = asyncio.create_task(producer())
         consumer_task = asyncio.create_task(consumer())
+
+        # Binance fill-stream consumer (#231 S5 / live-fill gap). ONLY when
+        # broker_mode == "binance-testnet-shadow" with a real binance_adapter
+        # AND a StrategyPositionStore is wired. The executor only writes
+        # `order_acked` (Binance MARKET ack = status=NEW, no price); without
+        # this background task NO `order_filled` is ever emitted for the live
+        # Binance path → zero realized P&L / positions / trades. Spawned
+        # OUTSIDE the FIRST_COMPLETED set (its natural completion must not end
+        # the trading loop) and cancelled cleanly in the finally below. The
+        # consumer itself is reconnect-bounded and never crashes the loop.
+        fill_task: asyncio.Task | None = None
+        if (
+            config.broker_mode == "binance-testnet-shadow"
+            and binance_adapter is not None
+            and config.position_store is not None
+        ):
+            def _stream_factory():
+                return binance_adapter.stream_fills()
+
+            fill_task = asyncio.create_task(
+                run_binance_fill_consumer(
+                    _stream_factory,
+                    wal=wal,
+                    position_store=config.position_store,
+                    stop_event=stop_event,
+                ),
+                name="binance-fill-consumer",
+            )
+            logger.info(
+                "binance fill consumer started (broker_mode=%s symbols=%s)",
+                config.broker_mode, config.symbols,
+            )
+
         try:
             await asyncio.wait(
                 {producer_task, consumer_task},
@@ -540,12 +600,19 @@ async def run_shadow_loop(
             )
         finally:
             stop_event.set()
-            for t in (producer_task, consumer_task):
+            shutdown_tasks = [producer_task, consumer_task]
+            if fill_task is not None:
+                shutdown_tasks.append(fill_task)
+            for t in shutdown_tasks:
                 if not t.done():
                     t.cancel()
                     try:
                         await t
-                    except (asyncio.CancelledError, BaseException):
+                    except BaseException:
+                        # Shutdown cleanup: swallow everything (incl.
+                        # CancelledError) for the cancelled producer/
+                        # consumer/fill tasks. BaseException already
+                        # covers CancelledError.
                         pass
             await feed.aclose()
 

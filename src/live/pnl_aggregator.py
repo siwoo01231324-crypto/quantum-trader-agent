@@ -12,10 +12,14 @@ KST 09:00 business-date convention (KRX trading day):
   - daily / monthly only accumulate fills whose business date == today's BD.
   - Reading `daily` / `monthly` after the BD has rolled returns 0 (auto-reset).
 
-The aggregator parses `strategy_id` from the `{strategy}:{symbol}:{ts}:{idx}`
-prefix in `client_order_id` (same fallback used by StrategyPositionStore in
-#192). When PaperBroker eventually injects strategy_id into `order_filled`
-payloads directly, the explicit field takes precedence.
+Strategy attribution comes from the explicit ``strategy_id`` persisted in the
+`order_filled` WAL payload (PaperBroker copies `OrderRequest.strategy_id`,
+threaded from `OrderIntent.strategy_id` by `intent_to_order_request`). This is
+replay-safe and cross-run-correct. The legacy ``{strategy}:`` `client_order_id`
+prefix fallback (`_resolve_strategy`) is retained ONLY for old WAL events; the
+post-#238 coid is a strategy-opaque sha256 (no ``:`` — by design, Binance's
+36-char `newClientOrderId` cap) so that fallback no longer resolves anything
+for new fills. A fill with neither is dropped (logged) — unattributable.
 """
 from __future__ import annotations
 

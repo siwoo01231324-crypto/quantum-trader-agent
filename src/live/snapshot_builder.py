@@ -241,6 +241,48 @@ class SnapshotBuilder:
         self._inject_real_equity(snapshot)
         return snapshot
 
+    def refresh_balance(self) -> None:
+        """Refresh the balance provider's cache OFF the event-loop thread.
+
+        #3 (prior-review MEDIUM): `build_snapshot` runs synchronously in the
+        live consumer coroutine on the event-loop thread. The loop calls this
+        via ``await asyncio.to_thread(snapshot_builder.refresh_balance)``
+        once per tick BEFORE the sync `build_snapshot`, so the only thing
+        that ever runs the (15s-cached) KIS+Binance REST is this worker
+        thread — never the event loop. `_inject_real_equity` then does a
+        pure non-blocking cached read.
+
+        No provider, or a provider without ``fetch()``, is a harmless no-op
+        (byte-identical to pre-#3 for the default path). Errors are swallowed
+        + logged here (the loop already guards, and `_inject_real_equity`
+        independently surfaces a degraded venue from the stale cache).
+        """
+        provider = self._balance_provider
+        if provider is None:
+            return
+        fetch = getattr(provider, "fetch", None)
+        if not callable(fetch):
+            return
+        try:
+            fetch()
+        except Exception as err:  # noqa: BLE001 — never kill the tick loop
+            logger.warning("snapshot.balance_refresh_error: %s", err)
+
+    def _read_balance(self) -> dict[str, Any] | None:
+        """Non-blocking read of the latest balances for `_inject_real_equity`.
+
+        Prefers the provider's ``peek()`` (pure cached read, no REST — the
+        #3 off-loop seam: the loop pre-warms via `refresh_balance` so peek()
+        is a hit). Falls back to ``fetch()`` only for providers/test fakes
+        that do not implement peek() — preserving the pre-#3 contract for
+        those (their fetch() is cheap / internally cached).
+        """
+        provider = self._balance_provider
+        peek = getattr(provider, "peek", None)
+        if callable(peek):
+            return peek() or {}
+        return provider.fetch() or {}
+
     def _inject_real_equity(self, snapshot: dict[str, Any]) -> None:
         """Overlay real venue balances onto the snapshot (#238 Item 9).
 
@@ -251,11 +293,15 @@ class SnapshotBuilder:
         leaves the config placeholder (equity_usdt unset → Item-8 conversion
         safely drops — no fabricated/naked sizing). MUST NOT raise into the
         per-tick hot loop.
+
+        #3: the balance is read NON-BLOCKING here (peek of the provider's
+        cache that the loop pre-warmed off-loop via `refresh_balance`); the
+        event-loop thread never runs the cache-miss REST.
         """
         if self._balance_provider is None:
             return
         try:
-            bal = self._balance_provider.fetch() or {}
+            bal = self._read_balance() or {}
         except Exception as err:  # noqa: BLE001 — never kill the tick loop
             logger.warning("snapshot.balance_provider_error: %s", err)
             # The provider blew up → degraded this tick. Re-overlay any

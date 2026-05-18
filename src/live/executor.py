@@ -100,6 +100,23 @@ async def execute_intents(
                 client_order_id=req.client_order_id,
                 strategy_id=intent.strategy_id,
             )
+            # Additive companion (signature of register_order intentionally
+            # unchanged). The Binance user-data BrokerFill carries only the
+            # coid + qty/price/fee — NOT symbol/side — so the live fill
+            # consumer (src/live/fill_consumer.py) resolves the full context
+            # from here to assemble a complete order_filled WAL payload.
+            # register_order_context may be absent on a minimal test double;
+            # guard so the legacy/no-context path is byte-identical.
+            register_ctx = getattr(
+                position_store, "register_order_context", None
+            )
+            if register_ctx is not None:
+                register_ctx(
+                    client_order_id=req.client_order_id,
+                    symbol=req.symbol,
+                    side=req.side.value,
+                    strategy_id=intent.strategy_id,
+                )
 
         t0 = time.monotonic()
         try:

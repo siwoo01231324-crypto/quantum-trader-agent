@@ -31,6 +31,12 @@ class StrategyPositionStore:
     def __init__(self) -> None:
         self._positions: dict[str, dict[str, Decimal]] = {}
         self._order_strategy: dict[str, str] = {}
+        # coid → (symbol, side, strategy_id). Populated alongside
+        # register_order by the executor before broker.place_order(). The
+        # Binance fill stream (async_ws.BrokerFill) carries the coid but NOT
+        # symbol/side, so the live fill consumer resolves the full context
+        # from here to build a complete order_filled WAL payload.
+        self._order_context: dict[str, tuple[str, str, str]] = {}
 
     def register_order(self, *, client_order_id: str, strategy_id: str) -> None:
         """Remember which strategy placed a given client_order_id.
@@ -39,6 +45,36 @@ class StrategyPositionStore:
         even when the broker payload doesn't echo strategy_id back.
         """
         self._order_strategy[client_order_id] = strategy_id
+
+    def register_order_context(
+        self,
+        *,
+        client_order_id: str,
+        symbol: str,
+        side: str,
+        strategy_id: str,
+    ) -> None:
+        """Remember the full order context for a client_order_id.
+
+        Additive companion to ``register_order`` (whose signature is
+        deliberately left unchanged — the executor coid-attribution spy
+        subclass depends on it). The Binance user-data ``BrokerFill`` only
+        carries the coid + qty/price/fee, so the live fill consumer needs
+        symbol + side from here to assemble a PaperBroker-schema-compatible
+        ``order_filled`` payload.
+        """
+        self._order_context[client_order_id] = (symbol, side, strategy_id)
+
+    def resolve_order_context(
+        self, client_order_id: str
+    ) -> tuple[str, str, str] | None:
+        """(symbol, side, strategy_id) for a coid, or None if not registered.
+
+        Cross-run note: this in-memory map (like ``_order_strategy``) is lost
+        on restart; the persisted ``strategy_id`` in the WAL ``order_filled``
+        payload is what makes cross-run trade_history correct.
+        """
+        return self._order_context.get(client_order_id)
 
     def record_fill(
         self,

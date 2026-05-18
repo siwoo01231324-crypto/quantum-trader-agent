@@ -45,6 +45,13 @@ class OrderRequest:
     reduce_only: bool = False
     close_position: bool = False
     emergency_exit: bool = False
+    # #238 review MEDIUM — originating strategy, threaded from
+    # OrderIntent.strategy_id by intent_to_order_request. PaperBroker copies
+    # this into the order_filled WAL payload so replay-based + cross-run
+    # consumers (PnLAggregator / trade_history) attribute KIS-paper fills
+    # without parsing the (now strategy-opaque post-#238) client_order_id.
+    # Default None → payload key absent → byte-identical legacy behavior.
+    strategy_id: str | None = None
 
 
 @dataclass

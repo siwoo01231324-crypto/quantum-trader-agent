@@ -327,7 +327,7 @@ body{{
 .nav-pill:hover{{border-color:var(--blue);color:var(--blue)}}
 
 /* ── 메인 레이아웃 ── */
-.page{{padding:16px 20px;display:flex;flex-direction:column;gap:16px}}
+.page{{padding-top:68px;padding-right:20px;padding-bottom:16px;padding-left:20px;display:flex;flex-direction:column;gap:16px}}
 
 /* ── 섹션 헤더 ── */
 .section-hdr{{
@@ -520,6 +520,8 @@ body{{
 }}
 .pos-table td:first-child{{text-align:left;font-family:var(--sans);font-weight:600}}
 .pos-table td.null-val{{color:var(--text3)}}
+/* sticky thead inside .trades-wrap scroll container must use top:0, not topbar offset */
+.trades-wrap .pos-table thead th{{top:0;z-index:2;background:var(--surface)}}
 
 /* ── 전략 포지션 테이블 ── */
 .stratpos-sym{{font-family:var(--mono);font-weight:600;font-size:13px;color:var(--text)}}
@@ -999,7 +1001,12 @@ function fmtNum(n, dec) {{
   if (n == null || n === '') return '—';
   const v = Number(n);
   if (isNaN(v)) return String(n);
-  if (dec != null) return v.toFixed(dec).replace(/\\B(?=(\\d{{3}})+(?!\\d))/g, ',');
+  if (dec != null) {{
+    const s = v.toFixed(dec);
+    const [intPart, decPart] = s.split('.');
+    const intFmt = intPart.replace(/\\B(?=(\\d{{3}})+(?!\\d))/g, ',');
+    return decPart !== undefined ? intFmt + '.' + decPart : intFmt;
+  }}
   return v.toLocaleString('ko-KR');
 }}
 function fmtPnl(v, suffix) {{

@@ -1,0 +1,226 @@
+"""Binance user-data fill stream → ``order_filled`` WAL consumer.
+
+Root incident
+-------------
+``src/brokers/binance/async_ws.py::stream_fills()`` (yields ``BrokerFill``)
+has NO production caller — only tests. On the live ``binance-testnet-shadow``
+path the executor only writes ``order_acked`` (intent: a Binance MARKET ack
+is status=NEW with no price). No ``order_filled`` WAL event is ever emitted,
+so ``PnLAggregator`` / ``StrategyPositionStore`` / ``trade_history`` (all of
+which early-return on ``event_type != "order_filled"``) show ZERO realized
+P&L / no positions / no trades for the entire Binance live path. The
+dashboard shows the SUBMITTED INTENT forever, never the actual fill.
+
+This module is the production consumer that closes the gap.
+
+Design
+------
+* ``broker_fill_to_order_filled_event`` — pure mapping of a ``BrokerFill``
+  to a ``WALEvent(event_type="order_filled")`` whose payload is
+  byte-compatible with the schema ``PaperBroker`` already emits (so
+  ``PnLAggregator.ingest_fill_event`` / ``StrategyPositionStore`` /
+  ``trade_history.reconstruct_trades`` read it with zero changes).
+* ``run_binance_fill_consumer`` — a bounded-reconnect async task that
+  iterates ``stream_fills()``, resolves symbol/side/strategy_id from the
+  ``StrategyPositionStore`` coid→context map (registered by the executor
+  BEFORE place_order), de-dupes on the Binance ``(broker_order_id,
+  trade_id)`` key, and writes the event through the *existing* ``WAL``.
+  The WAL's ``observer`` (wired in ``scripts/live_run.py``) then fans the
+  event out to timeline + position store + pnl aggregator — i.e. the SAME
+  established seam the paper path uses for ``order_filled``. No parallel
+  path is built.
+
+A real-money fill whose coid can't be resolved is STILL written to the WAL
+(``strategy_id`` key absent) plus a WARNING — never silently lost, so it is
+durable for forensics/audit. NOTE: such a fill is currently NOT counted by
+``PnLAggregator`` / ``StrategyPositionStore`` / ``trade_history`` — all three
+require a resolvable ``strategy_id`` and skip the event otherwise (it does
+NOT keep venue totals correct). This only occurs in the narrow window of a
+daemon restart with an order in flight (the in-memory order-context map is
+lost and the ``order_filled`` WAL row was not yet written); the normal
+in-process path always resolves the coid. Tracked follow-up: emit a
+``__unattributed__`` sentinel (or venue-level bucket) so totals stay exact.
+"""
+from __future__ import annotations
+
+import asyncio
+import logging
+from collections.abc import AsyncIterator, Awaitable, Callable
+
+from src.brokers.types import BrokerFill
+from src.live.reconnect import backoff_delay
+from src.live.types import WALEvent
+from src.live.wal import WAL, WALWriteFailed
+
+logger = logging.getLogger(__name__)
+
+# Bounded reconnect ceiling — a permanently-down user-data WS eventually
+# gives up rather than spinning forever, but the daemon outlives any
+# transient outage (mirrors loop.py producer intent).
+_DEFAULT_MAX_ATTEMPTS = 100
+
+
+def broker_fill_to_order_filled_event(
+    fill: BrokerFill,
+    *,
+    symbol: str,
+    side: str,
+    strategy_id: str | None,
+) -> WALEvent:
+    """Map a ``BrokerFill`` to an ``order_filled`` ``WALEvent``.
+
+    The payload mirrors ``PaperBroker``'s ``order_filled`` schema exactly
+    (``symbol``, ``side``, ``qty``, ``fill_qty``, ``fill_price``, ``fees``,
+    ``fee_asset``, ``client_order_id``, ``broker_order_id``, ``trade_id``,
+    ``server_ts``) so every existing replay/ingest consumer reads it with no
+    changes. ``ts`` is the broker fill timestamp (drives the KST-09:00
+    business-window classification + cross-run trade ordering).
+
+    ``strategy_id`` is added ONLY when resolvable — an absent key (rather
+    than ``None``) keeps the payload byte-identical to a legacy/no-strategy
+    fill so the WAL never carries a misleading null and downstream
+    ``payload.get("strategy_id")`` semantics are unchanged.
+    """
+    payload: dict = {
+        "client_order_id": fill.client_order_id,
+        "broker_order_id": fill.broker_order_id,
+        "symbol": symbol,
+        "side": side,
+        # ACTUAL fill quantities — never the submitted intent qty.
+        "qty": str(fill.qty),
+        "fill_qty": str(fill.qty),
+        "fill_price": str(fill.price),
+        "fees": str(fill.fee),
+        "fee_asset": fill.fee_asset,
+        "trade_id": fill.trade_id,
+        "server_ts": None,
+        # Persisted broker fill timestamp — read by PnLAggregator
+        # (business-window) and trade_history (deterministic ordering).
+        "ts": fill.ts.isoformat(),
+    }
+    if strategy_id is not None:
+        payload["strategy_id"] = strategy_id
+    return WALEvent(
+        ts=fill.ts.isoformat(),
+        event_type="order_filled",
+        payload=payload,
+    )
+
+
+async def run_binance_fill_consumer(
+    stream_factory: Callable[[], AsyncIterator[BrokerFill]],
+    *,
+    wal: WAL,
+    position_store,
+    stop_event: asyncio.Event,
+    max_attempts: int = _DEFAULT_MAX_ATTEMPTS,
+    sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+) -> None:
+    """Consume the Binance user-data fill stream into ``order_filled`` WAL.
+
+    ``stream_factory`` returns a fresh ``AsyncIterator[BrokerFill]`` each
+    call (a new ``stream_fills()``); it is re-invoked on reconnect so a
+    dropped WS gets a fresh listenKey/connection. The consumer:
+
+    * de-dupes on the Binance ``(broker_order_id, trade_id)`` pair — a
+      reconnect rebuilds the per-stream dedup set in ``async_ws``, so
+      cross-reconnect resends are caught HERE;
+    * resolves ``(symbol, side, strategy_id)`` from the position store's
+      coid→context map; an unresolved coid still emits the fill (warned,
+      strategy_id absent) — a real fill is never dropped;
+    * writes through the supplied ``WAL`` whose ``observer`` fan-out reaches
+      timeline + StrategyPositionStore + PnLAggregator (the established
+      seam — no parallel path);
+    * never crashes the caller: any stream error backs off
+      (``reconnect.backoff_delay``) and resumes, bounded by
+      ``max_attempts``; ``CancelledError`` propagates cleanly for a tidy
+      shutdown.
+    """
+    seen: set[tuple[str, str]] = set()
+    attempt = 0
+
+    while not stop_event.is_set() and attempt < max_attempts:
+        try:
+            stream = stream_factory()
+            async for fill in stream:
+                if stop_event.is_set():
+                    break
+                attempt = 0  # reset on any successful delivery
+                dedup_key = (fill.broker_order_id, fill.trade_id)
+                if dedup_key in seen:
+                    logger.debug(
+                        "binance_fill_consumer: duplicate fill skipped %s",
+                        dedup_key,
+                    )
+                    continue
+                seen.add(dedup_key)
+
+                ctx = position_store.resolve_order_context(
+                    fill.client_order_id
+                ) if position_store is not None else None
+                if ctx is not None:
+                    symbol, side, strategy_id = ctx
+                else:
+                    # Unresolvable coid — emit anyway (real money), warn.
+                    symbol = ""
+                    side = ""
+                    strategy_id = None
+                    logger.warning(
+                        "binance_fill_consumer: cannot resolve order context "
+                        "for coid=%r (broker_order_id=%s trade_id=%s) — "
+                        "emitting order_filled WITHOUT strategy_id (totals "
+                        "stay correct; per-strategy unattributed)",
+                        fill.client_order_id, fill.broker_order_id,
+                        fill.trade_id,
+                    )
+
+                event = broker_fill_to_order_filled_event(
+                    fill, symbol=symbol, side=side, strategy_id=strategy_id,
+                )
+                try:
+                    wal.write(event)
+                except WALWriteFailed as exc:
+                    # Do NOT crash the trading loop on a transient WAL error;
+                    # the fill is logged so it is not silently lost.
+                    logger.error(
+                        "binance_fill_consumer: WAL write failed for fill "
+                        "coid=%r trade_id=%s: %s",
+                        fill.client_order_id, fill.trade_id, exc,
+                    )
+            # Stream completed cleanly (e.g. aclose / iterator exhausted).
+            return
+        except asyncio.CancelledError:
+            raise
+        except BaseException as err:  # noqa: BLE001 — never crash the loop
+            if stop_event.is_set():
+                return
+            attempt += 1
+            if attempt >= max_attempts:
+                logger.error(
+                    "binance_fill_consumer: reconnect exhausted %d attempts "
+                    "(%s: %s) — giving up; live fills will no longer reach "
+                    "the WAL until restart",
+                    max_attempts, type(err).__name__, err,
+                )
+                return
+            delay = backoff_delay(attempt - 1, base=1.0, cap=30.0)
+            logger.warning(
+                "binance_fill_consumer: stream error (attempt=%d/%d, "
+                "sleep=%.1fs): %s: %s",
+                attempt, max_attempts, delay,
+                type(err).__name__, err,
+            )
+            if sleep is asyncio.sleep:
+                # Production: stay responsive to a shutdown during backoff.
+                try:
+                    await asyncio.wait_for(stop_event.wait(), timeout=delay)
+                    return  # stop requested during backoff
+                except asyncio.TimeoutError:
+                    pass
+                except asyncio.CancelledError:
+                    raise
+            else:
+                # Injected sleep hook (tests) — deterministic, fast.
+                await sleep(delay)
+                if stop_event.is_set():
+                    return

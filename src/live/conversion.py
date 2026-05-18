@@ -73,4 +73,9 @@ def intent_to_order_request(
         # #238 Item 7 — carry the long-only-exit guard to the broker so a
         # "sell with no long" is no-opped, not turned into a naked short.
         reduce_only=intent.reduce_only,
+        # #238 review MEDIUM — thread the originating strategy so PaperBroker
+        # can persist it in the order_filled WAL payload (the coid is
+        # strategy-opaque post-#238; replay-based/cross-run consumers need
+        # the explicit field for KIS-paper attribution).
+        strategy_id=intent.strategy_id,
     )

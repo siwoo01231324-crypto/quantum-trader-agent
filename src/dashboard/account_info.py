@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 from datetime import datetime, timezone
 from typing import Any
 
@@ -30,36 +31,97 @@ class AccountInfoProvider:
         self._cache: dict[str, Any] | None = None
         self._cache_at: datetime | None = None
         self._ttl = ttl_sec
+        # #2 (prior-review MEDIUM) — the 15s TTL check-then-act below is now
+        # hit concurrently by the dashboard /api/account/info worker thread
+        # (asyncio.to_thread(provider.fetch)) AND the live pipeline via
+        # SnapshotBuilder._inject_real_equity (shared instance on the
+        # attached/smoke path after #18). Unguarded it stampedes the slow
+        # KIS+Binance REST and can return a torn/partial dict.
+        #
+        # Strategy: SINGLE-FLIGHT with two locks, neither held across the
+        # cache-hit fast path.
+        #   - `_state_lock` (short): guards the cache read/write tuple so the
+        #     TTL check + store is atomic and never returns a torn dict.
+        #   - `_refresh_lock` (single-flight): only ONE thread runs the slow
+        #     KIS+Binance REST on a miss; concurrent callers block on this
+        #     lock, then re-read the now-fresh cache and reuse the in-flight
+        #     result instead of re-fetching (at most one underlying refresh).
+        # A warm-cache read takes only the short `_state_lock` and returns —
+        # it never touches `_refresh_lock`, so concurrent reads are NOT
+        # serialized behind a slow REST for >TTL. Both locks are
+        # non-reentrant and fetch() never calls itself → no deadlock.
+        self._state_lock = threading.Lock()
+        self._refresh_lock = threading.Lock()
 
-    def fetch(self) -> dict[str, Any]:
-        now = datetime.now(timezone.utc)
-        if (
-            self._cache is not None
-            and self._cache_at is not None
-            and (now - self._cache_at).total_seconds() < self._ttl
-        ):
+    def _read_fresh_cache(self) -> dict[str, Any] | None:
+        """Return the cached dict iff still within TTL, else None (atomic)."""
+        with self._state_lock:
+            if (
+                self._cache is not None
+                and self._cache_at is not None
+                and (datetime.now(timezone.utc) - self._cache_at).total_seconds()
+                < self._ttl
+            ):
+                return self._cache
+            return None
+
+    def peek(self) -> dict[str, Any] | None:
+        """Non-blocking cached read — returns the last fetched balances dict
+        without ever touching the network (None if nothing cached yet,
+        regardless of TTL).
+
+        #3 (prior-review MEDIUM): the live consumer coroutine runs the sync
+        `build_snapshot` on the event-loop thread. `_inject_real_equity`
+        reads balances via this peek() so the loop thread NEVER blocks on a
+        cache-miss REST. The actual refresh runs off-loop via fetch()
+        (`SnapshotBuilder.refresh_balance` wrapped in asyncio.to_thread).
+        Returns last-known balances even past TTL so a transient refresh
+        failure does not blank the snapshot (last-known-good upstream).
+        """
+        with self._state_lock:
             return self._cache
 
-        # Per-broker fallback (#231) — 한쪽 거래소 fetch 실패 시 이전 cache 의
-        # 그 거래소 응답을 재사용. ok=False 로 덮어쓰던 패턴 → "잠깐 정보 →
-        # 조회중↔에러" 깜박임 방지.
-        kis = self._safe(self._fetch_kis, "KIS")
-        if not kis.get("ok") and self._cache is not None:
-            prev_kis = self._cache.get("kis", {})
-            if prev_kis.get("ok"):
-                logger.debug("KIS fetch failed — reusing previous cache value")
-                kis = prev_kis
-        binance = self._safe(self._fetch_binance, "Binance")
-        if not binance.get("ok") and self._cache is not None:
-            prev_bn = self._cache.get("binance", {})
-            if prev_bn.get("ok"):
-                logger.debug("Binance fetch failed — reusing previous cache value")
-                binance = prev_bn
+    def fetch(self) -> dict[str, Any]:
+        # Fast path: a warm cache hit takes only the short state lock.
+        cached = self._read_fresh_cache()
+        if cached is not None:
+            return cached
 
-        data = {"kis": kis, "binance": binance}
-        self._cache = data
-        self._cache_at = now
-        return data
+        # Miss → single-flight: only one thread runs the slow REST. Late
+        # arrivals block here, then re-check the cache the winner just stored.
+        with self._refresh_lock:
+            cached = self._read_fresh_cache()
+            if cached is not None:
+                return cached  # winner already refreshed → reuse in-flight result
+
+            # Snapshot the prior cache for the per-broker fallback under the
+            # state lock so we never read self._cache (mutable) racily.
+            with self._state_lock:
+                prev_cache = self._cache
+
+            # Per-broker fallback (#231) — 한쪽 거래소 fetch 실패 시 이전
+            # cache 의 그 거래소 응답을 재사용. ok=False 로 덮어쓰던 패턴 →
+            # "잠깐 정보 → 조회중↔에러" 깜박임 방지.
+            kis = self._safe(self._fetch_kis, "KIS")
+            if not kis.get("ok") and prev_cache is not None:
+                prev_kis = prev_cache.get("kis", {})
+                if prev_kis.get("ok"):
+                    logger.debug("KIS fetch failed — reusing previous cache value")
+                    kis = prev_kis
+            binance = self._safe(self._fetch_binance, "Binance")
+            if not binance.get("ok") and prev_cache is not None:
+                prev_bn = prev_cache.get("binance", {})
+                if prev_bn.get("ok"):
+                    logger.debug(
+                        "Binance fetch failed — reusing previous cache value"
+                    )
+                    binance = prev_bn
+
+            data = {"kis": kis, "binance": binance}
+            with self._state_lock:
+                self._cache = data
+                self._cache_at = datetime.now(timezone.utc)
+                return data
 
     @staticmethod
     def _safe(callback, label: str) -> dict[str, Any]:

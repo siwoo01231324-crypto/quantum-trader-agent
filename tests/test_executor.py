@@ -156,11 +156,18 @@ async def test_execute_idempotency_key_format(broker, metrics):
     intent = _btc_intent(strategy_id="my_strat")
     acks = await execute_intents([intent], broker=pb, kill_switch=ks, wal=wal, metrics=metrics)
 
+    from src.brokers.client_id import BINANCE_CLIENT_ID_PATTERN
+
     assert len(acks) == 1
     key = acks[0].client_order_id
-    # format: {strategy_id}:{symbol}:{ts_epoch_ms}:{idx}
-    pattern = r"^my_strat:BTCUSDT:\d+:0$"
-    assert re.match(pattern, key), f"key {key!r} does not match pattern {pattern}"
+    # #238 Bug-B: coid is now a Binance-valid deterministic sha256 (no
+    # `{strategy}:{symbol}:{ts}:{idx}` — that exceeded Binance's 36-char cap
+    # and was discarded, losing strategy attribution). Contract now: matches
+    # the Binance client-id regex and is <=36 chars.
+    assert re.match(BINANCE_CLIENT_ID_PATTERN, key), (
+        f"key {key!r} does not match Binance pattern {BINANCE_CLIENT_ID_PATTERN}"
+    )
+    assert len(key) <= 36
 
 
 async def test_execute_multiple_intents(broker, metrics):
@@ -170,11 +177,16 @@ async def test_execute_multiple_intents(broker, metrics):
     intents = [_btc_intent(strategy_id=f"s{i}") for i in range(3)]
     acks = await execute_intents(intents, broker=pb, kill_switch=ks, wal=wal, metrics=metrics)
 
+    from src.brokers.client_id import BINANCE_CLIENT_ID_PATTERN
+
     assert len(acks) == 3
-    for expected_idx, ack in enumerate(acks):
-        # last segment of client_order_id is the idx
-        actual_idx = int(ack.client_order_id.split(":")[-1])
-        assert actual_idx == expected_idx
+    # #238 Bug-B: coid is an opaque sha256 (idx folded into the hashed
+    # input as side=f"{side}:{idx}"), no longer a `:`-delimited suffix.
+    # Contract: 3 intents → 3 DISTINCT Binance-valid coids.
+    coids = [ack.client_order_id for ack in acks]
+    assert len(set(coids)) == 3, f"coids must be distinct, got {coids}"
+    for coid in coids:
+        assert re.match(BINANCE_CLIENT_ID_PATTERN, coid), f"invalid coid {coid!r}"
 
 
 # ---------------------------------------------------------------------------

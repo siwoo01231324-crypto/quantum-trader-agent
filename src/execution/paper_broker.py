@@ -97,7 +97,10 @@ class PaperBroker:
             "price_intent": str(req.price) if req.price is not None else None,
             "order_type": req.order_type.value,
             "server_ts": None,
-            "strategy_id": None,
+            # #238 review MEDIUM — persist the originating strategy so
+            # replay-based / cross-run consumers attribute KIS-paper fills
+            # (coid is strategy-opaque post-#238). Absent → legacy None.
+            "strategy_id": req.strategy_id,
         }
         submitted_event = WALEvent(
             ts=ts.isoformat(),
@@ -189,6 +192,13 @@ class PaperBroker:
                 "trade_id": fill.trade_id,
                 "server_ts": None,
             }
+            # #238 review MEDIUM — persist strategy attribution at the source.
+            # Added ONLY when carried so a legacy/no-strategy_id order yields
+            # a byte-identical payload (key absent, current behavior). Replay-
+            # based PnLAggregator / cross-run trade_history read this field
+            # first; the post-#238 coid is strategy-opaque (no ':' prefix).
+            if req.strategy_id is not None:
+                filled_payload["strategy_id"] = req.strategy_id
             fill_event = WALEvent(
                 ts=fill_ts.isoformat(),
                 event_type="order_filled",

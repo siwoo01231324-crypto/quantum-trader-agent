@@ -803,6 +803,15 @@ async def _run_pipeline_attached(
             ops_counters.ingest(ev.event_type, ev.payload or {})
 
     config.wal_observer = _wal_observer
+    # Binance live-fill gap — the executor only writes `order_acked` (Binance
+    # MARKET ack = status=NEW, no price); without a fill-stream consumer NO
+    # `order_filled` is ever emitted for the live Binance path → zero realized
+    # P&L / positions / trades on the dashboard (제출-only, never 체결).
+    # Wiring the StrategyPositionStore lets run_shadow_loop spawn that
+    # consumer for binance-testnet-shadow and lets execute_intents register
+    # the coid→(symbol, side, strategy_id) context it resolves. Harmless for
+    # paper/kis (no fill-stream task is created without binance_adapter).
+    config.position_store = position_store
     # #238 follow-up root cause — reuse the dashboard's already-warm
     # AccountInfoProvider (15s cache kept fresh by /api/account/info polling)
     # so the KIS snapshot path rides a successful cached balance instead of a
@@ -1030,6 +1039,12 @@ async def _run_smoke_dual(
         binance_adapter = None
     if bnb_config is not None:
         bnb_config.wal_observer = _wal_observer
+        # Binance live-fill gap — only the Binance branch gets the fill-stream
+        # consumer (the KIS branch is PaperBroker, which emits its own
+        # order_filled; setting position_store there would NOT create a
+        # consumer anyway since no binance_adapter is passed, but we keep it
+        # scoped to the Binance branch for clarity).
+        bnb_config.position_store = position_store
         _wire_balance_provider(
             bnb_config, existing=getattr(state, "account_info_provider", None),
         )
@@ -1105,6 +1120,11 @@ async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
         ops_counters.ingest(ev.event_type, ev.payload or {})
 
     config.wal_observer = _wal_observer
+    # Binance live-fill gap — see _run_pipeline_attached. Wiring the store
+    # lets run_shadow_loop spawn the fill-stream consumer for
+    # binance-testnet-shadow so `order_filled` events actually reach the WAL
+    # (otherwise the live Binance path shows the submitted intent forever).
+    config.position_store = position_store
     _wire_balance_provider(config)  # #238 Item 9
 
     # #227 S3: env-gated Live Universe Scanner — when LIVE_SCANNER_ENABLED=1,
