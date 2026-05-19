@@ -47,6 +47,7 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 
+from src.brokers.errors import WSConfigError
 from src.brokers.types import BrokerFill
 from src.live.reconnect import backoff_delay
 from src.live.types import WALEvent
@@ -191,6 +192,21 @@ async def run_binance_fill_consumer(
             return
         except asyncio.CancelledError:
             raise
+        except WSConfigError as err:
+            # PERMANENT misconfig (wrong ws_base_url / 4xx handshake). Retrying
+            # cannot succeed — surface ONCE with remediation and stop the
+            # consumer (the trading loop is unaffected: it spawns this as a
+            # separate task; live fills simply won't reach the WAL until the
+            # operator fixes BINANCE_WS_BASE_URL). Do NOT reconnect-storm.
+            logger.error(
+                "binance_fill_consumer: fill stream permanently unavailable "
+                "(%s) — NOT retrying. Live Binance fills will NOT reach the "
+                "dashboard/PnL until BINANCE_WS_BASE_URL is corrected "
+                "(testnet: wss://stream.binancefuture.com/ws). Trading "
+                "continues; this only affects fill visibility.",
+                err,
+            )
+            return
         except BaseException as err:  # noqa: BLE001 — never crash the loop
             if stop_event.is_set():
                 return

@@ -520,8 +520,11 @@ def _build_binance_adapter(broker_mode: str):
     base_url = os.environ.get(
         "BINANCE_BASE_URL", "https://testnet.binancefuture.com",
     )
+    # NOTE: AsyncBinanceUserDataStream builds `{ws_base_url}/{listenKey}` — the
+    # base MUST include the `/ws` user-data path or Binance returns HTTP 404
+    # (testnet user-data WS = wss://stream.binancefuture.com/ws/<listenKey>).
     ws_base_url = os.environ.get(
-        "BINANCE_WS_BASE_URL", "wss://stream.binancefuture.com",
+        "BINANCE_WS_BASE_URL", "wss://stream.binancefuture.com/ws",
     )
     missing = [
         k for k, v in [

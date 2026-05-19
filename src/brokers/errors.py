@@ -59,3 +59,9 @@ class ListenKeyExpiredError(BrokerError):
 
 class WSDisconnectedError(BrokerError):
     """WebSocket connection dropped unexpectedly."""
+
+
+class WSConfigError(BrokerError):
+    """WebSocket handshake permanently rejected (HTTP 4xx — wrong URL /
+    invalid listenKey host). NOT transient: retrying cannot succeed, so the
+    caller must fail fast (surface once, do not reconnect-storm)."""

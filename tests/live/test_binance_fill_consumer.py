@@ -158,6 +158,38 @@ def _factory(fills):
 
 
 @pytest.mark.asyncio
+async def test_ws_config_error_fails_fast_no_reconnect_storm(tmp_path):
+    """#19 follow-up — user-reported 404 storm. A permanent handshake-config
+    failure (WSConfigError) must NOT be retried: the consumer returns at once
+    (factory invoked exactly ONCE, not up to max_attempts) so there is no
+    20×100 reconnect storm; the trading loop is unaffected.
+    """
+    from src.brokers.errors import WSConfigError
+
+    wal = WAL(tmp_path / "wal.jsonl")
+    store = StrategyPositionStore()
+    stop = asyncio.Event()
+    calls = {"n": 0}
+
+    class _CfgErrStream:
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            raise WSConfigError("WS handshake HTTP 404 at wss://bad/host")
+
+    def factory():
+        calls["n"] += 1
+        return _CfgErrStream()
+
+    await run_binance_fill_consumer(
+        factory, wal=wal, position_store=store, stop_event=stop,
+        max_attempts=100,  # would storm 100× if WSConfigError were retried
+    )
+    assert calls["n"] == 1, "WSConfigError must fail fast — no reconnect retries"
+
+
+@pytest.mark.asyncio
 async def test_consumer_emits_order_filled_through_wal_observer(tmp_path):
     seen_events: list = []
 

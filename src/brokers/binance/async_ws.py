@@ -24,7 +24,11 @@ import websockets.exceptions
 from src.brokers.binance.async_http import AsyncBinanceFuturesClient
 from src.brokers.binance.listen_key import ListenKeyManager
 from src.brokers.async_backoff import exponential_backoff
-from src.brokers.errors import ListenKeyExpiredError, WSDisconnectedError
+from src.brokers.errors import (
+    ListenKeyExpiredError,
+    WSConfigError,
+    WSDisconnectedError,
+)
 from src.brokers.types import BrokerFill
 from src.observability.metrics import get_registry
 
@@ -96,6 +100,10 @@ class AsyncBinanceUserDataStream:
         self._seen: set[tuple[str, str]] = set()
         self._closed = False
         self._expiry_event = asyncio.Event()
+        # Set when the WS handshake is permanently rejected (HTTP 4xx). Makes
+        # the failure non-retryable: stream_fills() raises this instead of a
+        # generic ListenKeyExpiredError so the consumer fails fast (no storm).
+        self._fatal_error: Exception | None = None
         self._metrics = get_registry()
 
     async def stream_fills(self) -> AsyncIterator[BrokerFill]:
@@ -116,6 +124,11 @@ class AsyncBinanceUserDataStream:
             while not self._closed:
                 # Check for listenKey expiry signal
                 if self._expiry_event.is_set():
+                    # A permanent handshake-config failure surfaces as the
+                    # non-retryable WSConfigError so the consumer fails fast
+                    # instead of treating it as a transient/expiry retry.
+                    if self._fatal_error is not None:
+                        raise self._fatal_error
                     raise ListenKeyExpiredError(
                         "Binance listenKey expired; fill stream cannot continue"
                     )
@@ -160,6 +173,30 @@ class AsyncBinanceUserDataStream:
                     broker=_METRICS_BROKER_LABEL, reason=f"close_{code}"
                 ).inc()
             except Exception as exc:
+                # A 4xx handshake rejection (esp. 404) is PERMANENT — wrong
+                # ws_base_url / invalid listenKey host. Retrying can never
+                # succeed; without this it storms 20×(outer 100×). Fail fast.
+                status = (
+                    getattr(getattr(exc, "response", None), "status_code", None)
+                    or getattr(exc, "status_code", None)
+                )
+                if isinstance(status, int) and 400 <= status < 500:
+                    log.error(
+                        "WS handshake permanently rejected HTTP %s at %r — "
+                        "NOT retrying. Check BINANCE_WS_BASE_URL: Binance "
+                        "futures user-data WS must include the /ws path "
+                        "(testnet: wss://stream.binancefuture.com/ws).",
+                        status, self._ws_base_url,
+                    )
+                    self._metrics.broker_ws_reconnect_total.labels(
+                        broker=_METRICS_BROKER_LABEL, reason=f"fatal_{status}"
+                    ).inc()
+                    self._fatal_error = WSConfigError(
+                        f"WS handshake HTTP {status} at {self._ws_base_url} "
+                        f"(/ws path or host misconfigured)"
+                    )
+                    self._expiry_event.set()
+                    return
                 log.warning("WS error: %s — reconnecting (attempt %d)", exc, attempt)
                 self._metrics.broker_ws_reconnect_total.labels(
                     broker=_METRICS_BROKER_LABEL, reason="error"

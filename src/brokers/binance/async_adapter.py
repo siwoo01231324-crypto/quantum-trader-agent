@@ -45,7 +45,7 @@ class AsyncBinanceFuturesAdapter:
         api_key: str,
         secret: str,
         base_url: str,
-        ws_base_url: str = "wss://fstream.binance.com",
+        ws_base_url: str = "wss://fstream.binance.com/ws",  # /ws req. (user-data 404 else)
         paper: bool = True,
         kill_switch: object | None = None,
         fill_queue_size: int = 1000,

@@ -1842,7 +1842,12 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
         for p in state.extra_wal_paths or []:
             if p is not None and Path(p).exists() and Path(p) not in paths:
                 paths.append(Path(p))
-        agg: dict[str, dict] = {}
+        # #238 follow-up — aggregate per (strategy_id, SYMBOL), NOT per
+        # strategy alone. A live-scanner trades a whole universe; keying by
+        # strategy_id collapsed SPK/AI/TRX/NEAR/... into ONE row whose symbol
+        # was frozen to the first seen (BTCUSDT) and whose qty/avg summed
+        # across different symbols → garbage. One row per (strategy, symbol).
+        agg: dict[tuple[str, str], dict] = {}
         for p in paths:
             events, _ = wal_replay(p)
             for ev in events:
@@ -1850,6 +1855,7 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
                     continue
                 pl = ev.payload or {}
                 sid = pl.get("strategy_id", "") or "?"
+                sym = pl.get("symbol", "") or "?"
                 side = (pl.get("side") or "").lower()
                 try:
                     qty = float(pl.get("qty") or pl.get("quantity") or 0)
@@ -1859,13 +1865,11 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
                     px = float(pl.get("price") or pl.get("fill_price") or 0)
                 except (TypeError, ValueError):
                     px = 0.0
-                a = agg.setdefault(sid, {
-                    "strategy_id": sid, "symbol": pl.get("symbol", ""),
+                a = agg.setdefault((sid, sym), {
+                    "strategy_id": sid, "symbol": sym,
                     "buy_n": 0, "buy_qty": 0.0, "sell_n": 0, "sell_qty": 0.0,
                     "_px_sum": 0.0, "_px_n": 0, "last_ts": "",
                 })
-                if not a["symbol"]:
-                    a["symbol"] = pl.get("symbol", "")
                 if side == "buy":
                     a["buy_n"] += 1
                     a["buy_qty"] += qty
@@ -1883,20 +1887,33 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
                 pnl_by = dict(state.pnl_aggregator.by_strategy)
             except Exception:
                 pnl_by = {}
+        rows = sorted(agg.values(), key=lambda r: (r["strategy_id"], r["symbol"]))
+        # realized_pnl is strategy-level only (PnLAggregator has no per-symbol
+        # realized) — attach it to a strategy's most-recent symbol row only,
+        # so the strategy total is not duplicated across its symbol rows.
+        realized_row: dict[str, dict] = {}
+        for r in rows:
+            sid = r["strategy_id"]
+            cur = realized_row.get(sid)
+            if cur is None or r["last_ts"] > cur["last_ts"]:
+                realized_row[sid] = r
         out = []
-        for sid, a in sorted(agg.items()):
-            avg_px = (a["_px_sum"] / a["_px_n"]) if a["_px_n"] > 0 else None
+        for r in rows:
+            avg_px = (r["_px_sum"] / r["_px_n"]) if r["_px_n"] > 0 else None
+            sid = r["strategy_id"]
             out.append({
                 "strategy_id": sid,
-                "symbol": a["symbol"],
-                "buy_n": a["buy_n"],
-                "buy_qty": round(a["buy_qty"], 6),
-                "sell_n": a["sell_n"],
-                "sell_qty": round(a["sell_qty"], 6),
-                "net_qty": round(a["buy_qty"] - a["sell_qty"], 6),
+                "symbol": r["symbol"],
+                "buy_n": r["buy_n"],
+                "buy_qty": round(r["buy_qty"], 6),
+                "sell_n": r["sell_n"],
+                "sell_qty": round(r["sell_qty"], 6),
+                "net_qty": round(r["buy_qty"] - r["sell_qty"], 6),
                 "avg_price": round(avg_px, 4) if avg_px is not None else None,
-                "realized_pnl": pnl_by.get(sid),
-                "last_ts": a["last_ts"],
+                "realized_pnl": (
+                    pnl_by.get(sid) if realized_row.get(sid) is r else None
+                ),
+                "last_ts": r["last_ts"],
             })
         return JSONResponse({"available": True, "strategies": out})
 
