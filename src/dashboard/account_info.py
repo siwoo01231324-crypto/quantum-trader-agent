@@ -52,6 +52,16 @@ class AccountInfoProvider:
         # non-reentrant and fetch() never calls itself → no deadlock.
         self._state_lock = threading.Lock()
         self._refresh_lock = threading.Lock()
+        # Binance-only fast path (#238 follow-up) — the dashboard polls
+        # /api/account/binance every 10s so 미실현손익 tracks the live
+        # Binance screen closely WITHOUT touching the slow KIS REST (its
+        # rate limit is why the combined cache TTL is 15s). Separate short
+        # TTL + own single-flight; never serialized behind the KIS path.
+        self._bn_cache: dict[str, Any] | None = None
+        self._bn_cache_at: datetime | None = None
+        self._bn_ttl = 8.0  # < 10s client poll → each poll is fresh
+        self._bn_state_lock = threading.Lock()
+        self._bn_refresh_lock = threading.Lock()
 
     def _read_fresh_cache(self) -> dict[str, Any] | None:
         """Return the cached dict iff still within TTL, else None (atomic)."""
@@ -121,6 +131,44 @@ class AccountInfoProvider:
             with self._state_lock:
                 self._cache = data
                 self._cache_at = datetime.now(timezone.utc)
+                return data
+
+    def fetch_binance(self) -> dict[str, Any]:
+        """Binance 계좌/포지션만 조회 (KIS REST 미접촉) — 대시보드 10s 폴링용.
+
+        조합 ``fetch()`` 와 분리된 짧은 TTL + single-flight 캐시. 반환 dict
+        에 스냅샷 시각 ``ts`` (UTC ISO) 를 실어, 클라이언트가 "n초 전" 으로
+        데이터 신선도를 표시할 수 있게 한다 — 대시보드 uPnL 이 실제 Binance
+        화면과 미세하게 다른 건 계산이 아니라 이 스냅샷 지연 때문임을
+        사용자가 눈으로 확인 가능. 캐시 적중 시 원본 스냅샷의 ``ts`` 를
+        그대로 유지(실제 데이터 나이를 정직하게 노출). _safe 로 감싸 어떤
+        예외도 ``{ok:False}`` 로 흡수 — 절대 raise 하지 않는다.
+        """
+        with self._bn_state_lock:
+            if (
+                self._bn_cache is not None
+                and self._bn_cache_at is not None
+                and (datetime.now(timezone.utc) - self._bn_cache_at).total_seconds()
+                < self._bn_ttl
+            ):
+                return self._bn_cache
+        with self._bn_refresh_lock:
+            with self._bn_state_lock:
+                if (
+                    self._bn_cache is not None
+                    and self._bn_cache_at is not None
+                    and (
+                        datetime.now(timezone.utc) - self._bn_cache_at
+                    ).total_seconds()
+                    < self._bn_ttl
+                ):
+                    return self._bn_cache  # winner refreshed → reuse in-flight
+            data = self._safe(self._fetch_binance, "Binance")
+            now = datetime.now(timezone.utc)
+            data = {**data, "ts": now.isoformat()}
+            with self._bn_state_lock:
+                self._bn_cache = data
+                self._bn_cache_at = now
                 return data
 
     @staticmethod

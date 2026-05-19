@@ -72,6 +72,104 @@ class TestAccountInfoProvider:
 
 
 # ---------------------------------------------------------------------------
+# AccountInfoProvider.fetch_binance — Binance-only fast path (10s 폴링용).
+# KIS REST 한도를 건드리지 않고 Binance 미실현손익만 자주 갱신.
+# ---------------------------------------------------------------------------
+
+class TestFetchBinanceOnly:
+    def test_returns_binance_only_with_ts_and_no_kis_call(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        provider = AccountInfoProvider()
+        calls = {"kis": 0, "binance": 0}
+
+        def _kis(self) -> dict:
+            calls["kis"] += 1
+            return {"ok": True}
+
+        def _bnb(self) -> dict:
+            calls["binance"] += 1
+            return {"ok": True, "api_key_masked": "ab****cd",
+                    "total_unrealized_pnl": -1.23}
+
+        monkeypatch.setattr(AccountInfoProvider, "_fetch_kis", _kis)
+        monkeypatch.setattr(AccountInfoProvider, "_fetch_binance", _bnb)
+        out = provider.fetch_binance()
+        assert out["ok"] is True
+        assert out["total_unrealized_pnl"] == -1.23
+        # 스냅샷 시각 — 클라이언트가 "n초 전" 표시에 사용.
+        assert isinstance(out.get("ts"), str) and out["ts"]
+        # 핵심: KIS REST 는 절대 호출 안 됨 (10s 폴링이 KIS 한도 안 건드림).
+        assert calls["kis"] == 0
+        assert calls["binance"] == 1
+
+    def test_binance_only_single_flight_cached_within_ttl(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        provider = AccountInfoProvider()
+        n = {"binance": 0}
+
+        def _bnb(self) -> dict:
+            n["binance"] += 1
+            return {"ok": True}
+
+        monkeypatch.setattr(AccountInfoProvider, "_fetch_binance", _bnb)
+        a = provider.fetch_binance()
+        b = provider.fetch_binance()
+        assert n["binance"] == 1            # TTL 내 단일 fetch
+        assert a["ts"] == b["ts"]           # 캐시 반환은 원본 스냅샷 시각 유지
+
+
+# ---------------------------------------------------------------------------
+# /api/account/binance endpoint — Binance 전용 (10s 폴링)
+# ---------------------------------------------------------------------------
+
+class TestAccountBinanceEndpoint:
+    def test_unavailable_without_provider(self) -> None:
+        state = DashboardState()
+        state.account_info_provider = None
+        client = TestClient(create_app(state))
+        resp = client.get("/api/account/binance")
+        assert resp.status_code == 200
+        assert resp.json() == {"available": False}
+
+    def test_returns_binance_payload(self) -> None:
+        class _Stub:
+            def fetch_binance(self) -> dict:
+                return {"ok": True, "wallet_balance_usdt": 1000.0,
+                        "total_unrealized_pnl": -2.5, "positions": [],
+                        "ts": "2026-05-19T07:30:20+00:00"}
+
+        state = DashboardState()
+        state.account_info_provider = _Stub()
+        client = TestClient(create_app(state))
+        resp = client.get("/api/account/binance")
+        assert resp.status_code == 200
+        d = resp.json()
+        assert d["available"] is True
+        assert d["binance"]["ok"] is True
+        assert d["binance"]["total_unrealized_pnl"] == -2.5
+        assert d["binance"]["ts"] == "2026-05-19T07:30:20+00:00"
+
+    def test_falls_back_to_fetch_when_provider_lacks_fetch_binance(self) -> None:
+        # 구형 provider(.fetch 만 보유) 도 500 없이 동작해야.
+        class _Old:
+            def fetch(self) -> dict:
+                return {"kis": {"ok": False},
+                        "binance": {"ok": True, "wallet_balance_usdt": 9.0}}
+
+        state = DashboardState()
+        state.account_info_provider = _Old()
+        client = TestClient(create_app(state))
+        resp = client.get("/api/account/binance")
+        assert resp.status_code == 200
+        d = resp.json()
+        assert d["available"] is True
+        assert d["binance"]["ok"] is True
+        assert d["binance"]["wallet_balance_usdt"] == 9.0
+
+
+# ---------------------------------------------------------------------------
 # /api/account/info endpoint
 # ---------------------------------------------------------------------------
 
@@ -129,3 +227,9 @@ class TestAccountCard:
         assert "bnb-wallet" in body
         # JS 폴링
         assert "/api/account/info" in body or "acctRefresh" in body
+
+    def test_binance_card_has_fast_poll_and_snapshot_element(self) -> None:
+        body = TestClient(create_app(DashboardState())).get("/").text
+        # Binance 전용 10s 폴링 + 조회시각 표시 요소
+        assert "/api/account/binance" in body
+        assert "bnb-snap" in body

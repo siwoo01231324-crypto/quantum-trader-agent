@@ -520,8 +520,13 @@ body{{
 }}
 .pos-table td:first-child{{text-align:left;font-family:var(--sans);font-weight:600}}
 .pos-table td.null-val{{color:var(--text3)}}
-/* sticky thead inside .trades-wrap scroll container must use top:0, not topbar offset */
-.trades-wrap .pos-table thead th{{top:0;z-index:2;background:var(--surface)}}
+/* sticky thead inside a SELF-scrolling container must use top:0, not the
+   page-topbar offset (top:52px). Both the 전략별 포지션 (.trades-wrap) and the
+   Binance 계좌 카드 포지션 표 (#bnb-pos-wrap, max-height:200px overflow:auto)
+   scroll inside their own box — without this the header floats 52px DOWN
+   inside the box and overlaps the rows. */
+.trades-wrap .pos-table thead th,
+#bnb-pos-wrap .pos-table thead th{{top:0;z-index:2;background:var(--surface)}}
 
 /* ── 전략 포지션 테이블 ── */
 .stratpos-sym{{font-family:var(--mono);font-weight:600;font-size:13px;color:var(--text)}}
@@ -799,7 +804,7 @@ body{{
             </tbody>
           </table>
         </div>
-        <div class="last-ts" id="bnb-detail">API Key: <span id="bnb-key">—</span> &nbsp;|&nbsp; <span id="bnb-mode">—</span></div>
+        <div class="last-ts" id="bnb-detail">API Key: <span id="bnb-key">—</span> &nbsp;|&nbsp; <span id="bnb-mode">—</span> &nbsp;|&nbsp; 기준 <span id="bnb-snap" title="이 카드 데이터의 스냅샷 시각 (KST). 실제 Binance 화면과의 미세차이는 이 지연 때문 — 계산은 Binance 의 unRealizedProfit 그대로 사용">—</span></div>
       </div>
 
       <!-- KIS 계좌 카드 -->
@@ -847,12 +852,13 @@ body{{
               <th>매도 건/수량</th>
               <th>순포지션</th>
               <th>평단가</th>
+              <th>현재가</th>
               <th>실현손익</th>
               <th style="padding-right:16px">최근 체결</th>
             </tr>
           </thead>
           <tbody id="stratpos-tbody">
-            <tr><td colspan="8" style="text-align:center;color:var(--text3);padding:20px;font-family:var(--sans);font-size:11px">조회 중…</td></tr>
+            <tr><td colspan="9" style="text-align:center;color:var(--text3);padding:20px;font-family:var(--sans);font-size:11px">조회 중…</td></tr>
           </tbody>
         </table>
       </div>
@@ -1075,8 +1081,8 @@ function _tlInsertRow(tbody, ev) {{
   }}
   const detail = ev.payload ? escHtml(JSON.stringify(ev.payload)).slice(0, 200) : '';
   const tsStr = ev.count > 1
-    ? escHtml((ev.ts||'').slice(0,19).replace('T',' ')) + ' … ' + escHtml((ev.ts_last||'').slice(11,19))
-    : escHtml((ev.ts||'').slice(0,19).replace('T',' '));
+    ? escHtml(fmtKst(ev.ts)) + ' … ' + escHtml(fmtKst(ev.ts_last).slice(11, 19))
+    : escHtml(fmtKst(ev.ts));
   const row = document.createElement('tr');
   row.innerHTML = `<td class="tl-ts">${{tsStr}}</td><td>${{labelHtml}}</td><td class="tl-detail">${{detail}}</td>`;
   tbody.insertBefore(row, tbody.firstChild);
@@ -1165,53 +1171,86 @@ async function acctRefresh() {{
     set('kis-cash', k.ok ? fmtNum(k.cash_balance) + ' 원' : '—');
     set('kis-eval', k.ok ? fmtNum(k.eval_amount) + ' 원' : '—');
     set('kis-positions', k.ok ? (k.n_positions || 0) + ' 종목' : '—');
-    // Binance
-    const b = d.binance || {{}};
-    setStatusChip('bnb-status', !!b.ok, '연결됨', b.error || '실패');
-    set('bnb-key', b.api_key_masked || '—');
-    set('bnb-mode', b.ok ? (b.testnet ? 'Testnet' : 'Live') + ' · ' + (b.base_url_short || '') : '—');
-    // 지갑
-    const walEl = document.getElementById('bnb-wallet');
-    if (walEl) {{ walEl.textContent = b.ok ? fmtNum(b.wallet_balance_usdt, 2) : '—'; }}
-    const avEl = document.getElementById('bnb-avail');
-    if (avEl) {{ avEl.textContent = b.ok ? fmtNum(b.available_usdt, 2) : '—'; }}
-    // uPnL
-    const upnlEl = document.getElementById('bnb-upnl');
-    if (upnlEl) {{
-      const u = b.total_unrealized_pnl;
-      if (b.ok && u != null) {{
-        const sign = u >= 0 ? '+' : '';
-        upnlEl.textContent = sign + fmtNum(u, 2);
-        colorEl(upnlEl, u);
-      }} else {{
-        upnlEl.textContent = '—';
-        upnlEl.style.color = 'var(--text2)';
-      }}
-    }}
-    set('bnb-pos-n', b.ok ? (b.n_positions || 0) + ' 개 포지션' : '포지션 —');
-    // 포지션 테이블
-    const posRows = document.getElementById('bnb-pos-rows');
-    if (posRows) {{
-      const ps = (b.ok && b.positions) ? b.positions : [];
-      if (ps.length === 0) {{
-        posRows.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text3);padding:14px;font-family:var(--sans);font-size:11px">열린 포지션 없음</td></tr>';
-      }} else {{
-        posRows.innerHTML = ps.map(p => {{
-          const isLong = p.side === 'LONG';
-          const sideCls = isLong ? 'side-long' : 'side-short';
-          const sideTxt = isLong ? 'LONG' : 'SHORT';
-          const pnlHtml = fmtPnl(p.unrealized_pnl, ' USDT');
-          return `<tr>
-            <td><span class="stratpos-sym">${{escHtml(p.symbol)}}</span><br><span class="side-badge ${{sideCls}}">${{sideTxt}}</span></td>
-            <td style="text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums">${{escHtml(p.amt)}}</td>
-            <td style="text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums">${{fmtNum(p.entry_price,2)}}</td>
-            <td style="text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums">${{pnlHtml}}</td>
-          </tr>`;
-        }}).join('');
-      }}
-    }}
+    // Binance 는 별도 10s 폴링(bnbFastRefresh)이 소유 — KIS REST 한도를
+    // 안 건드리면서 미실현손익을 실제 Binance 화면에 가깝게 따라가게.
   }} catch (err) {{ console.warn('account', err); }}
 }}
+
+// ── Binance 카드 렌더 (10s 폴링 + 30s 조합조회 공용) ───────────────
+let _bnbSnapAt = null;  // 마지막 스냅샷 Date — "n초 전" 틱 표시용
+function renderBinance(b) {{
+  b = b || {{}};
+  const set = (id, v) => {{ const e = document.getElementById(id); if (e) e.textContent = v; }};
+  setStatusChip('bnb-status', !!b.ok, '연결됨', b.error || '실패');
+  set('bnb-key', b.api_key_masked || '—');
+  set('bnb-mode', b.ok ? (b.testnet ? 'Testnet' : 'Live') + ' · ' + (b.base_url_short || '') : '—');
+  const walEl = document.getElementById('bnb-wallet');
+  if (walEl) {{ walEl.textContent = b.ok ? fmtNum(b.wallet_balance_usdt, 2) : '—'; }}
+  const avEl = document.getElementById('bnb-avail');
+  if (avEl) {{ avEl.textContent = b.ok ? fmtNum(b.available_usdt, 2) : '—'; }}
+  const upnlEl = document.getElementById('bnb-upnl');
+  if (upnlEl) {{
+    const u = b.total_unrealized_pnl;
+    if (b.ok && u != null) {{
+      const sign = u >= 0 ? '+' : '';
+      upnlEl.textContent = sign + fmtNum(u, 2);
+      colorEl(upnlEl, u);
+    }} else {{
+      upnlEl.textContent = '—';
+      upnlEl.style.color = 'var(--text2)';
+    }}
+  }}
+  set('bnb-pos-n', b.ok ? (b.n_positions || 0) + ' 개 포지션' : '포지션 —');
+  // 전략별 포지션 표가 평단/현재가를 join 하도록 심볼별 라이브 포지션 캐시.
+  window._bnbPosBySym = {{}};
+  for (const p of ((b.ok && b.positions) ? b.positions : [])) {{
+    if (p && p.symbol) window._bnbPosBySym[p.symbol] = p;
+  }}
+  const posRows = document.getElementById('bnb-pos-rows');
+  if (posRows) {{
+    const ps = (b.ok && b.positions) ? b.positions : [];
+    if (ps.length === 0) {{
+      posRows.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text3);padding:14px;font-family:var(--sans);font-size:11px">열린 포지션 없음</td></tr>';
+    }} else {{
+      posRows.innerHTML = ps.map(p => {{
+        const isLong = p.side === 'LONG';
+        const sideCls = isLong ? 'side-long' : 'side-short';
+        const sideTxt = isLong ? 'LONG' : 'SHORT';
+        const pnlHtml = fmtPnl(p.unrealized_pnl, ' USDT');
+        return `<tr>
+          <td><span class="stratpos-sym">${{escHtml(p.symbol)}}</span><br><span class="side-badge ${{sideCls}}">${{sideTxt}}</span></td>
+          <td style="text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums">${{escHtml(p.amt)}}</td>
+          <td style="text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums">${{fmtNum(p.entry_price,2)}}</td>
+          <td style="text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums">${{pnlHtml}}</td>
+        </tr>`;
+      }}).join('');
+    }}
+  }}
+  // 스냅샷 시각 — 데이터가 "언제 기준" 인지. 실제 Binance 와의 미세차이가
+  // 계산오류가 아니라 이 지연 때문임을 사용자가 눈으로 확인.
+  _bnbSnapAt = b.ts ? new Date(b.ts) : (b.ok ? new Date() : null);
+  bnbSnapTick();
+}}
+function bnbSnapTick() {{
+  const el = document.getElementById('bnb-snap');
+  if (!el) return;
+  if (!_bnbSnapAt || isNaN(_bnbSnapAt.getTime())) {{ el.textContent = '—'; return; }}
+  const age = Math.max(0, Math.round((Date.now() - _bnbSnapAt.getTime()) / 1000));
+  el.textContent = fmtKst(_bnbSnapAt.toISOString()).slice(11, 19)
+    + (age > 0 ? ' (' + age + '초 전)' : ' (방금)');
+}}
+setInterval(bnbSnapTick, 1000);
+async function bnbFastRefresh() {{
+  try {{
+    const r = await fetch('/api/account/binance');
+    const d = await r.json();
+    if (!d.available) {{ renderBinance({{ok: false}}); return; }}
+    renderBinance(d.binance || {{}});
+  }} catch (err) {{ console.warn('bnbFast', err); }}
+}}
+bnbFastRefresh();
+setInterval(bnbFastRefresh, 10000);
+
 let _acctInflight = false;
 async function acctRefreshGuarded() {{
   if (_acctInflight) return;
@@ -1306,7 +1345,7 @@ async function tradesRefresh() {{
       const sideCls = t.side === 'buy' ? 'side-buy' : t.side === 'sell' ? 'side-sell' : '';
       const stateCls = t.filled ? 'state-filled' : 'state-pending';
       const stateTxt = t.filled ? '체결' : '제출';
-      const ts = (t.ts || '').slice(0,19).replace('T',' ');
+      const ts = fmtKst(t.ts);
       const qtyStr = t.qty != null ? fmtNum(t.qty, 6).replace(/\\.?0+$/, '') : '—';
       const pxStr  = t.price != null ? fmtNum(t.price, 2) : '—';
       return `<tr>
@@ -1334,9 +1373,10 @@ async function stratPosRefresh() {{
     if (!tb) return;
     const rows = d.strategies || [];
     if (rows.length === 0) {{
-      tb.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:20px;font-size:11px">아직 거래한 전략 없음</td></tr>';
+      tb.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:20px;font-size:11px">아직 거래한 전략 없음</td></tr>';
       return;
     }}
+    const bnbBySym = window._bnbPosBySym || {{}};
     tb.innerHTML = rows.map(s => {{
       const net = s.net_qty || 0;
       let sideBadge;
@@ -1344,9 +1384,27 @@ async function stratPosRefresh() {{
       else if (net < 0)  sideBadge = '<span class="side-badge side-short">SHORT</span>';
       else               sideBadge = '<span class="side-badge side-flat">FLAT</span>';
       const netStr = net !== 0 ? fmtNum(Math.abs(net), 6).replace(/\\.?0+$/, '') : '<span class="col-dim">0</span>';
-      const avg    = s.avg_price != null ? fmtNum(s.avg_price, 4) : '<span class="col-dim">—</span>';
+      // 평단가: WAL fill-price 우선, 없으면 라이브 Binance 포지션 진입가 fallback.
+      const lp = bnbBySym[s.symbol] || null;
+      const avgVal = (s.avg_price != null)
+        ? s.avg_price
+        : (lp && lp.entry_price != null ? lp.entry_price : null);
+      const avg = (avgVal != null)
+        ? fmtNum(avgVal, 4) + (s.avg_price == null && lp ? '<span class="col-dim" style="font-size:9px"> live</span>' : '')
+        : '<span class="col-dim">—</span>';
+      // 현재가: 라이브 mark price. 진입가 대비 손익 방향으로 색칠
+      // (LONG 은 현재가>평단 이면 이익, SHORT 은 반대).
+      let curHtml = '<span class="col-dim">—</span>';
+      if (lp && lp.mark_price != null) {{
+        let cls = 'col-dim';
+        if (avgVal != null && net !== 0) {{
+          const up = (net > 0) ? (lp.mark_price > avgVal) : (lp.mark_price < avgVal);
+          cls = (lp.mark_price === avgVal) ? 'col-dim' : (up ? 'col-green' : 'col-red');
+        }}
+        curHtml = '<span class="' + cls + '">' + fmtNum(lp.mark_price, 4) + '</span>';
+      }}
       const pnlHtml = fmtPnl(s.realized_pnl);
-      const ts = (s.last_ts || '').slice(0, 19).replace('T', ' ');
+      const ts = fmtKst(s.last_ts);
       const buyQtyStr  = fmtNum(s.buy_qty,  6).replace(/\\.?0+$/, '');
       const sellQtyStr = fmtNum(s.sell_qty, 6).replace(/\\.?0+$/, '');
       return `<tr>
@@ -1359,6 +1417,7 @@ async function stratPosRefresh() {{
         <td><span class="col-red">${{s.sell_n}}</span> <span class="col-dim">건</span> / <span style="font-family:var(--mono);font-variant-numeric:tabular-nums">${{sellQtyStr}}</span></td>
         <td style="font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right">${{netStr}}</td>
         <td style="font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right">${{avg}}</td>
+        <td style="font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right">${{curHtml}}</td>
         <td style="text-align:right">${{pnlHtml}}</td>
         <td style="font-family:var(--mono);font-size:10px;color:var(--text3);padding-right:16px;text-align:right">${{escHtml(ts)}}</td>
       </tr>`;
@@ -1421,9 +1480,25 @@ function fmtHoldingTime(secs) {{
   if (s < 86400) return Math.floor(s/3600) + 'h ' + Math.floor((s%3600)/60) + 'm';
   return Math.floor(s/86400) + 'd ' + Math.floor((s%86400)/3600) + 'h';
 }}
+// 서버는 모든 ts 를 UTC(또는 +00:00) 로 적재한다. 화면은 한국시간(KST,
+// Asia/Seoul) 으로 보여준다. tz 표기가 없으면(naive) UTC 로 간주해 'Z' 부착.
+function fmtKst(ts) {{
+  if (!ts) return '—';
+  let s = String(ts);
+  const hasTz = /[zZ]$|[+-]\\d\\d:?\\d\\d$/.test(s);
+  if (!hasTz) s = s.replace(' ', 'T') + 'Z';
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return String(ts).slice(0, 19).replace('T', ' ');
+  const p = new Intl.DateTimeFormat('ko-KR', {{
+    timeZone: 'Asia/Seoul', hourCycle: 'h23',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  }}).formatToParts(d).reduce((o, x) => {{ o[x.type] = x.value; return o; }}, {{}});
+  return `${{p.year}}-${{p.month}}-${{p.day}} ${{p.hour}}:${{p.minute}}:${{p.second}}`;
+}}
 function fmtTs(ts) {{
   if (!ts) return '—';
-  return String(ts).slice(0, 19).replace('T', ' ');
+  return fmtKst(ts);
 }}
 async function tradeHistoryRefresh() {{
   try {{
@@ -2181,6 +2256,32 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
         finally:
             _acct_cache["inflight"] = False
         return JSONResponse({"available": True, **data})
+
+    @app.get("/api/account/binance")
+    async def api_account_binance() -> JSONResponse:
+        """Binance 전용 빠른 갱신 (대시보드 10s 폴링) — KIS REST 미접촉.
+
+        provider.fetch_binance() 우선; 구형 provider(.fetch 만 보유) 는
+        fetch()["binance"] 로 graceful fallback. 항상 200 — 절대 500 금지.
+        반환 binance dict 의 ``ts`` 가 스냅샷 시각.
+        """
+        provider = state.account_info_provider
+        if provider is None:
+            return JSONResponse({"available": False})
+        import asyncio
+        fb = getattr(provider, "fetch_binance", None)
+        try:
+            if callable(fb):
+                binance = await asyncio.to_thread(fb)
+            else:
+                data = await asyncio.to_thread(provider.fetch)
+                binance = (data or {}).get("binance", {"ok": False})
+        except Exception as err:  # noqa: BLE001 — never 500 the dashboard
+            return JSONResponse(
+                {"available": True,
+                 "binance": {"ok": False, "error": str(err)}}
+            )
+        return JSONResponse({"available": True, "binance": binance})
 
     # ── venue 실증 가시화 (#238 follow-up) ───────────────────────────────
     @app.get("/api/venue_equity_status")
