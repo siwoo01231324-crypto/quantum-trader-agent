@@ -228,6 +228,56 @@ strategies:
   #   class: backtest.strategies.live_oversold_with_divergence.LiveOversoldWithDivergence
   #   kwargs: {}
   #
+  # ─── Candidate-C 4-parallel deployment (added 2026-05-20) ─────────────────
+  #
+  # 위 5종이 코인 1m 에서 PF<1 LOSE 였지만, 같은 4종(macd 제외)을 코인 **1d** 로
+  # 재검정 시 PBO=0.0007 PASS + walk-forward 평균 79% 일관성 + 합성 시뮬에서
+  # ensemble 단독으로 SR 3.14 / MDD -23.2% / CAGR +135% (cs_tsmom_crypto 와의
+  # 상관 0.43, portfolio-level sim 결과는 reports/portfolio_cs_plus_cand_c.json).
+  # 자세한 검증: docs/background/51-live-scanner-bn1d-ensemble-validation.md.
+  #
+  # 1-instance wrapper 시도(live_scanner_ensemble_bn1d)는 OR-게이트 1-position
+  # 디자인이 분산 효과 파괴 → 5y wrapper bench PF 0.95 LOSER 로 rejected
+  # (docs/specs/strategies/live-scanner-ensemble-bn1d.md). 진짜 Candidate C
+  # 효과는 4 sub 를 **parallel entry** 로 등록하는 방식만 가능.
+  #
+  # 4 entry id 에 `cand-c-2026-05-20-` prefix 부여 (사용자 식별자) + class 는
+  # 위 5종 commented entry 와 동일 (코드 재사용, 동일 LiveScannerMixin 이라 같은
+  # stop=3%/tp=6% LivePositionRiskManager 청산). default_size 가 Candidate-C
+  # weight × half_kelly 비율 = 0.05 baseline 의:
+  #   rsi_oversold_volume_spike : 0.05 × 0.30 × 0.5 = 0.0075
+  #   breakout_with_atr_stop    : 0.05 × 0.30 × 0.5 = 0.0075
+  #   bb_lower_bounce           : 0.05 × 0.20 × 0.5 = 0.0050
+  #   oversold_with_divergence  : 0.05 × 0.20 × 0.5 = 0.0050
+  #
+  # **2중 활성화 게이트** (uncomment 후 둘 다 ON):
+  #   1. 아래 4 entry 의 # 제거
+  #   2. ENV `LIVE_SCANNER_BN1D_ENSEMBLE_ENABLED=1`
+  #      (LIVE_SCANNER_ENABLED=1 도 함께 필요 — LivePositionRiskManager 와이어)
+  #
+  # **활성화 전 체크리스트** (사용자 결정):
+  #   (a) cs_tsmom_crypto_daily 와 병행 운영 (자본 분배: cs_tsmom 70~50% + 본 4종 30~50%)
+  #   (b) paper 6개월 무사고 — PnL 양수 / MDD ≤ -25%
+  #   (c) 자동 trip 게이트 (3개월 rolling PF<1 → ENV gate OFF + 알람)
+  #   (d) 펀딩비·슬리피지 현실 페널티 (보수적 SR -30% / MDD +50% 추정)
+  #
+  # - id: cand-c-2026-05-20-live-rsi-oversold-volume-spike
+  #   class: backtest.strategies.live_rsi_oversold_volume_spike.LiveRsiOversoldVolumeSpike
+  #   kwargs:
+  #     default_size: 0.0075  # 0.05 × weight 0.30 × half_kelly 0.5
+  # - id: cand-c-2026-05-20-live-breakout-with-atr-stop
+  #   class: backtest.strategies.live_breakout_with_atr_stop.LiveBreakoutWithAtrStop
+  #   kwargs:
+  #     default_size: 0.0075  # 0.05 × weight 0.30 × half_kelly 0.5
+  # - id: cand-c-2026-05-20-live-bb-lower-bounce
+  #   class: backtest.strategies.live_bb_lower_bounce.LiveBbLowerBounce
+  #   kwargs:
+  #     default_size: 0.0050  # 0.05 × weight 0.20 × half_kelly 0.5
+  # - id: cand-c-2026-05-20-live-oversold-with-divergence
+  #   class: backtest.strategies.live_oversold_with_divergence.LiveOversoldWithDivergence
+  #   kwargs:
+  #     default_size: 0.0050  # 0.05 × weight 0.20 × half_kelly 0.5
+  #
   # HTS 검색식 hybrid (#230) — 단타·5분대기·스윙 OR 합성. KST ≤ 10:30 시간대 게이트.
   # KIS 1m 30일 한계로 5y bench 데이터 부족 → paper-only 운영 (5거래일 누적 후 검증).
   # - id: live-hts-hybrid
