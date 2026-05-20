@@ -70,6 +70,12 @@ LIVE_SCANNER_STRATEGIES: dict[str, tuple[str, str]] = {
         "backtest.strategies.live_oversold_with_divergence",
         "LiveOversoldWithDivergence",
     ),
+    # Ensemble wrapper — Candidate C (background/51). NOT equivalent to running
+    # the 4 sub-strategies in parallel; 1 position, conviction-weighted size.
+    "live_scanner_ensemble_bn1d": (
+        "backtest.strategies.live_scanner_ensemble_bn1d",
+        "LiveScannerEnsembleBn1d",
+    ),
 }
 
 
