@@ -274,8 +274,28 @@ def _run_dashboard_only_mode(port: int = 8000) -> int:
     n_strats = _count_strategies(yaml_path)
     _print_startup_banner(n_strats, dashboard_port=port)
     print(f"Dashboard ready: http://localhost:{port}")
-    print("거래는 아직 시작 안 됨 — 별도 cmd 에서 다음 명령으로 시작:")
-    print("  qta.exe --symbols 005930 --broker kis-paper-shadow")
+    # 2026-05-21: standalone 모드에서 pipeline 의 logger.info 가 root logger
+    # 로 빠지고 핸들러가 없어 stdout 에 안 뜨던 문제 수정 — 거래 시작 후
+    # 로그가 0 줄이라 "안 돌아가나" 오해 유발. basicConfig 으로 stdout 에
+    # 강제 송출 (uvicorn 의 log_level=warning 은 별도 logger 라 영향 X).
+    import logging  # noqa: PLC0415
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
+    # 거래 시작 시 실제로 어느 broker 로 갈지 미리 알려준다 (#$$$).
+    _env_broker = os.environ.get("QTA_DEFAULT_BROKER", "").strip()
+    if _env_broker:
+        print(f"기본 broker (QTA_DEFAULT_BROKER): {_env_broker}")
+    else:
+        _smoke = os.environ.get("SMOKE_TEST_ENABLED", "").lower() in ("1","true","yes")
+        _fallback = "binance-testnet-shadow" if _smoke else "kis-paper-shadow"
+        print(
+            f"기본 broker (QTA_DEFAULT_BROKER 미설정 → fallback): {_fallback}\n"
+            f"  → .env 의 QTA_DEFAULT_BROKER 가 안 잡혔다면 .env 위치/구문 확인 필요."
+        )
+    print("거래 시작: 대시보드 'KIS 카드 → 거래 시작' 버튼 또는 별도 cmd:")
+    print("  python scripts/live_run.py --symbols BTCUSDT --broker binance-testnet-shadow --feed binance")
     print("종료: 이 콘솔창에서 Ctrl+C")
     print()
 
@@ -997,6 +1017,12 @@ def _build_pipeline_factory(
         # 무관 — binance-testnet-shadow 인데 005930 fallback 되면 feed 가 비어 무의미.
         if broker == "binance-testnet-shadow" and not params.get("symbols"):
             symbols = ["BTCUSDT"]
+        # 2026-05-21: 거래 시작 시 실제 어디로 가는지 stdout 에 명시 — bars=0
+        # 인데 어디 막혔는지 진단 즉시 가능 (.env 미로드 / 한국장 마감 등).
+        print(
+            f"[qta] 거래 시작 — broker={broker} symbols={symbols} duration={duration}",
+            flush=True,
+        )
         # #238 — Binance broker 에서는 KIS REST 진입 자체를 막아야 함 (feed=binance).
         extra_argv: list[str] = []
         if broker == "binance-testnet-shadow":
