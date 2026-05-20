@@ -27,6 +27,10 @@ _OPTIONAL_SCALAR = (
     "backtest_period",
     "last_updated",
     "summary_ko",
+    # 출구 룰 % — 카드에 손절/익절/트레일링 표시 (2026-05-20).
+    "stop_loss_pct",
+    "take_profit_pct",
+    "trailing_stop_pct",
 )
 
 _FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---", re.DOTALL)

@@ -1631,6 +1631,13 @@ _STRATEGY_CARD_CSS = r"""
 .venue-binance{background:rgba(243,186,47,.12);color:#f3ba2f;border:1px solid rgba(243,186,47,.35)}
 .strat-disabled-reason{font-size:.6rem;color:#848e9c;font-family:'IBM Plex Mono',monospace;background:#1e2329;border:1px dashed #3a3a3a;border-radius:3px;padding:1px 5px;text-transform:uppercase;letter-spacing:.04em}
 .strat-toggle:disabled + .slider{opacity:.4;cursor:not-allowed}
+.strat-exits{display:flex;flex-wrap:wrap;gap:6px;margin-top:2px}
+.strat-exit-chip{font-size:.7rem;font-family:'IBM Plex Mono',monospace;padding:3px 7px;border-radius:3px;background:#0b0e11;border:1px solid #2b3139;color:#848e9c}
+.strat-exit-chip b{color:#eaecef;font-weight:600;font-variant-numeric:tabular-nums}
+.exit-tf{background:rgba(132,142,156,.08);color:#b7bdc8;font-weight:600}
+.exit-sl b{color:#f6465d}
+.exit-tp b{color:#0ecb81}
+.exit-trail b{color:#f0a500}
 .strat-meta{display:flex;gap:10px;flex-wrap:wrap;font-size:.72rem;color:#848e9c;font-family:'IBM Plex Mono',monospace}
 .strat-summary{font-size:.75rem;color:#b7bdc8;line-height:1.5;background:#0b0e11;border-left:3px solid #1890ff;padding:8px 10px;border-radius:4px;white-space:pre-line}
 .strat-metrics{display:grid;grid-template-columns:1fr 1fr;gap:5px}
@@ -1703,6 +1710,30 @@ def _fmt_metric(value: Any, *, percent: bool = False, digits: int = 2) -> str:
     return f"{v:.{digits}f}"
 
 
+def _fmt_timeframe(tf) -> str:
+    """봉(timeframe) 코드를 한국어 라벨로. 모르는 값은 원본 그대로 (안전 fallback)."""
+    if not tf:
+        return "—"
+    mapping = {
+        "1m": "1분봉", "3m": "3분봉", "5m": "5분봉", "15m": "15분봉",
+        "30m": "30분봉", "1h": "1시간봉", "2h": "2시간봉", "4h": "4시간봉",
+        "1d": "일봉", "1w": "주봉", "1mo": "월봉",
+    }
+    s = str(tf).strip()
+    return mapping.get(s, s)
+
+
+def _fmt_exit_pct(value, *, sign: str) -> str:
+    """출구 룰 % 표시 — 손절은 sign='-', 익절·트레일링도 부호 명시. None → '—'."""
+    if value is None:
+        return "—"
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return str(value)[:8]
+    return f"{sign}{v * 100:.1f}%"
+
+
 def _classify_venues(instruments) -> list[str]:
     """Map a spec's ``instruments`` list to venue tags for the card chip.
 
@@ -1744,7 +1775,12 @@ def _strategy_card(item: dict) -> str:
     name = html.escape(str(item.get("name", sid)))
     status = html.escape(str(item.get("status", "")))
     instruments = html.escape(", ".join(item.get("instruments") or []))
-    timeframe = html.escape(str(item.get("timeframe", "")))
+    timeframe_raw = str(item.get("timeframe", ""))
+    timeframe = html.escape(_fmt_timeframe(timeframe_raw))
+    # 출구 룰 % — 손절/익절/트레일링 (live-scanner 만 비-null, 그 외 '—').
+    stop_pct = _fmt_exit_pct(item.get("stop_loss_pct"), sign="-")
+    tp_pct = _fmt_exit_pct(item.get("take_profit_pct"), sign="+")
+    trail_pct = _fmt_exit_pct(item.get("trailing_stop_pct"), sign="-")
     sharpe = _fmt_metric(item.get("sharpe_bt"))
     mdd = _fmt_metric(item.get("mdd_bt"), percent=True, digits=1)
     annual = _fmt_metric(item.get("annual_return_bt"), percent=True, digits=1)
@@ -1801,6 +1837,12 @@ def _strategy_card(item: dict) -> str:
         <div><span class="m-label">MDD (BT)</span><span class="m-val">{mdd}</span></div>
         <div><span class="m-label">연수익 (BT)</span><span class="m-val">{annual}</span></div>
         <div><span class="m-label">기간 (BT)</span><span class="m-val">{period}</span></div>
+      </div>
+      <div class="strat-exits" data-timeframe="{html.escape(timeframe_raw)}">
+        <span class="strat-exit-chip exit-tf">{timeframe}</span>
+        <span class="strat-exit-chip exit-sl">손절 <b>{stop_pct}</b></span>
+        <span class="strat-exit-chip exit-tp">익절 <b>{tp_pct}</b></span>
+        <span class="strat-exit-chip exit-trail">트레일링 <b>{trail_pct}</b></span>
       </div>
       <div class="strat-toggle-row">
         <span class="strat-state {state_cls}">{state_label}</span>
@@ -2515,6 +2557,8 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
                 it["toggle_disabled"] = True
                 it["disabled_reason"] = pstatus  # "commented" or "absent"
             it["pnl_today"] = float(agg.daily_for(sid)) if agg is not None else 0.0
+        # 켜진 전략 위, 꺼진 전략 아래 — 같은 그룹 내 id 알파벳 정렬 (안정적, 보기 좋음).
+        items.sort(key=lambda r: (not bool(r.get("enabled")), str(r.get("id", ""))))
         return items
 
     @app.get("/api/strategies")

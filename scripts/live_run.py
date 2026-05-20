@@ -314,6 +314,29 @@ def _run_dashboard_only_mode(port: int = 8000) -> int:
             )
         )
         state.account_info_provider = AccountInfoProvider()
+
+        # Standalone 대시보드용 in-process orchestrator pre-build (2026-05-20).
+        # 인자 없이 띄운 standalone 모드는 trading loop 가 없어서 예전엔
+        # state.orchestrator=None → 카탈로그 토글이 전부 "no-runtime" 으로
+        # 읽기전용이 됐다. 카드 토글로 전략 ON/OFF 가 가능하도록 production.yaml
+        # 로부터 미리 orch 를 빌드해 attach 한다. "거래 시작" 클릭 시
+        # _run_pipeline_attached 가 자체 orch 로 덮어쓰므로 trading lifecycle
+        # 에는 영향 없음. 빌드 실패 시 warn 하고 None 유지 (graceful, never 500).
+        try:
+            from portfolio.config_loader import load_orchestrator_from_yaml  # noqa: PLC0415
+            from risk.dsl import Policy  # noqa: PLC0415
+            state.orchestrator = load_orchestrator_from_yaml(
+                yaml_path,
+                Policy(policy_version=1, name="dashboard"),
+                on_metalabeler_missing="skip",
+            )
+            print(
+                f"[qta] dashboard orch attached "
+                f"({len(state.orchestrator.strategies)} strategies — toggles actionable)"
+            )
+        except Exception as err:
+            print(f"[qta] dashboard orch pre-build skipped: {err!r}")
+
         app = create_app(state)
         config = uvicorn.Config(
             app, host="127.0.0.1", port=port,
