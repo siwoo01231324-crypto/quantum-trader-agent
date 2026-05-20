@@ -168,6 +168,24 @@ class PnLAggregator:
             payload.setdefault("ts", event.ts)
             self.ingest_fill_event(event.event_type, payload)
 
+    def replay_from_wal_dir(self, log_dir: Path | str) -> int:
+        """Cross-run restore: glob 모든 WAL under log_dir + 각각 replay.
+
+        매 run 마다 새 wal_path 가 생성되므로 single-path replay 만으로는
+        부팅 시 aggregator 가 비어있음 → realized/daily/monthly PnL 0. 본
+        메서드가 모든 run 의 fill events 누적 → realized PnL 정상 갱신.
+
+        Returns: replay 된 WAL 파일 수.
+        """
+        from src.live.trade_history import discover_wal_files
+        log_dir = Path(log_dir)
+        if not log_dir.exists():
+            return 0
+        paths = discover_wal_files(log_dir)
+        for p in paths:
+            self.replay_from_wal(p)
+        return len(paths)
+
     @property
     def realtime(self) -> float:
         return self._cum_realized
