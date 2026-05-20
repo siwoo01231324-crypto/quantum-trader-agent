@@ -250,33 +250,35 @@ strategies:
   #   bb_lower_bounce           : 0.05 × 0.20 × 0.5 = 0.0050
   #   oversold_with_divergence  : 0.05 × 0.20 × 0.5 = 0.0050
   #
-  # **2중 활성화 게이트** (uncomment 후 둘 다 ON):
-  #   1. 아래 4 entry 의 # 제거
-  #   2. ENV `LIVE_SCANNER_BN1D_ENSEMBLE_ENABLED=1`
-  #      (LIVE_SCANNER_ENABLED=1 도 함께 필요 — LivePositionRiskManager 와이어)
+  # **ACTIVATED 2026-05-20** — 4 entry uncomment 완료. ENV 게이트 2중 운영:
+  #   1. LIVE_SCANNER_BN1D_ENSEMBLE_ENABLED=1 (사용자 환경변수 set 완료)
+  #   2. LIVE_SCANNER_ENABLED=1 (LivePositionRiskManager 와이어, 사용자 set)
   #
-  # **활성화 전 체크리스트** (사용자 결정):
-  #   (a) cs_tsmom_crypto_daily 와 병행 운영 (자본 분배: cs_tsmom 70~50% + 본 4종 30~50%)
-  #   (b) paper 6개월 무사고 — PnL 양수 / MDD ≤ -25%
-  #   (c) 자동 trip 게이트 (3개월 rolling PF<1 → ENV gate OFF + 알람)
-  #   (d) 펀딩비·슬리피지 현실 페널티 (보수적 SR -30% / MDD +50% 추정)
+  # **paper 운영 6개월 무사고 후 자본 확대 검토**. 모니터링 항목:
+  #   - 일별: 시그널 발사·체결·이상 알람
+  #   - 주별: trade count vs backtest 기대값 (rsi ~0.16/day, breakout ~1.0/day)
+  #   - 월별: PF > 1.0, MDD ≤ -25%
+  #   - 자동 trip (3개월 rolling PF<1 → ENV gate OFF) 코드 미구현 — 수동 모니터링
   #
-  # - id: cand-c-2026-05-20-live-rsi-oversold-volume-spike
-  #   class: backtest.strategies.live_rsi_oversold_volume_spike.LiveRsiOversoldVolumeSpike
-  #   kwargs:
-  #     default_size: 0.0075  # 0.05 × weight 0.30 × half_kelly 0.5
-  # - id: cand-c-2026-05-20-live-breakout-with-atr-stop
-  #   class: backtest.strategies.live_breakout_with_atr_stop.LiveBreakoutWithAtrStop
-  #   kwargs:
-  #     default_size: 0.0075  # 0.05 × weight 0.30 × half_kelly 0.5
-  # - id: cand-c-2026-05-20-live-bb-lower-bounce
-  #   class: backtest.strategies.live_bb_lower_bounce.LiveBbLowerBounce
-  #   kwargs:
-  #     default_size: 0.0050  # 0.05 × weight 0.20 × half_kelly 0.5
-  # - id: cand-c-2026-05-20-live-oversold-with-divergence
-  #   class: backtest.strategies.live_oversold_with_divergence.LiveOversoldWithDivergence
-  #   kwargs:
-  #     default_size: 0.0050  # 0.05 × weight 0.20 × half_kelly 0.5
+  # **자본 분배** (현 default_size 는 cs_tsmom_crypto_daily 와 병행 가정 — baseline
+  # 0.05 × weight × half_kelly 0.5). cs_tsmom 단독 시 default_size 2배 권장.
+  #
+  - id: cand-c-2026-05-20-live-rsi-oversold-volume-spike
+    class: backtest.strategies.live_rsi_oversold_volume_spike.LiveRsiOversoldVolumeSpike
+    kwargs:
+      default_size: 0.0075  # 0.05 × weight 0.30 × half_kelly 0.5
+  - id: cand-c-2026-05-20-live-breakout-with-atr-stop
+    class: backtest.strategies.live_breakout_with_atr_stop.LiveBreakoutWithAtrStop
+    kwargs:
+      default_size: 0.0075  # 0.05 × weight 0.30 × half_kelly 0.5
+  - id: cand-c-2026-05-20-live-bb-lower-bounce
+    class: backtest.strategies.live_bb_lower_bounce.LiveBbLowerBounce
+    kwargs:
+      default_size: 0.0050  # 0.05 × weight 0.20 × half_kelly 0.5
+  - id: cand-c-2026-05-20-live-oversold-with-divergence
+    class: backtest.strategies.live_oversold_with_divergence.LiveOversoldWithDivergence
+    kwargs:
+      default_size: 0.0050  # 0.05 × weight 0.20 × half_kelly 0.5
   #
   # HTS 검색식 hybrid (#230) — 단타·5분대기·스윙 OR 합성. KST ≤ 10:30 시간대 게이트.
   # KIS 1m 30일 한계로 5y bench 데이터 부족 → paper-only 운영 (5거래일 누적 후 검증).
