@@ -73,9 +73,8 @@ def test_production_yaml_registers_all_strategies():
         on_metalabeler_missing="skip",
     )
     assert set(orch._strategies.keys()) == {
-        # Single-ticker (4 active — momo-btc-v2 disabled per 9553e87)
-        "momo-vol-filtered",
-        "meanrev-pairs",
+        # Single-ticker (2 active — momo-btc-v2/momo-vol-filtered/meanrev-pairs
+        # disabled per 9553e87 + #248 Scenario B)
         "breakout-donchian",
         "momo-kis-v1",
         # Universe-scan (#218, 6 active; cs-bb-macd-kr inactive)
@@ -88,7 +87,13 @@ def test_production_yaml_registers_all_strategies():
         # Smoke 통로 검증 (#236, env-gated — hold only without SMOKE_TEST_ENABLED)
         "smoke-1m-roundtrip-kis",
         "smoke-1m-roundtrip-binance",
-        # Live-scanner 5종 — DISABLED (#240 / 5y eval): 9553e87 참조.
+        # Candidate-C 4-parallel live-scanner 실험 (#247) — production wiring
+        # 검증 단계, env-gated.
+        "cand-c-2026-05-20-live-rsi-oversold-volume-spike",
+        "cand-c-2026-05-20-live-breakout-with-atr-stop",
+        "cand-c-2026-05-20-live-bb-lower-bounce",
+        "cand-c-2026-05-20-live-oversold-with-divergence",
+        # Live-scanner 원본 5종 — DISABLED (#240 / 5y eval): 9553e87 참조.
     }
 
 

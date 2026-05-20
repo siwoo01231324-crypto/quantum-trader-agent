@@ -54,6 +54,7 @@ class CrossSectionalAsyncStrategy:
         weights_kind: str = "krx",
         params: Optional[dict] = None,
         module: Optional[str] = None,
+        capital_fraction: float = 1.0,
     ) -> None:
         """
         Two construction modes:
@@ -79,6 +80,12 @@ class CrossSectionalAsyncStrategy:
         if strategy_id is None:
             raise ValueError("strategy_id required")
 
+        # capital_fraction (2026-05-20): 이 전략에 할당할 자본 비율 (0,1].
+        # 예: 0.5 → 잔고의 50% 만 사용. weights 1/N 가중치에 추가로 곱해져
+        # 종목당 deploy = capital_fraction × (1/N) × equity 가 됨.
+        if not 0 < capital_fraction <= 1.0:
+            raise ValueError(
+                f"capital_fraction must be in (0, 1], got {capital_fraction}")
         self.strategy_id = strategy_id
         self.compute_weights_fn = compute_weights_fn
         self.SYMBOL = symbol
@@ -86,6 +93,7 @@ class CrossSectionalAsyncStrategy:
         self.MIN_HISTORY = warmup_bars
         self.weights_kind = weights_kind
         self.params = params or {}
+        self.capital_fraction = float(capital_fraction)
         self._bar_count = 0
         self._last_weights: Optional[pd.Series] = None
 
@@ -134,7 +142,9 @@ class CrossSectionalAsyncStrategy:
                 return Signal(action="hold", size=0.0,
                               reason=f"{self.strategy_id}_no_data")
             weights_df = self.compute_weights_fn(*panels, **self.params)
-            last_row = weights_df.iloc[-1]
+            # capital_fraction 스케일: weights 와 exposure 둘 다 곱해 — downstream
+            # broker 가 latest_weights 와 size 둘 다 참조하므로 일관성 유지.
+            last_row = weights_df.iloc[-1] * self.capital_fraction
             self._last_weights = last_row[last_row > 0]
             exposure = float(last_row.sum())
         except Exception as e:

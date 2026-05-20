@@ -134,6 +134,9 @@ strategies:
       rebal_freq: 5
       warmup_bars: 252
       weights_kind: crypto
+      # 사용자 요청 (2026-05-21): 잔고의 50% 배정. 종목당 0.5 × (1/10) = 5%.
+      # 5y MDD -52% → 최악의 경우 총 자본 ~26% 일시 손실 가능 — 모니터링.
+      capital_fraction: 0.5
       params:
         top_n: 10
         min_quote_vol: 10000000
