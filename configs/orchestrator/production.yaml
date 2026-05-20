@@ -275,22 +275,36 @@ strategies:
   # available cash ≈ total balance 거의 그대로. 의도된 사이즈 = Candidate-C
   # weight × half_kelly 0.5 (baseline 1.0 of available cash). 4 entry 동시
   # 진입 max ≈ available 의 17% 사용 (보수적).
+  # stop/tp 조정 (2026-05-20): bench 의 stop=3%/tp=6% 는 코인 가격 변동 기준
+  # → 20x 레버리지에서 코인 +6% = 포지션 +120% (실현 불가). 사용자가 broker
+  # UI 에서 leverage 10x 수동 설정 + stop=0.5%/tp=1.0% 코인 가격 (= 포지션
+  # ±5%/+10% at 10x) 로 보수적 옵션 채택. 옛 5y bench 결과는 invalid —
+  # paper 운영 모니터링 + 후속 5y bench 재실시 후 미세조정.
   - id: cand-c-2026-05-20-live-rsi-oversold-volume-spike
     class: backtest.strategies.live_rsi_oversold_volume_spike.LiveRsiOversoldVolumeSpike
     kwargs:
-      default_size: 0.050  # weight 0.30 × half_kelly 0.5 × baseline 1.0 ≈ avail cash 5%
+      default_size: 0.050  # avail cash 5%
+      stop_loss_pct: 0.005   # 코인 -0.5% (포지션 -5% at 10x)
+      take_profit_pct: 0.010 # 코인 +1.0% (포지션 +10% at 10x)
   - id: cand-c-2026-05-20-live-breakout-with-atr-stop
     class: backtest.strategies.live_breakout_with_atr_stop.LiveBreakoutWithAtrStop
     kwargs:
-      default_size: 0.050  # weight 0.30 × half_kelly 0.5 ≈ avail cash 5%
+      default_size: 0.050  # avail cash 5%
+      stop_loss_pct: 0.005   # 코인 -0.5% (포지션 -5% at 10x)
+      take_profit_pct: 0.010 # 코인 +1.0% (포지션 +10% at 10x)
+      trailing_stop_pct: 0.005  # 코인 -0.5% trailing (포지션 -5% at 10x)
   - id: cand-c-2026-05-20-live-bb-lower-bounce
     class: backtest.strategies.live_bb_lower_bounce.LiveBbLowerBounce
     kwargs:
-      default_size: 0.033  # weight 0.20 × half_kelly 0.5 ≈ avail cash 3.3%
+      default_size: 0.033  # avail cash 3.3%
+      stop_loss_pct: 0.005
+      take_profit_pct: 0.010
   - id: cand-c-2026-05-20-live-oversold-with-divergence
     class: backtest.strategies.live_oversold_with_divergence.LiveOversoldWithDivergence
     kwargs:
-      default_size: 0.033  # weight 0.20 × half_kelly 0.5 ≈ avail cash 3.3%
+      default_size: 0.033  # avail cash 3.3%
+      stop_loss_pct: 0.005
+      take_profit_pct: 0.010
   #
   # ─── live_scanner_ensemble_bn1d (1-instance wrapper) — REJECTED ──────────
   # OR-게이트 1-position 디자인이 4-parallel 분산 효과(MDD -23%)를 파괴 → 5y

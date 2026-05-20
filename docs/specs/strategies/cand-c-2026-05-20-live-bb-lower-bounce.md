@@ -15,8 +15,8 @@ risk_rules:
 owner: siwoo
 created: 2026-05-20
 last_updated: 2026-05-20
-stop_loss_pct: 0.03
-take_profit_pct: 0.06
+stop_loss_pct: 0.005
+take_profit_pct: 0.010
 trailing_stop_pct: null
 sharpe_bt: 0.216
 sharpe_live: null
