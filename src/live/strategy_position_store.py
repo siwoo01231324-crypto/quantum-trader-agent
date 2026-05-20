@@ -127,6 +127,26 @@ class StrategyPositionStore:
                 out[sid] = positions
         return out
 
+    def replay_from_wal_dir(self, log_dir: Path | str) -> int:
+        """Cross-run restore: glob 모든 WAL under log_dir 후 각각 replay.
+
+        매 run 마다 새 wal_path (logs/live/{run_id}/wal.jsonl) 가 생성되므로
+        single-path replay_from_wal 만으로는 부팅 시 store 가 비어있는 상태로
+        시작 → restore_live_entered 가 빈 dict 로 호출 → _live_entered 비어있음
+        → 재진입 매수 폭주. 본 메서드가 dashboard 의 /api/strategy_positions
+        와 동일한 cross-run aggregate 패턴 (trade_history.discover_wal_files).
+
+        Returns: replay 된 WAL 파일 수 (진단용).
+        """
+        from src.live.trade_history import discover_wal_files  # local-only — cycle 회피
+        log_dir = Path(log_dir)
+        if not log_dir.exists():
+            return 0
+        paths = discover_wal_files(log_dir)
+        for p in paths:
+            self.replay_from_wal(p)
+        return len(paths)
+
     def replay_from_wal(self, wal_path: Path | str) -> None:
         """Cross-run restore from WAL.
 

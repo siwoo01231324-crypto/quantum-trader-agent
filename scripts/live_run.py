@@ -826,8 +826,24 @@ async def _run_pipeline_attached(
     state.wal_path = config.wal_path
     # Pre-existing WAL replay (예: 같은 run_id 로 재시작) — fresh session 이면 no-op.
     if pnl_aggregator is not None and config.wal_path and Path(config.wal_path).exists():
-        position_store.replay_from_wal(config.wal_path)
-        pnl_aggregator.replay_from_wal(config.wal_path)
+        # 2026-05-21 fix: cross-run aggregate. 매 run 마다 새 wal_path 가
+        # 생성되므로 single-path replay 만으로는 store/aggregator 가 비어있는
+        # 상태 → restore_live_entered 무효 → 재시작 매수 폭주 + PnL 0.
+        # log_dir 의 모든 WAL 을 replay 하고, 그 후 현재 run 의 wal_path 도
+        # 한 번 더 (event 멱등 — 같은 fill 두 번 ingest 안 함).
+        log_dir = Path(config.wal_path).parent.parent
+        try:
+            n_store = position_store.replay_from_wal_dir(log_dir)
+            n_pnl = pnl_aggregator.replay_from_wal_dir(log_dir)
+            if n_store or n_pnl:
+                logger.info(
+                    "cross-run replay: %d WAL files (store=%d / pnl=%d) from %s",
+                    max(n_store, n_pnl), n_store, n_pnl, log_dir,
+                )
+        except Exception as err:
+            logger.warning("cross-run replay failed: %s — fallback to single-path", err)
+            position_store.replay_from_wal(config.wal_path)
+            pnl_aggregator.replay_from_wal(config.wal_path)
 
     def _wal_observer(ev) -> None:
         if state.timeline_broker is not None:
@@ -1143,8 +1159,24 @@ async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
     pnl_aggregator = PnLAggregator()
     ops_counters = OpsCounters()
     if config.wal_path and Path(config.wal_path).exists():
-        position_store.replay_from_wal(config.wal_path)
-        pnl_aggregator.replay_from_wal(config.wal_path)
+        # 2026-05-21 fix: cross-run aggregate. 매 run 마다 새 wal_path 가
+        # 생성되므로 single-path replay 만으로는 store/aggregator 가 비어있는
+        # 상태 → restore_live_entered 무효 → 재시작 매수 폭주 + PnL 0.
+        # log_dir 의 모든 WAL 을 replay 하고, 그 후 현재 run 의 wal_path 도
+        # 한 번 더 (event 멱등 — 같은 fill 두 번 ingest 안 함).
+        log_dir = Path(config.wal_path).parent.parent
+        try:
+            n_store = position_store.replay_from_wal_dir(log_dir)
+            n_pnl = pnl_aggregator.replay_from_wal_dir(log_dir)
+            if n_store or n_pnl:
+                logger.info(
+                    "cross-run replay: %d WAL files (store=%d / pnl=%d) from %s",
+                    max(n_store, n_pnl), n_store, n_pnl, log_dir,
+                )
+        except Exception as err:
+            logger.warning("cross-run replay failed: %s — fallback to single-path", err)
+            position_store.replay_from_wal(config.wal_path)
+            pnl_aggregator.replay_from_wal(config.wal_path)
     dashboard_state = DashboardState(
         timeline_broker=timeline_broker,
         wal_path=config.wal_path,
