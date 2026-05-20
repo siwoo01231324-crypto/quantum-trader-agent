@@ -824,26 +824,28 @@ async def _run_pipeline_attached(
     from dataclasses import asdict
     # WAL path 를 state 에 노출 — WS replay 가 이 세션의 과거 이벤트를 복원할 수 있게.
     state.wal_path = config.wal_path
-    # Pre-existing WAL replay (예: 같은 run_id 로 재시작) — fresh session 이면 no-op.
-    if pnl_aggregator is not None and config.wal_path and Path(config.wal_path).exists():
-        # 2026-05-21 fix: cross-run aggregate. 매 run 마다 새 wal_path 가
-        # 생성되므로 single-path replay 만으로는 store/aggregator 가 비어있는
-        # 상태 → restore_live_entered 무효 → 재시작 매수 폭주 + PnL 0.
-        # log_dir 의 모든 WAL 을 replay 하고, 그 후 현재 run 의 wal_path 도
-        # 한 번 더 (event 멱등 — 같은 fill 두 번 ingest 안 함).
-        log_dir = Path(config.wal_path).parent.parent
+    # 2026-05-21 fix: cross-run replay 가드 완화. 이전엔 wal_path.exists() 가
+    # False 면 cross-run 도 skip (= 첫 거래 직전 wal_path 미생성 케이스에서 store/
+    # aggregator 가 빈 상태로 시작 → restore_live_entered 무효 → 매수 폭주).
+    # 본 fix 는 wal_path 가 None 이어도 log_dir 추정해서 cross-run 시도. 메시지도
+    # 항상 출력 (N=0 케이스 가시화 — 사용자 진단용).
+    if pnl_aggregator is not None and position_store is not None:
+        if config.wal_path:
+            log_dir = Path(config.wal_path).parent.parent
+        else:
+            log_dir = Path("logs/live")  # fallback
         try:
             n_store = position_store.replay_from_wal_dir(log_dir)
             n_pnl = pnl_aggregator.replay_from_wal_dir(log_dir)
-            if n_store or n_pnl:
-                logger.info(
-                    "cross-run replay: %d WAL files (store=%d / pnl=%d) from %s",
-                    max(n_store, n_pnl), n_store, n_pnl, log_dir,
-                )
+            logger.info(
+                "cross-run replay: %d WAL files (store=%d / pnl=%d) from %s",
+                max(n_store, n_pnl), n_store, n_pnl, log_dir,
+            )
         except Exception as err:
             logger.warning("cross-run replay failed: %s — fallback to single-path", err)
-            position_store.replay_from_wal(config.wal_path)
-            pnl_aggregator.replay_from_wal(config.wal_path)
+            if config.wal_path and Path(config.wal_path).exists():
+                position_store.replay_from_wal(config.wal_path)
+                pnl_aggregator.replay_from_wal(config.wal_path)
 
     def _wal_observer(ev) -> None:
         if state.timeline_broker is not None:
@@ -912,12 +914,13 @@ async def _run_pipeline_attached(
         # positions 로 _live_entered 복원 → 부팅 후 첫 tick 에 보유 종목 진입 차단.
         try:
             if position_store is not None and hasattr(orch, "restore_live_entered"):
-                n = orch.restore_live_entered(position_store.all_positions()) or 0
-                if n:
-                    logger.info(
-                        "orchestrator._live_entered restored %d entries from store",
-                        n,
-                    )
+                positions = position_store.all_positions()
+                n = orch.restore_live_entered(positions) or 0
+                logger.info(
+                    "orchestrator._live_entered restored %d entries from store "
+                    "(positions=%d strategies)",
+                    n, len(positions),
+                )
         except Exception as err:  # noqa: BLE001 — never block startup
             logger.warning("restore_live_entered failed (attached): %s", err)
         if risk_mgr is None:
@@ -1158,23 +1161,22 @@ async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
     position_store = StrategyPositionStore()
     pnl_aggregator = PnLAggregator()
     ops_counters = OpsCounters()
-    if config.wal_path and Path(config.wal_path).exists():
-        # 2026-05-21 fix: cross-run aggregate. 매 run 마다 새 wal_path 가
-        # 생성되므로 single-path replay 만으로는 store/aggregator 가 비어있는
-        # 상태 → restore_live_entered 무효 → 재시작 매수 폭주 + PnL 0.
-        # log_dir 의 모든 WAL 을 replay 하고, 그 후 현재 run 의 wal_path 도
-        # 한 번 더 (event 멱등 — 같은 fill 두 번 ingest 안 함).
+    # 2026-05-21 fix: cross-run replay 가드 완화 + 항상 log. wal_path 가 None /
+    # 미존재면 log_dir 추정해 cross-run 시도 (이전엔 skip 되어 빈 store 로 시작).
+    if config.wal_path:
         log_dir = Path(config.wal_path).parent.parent
-        try:
-            n_store = position_store.replay_from_wal_dir(log_dir)
-            n_pnl = pnl_aggregator.replay_from_wal_dir(log_dir)
-            if n_store or n_pnl:
-                logger.info(
-                    "cross-run replay: %d WAL files (store=%d / pnl=%d) from %s",
-                    max(n_store, n_pnl), n_store, n_pnl, log_dir,
-                )
-        except Exception as err:
-            logger.warning("cross-run replay failed: %s — fallback to single-path", err)
+    else:
+        log_dir = Path("logs/live")
+    try:
+        n_store = position_store.replay_from_wal_dir(log_dir)
+        n_pnl = pnl_aggregator.replay_from_wal_dir(log_dir)
+        logger.info(
+            "cross-run replay: %d WAL files (store=%d / pnl=%d) from %s",
+            max(n_store, n_pnl), n_store, n_pnl, log_dir,
+        )
+    except Exception as err:
+        logger.warning("cross-run replay failed: %s — fallback to single-path", err)
+        if config.wal_path and Path(config.wal_path).exists():
             position_store.replay_from_wal(config.wal_path)
             pnl_aggregator.replay_from_wal(config.wal_path)
     dashboard_state = DashboardState(
@@ -1239,12 +1241,13 @@ async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
         # positions 로 _live_entered 복원 → 부팅 후 첫 tick 에 보유 종목 진입 차단.
         try:
             if position_store is not None and hasattr(orch, "restore_live_entered"):
-                n = orch.restore_live_entered(position_store.all_positions()) or 0
-                if n:
-                    logger.info(
-                        "orchestrator._live_entered restored %d entries from store",
-                        n,
-                    )
+                positions = position_store.all_positions()
+                n = orch.restore_live_entered(positions) or 0
+                logger.info(
+                    "orchestrator._live_entered restored %d entries from store "
+                    "(positions=%d strategies)",
+                    n, len(positions),
+                )
         except Exception as err:  # noqa: BLE001 — never block startup
             logger.warning("restore_live_entered failed: %s", err)
         if risk_mgr is None:
