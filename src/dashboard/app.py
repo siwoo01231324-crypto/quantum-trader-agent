@@ -553,6 +553,10 @@ body{{
 /* ── 전략 포지션 테이블 ── */
 .stratpos-sym{{font-family:var(--mono);font-weight:600;font-size:13px;color:var(--text)}}
 .stratpos-id{{font-size:10px;color:var(--text3);margin-top:1px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+/* 2026-05-21: stratpos 카드 첫 컬럼 — 전략 큰 글자 + 종목 옆 가로 배치 */
+.stratpos-row{{display:flex;align-items:baseline;gap:8px}}
+.stratpos-strat-big{{font-family:var(--mono);font-weight:600;font-size:13px;color:var(--text);max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+.stratpos-sym-small{{font-family:var(--mono);font-size:11px;color:var(--text2)}}
 .side-badge{{
   display:inline-block;
   font-family:var(--mono);
@@ -1469,8 +1473,10 @@ async function stratPosRefresh() {{
       const sellQtyStr = fmtNum(s.sell_qty, 6).replace(/\\.?0+$/, '');
       return `<tr>
         <td style="padding-left:16px">
-          <div class="stratpos-sym">${{escHtml(s.symbol || '—')}}</div>
-          <div class="stratpos-id" title="${{escHtml(s.strategy_id)}}">${{escHtml(s.strategy_id)}}</div>
+          <div class="stratpos-row">
+            <div class="stratpos-strat-big" title="${{escHtml(s.strategy_id)}}">${{escHtml(s.strategy_id)}}</div>
+            <div class="stratpos-sym-small">${{escHtml(s.symbol || '—')}}</div>
+          </div>
         </td>
         <td style="text-align:center">${{sideBadge}}</td>
         <td><span class="col-green">${{s.buy_n}}</span> <span class="col-dim">건</span> / <span style="font-family:var(--mono);font-variant-numeric:tabular-nums">${{buyQtyStr}}</span></td>
@@ -1479,7 +1485,7 @@ async function stratPosRefresh() {{
         <td style="font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right">${{avg}}</td>
         <td style="font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right">${{curHtml}}</td>
         <td style="text-align:right">${{pnlHtml}}</td>
-        <td style="font-family:var(--mono);font-size:10px;color:var(--text3);padding-right:16px;text-align:right">${{escHtml(ts)}}</td>
+        <td style="font-family:var(--mono);color:var(--text3);padding-right:16px;text-align:right">${{escHtml(ts)}}</td>
       </tr>`;
     }}).join('');
   }} catch (err) {{ console.warn('stratpos', err); }}
