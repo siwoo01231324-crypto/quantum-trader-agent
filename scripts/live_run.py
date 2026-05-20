@@ -891,6 +891,19 @@ async def _run_pipeline_attached(
 
     def _on_orchestrator_ready(orch):
         setattr(state, "orchestrator", orch)
+        # 2026-05-20: re-entry bug fix — _live_entered 가 부팅 시 비어있어
+        # 재시작 = 보유 종목 추가 매수 폭주. 이미 replay 된 store 의
+        # positions 로 _live_entered 복원 → 부팅 후 첫 tick 에 보유 종목 진입 차단.
+        try:
+            if position_store is not None and hasattr(orch, "restore_live_entered"):
+                n = orch.restore_live_entered(position_store.all_positions()) or 0
+                if n:
+                    logger.info(
+                        "orchestrator._live_entered restored %d entries from store",
+                        n,
+                    )
+        except Exception as err:  # noqa: BLE001 — never block startup
+            logger.warning("restore_live_entered failed (attached): %s", err)
         if risk_mgr is None:
             return
         # #238 — 청산 시 orchestrator 진입 기록 해제 → live-scanner 재진입 허용.
@@ -1189,6 +1202,19 @@ async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
     # #227 S3: also register live-scanner stop/TP policies once strategies load.
     def _on_orchestrator_ready(orch):
         setattr(dashboard_state, "orchestrator", orch)
+        # 2026-05-20: re-entry bug fix — _live_entered 가 부팅 시 비어있어
+        # 재시작 = 보유 종목 추가 매수 폭주. 이미 replay 된 store 의
+        # positions 로 _live_entered 복원 → 부팅 후 첫 tick 에 보유 종목 진입 차단.
+        try:
+            if position_store is not None and hasattr(orch, "restore_live_entered"):
+                n = orch.restore_live_entered(position_store.all_positions()) or 0
+                if n:
+                    logger.info(
+                        "orchestrator._live_entered restored %d entries from store",
+                        n,
+                    )
+        except Exception as err:  # noqa: BLE001 — never block startup
+            logger.warning("restore_live_entered failed: %s", err)
         if risk_mgr is None:
             return
         # #238 — 청산 시 orchestrator 진입 기록 해제 → live-scanner 재진입 허용.

@@ -91,6 +91,33 @@ class AsyncStrategyOrchestrator:
         strategy-symbol 은 프로세스 수명 동안 1회만 진입 (안전 측 fail-safe)."""
         self._live_entered.discard((strategy_id, symbol))
 
+    def restore_live_entered(
+        self, positions: dict[str, list[tuple[str, float]]],
+    ) -> None:
+        """Startup-time restore of _live_entered from existing positions
+        (typically StrategyPositionStore.all_positions()).
+
+        BUG fixed: ``_live_entered`` 가 in-memory set 만이라 qta.exe / live_run.py
+        재시작 시 비어있음 → 부팅 후 첫 tick 에 이미 보유 중인 (sid, symbol) 도
+        '신규 진입' 으로 판정 → buy 발사 → broker 마진 누적 + 중복 매수.
+        매번 재시작 = 같은 종목 추가 매수 폭주.
+
+        본 메서드를 startup 시 호출하면 store/replay 로 복원된 logical position
+        을 _live_entered 로 옮겨놓아 부팅 후 첫 tick 에 보유 중 종목은 진입 차단.
+        is_live_scanner 가 True 인 strategy 만 추가 (단일종목 momo 등은 자체
+        lifecycle 사용, 본 set 미사용).
+        """
+        added = 0
+        for sid, sym_qty in positions.items():
+            strat = self._strategies.get(sid)
+            if not getattr(strat, "is_live_scanner", False):
+                continue
+            for symbol, qty in sym_qty:
+                if qty != 0:
+                    self._live_entered.add((sid, symbol))
+                    added += 1
+        return added
+
     def refresh_portfolio_risk(self, ts=None) -> Optional[PortfolioRiskReport]:
         return self._sync.refresh_portfolio_risk(ts)
 
