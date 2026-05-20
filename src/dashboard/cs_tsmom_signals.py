@@ -90,9 +90,17 @@ def compute_signals_from_panels(
     # rank: score 양수 중 순위 (1 = 최고), 음수/NaN 은 None
     ranks = score_today.where(score_today > 0).rank(ascending=False, method="min")
 
+    def _safe_float(v) -> float | None:
+        """Starlette JSONResponse 는 allow_nan=False 라 NaN 이 있으면 ValueError →
+        HTTP 500. 응답 직렬화 직전에 모든 float 를 sanitize."""
+        try:
+            x = float(v)
+        except (TypeError, ValueError):
+            return None
+        return None if x != x else x  # NaN 자기-비교 트릭
+
     rows: list[dict] = []
     for sym in closes.columns:
-        s = float(score_today.get(sym, float("nan")))
         is_today = bool(in_top_today.get(sym, False))
         is_yday = bool(in_top_yday.get(sym, False))
         if is_today and not is_yday:
@@ -107,9 +115,9 @@ def compute_signals_from_panels(
         rank_i: int | None = int(rank_v) if pd.notna(rank_v) else None
         rows.append({
             "symbol": str(sym),
-            "last_close": float(last_close.get(sym, float("nan"))),
+            "last_close": _safe_float(last_close.get(sym)),
             "last_ts": last_ts.isoformat() if hasattr(last_ts, "isoformat") else str(last_ts),
-            "score": s if not (s != s) else None,            # NaN → None
+            "score": _safe_float(score_today.get(sym)),
             "rank": rank_i,
             "in_top_today": is_today,
             "in_top_yday": is_yday,

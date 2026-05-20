@@ -2627,13 +2627,26 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
             return JSONResponse({
                 "available": False, "reason": f"{type(err).__name__}: {err}",
             })
-        return JSONResponse({
+        # Starlette JSONResponse 는 allow_nan=False → 응답에 NaN 한 개라도 있으면
+        # 직렬화 단계에서 ValueError → HTTP 500 으로 escape. compute_signals 가 이미
+        # sanitize 했지만 만의 하나 새는 NaN 도 잡도록 안전망 한 겹 더.
+        payload = {
             "available": result.available,
             "reason": result.reason,
             "fetched_at": result.fetched_at,
             "universe_size": result.universe_size,
             "rows": result.rows,
-        })
+        }
+        try:
+            return JSONResponse(payload)
+        except (ValueError, TypeError) as err:
+            return JSONResponse({
+                "available": False,
+                "reason": f"serialize_failed: {type(err).__name__}: {err}",
+                "fetched_at": result.fetched_at,
+                "universe_size": result.universe_size,
+                "rows": [],
+            })
 
     @app.get("/cs-tsmom", response_class=HTMLResponse)
     async def cs_tsmom_page() -> HTMLResponse:

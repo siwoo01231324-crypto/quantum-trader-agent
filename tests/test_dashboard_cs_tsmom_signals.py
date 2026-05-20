@@ -136,6 +136,62 @@ class TestComputeSignalsFromPanels:
         assert by_sym["LIQ"]["liquid"] is True
 
 
+class TestNaNSafeSerialization:
+    """Starlette JSONResponse 는 allow_nan=False — 응답 안에 NaN 한 개라도 있으면
+    ValueError → HTTP 500. 신규 상장 종목 (마지막 close NaN) 같은 케이스에서
+    `/api/cs-tsmom` 가 500 폭주하던 버그(2026-05-20) 의 회귀 방지."""
+
+    def test_last_close_nan_becomes_none(self):
+        # 신규 상장 흉내 — DDD 의 마지막 close 만 NaN
+        n = 280
+        idx = pd.date_range("2024-01-01", periods=n, freq="D")
+        closes = pd.DataFrame(index=idx, columns=["AAA", "BBB", "DDD"], dtype=float)
+        for i in range(n):
+            closes.iloc[i] = [100 + i * 0.5, 100 + i * 0.3, 100 + i * 0.2]
+        closes.iloc[-1, closes.columns.get_loc("DDD")] = float("nan")
+        qv = pd.DataFrame(2e7, index=idx, columns=closes.columns)
+        rows = compute_signals_from_panels(closes, qv)
+        ddd = next(r for r in rows if r["symbol"] == "DDD")
+        # NaN 은 None 으로 변환돼야 함 (JSON allow_nan=False 호환)
+        assert ddd["last_close"] is None
+
+    def test_no_nan_in_any_row_field(self):
+        # 의도적으로 NaN 만들어 — 일부 종목 score 자체가 NaN 일 수 있음
+        n = 280
+        idx = pd.date_range("2024-01-01", periods=n, freq="D")
+        closes = pd.DataFrame(index=idx, columns=["AAA", "BBB"], dtype=float)
+        for i in range(n):
+            closes.iloc[i] = [100 + i * 0.5, 100 + i * 0.3]
+        # BBB 의 close[t-252] 영역에 NaN 박기 → score NaN
+        closes.iloc[0:30, closes.columns.get_loc("BBB")] = float("nan")
+        qv = pd.DataFrame(2e7, index=idx, columns=closes.columns)
+        rows = compute_signals_from_panels(closes, qv)
+        # 모든 float 필드가 None 또는 finite — NaN 절대 없어야
+        import math
+        for r in rows:
+            for k in ("last_close", "score"):
+                v = r[k]
+                assert v is None or (isinstance(v, (int, float)) and math.isfinite(v)), (
+                    f"row {r['symbol']} field {k} = {v!r} (NaN/inf — JSON 직렬화 실패할 것)"
+                )
+
+    def test_full_response_json_dumps_with_allow_nan_false(self):
+        # Starlette JSONResponse 와 동일 옵션 (allow_nan=False) 으로 직접
+        # json.dumps 했을 때 raise 안 해야 한다. NaN 한 개라도 새면 ValueError.
+        import json
+        n = 280
+        idx = pd.date_range("2024-01-01", periods=n, freq="D")
+        closes = pd.DataFrame(index=idx, columns=["AAA", "BBB"], dtype=float)
+        for i in range(n):
+            closes.iloc[i] = [100 + i * 0.5, 100 + i * 0.3]
+        closes.iloc[-1, closes.columns.get_loc("BBB")] = float("nan")
+        qv = pd.DataFrame(2e7, index=idx, columns=closes.columns)
+        rows = compute_signals_from_panels(closes, qv)
+        payload = {"rows": rows, "available": True}
+        # 핵심 회귀 가드 — Starlette 와 정확히 같은 옵션.
+        json.dumps(payload, allow_nan=False)  # raises ValueError 면 fail
+
+
 class TestCsTsmomComputerCache:
     def test_returns_cached_within_ttl(self, monkeypatch):
         comp = CsTsmomComputer(ttl_sec=1000)
