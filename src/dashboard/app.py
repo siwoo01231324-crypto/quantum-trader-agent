@@ -327,6 +327,26 @@ body{{
 }}
 .nav-pill:hover{{border-color:var(--blue);color:var(--blue)}}
 
+/* ── Quick Links (랜딩 상단 CTA 카드) ── */
+.quick-links{{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}}
+.quick-link-card{{
+  display:flex;align-items:center;gap:12px;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:6px;padding:12px 14px;
+  text-decoration:none;color:var(--text);
+  transition:border-color .15s,background .15s,transform .15s;
+}}
+.quick-link-card:hover{{border-color:var(--blue);background:var(--surface2);transform:translateY(-1px)}}
+.quick-link-signals{{border-color:rgba(14,203,129,.35)}}
+.quick-link-signals:hover{{border-color:var(--green);background:rgba(14,203,129,.06)}}
+.quick-link-icon{{font-size:22px;line-height:1}}
+.quick-link-body{{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}}
+.quick-link-title{{font-size:13px;font-weight:600;color:var(--text)}}
+.quick-link-sub{{font-size:11px;color:var(--text3);font-family:var(--mono)}}
+.quick-link-arrow{{font-size:16px;color:var(--text3);font-family:var(--mono)}}
+.quick-link-card:hover .quick-link-arrow{{color:var(--blue)}}
+.quick-link-signals:hover .quick-link-arrow{{color:var(--green)}}
+
 /* ── 메인 레이아웃 ── */
 .page{{padding-top:68px;padding-right:20px;padding-bottom:16px;padding-left:20px;display:flex;flex-direction:column;gap:16px}}
 
@@ -682,12 +702,41 @@ body{{
   <span class="topbar-brand">QTA TERMINAL</span>
   <div class="topbar-nav">
     <a href="/strategies" class="nav-pill">전략 카탈로그</a>
+    <a href="/signals" class="nav-pill">신호 목록</a>
     <a href="/shadow_runs" class="nav-pill">Shadow Runs</a>
   </div>
   <span class="topbar-ts">{datetime.now(_KST).strftime('%Y-%m-%d %H:%M:%S KST')}</span>
 </div>
 
 <div class="page">
+
+  <!-- ── 빠른 이동 (Quick Links) ── -->
+  <div class="quick-links">
+    <a href="/signals" class="quick-link-card quick-link-signals">
+      <span class="quick-link-icon">📡</span>
+      <span class="quick-link-body">
+        <span class="quick-link-title">신호 목록 (Binance)</span>
+        <span class="quick-link-sub">실시간 buy/sell 신호 · 후속 체결 매칭</span>
+      </span>
+      <span class="quick-link-arrow">→</span>
+    </a>
+    <a href="/strategies" class="quick-link-card">
+      <span class="quick-link-icon">📋</span>
+      <span class="quick-link-body">
+        <span class="quick-link-title">전략 카탈로그</span>
+        <span class="quick-link-sub">활성 전략 · ON/OFF 토글</span>
+      </span>
+      <span class="quick-link-arrow">→</span>
+    </a>
+    <a href="/shadow_runs" class="quick-link-card">
+      <span class="quick-link-icon">🌑</span>
+      <span class="quick-link-body">
+        <span class="quick-link-title">Shadow Runs</span>
+        <span class="quick-link-sub">데몬 가동 이력</span>
+      </span>
+      <span class="quick-link-arrow">→</span>
+    </a>
+  </div>
 
   <!-- ── 섹션 1: PnL 요약 (venue 분리) ── -->
   <div>
@@ -1798,6 +1847,7 @@ h1{{font-size:1.1rem;color:#7ecef4;margin-bottom:14px}}
 <div class="nav">
   <a href="/">← 대시보드</a>
   <a href="/strategies">전략 카탈로그</a>
+  <a href="/signals">신호 목록</a>
 </div>
 {body}
 </body>
@@ -1844,6 +1894,129 @@ def _shadow_run_card(run: dict) -> str:
       </div>
       {warn_html}
     </div>"""
+
+
+def _render_signals_page() -> str:
+    """Binance signal-list page (#268). 표만 렌더; rows 는 /api/signals 폴링."""
+    return """<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>QTA — 신호 목록 (Binance)</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#0b0e11;--surface:#161a1e;--surface2:#1e2329;--border:#2b3139;
+  --text:#eaecef;--text2:#b7bdc6;--text3:#848e9c;--green:#0ecb81;--red:#f6465d;--yellow:#f0a500;
+  --mono:'IBM Plex Mono','Consolas',monospace;--sans:'IBM Plex Sans KR','Segoe UI',sans-serif}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);padding:14px;font-size:13px}
+h1{font-size:1.05rem;color:var(--text);margin-bottom:10px;font-weight:600}
+.nav{margin-bottom:14px}
+.nav a{color:var(--text2);text-decoration:none;margin-right:12px;font-size:.8rem;
+  background:var(--surface);padding:6px 12px;border-radius:4px;border:1px solid var(--border)}
+.nav a:hover{color:var(--text);background:var(--surface2)}
+.meta{font-size:.75rem;color:var(--text3);margin-bottom:8px;font-family:var(--mono)}
+.empty{padding:30px;text-align:center;color:var(--text3);
+  background:var(--surface);border-radius:6px;border:1px solid var(--border)}
+table{width:100%;border-collapse:separate;border-spacing:0;
+  background:var(--surface);border-radius:6px;overflow:hidden;border:1px solid var(--border)}
+thead th{position:sticky;top:0;background:var(--surface2);color:var(--text2);
+  font-weight:600;text-align:left;padding:8px 10px;font-size:.72rem;
+  text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--border);z-index:5}
+tbody td{padding:7px 10px;font-size:.78rem;border-bottom:1px solid #20262d;
+  font-family:var(--mono);color:var(--text)}
+tbody tr:nth-child(even){background:#13171c}
+tbody tr:hover{background:#1c2229}
+.td-num{text-align:right}
+.side-badge{display:inline-block;padding:2px 7px;border-radius:3px;
+  font-size:.68rem;font-weight:700;letter-spacing:.4px;font-family:var(--mono)}
+.side-buy{background:rgba(14,203,129,.16);color:var(--green)}
+.side-sell{background:rgba(246,70,93,.16);color:var(--red)}
+.fu-badge{display:inline-block;padding:2px 7px;border-radius:3px;
+  font-size:.68rem;font-weight:600;font-family:var(--mono)}
+.fu-pending{background:rgba(240,165,0,.16);color:var(--yellow)}
+.fu-ordered{background:rgba(14,203,129,.16);color:var(--green)}
+.fu-filled{background:rgba(14,203,129,.22);color:#11dd8c}
+.reason-cell{color:var(--text2);max-width:280px;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.sym-cell{color:#f0b90b;font-weight:600}
+.note{color:var(--text3);font-size:.7rem;margin-top:8px;font-family:var(--mono)}
+</style>
+</head>
+<body>
+<h1>QTA — 신호 목록 (Binance)</h1>
+<div class="nav">
+  <a href="/">← 대시보드</a>
+  <a href="/strategies">전략 카탈로그</a>
+  <a href="/shadow_runs">Shadow Runs</a>
+</div>
+<div class="meta" id="meta">로딩 중…</div>
+<div id="content"><div class="empty">신호 데이터를 불러오는 중입니다.</div></div>
+<script>
+const KST = 'Asia/Seoul';
+function fmtKst(iso){
+  if(!iso) return '—';
+  try{
+    const d = new Date(iso);
+    const p = new Intl.DateTimeFormat('ko-KR',{timeZone:KST,year:'2-digit',month:'2-digit',
+      day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(d);
+    return p;
+  }catch(e){ return iso; }
+}
+function esc(s){
+  return String(s==null?'':s).replace(/[&<>"']/g,c=>(
+    {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function sideBadge(s){
+  const v = String(s||'').toLowerCase();
+  const cls = v==='buy'?'side-buy':(v==='sell'?'side-sell':'');
+  return `<span class="side-badge ${cls}">${esc(v.toUpperCase()||'?')}</span>`;
+}
+function followUpBadge(fu){
+  const v = String(fu||'pending');
+  const cls = v==='filled'?'fu-filled':(v==='ordered'?'fu-ordered':'fu-pending');
+  const txt = {filled:'체결',ordered:'주문',pending:'보류'}[v]||v;
+  return `<span class="fu-badge ${cls}">${esc(txt)}</span>`;
+}
+async function refresh(){
+  try{
+    const r = await fetch('/api/signals?venue=binance&limit=200');
+    const j = await r.json();
+    const rows = j.signals || [];
+    const meta = document.getElementById('meta');
+    const trunc = j.truncated ? ` (cap 200)` : '';
+    meta.textContent = `총 ${j.total||0}건${trunc} · log_dir=${j.log_dir_used||'—'}`;
+    const content = document.getElementById('content');
+    if(rows.length===0){
+      content.innerHTML = '<div class="empty">신호 이력이 없습니다. live 데몬이 가동되면 여기에 표시됩니다.</div>';
+      return;
+    }
+    let html = '<table><thead><tr>'
+      + '<th>시각 (KST)</th><th>종목</th><th>전략</th><th>방향</th>'
+      + '<th class="td-num">수량</th><th>사유</th><th>후속</th>'
+      + '</tr></thead><tbody>';
+    for(const s of rows){
+      html += '<tr>'
+        + `<td>${esc(fmtKst(s.ts))}</td>`
+        + `<td class="sym-cell">${esc(s.symbol)}</td>`
+        + `<td>${esc(s.strategy_id)}</td>`
+        + `<td>${sideBadge(s.side)}</td>`
+        + `<td class="td-num">${esc(s.qty)}</td>`
+        + `<td class="reason-cell" title="${esc(s.reason)}">${esc(s.reason)}</td>`
+        + `<td>${followUpBadge(s.follow_up)}</td>`
+        + '</tr>';
+    }
+    html += '</tbody></table>';
+    if(j.note){ html += `<div class="note">${esc(j.note)}</div>`; }
+    content.innerHTML = html;
+  }catch(e){
+    document.getElementById('meta').textContent = 'fetch error: ' + e;
+  }
+}
+refresh();
+setInterval(refresh, 5000);
+</script>
+</body>
+</html>"""
 
 
 def _render_strategies(items: list[dict]) -> str:
@@ -2126,6 +2299,126 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
             "truncated": truncated,
             "log_dir_used": str(log_dir),
         })
+
+    @app.get("/api/signals")
+    async def api_signals(
+        venue: str = Query(default="binance"),
+        limit: int = Query(default=200, ge=1, le=2000),
+    ) -> JSONResponse:
+        """Signal-list feed (#268) — `signal_emitted` WAL events, newest first.
+
+        venue=binance → USDT-suffixed symbols (matches shadow_runs classifier).
+        Follow-up resolution: for each signal, find the nearest matching
+        `order_acked` / `order_placed` (→ "ordered") or `fill_received` /
+        `order_filled` (→ "filled") with the same (strategy_id, symbol, side)
+        within 120s after the signal. Otherwise "pending" (e.g. blocked by
+        meta-labeler or risk gate).
+
+        Read-only, idempotent. WAL absence → empty + note (never 500).
+        """
+        log_dir = _resolve_log_dir()
+        if log_dir is None:
+            return JSONResponse({
+                "signals": [], "total": 0, "truncated": False,
+                "log_dir_used": None, "venue": venue,
+                "note": "log_dir 미설정 — WAL 경로가 아직 없습니다.",
+            })
+
+        import asyncio as _asyncio
+        wal_paths = await _asyncio.to_thread(discover_wal_files, log_dir)
+
+        def _scan() -> tuple[list[dict], list[dict]]:
+            """Walk WALs once; return (signals, candidates_for_followup)."""
+            sigs: list[dict] = []
+            cands: list[dict] = []
+            for p in wal_paths:
+                events, _corruptions = wal_replay(p)
+                for ev in events:
+                    pl = ev.payload or {}
+                    if ev.event_type == "signal_emitted":
+                        sigs.append({
+                            "ts": ev.ts,
+                            "strategy_id": str(pl.get("strategy_id", "")),
+                            "symbol": str(pl.get("symbol", "")),
+                            "side": str(pl.get("side", "")).lower(),
+                            "qty": str(pl.get("qty", "")),
+                            "reason": str(pl.get("reason", "")),
+                        })
+                    elif ev.event_type in (
+                        "order_acked", "order_placed", "order_submitted",
+                        "order_filled", "fill_received",
+                    ):
+                        sym = pl.get("symbol") or ""
+                        if not sym and ev.event_type == "order_acked":
+                            sid = pl.get("strategy_id") or ""
+                            sym = sid.split("-")[-1] if sid else ""
+                        cands.append({
+                            "ts": ev.ts,
+                            "event_type": ev.event_type,
+                            "strategy_id": str(pl.get("strategy_id", "")),
+                            "symbol": str(sym),
+                            "side": str(pl.get("side", "")).lower(),
+                        })
+            return sigs, cands
+
+        signals, candidates = await _asyncio.to_thread(_scan)
+
+        # Venue filter (binance = USDT suffix; "all" disables).
+        venue_norm = venue.lower()
+        if venue_norm == "binance":
+            signals = [s for s in signals if s["symbol"].endswith("USDT")]
+
+        def _to_epoch(iso: str) -> float:
+            try:
+                return datetime.fromisoformat(iso.replace("Z", "+00:00")).timestamp()
+            except Exception:
+                return 0.0
+
+        cand_index: dict[tuple[str, str, str], list[tuple[float, str]]] = {}
+        for c in candidates:
+            key = (c["strategy_id"], c["symbol"], c["side"])
+            cand_index.setdefault(key, []).append((_to_epoch(c["ts"]), c["event_type"]))
+        for v in cand_index.values():
+            v.sort()
+
+        FILL_TYPES = {"order_filled", "fill_received"}
+        WINDOW_S = 120.0
+
+        def _resolve_followup(sig: dict) -> str:
+            key = (sig["strategy_id"], sig["symbol"], sig["side"])
+            arr = cand_index.get(key)
+            if not arr:
+                return "pending"
+            sig_ts = _to_epoch(sig["ts"])
+            status = "pending"
+            for cts, etype in arr:
+                if cts < sig_ts:
+                    continue
+                if cts - sig_ts > WINDOW_S:
+                    break
+                if etype in FILL_TYPES:
+                    return "filled"
+                status = "ordered"
+            return status
+
+        for s in signals:
+            s["follow_up"] = _resolve_followup(s)
+
+        signals.sort(key=lambda r: str(r.get("ts") or ""), reverse=True)
+        total = len(signals)
+        truncated = total > limit
+        page = signals[:limit]
+        return JSONResponse({
+            "signals": page,
+            "total": total,
+            "truncated": truncated,
+            "log_dir_used": str(log_dir),
+            "venue": venue_norm,
+        })
+
+    @app.get("/signals", response_class=HTMLResponse)
+    async def signals_page() -> HTMLResponse:
+        return HTMLResponse(content=_render_signals_page())
 
     @app.get("/api/limits")
     async def api_limits() -> JSONResponse:
