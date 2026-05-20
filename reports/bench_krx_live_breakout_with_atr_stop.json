@@ -1,0 +1,17 @@
+[
+  {
+    "strategy_id": "live_breakout_with_atr_stop",
+    "universe": "krx",
+    "period": "5y",
+    "n_symbols": 345,
+    "trades": 6968,
+    "win_rate": 0.35619977037887485,
+    "avg_hold_days": 9.753587830080367,
+    "sharpe": 1.195168251291505,
+    "mdd": -0.9989895379410221,
+    "ann_return": 1.131945588619407,
+    "realized_pnl_profit": 306.03804427540496,
+    "realized_pnl_loss": -270.2391609836607,
+    "n_days_with_trades": 719
+  }
+]

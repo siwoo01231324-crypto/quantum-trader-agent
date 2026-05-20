@@ -1,0 +1,17 @@
+[
+  {
+    "strategy_id": "live_breakout_with_atr_stop",
+    "universe": "binance",
+    "period": "5y",
+    "n_symbols": 28,
+    "trades": 1803,
+    "win_rate": 0.382140876317249,
+    "avg_hold_days": 5.469217970049916,
+    "sharpe": 3.4294038448481445,
+    "mdd": -0.9671311686417967,
+    "ann_return": Infinity,
+    "realized_pnl_profit": 104.81757190718704,
+    "realized_pnl_loss": -79.05221875262365,
+    "n_days_with_trades": 806
+  }
+]

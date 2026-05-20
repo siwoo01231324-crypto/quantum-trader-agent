@@ -1,0 +1,17 @@
+[
+  {
+    "strategy_id": "live_rsi_oversold_volume_spike",
+    "universe": "krx",
+    "period": "5y",
+    "n_symbols": 345,
+    "trades": 412,
+    "win_rate": 0.4878640776699029,
+    "avg_hold_days": 8.912621359223301,
+    "sharpe": 1.3261323471162592,
+    "mdd": -0.45202724814079376,
+    "ann_return": 1.3590085803058805,
+    "realized_pnl_profit": 15.14708364053537,
+    "realized_pnl_loss": -12.803915256872617,
+    "n_days_with_trades": 205
+  }
+]

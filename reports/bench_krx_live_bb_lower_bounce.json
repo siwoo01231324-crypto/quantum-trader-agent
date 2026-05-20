@@ -1,0 +1,17 @@
+[
+  {
+    "strategy_id": "live_bb_lower_bounce",
+    "universe": "krx",
+    "period": "5y",
+    "n_symbols": 345,
+    "trades": 1511,
+    "win_rate": 0.4870946393117141,
+    "avg_hold_days": 9.86035737921906,
+    "sharpe": 2.245172857583247,
+    "mdd": -0.8056793609565319,
+    "ann_return": 4.431368779718384,
+    "realized_pnl_profit": 56.00640268049002,
+    "realized_pnl_loss": -46.66560361019451,
+    "n_days_with_trades": 463
+  }
+]

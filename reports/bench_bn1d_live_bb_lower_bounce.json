@@ -1,0 +1,17 @@
+[
+  {
+    "strategy_id": "live_bb_lower_bounce",
+    "universe": "binance",
+    "period": "5y",
+    "n_symbols": 28,
+    "trades": 668,
+    "win_rate": 0.3787425149700599,
+    "avg_hold_days": 5.797904191616767,
+    "sharpe": -1.116648420318585,
+    "mdd": -0.9614700807176956,
+    "ann_return": -0.9090190453475351,
+    "realized_pnl_profit": 20.99779580141761,
+    "realized_pnl_loss": -32.502775105303556,
+    "n_days_with_trades": 327
+  }
+]
