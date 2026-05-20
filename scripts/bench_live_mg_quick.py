@@ -23,13 +23,17 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import gc
 import importlib
 import logging
 import sys
 import time
 from pathlib import Path
+from typing import Literal
 
 import pandas as pd
+
+Freq = Literal["1m", "15m", "1h", "4h"]
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_REPO_ROOT))
@@ -53,10 +57,10 @@ SWEEP_RR = [
 ]
 
 # Resampling rules — pandas accepts "1min", "15min", "1h", "4h", etc.
-FREQ_RULE = {"1m": "1min", "15m": "15min", "1h": "1h", "4h": "4h"}
+FREQ_RULE: dict[Freq, str] = {"1m": "1min", "15m": "15min", "1h": "1h", "4h": "4h"}
 
 
-def _resample(df_1m: pd.DataFrame, freq: str) -> pd.DataFrame:
+def _resample(df_1m: pd.DataFrame, freq: Freq) -> pd.DataFrame:
     if freq == "1m":
         # No resample needed — return as-is (caller may still slice).
         return df_1m
@@ -91,18 +95,29 @@ def _edge(metrics: dict) -> dict:
     }
 
 
-def _load_panels(symbols: list[str], months: int, freq: str
+def _load_panels(symbols: list[str], months: int, freq: Freq
                  ) -> dict[str, pd.DataFrame]:
-    logger.info("loading 1m cache for %s ...", symbols)
-    all_panels = bench._load_binance_universe("5y", bar="1m")
-    if not all_panels:
+    """Selective parquet load — only the requested symbols.
+
+    ``bench._load_binance_universe(bar="1m")`` reads *all* ~30 cached symbols
+    (~1.6 GB parquet → 5–8 GB in memory) even when we only need 2. Bypass it
+    and read the requested files directly to keep this script viable on
+    16 GB machines.
+    """
+    cache_dir = _REPO_ROOT / "data" / "cache" / "binance_1m"
+    if not cache_dir.exists():
+        logger.error(
+            "binance_1m cache missing at %s — run "
+            "`python scripts/fetch_binance_1m_5y.py` first.", cache_dir,
+        )
         return {}
     selected: dict[str, pd.DataFrame] = {}
     for sym in symbols:
-        if sym not in all_panels:
-            logger.warning("symbol %s not in cache, skipping", sym)
+        path = cache_dir / f"{sym}.parquet"
+        if not path.exists():
+            logger.warning("symbol %s not in cache (%s), skipping", sym, path)
             continue
-        p1m = all_panels[sym]
+        p1m = pd.read_parquet(path)
         if p1m.index.tz is None:
             p1m = p1m.tz_localize("UTC")
         last_ts = p1m.index.max()
@@ -116,20 +131,45 @@ def _load_panels(symbols: list[str], months: int, freq: str
         logger.info("  %s @ %s: 1m=%d → %d bars  [%s .. %s]",
                     sym, freq, len(p1m), len(panel),
                     panel.index[0].date(), panel.index[-1].date())
+        del p1m
+    gc.collect()
     return selected
 
 
-async def _run_combo(strat, panels: dict[str, pd.DataFrame],
+async def _run_combo(panels: dict[str, pd.DataFrame],
                      stop: float, tp: float, cost_bps: float) -> dict:
-    strat.stop_loss_pct = stop  # type: ignore[misc]
-    strat.take_profit_pct = tp  # type: ignore[misc]
-    strat.trailing_stop_pct = None  # type: ignore[misc]
+    """Fresh strategy instance per combo — kwargs override avoids class-level
+    state leakage between sweeps (previous version mutated shared instance
+    attrs and relied on `# type: ignore[misc]`)."""
+    from backtest.strategies.live_mg_bb_reversal import LiveMgBbReversal
+
+    strat = LiveMgBbReversal(
+        stop_loss_pct=stop, take_profit_pct=tp, trailing_stop_pct=None,
+    )
     all_trades: list[dict] = []
     for sym, panel in panels.items():
         all_trades.extend(
             await bench._replay_symbol(strat, sym, panel, cost_bps=cost_bps)
         )
     return _edge(bench._aggregate(all_trades))
+
+
+def _fmt_header() -> str:
+    """Column header matching ``_fmt_row``'s field widths.
+
+    Kept as a separate function so changing _fmt_row's format strings doesn't
+    silently break header alignment (the previous .replace()-on-fake-row trick
+    failed silently whenever any width changed).
+    """
+    return (
+        f"  {'label (R/R)':<18} {'stop':<7} {'tp':<7}  "
+        f"{'trades':>10}  "
+        f"{'win':>6}  "
+        f"{'payoff':>6}  "
+        f"{'PF':>5}  "
+        f"{'exp':>8}  "
+        f"verdict"
+    )
 
 
 def _fmt_row(label: str, stop: float, tp: float, e: dict) -> str:
@@ -147,8 +187,6 @@ def _fmt_row(label: str, stop: float, tp: float, e: dict) -> str:
 
 async def _main_async(args: argparse.Namespace) -> int:
     t0 = time.time()
-    from backtest.strategies.live_mg_bb_reversal import LiveMgBbReversal
-
     symbols = [s.strip() for s in args.symbols.split(",") if s.strip()]
     if args.freq not in FREQ_RULE:
         logger.error("unknown freq %s (choose: %s)", args.freq, list(FREQ_RULE))
@@ -159,7 +197,6 @@ async def _main_async(args: argparse.Namespace) -> int:
         logger.error("no usable panels — abort.")
         return 3
 
-    strat = LiveMgBbReversal()
     combos = SWEEP_RR if args.sweep_rr else [
         (args.stop, args.tp, f"{args.stop*100:.1f}/{args.tp*100:.1f}"),
     ]
@@ -174,21 +211,14 @@ async def _main_async(args: argparse.Namespace) -> int:
     rows: list[tuple[str, float, float, dict]] = []
     for stop, tp, label in combos:
         c0 = time.time()
-        e = await _run_combo(strat, panels, stop, tp, args.cost_bps)
+        e = await _run_combo(panels, stop, tp, args.cost_bps)
         rows.append((label, stop, tp, e))
         logger.info("  combo %s done in %.1fs (trades=%d PF=%.3f exp=%+.4f%%)",
                     label, time.time() - c0, e["trades"],
                     e["profit_factor"], e["expectancy"] * 100)
 
     print()
-    print(_fmt_row("label (R/R)", 0, 0, {
-        "trades": 0, "win_rate": 0, "payoff": 0, "profit_factor": 0, "expectancy": 0,
-    }).replace("trades=   0", "trades=    ")
-        .replace("win= 0.00%", "win=     ")
-        .replace("payoff= 0.00", "payoff=     ")
-        .replace("PF=0.000", "PF=     ")
-        .replace("exp=+0.0000%", "exp=          ")
-        .replace("LOSER", "       "))
+    print(_fmt_header())
     print("  " + "-" * 106)
     rows_sorted = sorted(rows, key=lambda r: r[3]["profit_factor"], reverse=True)
     for label, stop, tp, e in rows_sorted:
