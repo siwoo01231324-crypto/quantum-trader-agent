@@ -1,0 +1,52 @@
+{
+  "cost_bps": 10.0,
+  "period": "5y",
+  "n_symbols": 30,
+  "results": [
+    {
+      "stop_loss_pct": 0.05,
+      "take_profit_pct": 0.2,
+      "trailing_stop_pct": 0.04,
+      "_tag": "BASELINE(current)",
+      "trades": 50088,
+      "win_rate": 0.3425770643667146,
+      "avg_hold_days": 0.46997284778789333,
+      "sharpe": 3.192902261123124,
+      "mdd": -0.3550372573294207,
+      "ann_return": 2.6085371646835336,
+      "n_days_with_trades": 1821,
+      "realized_pnl_profit": 801.6349380291629,
+      "realized_pnl_loss": -923.274549244632
+    },
+    {
+      "stop_loss_pct": 0.025,
+      "take_profit_pct": 0.1,
+      "trailing_stop_pct": 0.04,
+      "_tag": "tr4%/sl2.5%/tp10%",
+      "trades": 65506,
+      "win_rate": 0.30443012853784385,
+      "avg_hold_days": 0.32641284767807527,
+      "sharpe": 2.6371886263313384,
+      "mdd": -0.39948239003643704,
+      "ann_return": 1.320067896003542,
+      "n_days_with_trades": 1824,
+      "realized_pnl_profit": 934.6678262239174,
+      "realized_pnl_loss": -1094.2661477332672
+    },
+    {
+      "stop_loss_pct": 0.02,
+      "take_profit_pct": 0.1,
+      "trailing_stop_pct": 0.04,
+      "_tag": "tr4%/sl2.0%/tp10%",
+      "trades": 73919,
+      "win_rate": 0.27600481608246863,
+      "avg_hold_days": 0.280658558692623,
+      "sharpe": 2.593764362052227,
+      "mdd": -0.3996369998463246,
+      "ann_return": 1.122475860976949,
+      "n_days_with_trades": 1824,
+      "realized_pnl_profit": 956.986335512888,
+      "realized_pnl_loss": -1134.2455725418831
+    }
+  ]
+}

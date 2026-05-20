@@ -121,6 +121,17 @@ def main(argv: list[str] | None = None) -> int:
                         help="rate-limit cushion between paginated requests")
     args = parser.parse_args(argv)
 
+    # Windows console / file-redirect uses the locale codec (cp949 on a
+    # Korean box). The top-N universe can include a non-ASCII junk ticker
+    # (observed: 币安人生USDT) → print() raised UnicodeEncodeError and killed
+    # the WHOLE 30-symbol job at symbol 25. Make stdout/stderr lossy-UTF-8
+    # so one odd ticker name never aborts the fetch.
+    for _stream in (sys.stdout, sys.stderr):
+        try:
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     symbols = _resolve_symbols(args)
     print(f"[fetch_binance_1m] {len(symbols)} symbols, {args.years}y horizon",

@@ -64,7 +64,7 @@
 - **일수익률 시계열 export** — `orchestrator.register_strategy_returns(strategy_id, series)` 로 공급 필수.
 - **`docs/specs/strategies/<strategy_id>.md` 스펙 파일** — 프론트매터 `type: strategy`, `paradigm: universe-scan | live-scanner | single-ticker` 명시. universe-scan 은 pin-date, live-scanner 는 stop_loss_pct/take_profit_pct/trailing_stop_pct 명시. "리스크 연동" 섹션 필수.
 - **단위 테스트 1건** — synthetic OHLCV 로 buy path + warmup + boundary 검증.
-- **5y backtest** — Sharpe ≥ 0.5 (universe-scan) / ≥ 1.0 (live-scanner intraday 권장) 통과 시에만 `production.yaml` `enabled: true` 후보. 미통과 시 spec status `rejected`.
+- **5y backtest 게이트 — PF·기대값 우선, Sharpe 단독 금지 (2026-05-20 강화)**. 활성화 후보가 되려면 `reports/*.json` 의 trustworthy 지표가 **Profit Factor > 1.0 AND 거래당 기대값(expectancy) > 0** (5y · 다중레짐 · 현실적 비용 ≥ 10bp 가정). Sharpe 는 보조 지표로만 — `bench_live_scanner._aggregate` 의 일별평균 + `final ** (252/n_days)` 투영이 PF<1 인 손실 전략을 Sharpe 1.5~3.7 로 통과시키던 사례 5건(live-scanner 군 전부) 적발됨(`reports/eval_live_scanners_5y.json`). PF/기대값은 합산 기반이라 게임 불가. 보조로 Sharpe ≥ 0.5(universe-scan)/≥ 1.0(live-scanner intraday) 권장. 미통과 시 spec `status: rejected` + 5y 수치 기록.
 - **PR 전 완전성 검증** — `python scripts/check_strategy_completeness.py` 실행. 8개 레이어(spec/코드/테스트/production.yaml/live-scanner stop·TP/universe-scan module·pin-date/5y backtest 결과/orphan) 누락을 정적 검출. CI `.github/workflows/strategy-completeness-check.yml` 가 PR 마다 동일 검증 실행 (현재 warn 모드, 정리 후 `--strict` 승격 예정).
 - **상세**: `src/backtest/strategies/.ai.md` + paradigm 별 spec 의 "PR 체크리스트" 참조.
 

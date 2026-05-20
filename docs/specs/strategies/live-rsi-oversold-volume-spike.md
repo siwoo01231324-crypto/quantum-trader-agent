@@ -2,7 +2,7 @@
 type: strategy
 id: live-rsi-oversold-volume-spike
 name: Live RSI Oversold + Volume Spike
-status: backtest
+status: rejected
 paradigm: live-scanner
 instruments:
 - KRX_UNIVERSE
@@ -15,13 +15,13 @@ risk_rules:
 - per-symbol-take-profit-6pct
 owner: siwoo
 created: 2026-05-11
-sharpe_bt: null
+sharpe_bt: 3.726
 sharpe_live: null
-mdd_bt: null
-annual_return_bt: null
-trades_bt: null
-backtest_period: null
-last_updated: 2026-05-11
+mdd_bt: -0.308
+annual_return_bt: 3.8741
+trades_bt: 42210
+backtest_period: 2021-05-19/2026-05-19
+last_updated: 2026-05-20
 stop_loss_pct: 0.03
 take_profit_pct: 0.06
 trailing_stop_pct: null
@@ -34,6 +34,9 @@ tags:
 - rsi
 - volume
 - intraday
+profit_factor_bt: 0.9192
+expectancy_bt: -0.00185
+verdict_5y: "rejected: PF=0.919<1, expectancy=-0.185%/trade<0 (5y/30 syms/10bp)"
 ---
 
 # Live RSI Oversold + Volume Spike
@@ -95,3 +98,23 @@ orch.refresh_portfolio_risk()
 - [[universe-scan-strategy-pattern]] — 별 패러다임 (cross-sectional weekly rebal). 본 전략과 공존
 - [[cs-rsi-div-kr]] — RSI 다이버전스 cross-sectional 변형 (#218)
 - 이슈 #227 (Live Universe Scanner 도입)
+
+## 5y 검증 결과 (2026-05-20)
+
+**REJECTED.** 견고지표(Profit Factor·거래당 기대값) 기준 음의 엣지 확정.
+
+| 지표 | 값 | 게이트 |
+|---|---|---|
+| Profit Factor | **0.919** | <1 ❌ |
+| 기대값/거래 | **-0.185%** | <0 ❌ |
+| 승률 | 34.6% | — |
+| Payoff | 1.74x | — |
+| 거래수 | 42,210 | — |
+
+조건: 5y(2021-05~2026-05) · 30 USDT-perp 심볼 · 라운드트립 비용 10bp.
+
+벤치 하네스의 Sharpe (3.73) 는 `bench_live_scanner._aggregate` 의 일별평균 + `final ** (252/n_days_with_trades)` 투영 집계 산물로, PF<1 과 부호가 모순되어 **신뢰 불가**. 결정 근거는 PF·기대값 (게임 불가능, 합산 기반).
+
+사전등록 가설(naive 진입 + 고정 % 출구) **falsified**. 파라미터 튜닝(stop/TP/trailing %)으로 PF 1 못 넘김 — `scripts/sweep_breakout_atr.py` 의 1y(19조합) + 5y(3조합) sweep 이 이미 증명. 재활성화는 (a) 진입 신호 재설계 + (b) PF>1·exp>0 게이트 통과 후에만.
+
+원자료: `reports/eval_live_scanners_5y.json`.

@@ -21,25 +21,29 @@ orchestrator:
 # 5 baseline strategies + 메타라벨러 (#85) opt-in entry (commented).
 strategies:
   # ── Crypto sleeve (Binance USDT-M Futures, 15m bars) ─────────────────────
-  - id: momo-btc-v2
-    class: backtest.strategies.momo_btc_v2.MomoBtcV2
-    kwargs:
-      symbol: BTCUSDT      # cross-asset gate (#177); strategy holds on non-BTC bars
-      sizing_mode: full
-      # #238 — Binance aggTrade WS drives on_bar at dozens/sec. momo is a 15m
-      # strategy; without this it re-emits an identical SELL every tick while
-      # bearish divergence persists → -2019 Margin-insufficient order flood.
-      # 900s = at most one signal per intended 15m bar. Default (0.0) is OFF
-      # so backtests/Sharpe gate stay bit-identical; live opts in here.
-      min_signal_interval_sec: 900
-      # #238 — momo is single-ticker (NOT a LiveScannerMixin) so it had NO
-      # auto stop/TP. Root incident: a naked -1 BTC short that ran with ZERO
-      # stop because LivePositionRiskManager was long-only AND momo declared
-      # no thresholds. scripts/live_run._register_exit_policies reads these
-      # and builds a StopTpPolicy (handles long AND short). on_bar/backtest
-      # never read them → 5y Sharpe gate stays bit-identical.
-      stop_loss_pct: 0.03
-      take_profit_pct: 0.06
+  # momo-btc-v2 — DISABLED (2026-05-20). sizing_mode:"full" 가 실 보유와 무관하게
+  # 전 자본분 매도(예: 0.072 BTC) 를 시도 → reduceOnly 가 막아 naked-short 는 방지
+  # 되지만 매 신호마다 Binance -2022 거부 로그 도배 + 다전략 BTC 공유 포지션을
+  # 임의 청산해 다른 전략 장부 깨뜨림 (one-way 모드). 실거래로 활성화 안 함.
+  # - id: momo-btc-v2
+  #   class: backtest.strategies.momo_btc_v2.MomoBtcV2
+  #   kwargs:
+  #     symbol: BTCUSDT      # cross-asset gate (#177); strategy holds on non-BTC bars
+  #     sizing_mode: full
+  #     # #238 — Binance aggTrade WS drives on_bar at dozens/sec. momo is a 15m
+  #     # strategy; without this it re-emits an identical SELL every tick while
+  #     # bearish divergence persists → -2019 Margin-insufficient order flood.
+  #     # 900s = at most one signal per intended 15m bar. Default (0.0) is OFF
+  #     # so backtests/Sharpe gate stay bit-identical; live opts in here.
+  #     min_signal_interval_sec: 900
+  #     # #238 — momo is single-ticker (NOT a LiveScannerMixin) so it had NO
+  #     # auto stop/TP. Root incident: a naked -1 BTC short that ran with ZERO
+  #     # stop because LivePositionRiskManager was long-only AND momo declared
+  #     # no thresholds. scripts/live_run._register_exit_policies reads these
+  #     # and builds a StopTpPolicy (handles long AND short). on_bar/backtest
+  #     # never read them → 5y Sharpe gate stays bit-identical.
+  #     stop_loss_pct: 0.03
+  #     take_profit_pct: 0.06
 
   # ── Crypto sleeve (Binance USDT-M Futures, 4h bars, vol-filtered) ────────
   - id: momo-vol-filtered
@@ -196,21 +200,33 @@ strategies:
   # env 없으면 config_loader 는 register 하지만 LivePositionRiskManager 미구성 →
   # universe-scan / single-ticker 만 동작. env=1 일 때만 universe 매 tick 스캔 +
   # 자동 stop/TP 청산. 5y bench 미검증 — testnet 동작 검증 우선 (#238 A 옵션).
-  - id: live-rsi-oversold-volume-spike
-    class: backtest.strategies.live_rsi_oversold_volume_spike.LiveRsiOversoldVolumeSpike
-    kwargs: {}
-  - id: live-macd-bullish-cross-breakout
-    class: backtest.strategies.live_macd_bullish_cross_breakout.LiveMacdBullishCrossBreakout
-    kwargs: {}
-  - id: live-bb-lower-bounce
-    class: backtest.strategies.live_bb_lower_bounce.LiveBbLowerBounce
-    kwargs: {}
-  - id: live-breakout-with-atr-stop
-    class: backtest.strategies.live_breakout_with_atr_stop.LiveBreakoutWithAtrStop
-    kwargs: {}
-  - id: live-oversold-with-divergence
-    class: backtest.strategies.live_oversold_with_divergence.LiveOversoldWithDivergence
-    kwargs: {}
+  # live-scanner 5종 — ALL DISABLED (2026-05-20). 5y 1m × 30심볼 × 비용 10bp
+  # 검증 결과 전부 PF<1 · 거래당 기대값 음수 (LOSER):
+  #   live_bb_lower_bounce             PF 0.922  exp -0.179%
+  #   live_rsi_oversold_volume_spike   PF 0.919  exp -0.185%
+  #   live_oversold_with_divergence    PF 0.911  exp -0.203%
+  #   live_macd_bullish_cross_breakout PF 0.885  exp -0.264%
+  #   live_breakout_with_atr_stop      PF 0.868  exp -0.243%
+  # 벤치 Sharpe(1.5~3.7) 가 게이트 통과시키던 것은 일별평균+(252/n_days) 투영
+  # 집계 착시였음 (reports/eval_live_scanners_5y.json). 견고지표(PF·기대값)
+  # 으로 보면 전부 거래 많을수록 잔고가 깎이는 음의 엣지 전략. 파라미터
+  # 튜닝(stop/TP/trailing %)으로 못 고침 — breakout-atr sweep 이 이미 증명.
+  # 재활성화는 (a) 진입 신호 재설계 + (b) PF>1·exp>0 게이트 통과 후에만.
+  # - id: live-rsi-oversold-volume-spike
+  #   class: backtest.strategies.live_rsi_oversold_volume_spike.LiveRsiOversoldVolumeSpike
+  #   kwargs: {}
+  # - id: live-macd-bullish-cross-breakout
+  #   class: backtest.strategies.live_macd_bullish_cross_breakout.LiveMacdBullishCrossBreakout
+  #   kwargs: {}
+  # - id: live-bb-lower-bounce
+  #   class: backtest.strategies.live_bb_lower_bounce.LiveBbLowerBounce
+  #   kwargs: {}
+  # - id: live-breakout-with-atr-stop
+  #   class: backtest.strategies.live_breakout_with_atr_stop.LiveBreakoutWithAtrStop
+  #   kwargs: {}
+  # - id: live-oversold-with-divergence
+  #   class: backtest.strategies.live_oversold_with_divergence.LiveOversoldWithDivergence
+  #   kwargs: {}
   #
   # HTS 검색식 hybrid (#230) — 단타·5분대기·스윙 OR 합성. KST ≤ 10:30 시간대 게이트.
   # KIS 1m 30일 한계로 5y bench 데이터 부족 → paper-only 운영 (5거래일 누적 후 검증).

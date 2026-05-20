@@ -2,7 +2,7 @@
 type: strategy
 id: live-oversold-with-divergence
 name: Live RSI Bullish Divergence in Downtrend
-status: backtest
+status: rejected
 paradigm: live-scanner
 instruments:
 - KRX_UNIVERSE
@@ -15,13 +15,13 @@ risk_rules:
 - per-symbol-take-profit-6pct
 owner: siwoo
 created: 2026-05-11
-sharpe_bt: null
+sharpe_bt: 3.216
 sharpe_live: null
-mdd_bt: null
-annual_return_bt: null
-trades_bt: null
-backtest_period: null
-last_updated: 2026-05-11
+mdd_bt: -0.2675
+annual_return_bt: 2.7183
+trades_bt: 44589
+backtest_period: 2021-05-19/2026-05-19
+last_updated: 2026-05-20
 stop_loss_pct: 0.03
 take_profit_pct: 0.06
 trailing_stop_pct: null
@@ -35,6 +35,9 @@ tags:
 - divergence
 - intraday
 - mean-reversion
+profit_factor_bt: 0.9108
+expectancy_bt: -0.002032
+verdict_5y: "rejected: PF=0.911<1, expectancy=-0.203%/trade<0 (5y/30 syms/10bp)"
 ---
 
 # Live RSI Bullish Divergence in Downtrend
@@ -83,3 +86,23 @@ orch.register_strategy_returns("live_oversold_with_divergence", daily_returns_se
 - `docs/specs/live-universe-scanner-paradigm.draft.md` — 본 패러다임 spec
 - `docs/specs/strategies/momo-kis-v1.md` (legacy single-ticker — universe 화 대상)
 - 이슈 #227 (Live Universe Scanner — 진행 중)
+
+## 5y 검증 결과 (2026-05-20)
+
+**REJECTED.** 견고지표(Profit Factor·거래당 기대값) 기준 음의 엣지 확정.
+
+| 지표 | 값 | 게이트 |
+|---|---|---|
+| Profit Factor | **0.911** | <1 ❌ |
+| 기대값/거래 | **-0.203%** | <0 ❌ |
+| 승률 | 34.2% | — |
+| Payoff | 1.76x | — |
+| 거래수 | 44,589 | — |
+
+조건: 5y(2021-05~2026-05) · 30 USDT-perp 심볼 · 라운드트립 비용 10bp.
+
+벤치 하네스의 Sharpe (3.22) 는 `bench_live_scanner._aggregate` 의 일별평균 + `final ** (252/n_days_with_trades)` 투영 집계 산물로, PF<1 과 부호가 모순되어 **신뢰 불가**. 결정 근거는 PF·기대값 (게임 불가능, 합산 기반).
+
+사전등록 가설(naive 진입 + 고정 % 출구) **falsified**. 파라미터 튜닝(stop/TP/trailing %)으로 PF 1 못 넘김 — `scripts/sweep_breakout_atr.py` 의 1y(19조합) + 5y(3조합) sweep 이 이미 증명. 재활성화는 (a) 진입 신호 재설계 + (b) PF>1·exp>0 게이트 통과 후에만.
+
+원자료: `reports/eval_live_scanners_5y.json`.
