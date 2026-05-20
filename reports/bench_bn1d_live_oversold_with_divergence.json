@@ -1,0 +1,17 @@
+[
+  {
+    "strategy_id": "live_oversold_with_divergence",
+    "universe": "binance",
+    "period": "5y",
+    "n_symbols": 28,
+    "trades": 1167,
+    "win_rate": 0.38303341902313626,
+    "avg_hold_days": 4.580976863753214,
+    "sharpe": -0.07953487535318828,
+    "mdd": -0.9352828529400159,
+    "ann_return": -0.597846492436678,
+    "realized_pnl_profit": 38.90639072426653,
+    "realized_pnl_loss": -53.39671116347151,
+    "n_days_with_trades": 536
+  }
+]

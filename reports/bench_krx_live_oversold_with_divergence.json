@@ -1,0 +1,17 @@
+[
+  {
+    "strategy_id": "live_oversold_with_divergence",
+    "universe": "krx",
+    "period": "5y",
+    "n_symbols": 345,
+    "trades": 2225,
+    "win_rate": 0.40629213483146065,
+    "avg_hold_days": 9.538426966292135,
+    "sharpe": 2.035730313127237,
+    "mdd": -0.8206464473808904,
+    "ann_return": 3.3094532953045057,
+    "realized_pnl_profit": 68.95594015941626,
+    "realized_pnl_loss": -77.27263767603444,
+    "n_days_with_trades": 551
+  }
+]

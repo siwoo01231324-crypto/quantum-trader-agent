@@ -1,0 +1,17 @@
+[
+  {
+    "strategy_id": "live_scanner_ensemble_bn1d",
+    "universe": "binance",
+    "period": "5y",
+    "n_symbols": 28,
+    "trades": 4046,
+    "win_rate": 0.42016806722689076,
+    "avg_hold_days": 3.641868512110727,
+    "sharpe": 1.0854398232141447,
+    "mdd": -0.9666512220863375,
+    "ann_return": 0.7643349545024436,
+    "realized_pnl_profit": 165.45751768718213,
+    "realized_pnl_loss": -173.85299337137303,
+    "n_days_with_trades": 1519
+  }
+]

@@ -1,0 +1,17 @@
+[
+  {
+    "strategy_id": "live_rsi_oversold_volume_spike",
+    "universe": "binance",
+    "period": "5y",
+    "n_symbols": 28,
+    "trades": 285,
+    "win_rate": 0.624561403508772,
+    "avg_hold_days": 3.354385964912281,
+    "sharpe": 3.713417154791655,
+    "mdd": -0.6012050199518439,
+    "ann_return": 71.0599736606473,
+    "realized_pnl_profit": 17.591967088499672,
+    "realized_pnl_loss": -8.587505968009642,
+    "n_days_with_trades": 131
+  }
+]
