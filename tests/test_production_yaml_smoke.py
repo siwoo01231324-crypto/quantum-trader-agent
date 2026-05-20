@@ -57,12 +57,15 @@ def _build_history(n_bars: int = 60) -> pd.DataFrame:
 
 
 def test_production_yaml_registers_all_strategies():
-    """Single-ticker (5) + universe-scan (6, #218) + smoke (2, #236) +
-    live-scanner (5, #227/#238) = 18 등록 (cs-bb-macd-kr inactive 제외).
+    """Single-ticker (4) + universe-scan (6, #218) + smoke (2, #236) = 12 등록.
 
-    Smoke entries 는 SMOKE_TEST_ENABLED env 없으면 hold. Live-scanner entries
-    는 LIVE_SCANNER_ENABLED env 없으면 LivePositionRiskManager 미구성이라
-    universe-scan / single-ticker 만 동작 (#238 — 두 env-gate 모두 zero-impact).
+    2026-05-20 — momo-btc-v2 + live-scanner 5종 비활성화 (9553e87): 5y 검증
+    결과 전부 PF<1·음의 기대값으로 확정되어 production.yaml 에서 주석처리.
+    cs-bb-macd-kr 은 이전부터 inactive (Sharpe -0.32). 재활성화는 진입 신호
+    재설계 + PF>1 게이트 통과 후에만.
+
+    Smoke entries 는 SMOKE_TEST_ENABLED env 없으면 hold. 검증된 universe-scan
+    + momo-kis-v1 만 실제 동작.
     """
     orch = load_orchestrator_from_yaml(
         _PRODUCTION_YAML,
@@ -70,8 +73,7 @@ def test_production_yaml_registers_all_strategies():
         on_metalabeler_missing="skip",
     )
     assert set(orch._strategies.keys()) == {
-        # Legacy single-ticker (5)
-        "momo-btc-v2",
+        # Single-ticker (4 active — momo-btc-v2 disabled per 9553e87)
         "momo-vol-filtered",
         "meanrev-pairs",
         "breakout-donchian",
@@ -86,12 +88,7 @@ def test_production_yaml_registers_all_strategies():
         # Smoke 통로 검증 (#236, env-gated — hold only without SMOKE_TEST_ENABLED)
         "smoke-1m-roundtrip-kis",
         "smoke-1m-roundtrip-binance",
-        # Live-scanner (#227/#238, env-gated — LIVE_SCANNER_ENABLED 없으면 청산 비활성)
-        "live-rsi-oversold-volume-spike",
-        "live-macd-bullish-cross-breakout",
-        "live-bb-lower-bounce",
-        "live-breakout-with-atr-stop",
-        "live-oversold-with-divergence",
+        # Live-scanner 5종 — DISABLED (#240 / 5y eval): 9553e87 참조.
     }
 
 

@@ -110,17 +110,22 @@ class TestStrategiesJSON:
         alpha = next(it for it in items if it["id"] == "alpha")
         assert alpha["enabled"] is False
 
-    def test_unregistered_strategy_enabled_default_true(self, client: TestClient, state: DashboardState):
-        """Spec exists but not registered in orchestrator → enabled=True default."""
-        # Re-create state without registering 'beta'
+    def test_unregistered_strategy_not_in_yaml_shows_off(
+        self, client: TestClient, state: DashboardState,
+    ):
+        """2026-05-20 truthful derivation — spec 가 orch 미등록이고 production.yaml
+        에도 없으면 (absent) UI 에서 OFF 로 보여야 한다 (예전엔 default True 였음)."""
         from portfolio import AsyncStrategyOrchestrator
         from risk.dsl import Policy
         state.orchestrator = AsyncStrategyOrchestrator(Policy(policy_version=1, name="t2"))
-        # only alpha registered
         state.orchestrator.register_strategy("alpha", _StubStrategy("alpha"))
+        # no production_yaml_path on the fixture → load_production_status
+        # returns {} → 'beta' resolves to "absent".
         items = client.get("/api/strategies").json()
         beta = next(it for it in items if it["id"] == "beta")
-        assert beta["enabled"] is True
+        assert beta["enabled"] is False
+        assert beta["toggle_disabled"] is True
+        assert beta["disabled_reason"] == "absent"
 
 
 # ---------------------------------------------------------------------------

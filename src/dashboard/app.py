@@ -72,6 +72,7 @@ class DashboardState:
     # 전략 카탈로그 + 토글 (#178 + #180)
     orchestrator: Any | None = None  # AsyncStrategyOrchestrator (avoid import cycle)
     specs_dir: Path | None = None    # docs/specs/strategies — fall back to repo default
+    production_yaml_path: Path | None = None  # configs/orchestrator/production.yaml override
     position_provider: Callable[[str], list[tuple[str, float]]] | None = None
 
     # 거래 시작/정지 컨트롤 (#182 단계 2). dashboard-only 모드에서만 주입.
@@ -1576,6 +1577,11 @@ _STRATEGY_CARD_CSS = r"""
 .prod-active{background:rgba(14,203,129,.1);color:#0ecb81;border:1px solid rgba(14,203,129,.25)}
 .prod-commented{background:rgba(240,165,0,.1);color:#f0a500;border:1px solid rgba(240,165,0,.25)}
 .prod-absent{background:#1e2329;color:#5e6673;border:1px dashed #2b3139}
+.strat-venue{font-size:.6rem;border-radius:3px;padding:2px 5px;font-weight:700;letter-spacing:.04em;font-family:'IBM Plex Mono',monospace}
+.venue-kis{background:rgba(24,144,255,.12);color:#1890ff;border:1px solid rgba(24,144,255,.3)}
+.venue-binance{background:rgba(243,186,47,.12);color:#f3ba2f;border:1px solid rgba(243,186,47,.35)}
+.strat-disabled-reason{font-size:.6rem;color:#848e9c;font-family:'IBM Plex Mono',monospace;background:#1e2329;border:1px dashed #3a3a3a;border-radius:3px;padding:1px 5px;text-transform:uppercase;letter-spacing:.04em}
+.strat-toggle:disabled + .slider{opacity:.4;cursor:not-allowed}
 .strat-meta{display:flex;gap:10px;flex-wrap:wrap;font-size:.72rem;color:#848e9c;font-family:'IBM Plex Mono',monospace}
 .strat-summary{font-size:.75rem;color:#b7bdc8;line-height:1.5;background:#0b0e11;border-left:3px solid #1890ff;padding:8px 10px;border-radius:4px;white-space:pre-line}
 .strat-metrics{display:grid;grid-template-columns:1fr 1fr;gap:5px}
@@ -1648,6 +1654,42 @@ def _fmt_metric(value: Any, *, percent: bool = False, digits: int = 2) -> str:
     return f"{v:.{digits}f}"
 
 
+def _classify_venues(instruments) -> list[str]:
+    """Map a spec's ``instruments`` list to venue tags for the card chip.
+
+    Heuristic (order matters — first match wins per item):
+      - "BINANCE_*", "*USDT" / "*USDC" / "*BUSD"   → binance (USDⓈ-M futures)
+      - "KRX_*", "KOSPI_*", "KOSDAQ_*", 6-digit    → kis (KRX paper/live)
+      - anything else                              → unknown, skipped silently
+
+    Returns a sorted de-duplicated venue list (so a dual-market spec like
+    ``[KRX_UNIVERSE, BINANCE_USDT_PERP_UNIVERSE]`` yields ``["binance", "kis"]``).
+    """
+    if not instruments:
+        return []
+    venues: set[str] = set()
+    for inst in instruments:
+        s = str(inst).strip().upper()
+        if not s:
+            continue
+        if (
+            s.startswith("BINANCE")
+            or s.endswith("USDT")
+            or s.endswith("USDC")
+            or s.endswith("BUSD")
+        ):
+            venues.add("binance")
+        elif (
+            s.startswith("KRX")
+            or s.startswith("KOSPI")
+            or s.startswith("KOSDAQ")
+            or (s.isdigit() and len(s) == 6)
+        ):
+            venues.add("kis")
+        # else: unknown / abstract → don't tag (keep the chip absent)
+    return sorted(venues)
+
+
 def _strategy_card(item: dict) -> str:
     sid = html.escape(str(item.get("id", "")))
     name = html.escape(str(item.get("name", sid)))
@@ -1674,10 +1716,28 @@ def _strategy_card(item: dict) -> str:
         "commented": ("INACTIVE",        "prod-commented"),
         "absent":    ("DRAFT",           "prod-absent"),
     }.get(prod_status, ("DRAFT", "prod-absent"))
+    # Venue chips (KIS / Binance) — visual market-mark per card, derived in
+    # _enriched_catalog. Empty list → no chips (abstract/test instruments).
+    venue_label = {"kis": "KIS", "binance": "BINANCE"}
+    venues_html = "".join(
+        f'<span class="strat-venue venue-{v}" data-venue="{v}">'
+        f'{venue_label.get(v, v.upper())}</span>'
+        for v in (item.get("venues") or [])
+    )
+    # Toggle actionability — read-only when no orch / rejected / commented.
+    toggle_disabled = bool(item.get("toggle_disabled"))
+    disabled_reason = item.get("disabled_reason")
+    disabled_attr = " disabled" if toggle_disabled else ""
+    reason_chip = (
+        f'<span class="strat-disabled-reason" title="{html.escape(str(disabled_reason))}">'
+        f'{html.escape(str(disabled_reason))}</span>'
+        if toggle_disabled and disabled_reason else ""
+    )
     return f"""
     <div class="{card_cls}" data-strategy-id="{sid}">
       <div class="strat-head">
         <a class="strat-name" href="/strategies/{sid}">{name}</a>
+        {venues_html}
         <span class="strat-prod {prod_cls}" title="production.yaml: {prod_status}">{prod_label}</span>
         <span class="strat-status">{status}</span>
       </div>
@@ -1695,8 +1755,9 @@ def _strategy_card(item: dict) -> str:
       </div>
       <div class="strat-toggle-row">
         <span class="strat-state {state_cls}">{state_label}</span>
+        {reason_chip}
         <label class="switch">
-          <input type="checkbox" class="strat-toggle" data-strategy-id="{sid}"{checked_attr}>
+          <input type="checkbox" class="strat-toggle" data-strategy-id="{sid}"{checked_attr}{disabled_attr}>
           <span class="slider"></span>
         </label>
       </div>
@@ -2108,21 +2169,59 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
         return Path(__file__).resolve().parents[2] / "docs" / "specs" / "strategies"
 
     def _resolve_production_yaml() -> Path:
+        if state.production_yaml_path is not None:
+            return Path(state.production_yaml_path)
         return Path(__file__).resolve().parents[2] / "configs" / "orchestrator" / "production.yaml"
 
     def _enriched_catalog() -> list[dict]:
+        """Catalog + truthful enabled/venue derivation (2026-05-20 정직화).
+
+        Old behavior: ``enabled = item.get("enabled", True)`` made every
+        rejected/commented-out spec look ON in the UI. Truth derivation now:
+
+          1. spec ``status: rejected``                            → OFF, reason=rejected
+          2. orch registered + ``is_enabled(sid)``                → orch wins (runtime)
+          3. orch missing/unregistered AND production_status=active
+             → ON (config intent) but toggle read-only            → reason=no-runtime
+          4. production_status in {commented, absent}             → OFF, reason matches
+
+        Also attaches a sorted venue list (KIS / Binance) derived from the
+        spec's ``instruments`` for visual market-mark chips on the card.
+        """
         items = load_strategy_catalog(_resolve_specs_dir())
         prod_status = load_production_status(_resolve_production_yaml())
         orch = state.orchestrator
         agg = state.pnl_aggregator
         for it in items:
-            if orch is not None and hasattr(orch, "is_enabled"):
-                it["enabled"] = bool(orch.is_enabled(it["id"]))
-            else:
+            sid = it["id"]
+            spec_status = str(it.get("status") or "")
+            pstatus = prod_status.get(sid, "absent")
+            it["production_status"] = pstatus
+            it["venues"] = _classify_venues(it.get("instruments") or [])
+            registered = (
+                orch is not None
+                and sid in getattr(orch, "strategies", {})
+            )
+            if spec_status == "rejected":
+                it["enabled"] = False
+                it["toggle_disabled"] = True
+                it["disabled_reason"] = "rejected"
+            elif registered:
+                it["enabled"] = bool(orch.is_enabled(sid))
+                it["toggle_disabled"] = False
+                it["disabled_reason"] = None
+            elif pstatus == "active":
+                # Configured ON, but no runtime orch attached (dashboard-only):
+                # show ON to reflect config intent, but the toggle is
+                # read-only (no orchestrator to receive enable/disable calls).
                 it["enabled"] = True
-            it["pnl_today"] = float(agg.daily_for(it["id"])) if agg is not None else 0.0
-            # production.yaml registration visibility (18 specs vs 11 active).
-            it["production_status"] = prod_status.get(it["id"], "absent")
+                it["toggle_disabled"] = True
+                it["disabled_reason"] = "no-runtime"
+            else:
+                it["enabled"] = False
+                it["toggle_disabled"] = True
+                it["disabled_reason"] = pstatus  # "commented" or "absent"
+            it["pnl_today"] = float(agg.daily_for(sid)) if agg is not None else 0.0
         return items
 
     @app.get("/api/strategies")
