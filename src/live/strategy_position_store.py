@@ -128,9 +128,37 @@ class StrategyPositionStore:
         return out
 
     def replay_from_wal(self, wal_path: Path | str) -> None:
+        """Cross-run restore from WAL.
+
+        Processes 2 event types:
+        1. ``order_acked`` / ``order_placed`` — restore in-memory register_order
+           + register_order_context maps (coid → strategy_id, symbol, side).
+           Without this, **재시작 후 발생한 sell fill** 이 in-memory map 비어있어
+           strategy_id 결정 실패 → WAL payload 에 strategy_id 누락 → ingest_fill_event
+           가 drop → store/aggregator 갱신 안 됨. 이슈 4/5 의 진짜 long-term 원인.
+        2. ``order_filled`` — replay fill events 로 logical position 복원.
+
+        Event order in WAL is chronological so acks/placed come before fills,
+        ensuring the map is warm by the time a fill is ingested.
+        """
         events, _corruptions = replay(wal_path)
         for event in events:
-            self.ingest_fill_event(event.event_type, event.payload or {})
+            et = event.event_type
+            payload = event.payload or {}
+            if et in ("order_acked", "order_placed"):
+                sid = payload.get("strategy_id")
+                coid = payload.get("client_order_id")
+                sym = payload.get("symbol")
+                side = payload.get("side")
+                if sid and coid:
+                    self.register_order(client_order_id=coid, strategy_id=sid)
+                    if sym and side:
+                        self.register_order_context(
+                            client_order_id=coid, symbol=sym,
+                            side=side, strategy_id=sid,
+                        )
+            elif et == "order_filled":
+                self.ingest_fill_event(et, payload)
 
     def ingest_fill_event(self, event_type: str, payload: dict) -> None:
         """Apply an `order_filled` event payload to the in-memory position map.
