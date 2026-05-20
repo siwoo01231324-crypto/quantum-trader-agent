@@ -113,6 +113,20 @@ class StrategyPositionStore:
             if qty != 0
         ]
 
+    def all_positions(self) -> dict[str, list[tuple[str, float]]]:
+        """All non-zero positions across all strategies — used at startup to
+        restore orchestrator._live_entered (preventing re-entry on restart).
+
+        Returns: {strategy_id: [(symbol, qty), ...]} for every strategy with at
+        least one non-zero position. Empty dict if no positions tracked.
+        """
+        out: dict[str, list[tuple[str, float]]] = {}
+        for sid in self._positions:
+            positions = self.get_positions(sid)
+            if positions:
+                out[sid] = positions
+        return out
+
     def replay_from_wal(self, wal_path: Path | str) -> None:
         events, _corruptions = replay(wal_path)
         for event in events:
