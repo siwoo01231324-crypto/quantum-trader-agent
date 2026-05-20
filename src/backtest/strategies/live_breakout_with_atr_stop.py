@@ -29,10 +29,22 @@ class LiveBreakoutWithAtrStop(LiveScannerMixin):
     take_profit_pct: ClassVar[float] = 0.20
     trailing_stop_pct: ClassVar[float] = 0.04
 
-    def __init__(self, *, default_size: float = 0.05) -> None:
+    def __init__(
+        self, *,
+        default_size: float = 0.05,
+        stop_loss_pct: float | None = None,
+        take_profit_pct: float | None = None,
+        trailing_stop_pct: float | None = None,
+    ) -> None:
         if not 0 < default_size <= 1.0:
             raise ValueError(f"default_size must be in (0, 1], got {default_size}")
         self.default_size = default_size
+        if stop_loss_pct is not None:
+            self.stop_loss_pct = stop_loss_pct
+        if take_profit_pct is not None:
+            self.take_profit_pct = take_profit_pct
+        if trailing_stop_pct is not None:
+            self.trailing_stop_pct = trailing_stop_pct
 
     async def on_bar(self, ctx: object) -> Signal | None:
         snap = ctx["market_snapshot"]  # type: ignore[index]
