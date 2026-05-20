@@ -33,15 +33,31 @@ class LiveMgBbReversal(LiveScannerMixin):
     BB_WINDOW: ClassVar[int] = 20
     BB_STD: ClassVar[float] = 2.0
     DIP_LOOKBACK: ClassVar[int] = 2  # check bars [-2..-(DIP_LOOKBACK+1)] for band touch
-    MIN_HISTORY: ClassVar[int] = 24  # BB_WINDOW + DIP_LOOKBACK + 2
+    # Derived so changing DIP_LOOKBACK/BB_WINDOW doesn't silently desync warmup.
+    MIN_HISTORY: ClassVar[int] = BB_WINDOW + DIP_LOOKBACK + 2
 
     stop_loss_pct: ClassVar[float] = 0.03
     take_profit_pct: ClassVar[float] = 0.06
 
-    def __init__(self, *, default_size: float = 0.05) -> None:
+    def __init__(
+        self,
+        *,
+        default_size: float = 0.05,
+        stop_loss_pct: float | None = None,
+        take_profit_pct: float | None = None,
+        trailing_stop_pct: float | None = None,
+    ) -> None:
         if not 0 < default_size <= 1.0:
             raise ValueError(f"default_size must be in (0, 1], got {default_size}")
         self.default_size = default_size
+        # Instance attrs shadow ClassVar — keeps backtest sweeps clean (no
+        # external attr mutation, no class-level state leak across runs).
+        if stop_loss_pct is not None:
+            self.stop_loss_pct = stop_loss_pct
+        if take_profit_pct is not None:
+            self.take_profit_pct = take_profit_pct
+        if trailing_stop_pct is not None:
+            self.trailing_stop_pct = trailing_stop_pct
 
     async def on_bar(self, ctx: object) -> Signal | None:
         snap = ctx["market_snapshot"]  # type: ignore[index]

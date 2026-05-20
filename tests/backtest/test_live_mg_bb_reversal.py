@@ -105,16 +105,21 @@ class TestLiveMgBbReversal:
         s = LiveMgBbReversal()
         history = _flat_then_engulfing()
         signal = _run(s, _ctx(history))
-        if signal.action != "buy":  # robustness against synthetic-path drift
-            pytest.skip(f"synthetic engulfing path missed gates: {signal.reason}")
+        # Hard assert — if the synthetic path stops triggering a buy, the test
+        # is no longer guarding the engulfing path; surface that instead of
+        # silently skipping (which would leave the code uncovered in CI).
+        assert signal.action == "buy", (
+            f"engulfing path expected buy, got {signal.action}/{signal.reason}"
+        )
         assert "mg_bb_reversal:engulfing" in signal.reason
 
     def test_buy_on_hammer_after_dip(self):
         s = LiveMgBbReversal()
         history = _flat_then_hammer()
         signal = _run(s, _ctx(history))
-        if signal.action != "buy":
-            pytest.skip(f"synthetic hammer path missed gates: {signal.reason}")
+        assert signal.action == "buy", (
+            f"hammer path expected buy, got {signal.action}/{signal.reason}"
+        )
         assert "mg_bb_reversal:hammer" in signal.reason
 
     def test_hold_without_band_touch(self):
