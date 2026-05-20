@@ -17,7 +17,7 @@ from src.execution.base import MarketState, Tick as ExecTick
 from src.execution.mock_matching import MockMatchingEngine
 from src.execution.paper_broker import PaperBroker
 from src.live.executor import execute_intents
-from src.live.feed import MarketDataFeed, BinancePublicFeed
+from src.live.feed import MarketDataFeed, BinancePublicFeed, BinanceMarkPriceFeed
 from src.live.fill_consumer import run_binance_fill_consumer
 from src.live.process_lock import ProcessLock
 from src.live.reconnect import backoff_delay
@@ -100,6 +100,15 @@ class ShadowConfig:
     # the fill consumer needs. None (default) → no fill-stream task; the
     # paper / kis paths are byte-identical.
     position_store: Any | None = None
+    # Multi-symbol mark-price feed (#238 follow-up). When ``True`` AND
+    # ``position_risk_manager`` is set AND ``broker_mode == "binance-testnet-shadow"``,
+    # a parallel ``BinanceMarkPriceFeed`` subscribes to ``!markPrice@arr@1s``
+    # (all USDT-perp symbols, 1Hz mark price) and pipes every update through
+    # ``position_risk_manager.evaluate(...)``. Without this, the single-symbol
+    # aggTrade feed only triggers stop/TP for the one symbol in
+    # ``config.symbols`` — universe-scanner positions on other symbols are
+    # never evaluated and never auto-closed.
+    enable_mark_price_feed: bool = True
 
 
 def _load_orchestrator(config: ShadowConfig, broker: PaperBroker) -> AsyncStrategyOrchestrator:
@@ -593,6 +602,37 @@ async def run_shadow_loop(
                 config.broker_mode, config.symbols,
             )
 
+        # Multi-symbol mark-price consumer (#238 follow-up). Subscribes to
+        # `!markPrice@arr@1s` so every USDT-perp symbol's mark price reaches
+        # ``position_risk_manager.evaluate`` once per second. Without this the
+        # single-symbol aggTrade feed only evaluates one symbol per tick →
+        # universe-scanner positions on the other symbols never trigger
+        # stop/TP. Reconnect with exponential backoff is delegated to the
+        # standalone helper below so its lifecycle matches the producer task
+        # (cancelled cleanly on stop_event).
+        mark_price_task: asyncio.Task | None = None
+        if (
+            config.enable_mark_price_feed
+            and config.broker_mode == "binance-testnet-shadow"
+            and config.position_risk_manager is not None
+        ):
+            mark_price_task = asyncio.create_task(
+                _run_mark_price_consumer(
+                    position_risk_manager=config.position_risk_manager,
+                    router=router,
+                    kill_switch=kill_switch,
+                    wal=wal,
+                    metrics=metrics,
+                    position_store=config.position_store,
+                    stop_event=stop_event,
+                ),
+                name="binance-mark-price-consumer",
+            )
+            logger.info(
+                "binance mark-price consumer started (broker_mode=%s stream=%s)",
+                config.broker_mode, BinanceMarkPriceFeed.STREAM_PATH,
+            )
+
         try:
             await asyncio.wait(
                 {producer_task, consumer_task},
@@ -603,6 +643,8 @@ async def run_shadow_loop(
             shutdown_tasks = [producer_task, consumer_task]
             if fill_task is not None:
                 shutdown_tasks.append(fill_task)
+            if mark_price_task is not None:
+                shutdown_tasks.append(mark_price_task)
             for t in shutdown_tasks:
                 if not t.done():
                     t.cancel()
@@ -618,6 +660,146 @@ async def run_shadow_loop(
 
     finally:
         lock.release()
+
+
+async def _run_mark_price_consumer(
+    *,
+    position_risk_manager,
+    router,
+    kill_switch: KillSwitch,
+    wal: WAL,
+    metrics: Metrics,
+    position_store,
+    stop_event: asyncio.Event,
+    feed_factory: Callable[[], "BinanceMarkPriceFeed"] | None = None,
+) -> None:
+    """Run the Binance ``!markPrice@arr@1s`` consumer until ``stop_event`` fires.
+
+    For each 1-second batch of ``(symbol, mark_price, ts)`` tuples, calls
+    ``position_risk_manager.evaluate(symbol, mark_price, ts)`` and routes any
+    returned SELL intents through the existing executor pipeline. Reconnect
+    with exponential backoff matches the producer-task pattern in
+    :func:`run_shadow_loop`.
+
+    The function never raises out to the caller — any ``BaseException`` other
+    than ``CancelledError`` is logged and the WS connection is reopened on
+    the next backoff tick. This keeps the trading loop alive even if the
+    mark-price endpoint hiccups.
+
+    ``feed_factory`` is injectable for tests; production callers pass
+    ``None`` and the function picks the testnet endpoint to match the
+    aggTrade feed's regional-restriction workaround.
+    """
+    if feed_factory is None:
+        def feed_factory():
+            return BinanceMarkPriceFeed(base_url=BinanceMarkPriceFeed.DEFAULT_TESTNET)
+
+    attempt = 0
+    max_attempts = 100
+    feed = feed_factory()
+    try:
+        await feed.connect()
+    except BaseException as err:
+        logger.warning("mark-price feed initial connect failed: %s", err)
+
+    while not stop_event.is_set() and attempt < max_attempts:
+        try:
+            async for batch in feed:
+                if stop_event.is_set():
+                    break
+                # Cheap broker-state guard: a market_state for the executor
+                # is required when an exit fires. Build a minimal MarketState
+                # per symbol from the mark price itself (no order book).
+                for symbol, mark_price, ts in batch:
+                    try:
+                        risk_intents = position_risk_manager.evaluate(
+                            symbol, mark_price, ts,
+                        )
+                    except Exception as eval_err:
+                        logger.warning(
+                            "position_risk_manager.evaluate failed sym=%s err=%s",
+                            symbol, eval_err,
+                        )
+                        continue
+                    if not risk_intents:
+                        continue
+                    ms = MarketState(
+                        tick=ExecTick(
+                            symbol=symbol,
+                            bid=float(mark_price) * 0.9999,
+                            ask=float(mark_price) * 1.0001,
+                            last=float(mark_price),
+                            volume=0,
+                            ts=ts,
+                        ),
+                        adv=1_000_000.0,
+                    )
+                    for ri in risk_intents:
+                        try:
+                            wal.write(WALEvent(
+                                ts=datetime.now(timezone.utc).isoformat(),
+                                event_type="signal_emitted",
+                                payload={
+                                    "strategy_id": ri.strategy_id,
+                                    "symbol": ri.symbol,
+                                    "side": ri.side,
+                                    "qty": str(ri.qty),
+                                    "reason": ri.reason,
+                                },
+                            ))
+                        except Exception as wal_err:
+                            logger.warning(
+                                "wal.signal_emitted_write_failed (mark_price_exit) "
+                                "strategy_id=%s error=%s",
+                                ri.strategy_id, wal_err,
+                            )
+                    await execute_intents(
+                        risk_intents, broker=router, kill_switch=kill_switch,
+                        wal=wal, metrics=metrics, market_state=ms,
+                        position_store=position_store,
+                    )
+                attempt = 0
+            break  # feed closed cleanly
+        except (asyncio.CancelledError, KeyboardInterrupt):
+            raise
+        except BaseException as err:
+            if stop_event.is_set():
+                break
+            attempt += 1
+            delay = backoff_delay(attempt - 1, base=1.0, cap=60.0)
+            logger.warning(
+                "mark-price feed disconnect (attempt=%d/%d, sleep=%.1fs): %s: %s",
+                attempt, max_attempts, delay,
+                type(err).__name__, err,
+            )
+            try:
+                await feed.aclose()
+            except BaseException:
+                pass
+            try:
+                await asyncio.wait_for(stop_event.wait(), timeout=delay)
+                break
+            except asyncio.TimeoutError:
+                pass
+            feed = feed_factory()
+            try:
+                await feed.connect()
+                logger.info("mark-price feed reconnected after attempt=%d", attempt)
+            except BaseException as reconnect_err:
+                logger.warning(
+                    "mark-price feed reconnect failed (attempt=%d): %s: %s",
+                    attempt, type(reconnect_err).__name__, reconnect_err,
+                )
+                continue
+    if attempt >= max_attempts:
+        logger.error(
+            "mark-price feed reconnect exhausted %d attempts; consumer exiting",
+            max_attempts,
+        )
+    try:
+        await feed.aclose()
+    except BaseException:
+        pass
 
 
 def _setup_signal_handlers(stop_event: asyncio.Event) -> None:
