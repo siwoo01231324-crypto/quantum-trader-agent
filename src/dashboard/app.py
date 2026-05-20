@@ -73,6 +73,7 @@ class DashboardState:
     orchestrator: Any | None = None  # AsyncStrategyOrchestrator (avoid import cycle)
     specs_dir: Path | None = None    # docs/specs/strategies — fall back to repo default
     production_yaml_path: Path | None = None  # configs/orchestrator/production.yaml override
+    cs_tsmom_computer: Any | None = None  # CsTsmomComputer — /cs-tsmom page backend
     position_provider: Callable[[str], list[tuple[str, float]]] | None = None
 
     # 거래 시작/정지 컨트롤 (#182 단계 2). dashboard-only 모드에서만 주입.
@@ -703,6 +704,7 @@ body{{
   <div class="topbar-nav">
     <a href="/strategies" class="nav-pill">전략 카탈로그</a>
     <a href="/signals" class="nav-pill">신호 목록</a>
+    <a href="/cs-tsmom" class="nav-pill">cs-tsmom (90%)</a>
     <a href="/shadow_runs" class="nav-pill">Shadow Runs</a>
   </div>
   <span class="topbar-ts">{datetime.now(_KST).strftime('%Y-%m-%d %H:%M:%S KST')}</span>
@@ -717,6 +719,14 @@ body{{
       <span class="quick-link-body">
         <span class="quick-link-title">신호 목록 (Binance)</span>
         <span class="quick-link-sub">실시간 buy/sell 신호 · 후속 체결 매칭</span>
+      </span>
+      <span class="quick-link-arrow">→</span>
+    </a>
+    <a href="/cs-tsmom" class="quick-link-card quick-link-signals">
+      <span class="quick-link-icon">📈</span>
+      <span class="quick-link-body">
+        <span class="quick-link-title">cs-tsmom 신호 (90% 전략)</span>
+        <span class="quick-link-sub">12-1m 모멘텀 · 30종목 top-10 랭킹 · Pine Script 동일 식</span>
       </span>
       <span class="quick-link-arrow">→</span>
     </a>
@@ -2061,6 +2071,139 @@ setInterval(refresh, 5000);
 </html>"""
 
 
+def _render_cs_tsmom_page() -> str:
+    """cs-tsmom-crypto-daily 신호 페이지 — Pine Script 와 동일 score 정의 + cross-sectional 랭킹."""
+    return """<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>QTA — cs-tsmom 신호 (Binance)</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#0b0e11;--surface:#161a1e;--surface2:#1e2329;--border:#2b3139;
+  --text:#eaecef;--text2:#b7bdc6;--text3:#848e9c;--green:#0ecb81;--red:#f6465d;--yellow:#f0a500;
+  --mono:'IBM Plex Mono','Consolas',monospace;--sans:'IBM Plex Sans KR','Segoe UI',sans-serif}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);padding:14px;font-size:13px}
+h1{font-size:1.05rem;color:var(--text);margin-bottom:6px;font-weight:600}
+.subtitle{font-size:.75rem;color:var(--text3);margin-bottom:10px}
+.nav{margin-bottom:14px}
+.nav a{color:var(--text2);text-decoration:none;margin-right:12px;font-size:.8rem;
+  background:var(--surface);padding:6px 12px;border-radius:4px;border:1px solid var(--border)}
+.nav a:hover{color:var(--text);background:var(--surface2)}
+.meta{font-size:.75rem;color:var(--text3);margin-bottom:8px;font-family:var(--mono)}
+.empty,.error{padding:30px;text-align:center;color:var(--text3);
+  background:var(--surface);border-radius:6px;border:1px solid var(--border)}
+.error{color:var(--red);border-color:rgba(246,70,93,.35)}
+table{width:100%;border-collapse:separate;border-spacing:0;
+  background:var(--surface);border-radius:6px;overflow:hidden;border:1px solid var(--border)}
+thead th{position:sticky;top:0;background:var(--surface2);color:var(--text2);font-weight:600;
+  text-align:left;padding:8px 10px;font-size:.72rem;text-transform:uppercase;letter-spacing:.4px;
+  border-bottom:1px solid var(--border);z-index:5}
+tbody td{padding:7px 10px;font-size:.78rem;border-bottom:1px solid #20262d;
+  font-family:var(--mono);color:var(--text)}
+tbody tr.in-top{background:rgba(14,203,129,.06)}
+tbody tr:hover{background:#1c2229}
+.td-num{text-align:right;font-variant-numeric:tabular-nums}
+.sym-cell{color:#f0b90b;font-weight:600}
+.rank-cell{font-weight:700;color:var(--text)}
+.rank-out{color:var(--text3)}
+.sig-badge{display:inline-block;padding:2px 7px;border-radius:3px;font-size:.68rem;
+  font-weight:700;letter-spacing:.4px;font-family:var(--mono)}
+.sig-ENTER{background:rgba(14,203,129,.2);color:#11dd8c}
+.sig-HOLD{background:rgba(14,203,129,.1);color:var(--green)}
+.sig-EXIT{background:rgba(246,70,93,.16);color:var(--red)}
+.sig-OUT{background:rgba(132,142,156,.1);color:var(--text3)}
+.score-pos{color:var(--green)}
+.score-neg{color:var(--red)}
+.illiq{color:var(--yellow)}
+.note{color:var(--text3);font-size:.72rem;margin-top:10px;font-family:var(--mono);line-height:1.55}
+</style>
+</head>
+<body>
+<h1>QTA — cs-tsmom-crypto-daily (12-1m 모멘텀 + cross-sectional top-10)</h1>
+<div class="subtitle">production 전략과 동일 score 식 — log(close[t-21]/close[t-252]). 5y backtest Sharpe 1.33 · 연수익 +90.8% · MDD −52.4%. 매일 30종목 새로 fetch + 랭킹.</div>
+<div class="nav">
+  <a href="/">← 대시보드</a>
+  <a href="/strategies">전략 카탈로그</a>
+  <a href="/signals">신호 목록</a>
+</div>
+<div class="meta" id="meta">로딩 중…</div>
+<div id="content"><div class="empty">신호 데이터를 불러오는 중입니다 (첫 호출은 30종목 fetch 로 ~10초 소요 가능).</div></div>
+<script>
+const KST = 'Asia/Seoul';
+function fmtKst(iso){
+  if(!iso) return '—';
+  try{
+    const d = new Date(iso);
+    return new Intl.DateTimeFormat('ko-KR',{timeZone:KST,year:'2-digit',month:'2-digit',
+      day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(d);
+  }catch(e){ return iso; }
+}
+function esc(s){
+  return String(s==null?'':s).replace(/[&<>"']/g,c=>(
+    {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function fmtPct(s){
+  if(s==null) return '—';
+  const v = Number(s)*100;
+  const cls = v>0?'score-pos':(v<0?'score-neg':'');
+  const sign = v>0?'+':'';
+  return `<span class="${cls}">${sign}${v.toFixed(1)}%</span>`;
+}
+function fmtClose(v){
+  if(v==null||isNaN(v)) return '—';
+  return Number(v).toLocaleString('ko-KR',{maximumFractionDigits:6});
+}
+function render(rows){
+  if(rows.length===0) return '<div class="empty">데이터 없음 — 패널 빌드 실패 또는 워밍업 부족.</div>';
+  const trs = rows.map(r => {
+    const sig = r.signal || 'OUT';
+    const inTop = r.in_top_today;
+    const rankTxt = (r.rank!=null) ? r.rank : '—';
+    const liq = r.liquid ? '' : '<span class="illiq" title="유동성 미달 (60d avg quote_vol < 10M USDT)">⚠</span>';
+    return `<tr class="${inTop?'in-top':''}">
+      <td class="td-num rank-cell ${inTop?'':'rank-out'}">${esc(rankTxt)}</td>
+      <td class="sym-cell">${esc(r.symbol)}</td>
+      <td class="td-num">${fmtPct(r.score)}</td>
+      <td class="td-num">${esc(fmtClose(r.last_close))}</td>
+      <td><span class="sig-badge sig-${esc(sig)}">${esc(sig)}</span></td>
+      <td>${liq}</td>
+    </tr>`;
+  }).join('');
+  return `<table><thead><tr>
+    <th>Rank</th><th>Symbol</th><th class="td-num">Score (12-1m)</th>
+    <th class="td-num">Last Close</th><th>Signal</th><th>Liquid</th>
+  </tr></thead><tbody>${trs}</tbody></table>
+  <div class="note">
+    Signal: <b>ENTER</b> = 어제 top10 외 → 오늘 top10 진입 (BUY). <b>HOLD</b> = 어제·오늘 모두 top10. <b>EXIT</b> = 어제 top10 → 오늘 이탈. <b>OUT</b> = 비보유.<br>
+    실거래 wiring 무관, 대시보드 서버가 매일 자체 fetch + 계산 (1h 캐시). production 전략과 동일 score 식 → TV Pine Script (cs-tsmom-crypto-daily 12-1m) 와 정확히 같은 숫자.
+  </div>`;
+}
+async function refresh(){
+  try{
+    const r = await fetch('/api/cs-tsmom');
+    const j = await r.json();
+    const meta = document.getElementById('meta');
+    const content = document.getElementById('content');
+    if(!j.available){
+      meta.textContent = `미가용 — ${j.reason||'unknown'} · 마지막 시도 ${fmtKst(j.fetched_at)}`;
+      content.innerHTML = `<div class="error">계산 실패: ${esc(j.reason||'unknown')} — 잠시 후 다시 시도</div>`;
+      return;
+    }
+    meta.textContent = `${j.universe_size||0} 종목 · 캐시 시각 ${fmtKst(j.fetched_at)}`;
+    content.innerHTML = render(j.rows || []);
+  }catch(e){
+    document.getElementById('content').innerHTML =
+      `<div class="error">로딩 실패: ${esc(String(e))}</div>`;
+  }
+}
+refresh();
+setInterval(refresh, 60000);  // 1분마다 (서버는 1h 캐시이므로 보통 캐시 반환)
+</script>
+</body>
+</html>"""
+
+
 def _render_strategies(items: list[dict]) -> str:
     cards_html = "".join(_strategy_card(it) for it in items)
     return f"""<!DOCTYPE html>
@@ -2461,6 +2604,40 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
     @app.get("/signals", response_class=HTMLResponse)
     async def signals_page() -> HTMLResponse:
         return HTMLResponse(content=_render_signals_page())
+
+    @app.get("/api/cs-tsmom")
+    async def api_cs_tsmom() -> JSONResponse:
+        """cs-tsmom-crypto-daily 자체 계산 신호 (2026-05-20).
+
+        production 전략의 universe-scan wiring 과 무관하게 대시보드 서버가
+        매일 30종목 일봉 fetch + score + cross-sectional 랭킹 계산. Pine
+        Script 와 동일 score 식 → 두 시각화가 동일 숫자. 1h TTL 캐시 +
+        single-flight 락이라 다중 동시 호출 안전. 절대 500 금지.
+        """
+        comp = state.cs_tsmom_computer
+        if comp is None:
+            return JSONResponse({
+                "available": False,
+                "reason": "cs_tsmom_computer not wired (standalone dashboard 모드에서만 자동 attach)",
+            })
+        import asyncio as _asyncio
+        try:
+            result = await _asyncio.to_thread(comp.compute)
+        except Exception as err:  # noqa: BLE001
+            return JSONResponse({
+                "available": False, "reason": f"{type(err).__name__}: {err}",
+            })
+        return JSONResponse({
+            "available": result.available,
+            "reason": result.reason,
+            "fetched_at": result.fetched_at,
+            "universe_size": result.universe_size,
+            "rows": result.rows,
+        })
+
+    @app.get("/cs-tsmom", response_class=HTMLResponse)
+    async def cs_tsmom_page() -> HTMLResponse:
+        return HTMLResponse(content=_render_cs_tsmom_page())
 
     @app.get("/api/limits")
     async def api_limits() -> JSONResponse:

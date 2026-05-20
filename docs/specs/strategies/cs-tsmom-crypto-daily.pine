@@ -1,0 +1,163 @@
+// cs-tsmom-crypto-daily — TradingView Pine Script (v5) — B-full (~85% fidelity).
+//
+// 원본 production 전략: docs/specs/strategies/cs-tsmom-crypto-daily.md
+// 동일 score 정의 + 30종목 cross-sectional ranking 까지 Pine 안에서 재현.
+// 본 차트의 종목이 top-N 안에 들고 score > threshold 면 BUY 마커.
+//
+// 100% 정확도가 필요하면 대시보드 `/cs-tsmom` (서버측 자체 계산) 을 참고할 것.
+// Pine 한도(request.security 40회/script)로 30종목 1-tuple fetch + 본 차트
+// 1회 = 31회 사용, 한도 안에서 동작.
+//
+// 사용법: TV Pine Editor → 통째로 복사·붙여넣기 → Save → Add to chart.
+//        차트를 BTCUSDT.P / ETHUSDT.P 등 USDT-perp 으로 두고 동작.
+//        Alert: 우클릭 → Add Alert → Condition = "cs-tsmom B-full BUY".
+
+//@version=5
+indicator("cs-tsmom-crypto-daily B-full (cross-sectional top-N)", overlay=true)
+
+// ─── Parameters (production cs-tsmom-crypto-daily kwargs 기본값) ─────────
+long_lb   = input.int(252, "Long lookback (일)",  minval=30,
+                       tooltip="원 전략 252 — 12개월")
+skip_lb   = input.int(21,  "Skip lookback (일)",  minval=0,
+                       tooltip="원 전략 21 — 1개월 reversal 제외 (12-1m 정의)")
+top_n     = input.int(10,  "Top-N hold",          minval=1, maxval=30,
+                       tooltip="원 전략 10")
+threshold = input.float(0.0, "BUY threshold (score >)",
+                        tooltip="원 전략 0.0 — 모멘텀 양수 시 후보")
+
+// ─── Helper: 종목의 12-1m score 한 번에 가져오기 (request.security 1회) ─
+// Pine v5 tuple-return: 두 close 값을 한 보안 호출로 fetch → request.security
+// 한도(40) 안에서 30종목 + 본 차트 = 31회로 운영.
+get_score(sym) =>
+    [c_skip, c_long] = request.security(sym, "D",
+        [close[skip_lb], close[long_lb]],
+        lookahead=barmerge.lookahead_off)
+    valid = not na(c_skip) and not na(c_long) and c_long > 0
+    valid ? math.log(c_skip / c_long) : na
+
+// ─── Universe (top-30 USDT-perp 가까운 기본값). 우상단 톱니 → 종목 수정 가능 ─
+// TV symbol 명: "BINANCE:XYZUSDT.P" 가 perp. 일부 종목은 .P 없을 수도 — 그 경우
+// "BINANCE:XYZUSDT" 로 spot 으로 fallback 하거나 input 에서 수동 교체.
+sym01 = input.symbol("BINANCE:BTCUSDT.P",   "Sym 01", group="Universe (top-30)")
+sym02 = input.symbol("BINANCE:ETHUSDT.P",   "Sym 02", group="Universe (top-30)")
+sym03 = input.symbol("BINANCE:SOLUSDT.P",   "Sym 03", group="Universe (top-30)")
+sym04 = input.symbol("BINANCE:XRPUSDT.P",   "Sym 04", group="Universe (top-30)")
+sym05 = input.symbol("BINANCE:BNBUSDT.P",   "Sym 05", group="Universe (top-30)")
+sym06 = input.symbol("BINANCE:DOGEUSDT.P",  "Sym 06", group="Universe (top-30)")
+sym07 = input.symbol("BINANCE:ADAUSDT.P",   "Sym 07", group="Universe (top-30)")
+sym08 = input.symbol("BINANCE:TRXUSDT.P",   "Sym 08", group="Universe (top-30)")
+sym09 = input.symbol("BINANCE:AVAXUSDT.P",  "Sym 09", group="Universe (top-30)")
+sym10 = input.symbol("BINANCE:LINKUSDT.P",  "Sym 10", group="Universe (top-30)")
+sym11 = input.symbol("BINANCE:DOTUSDT.P",   "Sym 11", group="Universe (top-30)")
+sym12 = input.symbol("BINANCE:LTCUSDT.P",   "Sym 12", group="Universe (top-30)")
+sym13 = input.symbol("BINANCE:BCHUSDT.P",   "Sym 13", group="Universe (top-30)")
+sym14 = input.symbol("BINANCE:NEARUSDT.P",  "Sym 14", group="Universe (top-30)")
+sym15 = input.symbol("BINANCE:UNIUSDT.P",   "Sym 15", group="Universe (top-30)")
+sym16 = input.symbol("BINANCE:ATOMUSDT.P",  "Sym 16", group="Universe (top-30)")
+sym17 = input.symbol("BINANCE:ICPUSDT.P",   "Sym 17", group="Universe (top-30)")
+sym18 = input.symbol("BINANCE:INJUSDT.P",   "Sym 18", group="Universe (top-30)")
+sym19 = input.symbol("BINANCE:APTUSDT.P",   "Sym 19", group="Universe (top-30)")
+sym20 = input.symbol("BINANCE:FILUSDT.P",   "Sym 20", group="Universe (top-30)")
+sym21 = input.symbol("BINANCE:OPUSDT.P",    "Sym 21", group="Universe (top-30)")
+sym22 = input.symbol("BINANCE:ARBUSDT.P",   "Sym 22", group="Universe (top-30)")
+sym23 = input.symbol("BINANCE:HBARUSDT.P",  "Sym 23", group="Universe (top-30)")
+sym24 = input.symbol("BINANCE:STXUSDT.P",   "Sym 24", group="Universe (top-30)")
+sym25 = input.symbol("BINANCE:RNDRUSDT.P",  "Sym 25", group="Universe (top-30)")
+sym26 = input.symbol("BINANCE:IMXUSDT.P",   "Sym 26", group="Universe (top-30)")
+sym27 = input.symbol("BINANCE:GRTUSDT.P",   "Sym 27", group="Universe (top-30)")
+sym28 = input.symbol("BINANCE:AAVEUSDT.P",  "Sym 28", group="Universe (top-30)")
+sym29 = input.symbol("BINANCE:SUIUSDT.P",   "Sym 29", group="Universe (top-30)")
+sym30 = input.symbol("BINANCE:TONUSDT.P",   "Sym 30", group="Universe (top-30)")
+
+// ─── 30 universe scores ──────────────────────────────────────────────────
+s01 = get_score(sym01)
+s02 = get_score(sym02)
+s03 = get_score(sym03)
+s04 = get_score(sym04)
+s05 = get_score(sym05)
+s06 = get_score(sym06)
+s07 = get_score(sym07)
+s08 = get_score(sym08)
+s09 = get_score(sym09)
+s10 = get_score(sym10)
+s11 = get_score(sym11)
+s12 = get_score(sym12)
+s13 = get_score(sym13)
+s14 = get_score(sym14)
+s15 = get_score(sym15)
+s16 = get_score(sym16)
+s17 = get_score(sym17)
+s18 = get_score(sym18)
+s19 = get_score(sym19)
+s20 = get_score(sym20)
+s21 = get_score(sym21)
+s22 = get_score(sym22)
+s23 = get_score(sym23)
+s24 = get_score(sym24)
+s25 = get_score(sym25)
+s26 = get_score(sym26)
+s27 = get_score(sym27)
+s28 = get_score(sym28)
+s29 = get_score(sym29)
+s30 = get_score(sym30)
+
+// ─── 현재 차트 종목의 score (independent fetch, 일봉 강제) ────────────────
+[my_c_skip, my_c_long] = request.security(syminfo.tickerid, "D",
+    [close[skip_lb], close[long_lb]],
+    lookahead=barmerge.lookahead_off)
+my_valid = not na(my_c_skip) and not na(my_c_long) and my_c_long > 0
+my_score = my_valid ? math.log(my_c_skip / my_c_long) : na
+
+// ─── Rank: my_score 보다 큰 universe score 개수 + 1 ─────────────────────
+scores_arr = array.from(s01, s02, s03, s04, s05, s06, s07, s08, s09, s10,
+                         s11, s12, s13, s14, s15, s16, s17, s18, s19, s20,
+                         s21, s22, s23, s24, s25, s26, s27, s28, s29, s30)
+var int n_higher = 0
+n_higher := 0
+if not na(my_score)
+    for i = 0 to array.size(scores_arr) - 1
+        s = array.get(scores_arr, i)
+        if not na(s) and s > my_score
+            n_higher += 1
+my_rank = not na(my_score) ? n_higher + 1 : na   // 1-indexed; na if our score unavailable
+
+// ─── BUY/EXIT signal ────────────────────────────────────────────────────
+in_top  = not na(my_score) and my_score > threshold and not na(my_rank) and my_rank <= top_n
+prev_in = nz(in_top[1], false)
+buySignal  = in_top and not prev_in
+exitSignal = not in_top and prev_in
+
+// ─── Visuals on price chart ─────────────────────────────────────────────
+bgcolor(in_top ? color.new(color.lime, 92) : na, title="in top-N tint")
+plotshape(buySignal,  title="BUY",  style=shape.triangleup,   location=location.belowbar,
+          color=color.lime, size=size.small, text="BUY")
+plotshape(exitSignal, title="EXIT", style=shape.triangledown, location=location.abovebar,
+          color=color.red,  size=size.small, text="EXIT")
+
+// Status label on last bar — rank + score 즉시 가시
+if barstate.islast
+    var label lbl = na
+    label.delete(lbl)
+    score_pct  = na(my_score) ? na : my_score * 100
+    rank_str   = na(my_rank) ? "—" : str.tostring(my_rank)
+    score_str  = na(score_pct) ? "—" : str.tostring(score_pct, "#.##") + "%"
+    state_str  = in_top ? "✓ IN TOP" : (na(my_score) ? "warmup" : "× out")
+    txt = "rank " + rank_str + "/" + str.tostring(top_n) +
+          "   score " + score_str + "   " + state_str
+    lbl := label.new(bar_index, high, txt,
+                     color=in_top ? color.lime : (na(my_score) ? color.gray : color.orange),
+                     textcolor=color.black, style=label.style_label_left, size=size.small)
+
+// Data-window plots (값을 우측 패널에서 확인 가능)
+plot(my_score, "my 12-1m score", color=color.new(color.aqua, 80),
+     display=display.data_window)
+plot(my_rank,  "my rank",        color=color.new(color.aqua, 80),
+     display=display.data_window)
+
+// ─── Alerts (TV → Create Alert → Condition: 아래 둘 중 선택) ──────────────
+alertcondition(buySignal,
+     title="cs-tsmom B-full BUY",
+     message="cs-tsmom-crypto-daily B-full BUY: {{ticker}} 가 top-N 진입 (score {{plot_0}}, rank {{plot_1}}).")
+alertcondition(exitSignal,
+     title="cs-tsmom B-full EXIT",
+     message="cs-tsmom-crypto-daily B-full EXIT: {{ticker}} 가 top-N 이탈.")

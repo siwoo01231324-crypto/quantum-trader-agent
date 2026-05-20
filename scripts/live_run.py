@@ -337,6 +337,17 @@ def _run_dashboard_only_mode(port: int = 8000) -> int:
         except Exception as err:
             print(f"[qta] dashboard orch pre-build skipped: {err!r}")
 
+        # cs-tsmom-crypto-daily 신호 페이지 backend (2026-05-20).
+        # production wiring 무관, dashboard 가 자체적으로 30종목 일봉 fetch +
+        # 12-1m momentum + cross-sectional 랭킹. 첫 호출에서만 fetch(~10s),
+        # 이후 1h TTL 캐시. parquet 디스크 캐시도 같이 잡혀 재시작 후 빠름.
+        try:
+            from src.dashboard.cs_tsmom_signals import CsTsmomComputer  # noqa: PLC0415
+            state.cs_tsmom_computer = CsTsmomComputer()
+            print("[qta] cs-tsmom computer attached — /cs-tsmom page ready")
+        except Exception as err:
+            print(f"[qta] cs-tsmom computer wiring skipped: {err!r}")
+
         app = create_app(state)
         config = uvicorn.Config(
             app, host="127.0.0.1", port=port,
