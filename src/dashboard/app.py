@@ -2269,12 +2269,20 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
     async def api_trades(limit: int = Query(default=50, ge=1, le=500)) -> JSONResponse:
         """Recent buy/sell fills + submitted orders, newest-first.
 
-        Reads `state.wal_path` plus every `state.extra_wal_paths` entry — the
-        `smoke-dual` runtime writes two WAL files (KIS + Binance) and both must
-        surface in the dashboard. Read-only — does not mutate any aggregator.
+        Cross-run WAL aggregate (대시보드 재시작·세션 교체에도 영구·누적
+        이력 유지). discover_wal_files(log_dir) 로 모든 run 의 WAL 글로브
+        + state.wal_path / extra_wal_paths 도 union (현재 run 의 WAL 이
+        glob 밖일 경우 대비). Read-only — does not mutate any aggregator.
         """
         paths: list[Path] = []
-        if state.wal_path is not None and Path(state.wal_path).exists():
+        log_dir = _resolve_log_dir()
+        if log_dir is not None:
+            try:
+                paths.extend(discover_wal_files(log_dir))
+            except Exception:  # noqa: BLE001 — never 500 the dashboard
+                paths = []
+        if state.wal_path is not None and Path(state.wal_path).exists() \
+                and Path(state.wal_path) not in paths:
             paths.append(Path(state.wal_path))
         for p in state.extra_wal_paths or []:
             if p is not None and Path(p).exists() and Path(p) not in paths:
@@ -2627,12 +2635,23 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
             return JSONResponse({
                 "available": False, "reason": f"{type(err).__name__}: {err}",
             })
+        # JSON sanitize — NaN/Inf 가 들어오면 표준 json.dumps 가 ValueError.
+        # last_close 같은 fetch-fail 종목은 NaN → None 으로 변환 (RFC 7159 호환).
+        import math as _math
+        def _nan_safe(v):
+            if isinstance(v, float) and (_math.isnan(v) or _math.isinf(v)):
+                return None
+            return v
+        safe_rows = [
+            {k: _nan_safe(v) for k, v in r.items()}
+            for r in (result.rows or [])
+        ]
         return JSONResponse({
             "available": result.available,
             "reason": result.reason,
             "fetched_at": result.fetched_at,
             "universe_size": result.universe_size,
-            "rows": result.rows,
+            "rows": safe_rows,
         })
 
     @app.get("/cs-tsmom", response_class=HTMLResponse)
