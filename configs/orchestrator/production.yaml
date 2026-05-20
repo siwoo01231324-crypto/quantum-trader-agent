@@ -228,6 +228,36 @@ strategies:
   #   class: backtest.strategies.live_oversold_with_divergence.LiveOversoldWithDivergence
   #   kwargs: {}
   #
+  # live-scanner Ensemble BN 1d (2026-05-20) — Candidate C wrapper REJECTED
+  # 위 5종이 코인 1m 에서 PF<1 LOSE 였으나, 같은 4종을 코인 1d 로 재검정 시
+  # PBO=0.0007 PASS + walk-forward 평균 79% 일관성 + 4-parallel 시뮬 SR 2.515
+  # / MDD -23.2% (docs/background/51-live-scanner-bn1d-ensemble-validation.md).
+  #
+  # wrapper (4 sub 를 1 instance 로 묶음) 시도 — 5y BN 1d 벤치 결과
+  # **PF=0.9517 / exp=-0.21% / MDD=-96.67% LOSER** (reports/bench_ensemble_bn1d_5y.json).
+  # 진단: OR-게이트 1-position 디자인이 4-parallel 의 분산 효과(MDD -23%)를
+  # 파괴함. wrapper 진입 후 in_pos 게이트로 다른 sub firing 무시 → 한 PnL series
+  # 만 생성 → 분산 자체 불가. wrapper 디자인 architectural mistake.
+  # → wrapper entry **영구 disabled**. 코드는 historical reference 로 보존.
+  #
+  # 진짜 Candidate C 운영 권고 (별도 PR 후속):
+  # 위 4종 (rsi-oversold-volume-spike, breakout-with-atr-stop, bb-lower-bounce,
+  # oversold-with-divergence) uncomment + 각각 default_size 를 다음으로 설정해
+  # half-kelly Candidate-C 사이즈 분산:
+  #   rsi_oversold:  0.05 × 0.30 × 0.5 = 0.0075
+  #   breakout_atr:  0.05 × 0.30 × 0.5 = 0.0075
+  #   bb_lower:      0.05 × 0.20 × 0.5 = 0.0050
+  #   oversold_div:  0.05 × 0.20 × 0.5 = 0.0050
+  # 각자 독립 position → 진짜 분산. 4 entry 모두 ENV LIVE_SCANNER_BN1D_ENSEMBLE_ENABLED
+  # gate 공유. 단 활성화 전 paper 6개월 + 자동 trip (3개월 rolling PF<1) 필수.
+  #
+  # - id: live-scanner-ensemble-bn1d   # ⚠️ DISABLED — wrapper LOSER (PF 0.95, MDD -97%)
+  #   class: backtest.strategies.live_scanner_ensemble_bn1d.LiveScannerEnsembleBn1d
+  #   enabled: false
+  #   kwargs:
+  #     default_size: 0.05
+  #     half_kelly: 0.5
+  #
   # HTS 검색식 hybrid (#230) — 단타·5분대기·스윙 OR 합성. KST ≤ 10:30 시간대 게이트.
   # KIS 1m 30일 한계로 5y bench 데이터 부족 → paper-only 운영 (5거래일 누적 후 검증).
   # - id: live-hts-hybrid
