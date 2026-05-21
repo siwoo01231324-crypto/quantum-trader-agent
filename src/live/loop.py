@@ -16,6 +16,8 @@ from src.brokers.async_router import AsyncOrderRouter
 from src.execution.base import MarketState, Tick as ExecTick
 from src.execution.mock_matching import MockMatchingEngine
 from src.execution.paper_broker import PaperBroker
+import os as _os  # CS_BASKET_DISPATCH env gate (#218 follow-up 2026-05-21)
+
 from src.live.executor import execute_intents
 from src.live.feed import MarketDataFeed, BinancePublicFeed, BinanceMarkPriceFeed
 from src.live.fill_consumer import run_binance_fill_consumer
@@ -517,6 +519,20 @@ async def run_shadow_loop(
 
         async def consumer():
             iter_count = 0
+            # cs-tsmom-crypto-daily / KRX universe-scan basket dispatcher
+            # (#218 follow-up — 2026-05-21 fix). orchestrator.run_bar 는
+            # universe-scan strategy 의 Signal(symbol="CRYPTO_TOP30_BASKET")
+            # 을 받으면 size_to_qty 가 basket 가격을 못 찾아 OrderIntent 가
+            # silent drop 됨. 별도 polling 으로 strategy.latest_weights →
+            # 종목별 dispatch_rebalance() → broker.place_order.
+            # env gate ``CS_BASKET_DISPATCH=1`` — 기본 OFF (회귀 zero-impact).
+            basket_dispatcher = None
+            if _os.environ.get("CS_BASKET_DISPATCH") == "1":
+                from src.live.cs_basket_dispatcher import BasketDispatcher
+                basket_dispatcher = BasketDispatcher()
+                logger.info(
+                    "cs_basket_dispatcher.enabled — universe-scan auto-orders ON",
+                )
             while not stop_event.is_set():
                 try:
                     tick = await asyncio.wait_for(tick_queue.get(), timeout=1.0)
@@ -568,6 +584,26 @@ async def run_shadow_loop(
                         wal=wal, metrics=metrics, market_state=ms,
                         position_store=config.position_store,
                     )
+                # cs-tsmom-crypto-daily universe-scan basket dispatch — see
+                # `src/live/cs_basket_dispatcher.py` for the why (orchestrator
+                # drops basket-symbol intents silently). Default OFF; opt-in
+                # via CS_BASKET_DISPATCH=1.
+                if basket_dispatcher is not None:
+                    try:
+                        ms_dict = getattr(snapshot, "market_snapshot", None) or {}
+                        ohlcv = ms_dict.get("ohlcv_history") if isinstance(ms_dict, dict) else None
+                        await basket_dispatcher.dispatch(
+                            orchestrator=orchestrator,
+                            snapshot=snapshot,
+                            broker=router,
+                            position_store=config.position_store,
+                            ohlcv_history=ohlcv,
+                            wal=wal,
+                        )
+                    except Exception as err:  # noqa: BLE001 — never abort live loop
+                        logger.warning(
+                            "basket_dispatcher.consumer_failed err=%s", err,
+                        )
                 # #227 S3: position-level stop/TP evaluation. Runs even when
                 # the strategy dispatch produced no intents (the price tick is
                 # sufficient to cross a stop). Restricted to tick.symbol — the
