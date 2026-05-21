@@ -1294,7 +1294,10 @@ function renderBinance(b) {{
   }}
   set('bnb-pos-n', b.ok ? (b.n_positions || 0) + ' 개 포지션' : '포지션 —');
   // 전략별 포지션 표가 평단/현재가를 join 하도록 심볼별 라이브 포지션 캐시.
+  // bnbApiOk = Binance ground-truth 신뢰 가능 (b.ok). false 면 stratpos
+  // 필터가 USDT row 를 함부로 숨기지 않는다 (API down 시 fail-safe).
   window._bnbPosBySym = {{}};
+  window._bnbApiOk = !!b.ok;
   for (const p of ((b.ok && b.positions) ? b.positions : [])) {{
     if (p && p.symbol) window._bnbPosBySym[p.symbol] = p;
   }}
@@ -1469,27 +1472,26 @@ async function stratPosRefresh() {{
       return;
     }}
     const bnbBySym = window._bnbPosBySym || {{}};
-    // 2026-05-21: Binance ground-truth reconcile — if WAL aggregate still shows
-    // a residual net on a USDT symbol, but Binance reports NO such position,
-    // hide the row (our WAL is stale relative to the venue; the residual is
-    // dust from prior runs or rounding). Carry realized_pnl forward as a
-    // single "(closed)" summary row per strategy so the user can still see the
-    // strategy total even when all its symbol rows are filtered out.
-    const realizedBySid = {{}};  // strategy_id → realized_pnl
+    const bnbApiOk = !!window._bnbApiOk;
+    // 2026-05-21 (v2): Binance ground-truth = 단일 진실. bnbApiOk=true 일 때
+    // USDT 심볼이 Binance positions 에 없으면 = 청산된 것. dust 임계값 무관
+    // 일괄 숨김 (이전엔 net/cum<0.5% 만 숨겨서 net=652 같은 큰 stale 잔량은
+    // 그대로 표시 → 사용자가 청산 발주해도 안 사라지는 사고). API down 시
+    // (bnbApiOk=false) 는 fail-safe 로 모두 표시. realized_pnl 은 closed-summary
+    // 로 보존.
+    const realizedBySid = {{}};
+    const realizedPerSymBySid = {{}};  // sid to map of sym-realized
     const filteredRows = [];
     for (const s of rows) {{
       const sym = s.symbol || '';
       const sid = s.strategy_id || '';
-      if (s.realized_pnl != null) realizedBySid[sid] = s.realized_pnl;
+      if (s.realized_pnl != null) {{
+        realizedBySid[sid] = (realizedBySid[sid] || 0) + s.realized_pnl;
+        (realizedPerSymBySid[sid] = realizedPerSymBySid[sid] || {{}})[sym] = s.realized_pnl;
+      }}
       const isUsdt = sym.endsWith('USDT');
-      const netQ = Math.abs(s.net_qty || 0);
       const bnbHas = !!bnbBySym[sym];
-      // Hide only USDT positions that Binance says are closed but our WAL
-      // residual is dust (< 0.5% of cumulative volume). Keeps NEAR with a
-      // real 310-unit position visible; hides TRX with a 0.788 ghost.
-      const cum = Math.max(s.buy_qty || 0, s.sell_qty || 0);
-      const isDust = cum > 0 && netQ > 0 && (netQ / cum) < 0.005;
-      const venueClosed = isUsdt && !bnbHas && (netQ === 0 || isDust);
+      const venueClosed = isUsdt && bnbApiOk && !bnbHas;
       if (venueClosed) continue;
       filteredRows.push(s);
     }}
@@ -3551,10 +3553,31 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
                 status_code=500, detail=f"position_provider failed: {err}",
             )
         held = next((q for sym, q in positions if sym.upper() == symbol.upper()), 0.0)
+        # 2026-05-21: Binance ground-truth fallback. position_provider 는
+        # in-memory store 라 fill 미동기/buy-sell qty 불일치 시 net=0 인데
+        # 실제 거래소 포지션은 살아있는 케이스가 발생 (사용자 사고: 청산 발주
+        # → 우리 net=0, 거래소는 안 줄어듦 → 사용자가 거래소에서 또 매도 →
+        # 이중 매도). 이 경우 거래소 실제 amt 로 reduce_only 발주해서 사고
+        # 차단. 거래소에도 없으면 진짜 청산된 것 → 404.
+        if held == 0.0:
+            provider = state.account_info_provider
+            if provider is not None:
+                try:
+                    fb = getattr(provider, "fetch_binance", None)
+                    bn = await asyncio.to_thread(fb) if callable(fb) else None
+                    if not isinstance(bn, dict) or not bn.get("ok"):
+                        bn = None
+                    if bn is not None:
+                        for p in bn.get("positions") or []:
+                            if (p.get("symbol") or "").upper() == symbol.upper():
+                                held = float(p.get("amt") or 0.0)
+                                break
+                except Exception:  # noqa: BLE001 — fallback is best-effort
+                    pass
         if held == 0.0:
             raise HTTPException(
                 status_code=404,
-                detail=f"no open position for {strategy_id} / {symbol}",
+                detail=f"no open position for {strategy_id} / {symbol} (in-memory store + Binance both flat)",
             )
         body = body or {}
         qty_request = body.get("qty", "all")
