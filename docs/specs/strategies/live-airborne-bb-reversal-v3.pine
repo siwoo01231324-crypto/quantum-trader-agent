@@ -1,0 +1,236 @@
+//@version=5
+// =============================================================================
+// Airborne BB Reversal v3 — RE + Trend + Volume
+// =============================================================================
+// v1 (역공학 원본 복원) + v2 (추세 정렬 게이트) + v3 (거래량 동반 게이트).
+// 스크린샷 비교에서 원본 에어본(체험판)이 강한 하락 추세에서 롱 신호를 거의
+// 띄우지 않는 반면 v1 은 계속 띄움을 발견. 강의 서머리 §1.4 "이탈 직후
+// 진입 금지, 반전 캔들이 **거래량과 함께** 축소될 때까지 대기" 의 거래량
+// 동반 게이트를 추가.
+//
+// 신호 발화 조건:
+//   1. BB 돌파 (HTF, 차트 TF)                            ← v1
+//   2. 극값 추적 + 40% 되돌림 + 봉 확정 close            ← v1
+//   3. close > SMA(trend_len)                            ← v2 NEW
+//   4. volume[-1] > volume_ratio_min × SMA(volume, vol_len)  ← v3 NEW
+//
+// 사양 / 백테스트:
+//   docs/specs/strategies/live-airborne-bb-reversal-v3.md
+//   src/backtest/strategies/live_airborne_bb_reversal_v3.py
+//
+// 면책: 차트 표시 + 알람 신호 용도. 추세/거래량 게이트는 원본 에어본의
+// 동작을 더 가깝게 모방하기 위함이며 라이브 매매 의존 금지 (5y 검증 전).
+// =============================================================================
+
+indicator(
+     title="Airborne BB Reversal v3 (RE + Trend + Vol)",
+     shorttitle="Airborne RE v3",
+     overlay=true,
+     max_lines_count=100,
+     max_labels_count=200)
+
+// ============== Inputs ==============
+group_bb     = "Bollinger Bands"
+bb_length    = input.int(20,   "BB Length",      minval=2, group=group_bb)
+bb_std       = input.float(2.0,"BB StdDev",      minval=0.1, step=0.1, group=group_bb)
+
+group_logic  = "Trigger Logic"
+retrace      = input.float(0.4,"Retrace Ratio",  minval=0.05, maxval=0.95, step=0.05,
+     tooltip="역공학 확정값 = 0.4 (40% 되돌림)", group=group_logic)
+
+group_trend  = "Trend Alignment (v2)"
+trend_len    = input.int(50, "Trend SMA Period", minval=2,
+     tooltip="default 50: 1h × 50 ≈ 2일 추세", group=group_trend)
+require_trend = input.bool(true, "추세 정렬 강제", group=group_trend)
+
+group_vol    = "Volume Confirmation (v3 NEW)"
+vol_len      = input.int(20, "Volume MA Period", minval=2, group=group_vol)
+vol_min      = input.float(1.0, "Min vol ratio (vol / MA)", minval=0.0, step=0.1,
+     tooltip="발화봉 거래량이 MA × 이 값 이상이어야 함. 1.0 = 평균 이상.",
+     group=group_vol)
+require_vol  = input.bool(true, "거래량 동반 강제", group=group_vol)
+
+group_ltf    = "Lower Timeframe BB"
+ltf_tf       = input.timeframe("5", "LTF",
+     tooltip="원본 에어본의 '5분 BB'. 차트 표시 + 상태 테이블용.",
+     group=group_ltf)
+
+group_disp   = "Display"
+show_bands   = input.bool(true, "HTF BB 표시", group=group_disp)
+show_ltf     = input.bool(true, "LTF BB 표시", group=group_disp)
+show_trend   = input.bool(true, "Trend SMA 표시", group=group_disp)
+show_table   = input.bool(true, "상태 테이블 표시", group=group_disp)
+show_setup   = input.bool(true, "대기 진입 마커 표시", group=group_disp)
+table_pos    = input.string("top_right", "테이블 위치",
+     options=["top_left","top_right","bottom_left","bottom_right"], group=group_disp)
+
+// ============== HTF BB ==============
+htf_basis = ta.sma(close, bb_length)
+htf_dev   = ta.stdev(close, bb_length) * bb_std
+htf_upper = htf_basis + htf_dev
+htf_lower = htf_basis - htf_dev
+
+// ============== LTF BB (display only) ==============
+ltf_basis = request.security(syminfo.tickerid, ltf_tf,
+     ta.sma(close, bb_length), lookahead=barmerge.lookahead_off)
+ltf_dev_v = request.security(syminfo.tickerid, ltf_tf,
+     ta.stdev(close, bb_length) * bb_std, lookahead=barmerge.lookahead_off)
+ltf_upper = ltf_basis + ltf_dev_v
+ltf_lower = ltf_basis - ltf_dev_v
+
+// ============== Trend SMA ==============
+trend_sma = ta.sma(close, trend_len)
+trend_up  = close > trend_sma
+trend_dn  = close < trend_sma
+
+// ============== Volume MA ==============
+vol_ma    = ta.sma(volume, vol_len)
+vol_ratio = vol_ma > 0 ? volume / vol_ma : 0.0
+vol_ok    = vol_ratio >= vol_min
+
+// ============== State Machine ==============
+var int   state    = 0
+var float base     = na
+var float extreme  = na
+
+upper_break = high >= htf_upper and high[1] < htf_upper[1]
+lower_break = low  <= htf_lower and low[1]  > htf_lower[1]
+
+if state == 0
+    if upper_break
+        state   := 2
+        base    := close
+        extreme := high
+    else if lower_break
+        state   := 1
+        base    := close
+        extreme := low
+
+if state == 1 and not na(extreme)
+    extreme := math.min(extreme, low)
+if state == 2 and not na(extreme)
+    extreme := math.max(extreme, high)
+
+trigger = state == 1 ? extreme + retrace * (base - extreme) :
+          state == 2 ? extreme - retrace * (extreme - base) : float(na)
+
+// ============== Fire (with v2 trend + v3 volume gates) ==============
+long_fire  = false
+short_fire = false
+
+long_gate_trend  = require_trend ? trend_up : true
+short_gate_trend = require_trend ? trend_dn : true
+gate_volume      = require_vol   ? vol_ok    : true
+
+if barstate.isconfirmed
+    if state == 1 and close >= trigger and long_gate_trend and gate_volume
+        long_fire := true
+        state := 0
+        base := na
+        extreme := na
+    else if state == 1 and close >= trigger
+        // Trigger reached but gate(s) blocked — reset setup.
+        state := 0
+        base := na
+        extreme := na
+    else if state == 2 and close <= trigger and short_gate_trend and gate_volume
+        short_fire := true
+        state := 0
+        base := na
+        extreme := na
+    else if state == 2 and close <= trigger
+        state := 0
+        base := na
+        extreme := na
+
+new_long_setup  = state == 1 and (state[1] != 1)
+new_short_setup = state == 2 and (state[1] != 2)
+
+// ============== Plots ==============
+plot(long_fire  ? 1 : 0, "에어본 롱 v3", color=color.lime,   display=display.data_window)
+plot(short_fire ? 1 : 0, "에어본 숏 v3", color=color.red,    display=display.data_window)
+plot(state == 1 ? 1 : 0, "롱 대기",     color=color.green,  display=display.data_window)
+plot(state == 2 ? 1 : 0, "숏 대기",     color=color.maroon, display=display.data_window)
+plot(trend_up   ? 1 : 0, "추세 정렬 ↑", color=color.teal,   display=display.data_window)
+plot(vol_ratio,          "거래량 비율",  color=color.purple, display=display.data_window)
+
+plot(show_bands ? htf_upper : na, "HTF BB 상단",
+     color=color.new(color.blue, 40), linewidth=1)
+plot(show_bands ? htf_basis : na, "HTF BB 중심(20이평)",
+     color=color.new(color.orange, 30), linewidth=1)
+plot(show_bands ? htf_lower : na, "HTF BB 하단",
+     color=color.new(color.blue, 40), linewidth=1)
+plot(show_ltf ? ltf_upper : na, "LTF BB 상단",
+     color=color.new(color.aqua, 30), linewidth=1)
+plot(show_ltf ? ltf_lower : na, "LTF BB 하단",
+     color=color.new(color.aqua, 30), linewidth=1)
+plot(show_trend ? trend_sma : na, "Trend SMA",
+     color=color.new(color.yellow, 30), linewidth=2)
+
+plotshape(long_fire,  title="에어본 롱 v3 발화", style=shape.triangleup,
+     location=location.belowbar, color=color.lime, size=size.normal, text="에어본 v3")
+plotshape(short_fire, title="에어본 숏 v3 발화", style=shape.triangledown,
+     location=location.abovebar, color=color.red,  size=size.normal, text="에어본 v3")
+plotshape(show_setup and new_long_setup,  title="롱 대기 진입",
+     style=shape.circle, location=location.belowbar, color=color.green,
+     size=size.tiny, text="대기")
+plotshape(show_setup and new_short_setup, title="숏 대기 진입",
+     style=shape.circle, location=location.abovebar, color=color.maroon,
+     size=size.tiny, text="대기")
+
+// ============== Status Table ==============
+table_position(pos) =>
+    switch pos
+        "top_left"     => position.top_left
+        "top_right"    => position.top_right
+        "bottom_left"  => position.bottom_left
+        "bottom_right" => position.bottom_right
+        =>                position.top_right
+
+var table status_tbl = na
+
+if show_table
+    if barstate.islast
+        if na(status_tbl)
+            status_tbl := table.new(table_position(table_pos), 2, 8,
+                 frame_color=color.gray, frame_width=1,
+                 border_color=color.gray, border_width=1)
+        state_lbl = state == 1 ? "🟢 에어본 롱 대기 v3" : state == 2 ? "🔴 에어본 숏 대기 v3" : "⏸ 신호 없음"
+        trend_lbl = trend_up ? "↑ 추세 위" : trend_dn ? "↓ 추세 아래" : "—"
+        vol_lbl   = vol_ok ? "✓ " + str.tostring(vol_ratio, "#.##") + "x" : "✗ " + str.tostring(vol_ratio, "#.##") + "x"
+        bg_hdr    = color.new(color.black, 50)
+        bg_row    = color.new(color.black, 75)
+        tc        = color.white
+        table.cell(status_tbl, 0, 0, "상태",      bgcolor=bg_hdr, text_color=tc)
+        table.cell(status_tbl, 1, 0, state_lbl,   bgcolor=bg_hdr, text_color=tc)
+        table.cell(status_tbl, 0, 1, "추세 정렬", bgcolor=bg_row, text_color=tc)
+        table.cell(status_tbl, 1, 1, trend_lbl,   bgcolor=bg_row, text_color=tc)
+        table.cell(status_tbl, 0, 2, "거래량",    bgcolor=bg_row, text_color=tc)
+        table.cell(status_tbl, 1, 2, vol_lbl,     bgcolor=bg_row, text_color=tc)
+        table.cell(status_tbl, 0, 3, "기준 시가", bgcolor=bg_row, text_color=tc)
+        table.cell(status_tbl, 1, 3, na(base)    ? "-" : str.tostring(base,    "#.####"),
+             bgcolor=bg_row, text_color=tc)
+        table.cell(status_tbl, 0, 4, "현재 극값", bgcolor=bg_row, text_color=tc)
+        table.cell(status_tbl, 1, 4, na(extreme) ? "-" : str.tostring(extreme, "#.####"),
+             bgcolor=bg_row, text_color=tc)
+        table.cell(status_tbl, 0, 5, "트리거가",  bgcolor=bg_row, text_color=tc)
+        table.cell(status_tbl, 1, 5, na(trigger) ? "-" : str.tostring(trigger, "#.####"),
+             bgcolor=bg_row, text_color=tc)
+        table.cell(status_tbl, 0, 6, "Trend SMA(" + str.tostring(trend_len) + ")",
+             bgcolor=bg_row, text_color=tc)
+        table.cell(status_tbl, 1, 6, str.tostring(trend_sma, "#.####"),
+             bgcolor=bg_row, text_color=tc)
+        table.cell(status_tbl, 0, 7, ltf_tf + "분 BB",
+             bgcolor=bg_row, text_color=tc)
+        table.cell(status_tbl, 1, 7, str.tostring(ltf_lower, "#.##") + " / " + str.tostring(ltf_upper, "#.##"),
+             bgcolor=bg_row, text_color=tc)
+
+// ============== Alerts ==============
+alertcondition(long_fire, title="에어본 롱 v3 발화",
+     message="Airborne v3 LONG fired @ {{ticker}} {{interval}}  close={{close}}  (trend+vol OK)")
+alertcondition(short_fire, title="에어본 숏 v3 발화",
+     message="Airborne v3 SHORT fired @ {{ticker}} {{interval}}  close={{close}}  (trend+vol OK)")
+alertcondition(new_long_setup, title="롱 대기 진입",
+     message="Airborne v3 long setup armed @ {{ticker}} {{interval}}")
+alertcondition(new_short_setup, title="숏 대기 진입",
+     message="Airborne v3 short setup armed @ {{ticker}} {{interval}}")
