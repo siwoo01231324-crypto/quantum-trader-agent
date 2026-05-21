@@ -1199,12 +1199,61 @@ function tlConnect() {{
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   const ws = new WebSocket(`${{proto}}//${{location.host}}/ws/timeline?replay=${{TIMELINE_MAX_ROWS}}`);
   ws.onmessage = (e) => {{
-    try {{ tlAppend(JSON.parse(e.data)); }} catch(err) {{ console.warn('ws parse', err); }}
+    try {{
+      const ev = JSON.parse(e.data);
+      tlAppend(ev);
+      // 2026-05-21 — broker ↔ store reconciliation 알림. 사용자가 Binance UI
+      // 에서 직접 close 한 경우 등 mismatch 발견되면 banner 로 즉시 노출.
+      if (ev && ev.event_type === 'position_reconciled') {{
+        showReconcileBanner(ev.payload || {{}});
+      }}
+    }} catch(err) {{ console.warn('ws parse', err); }}
   }};
   ws.onclose = () => setTimeout(tlConnect, 1000);
   ws.onerror = () => ws.close();
 }}
 if (typeof WebSocket !== 'undefined') {{ tlConnect(); }}
+
+// 2026-05-21 — Reconciliation 알림 토스트.
+function showReconcileBanner(payload) {{
+  let bar = document.getElementById('reconcile-banner');
+  if (!bar) {{
+    bar = document.createElement('div');
+    bar.id = 'reconcile-banner';
+    bar.style.cssText = 'position:fixed;top:8px;right:8px;max-width:520px;'
+      + 'background:#fff3cd;border:2px solid #ffc107;border-radius:8px;'
+      + 'padding:12px 16px;box-shadow:0 4px 12px rgba(0,0,0,0.15);'
+      + 'z-index:9999;font-size:13px;line-height:1.5;';
+    document.body.appendChild(bar);
+  }}
+  const action = payload.action || 'unknown';
+  const actionLabel = action === 'auto_fix' ? '자동 동기화 완료'
+    : action === 'alert_only_phantom_broker' ? '⚠️ Broker 에 phantom 포지션'
+    : action === 'alert_only_multi_holder' ? '⚠️ 다중 전략 보유 — 수동 확인 필요'
+    : action;
+  const holders = payload.holders || {{}};
+  const holdersStr = Object.keys(holders).length
+    ? Object.entries(holders).map(([k,v]) => `${{k.slice(0,30)}}:${{v}}`).join(', ')
+    : '(없음)';
+  bar.innerHTML = `
+    <div style="font-weight:600;margin-bottom:6px;">📡 포지션 동기화 알림</div>
+    <div><b>${{payload.symbol || '?'}}</b> — ${{actionLabel}}</div>
+    <div style="font-family:monospace;font-size:12px;margin-top:4px;">
+      logical=${{payload.logical_net}} / broker=${{payload.broker_net}}
+      / delta=${{payload.delta}}
+    </div>
+    <div style="font-size:11px;margin-top:4px;color:#555;">holders: ${{holdersStr}}</div>
+    <button onclick="this.parentElement.remove()"
+      style="margin-top:8px;padding:4px 10px;font-size:12px;cursor:pointer;">
+      닫기
+    </button>
+  `;
+  // alert_only 케이스는 사용자 액션이 필요해 자동 dismiss 안 함. auto_fix 는
+  // 30 초 후 자동 dismiss.
+  if (action === 'auto_fix') {{
+    setTimeout(() => {{ if (bar) bar.remove(); }}, 30000);
+  }}
+}}
 
 // ── 거래 시작/정지 ──────────────────────────────────────────────
 async function runStart() {{

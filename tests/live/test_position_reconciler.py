@@ -1,0 +1,201 @@
+"""PositionReconciler 회귀 (2026-05-21).
+
+NEARUSDT 19:47:47 사례 fix: 사용자가 broker UI 에서 수동 close → store 모름
+→ store 에 phantom long → stop fire → broker SHORT 진입.
+
+본 reconciler 가 주기적으로 broker.get_net_positions() 와 store 를 비교해서
+mismatch 발견 시 WAL/timeline alert + single-holder 케이스 auto-fix.
+"""
+from __future__ import annotations
+
+import asyncio
+import sys
+from decimal import Decimal
+from pathlib import Path
+
+import pytest
+
+_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(_ROOT / "src"))
+sys.path.insert(0, str(_ROOT))
+
+from live.position_reconciler import PositionReconciler, EVENT_TYPE
+from live.strategy_position_store import StrategyPositionStore
+
+
+class _FakeBroker:
+    def __init__(self, net: dict[str, Decimal] | None = None) -> None:
+        self.net = net or {}
+        self.calls = 0
+        self.raise_next = False
+
+    async def get_net_positions(self) -> dict[str, Decimal]:
+        self.calls += 1
+        if self.raise_next:
+            self.raise_next = False
+            raise RuntimeError("simulated broker error")
+        return dict(self.net)
+
+
+def _make_reconciler(broker, store):
+    wal_events: list = []
+    timeline: list = []
+    rec = PositionReconciler(
+        position_store=store,
+        broker=broker,
+        wal_observer=lambda ev: wal_events.append(ev),
+        alert_publisher=lambda p: timeline.append(p),
+        tol=Decimal("0.001"),
+    )
+    return rec, wal_events, timeline
+
+
+@pytest.mark.asyncio
+async def test_no_mismatch_no_alert_no_fix():
+    """store 와 broker 가 일치 → alert/fix 둘 다 없음."""
+    store = StrategyPositionStore()
+    store.force_sync_position(strategy_id="scan", symbol="NEARUSDT", qty=Decimal("135"))
+    broker = _FakeBroker({"NEARUSDT": Decimal("135")})
+    rec, wal_events, timeline = _make_reconciler(broker, store)
+
+    outcome = await rec.reconcile_once()
+    assert outcome.mismatches == ()
+    assert outcome.auto_fixed == ()
+    assert outcome.alerted_only == ()
+    assert wal_events == []
+    assert timeline == []
+
+
+@pytest.mark.asyncio
+async def test_manual_close_on_binance_ui_triggers_auto_fix():
+    """★ 실제 사고 시나리오: store=+135 long, broker=0 (사용자 수동 close).
+    Single holder → auto-fix 로 store 를 0 으로 강제 동기화.
+    """
+    store = StrategyPositionStore()
+    store.force_sync_position(strategy_id="scan", symbol="NEARUSDT", qty=Decimal("135"))
+    broker = _FakeBroker({})  # broker 에 NEAR 0
+    rec, wal_events, timeline = _make_reconciler(broker, store)
+
+    outcome = await rec.reconcile_once()
+    assert len(outcome.mismatches) == 1
+    m = outcome.mismatches[0]
+    assert m.symbol == "NEARUSDT"
+    assert m.logical_net == Decimal("135")
+    assert m.broker_net == Decimal("0")
+    assert m.delta == Decimal("135")
+
+    # Auto-fix: store NEAR 가 broker (0) 에 맞춰짐 → bucket 에서 제거.
+    assert outcome.auto_fixed == (("scan", "NEARUSDT", Decimal("135"), Decimal("0")),)
+    assert store.get_positions("scan") == []  # NEAR removed (qty=0)
+
+    # WAL + timeline 둘 다 alert.
+    assert len(wal_events) == 1
+    assert wal_events[0].event_type == EVENT_TYPE
+    assert wal_events[0].payload["action"] == "auto_fix"
+    assert len(timeline) == 1
+    assert timeline[0]["event_type"] == EVENT_TYPE
+
+
+@pytest.mark.asyncio
+async def test_phantom_broker_position_alerts_only():
+    """broker 에는 있는데 store 엔 holder 없음 → phantom → 알림만, fix X."""
+    store = StrategyPositionStore()  # 비어있음
+    broker = _FakeBroker({"NEARUSDT": Decimal("135")})
+    rec, wal_events, timeline = _make_reconciler(broker, store)
+
+    outcome = await rec.reconcile_once()
+    assert len(outcome.mismatches) == 1
+    assert outcome.auto_fixed == ()
+    assert len(outcome.alerted_only) == 1
+    assert wal_events[0].payload["action"] == "alert_only_phantom_broker"
+    # Store 는 변경 X — 어느 strategy 에 attribute 할지 불명확.
+    assert store.all_positions() == {}
+
+
+@pytest.mark.asyncio
+async def test_multi_holder_alerts_only_no_fix():
+    """Symbol 을 strategy 2개 이상이 들고 있으면 attribution 불확실 → 알림만."""
+    store = StrategyPositionStore()
+    store.force_sync_position(strategy_id="a", symbol="NEARUSDT", qty=Decimal("100"))
+    store.force_sync_position(strategy_id="b", symbol="NEARUSDT", qty=Decimal("50"))
+    broker = _FakeBroker({"NEARUSDT": Decimal("0")})  # broker close
+    rec, wal_events, timeline = _make_reconciler(broker, store)
+
+    outcome = await rec.reconcile_once()
+    assert len(outcome.mismatches) == 1
+    assert outcome.auto_fixed == ()
+    assert len(outcome.alerted_only) == 1
+    assert wal_events[0].payload["action"] == "alert_only_multi_holder"
+    # Store 는 변경 X — 사용자가 dashboard 보고 직접 결정해야.
+    assert store.all_positions() == {
+        "a": [("NEARUSDT", 100.0)], "b": [("NEARUSDT", 50.0)],
+    }
+
+
+@pytest.mark.asyncio
+async def test_broker_short_logical_long_auto_fix_to_short():
+    """store +135 LONG, broker -135 SHORT — 가장 위험한 케이스 (사고 시나리오).
+    Auto-fix 가 store 를 -135 (broker truth) 로 동기화 → 다음 evaluate 가 short
+    포지션으로 인식해 long-stop 발사 안 함.
+    """
+    store = StrategyPositionStore()
+    store.force_sync_position(strategy_id="scan", symbol="NEARUSDT", qty=Decimal("135"))
+    broker = _FakeBroker({"NEARUSDT": Decimal("-135")})
+    rec, wal_events, timeline = _make_reconciler(broker, store)
+
+    outcome = await rec.reconcile_once()
+    assert outcome.auto_fixed == (("scan", "NEARUSDT", Decimal("135"), Decimal("-135")),)
+    # Store 가 short 으로 동기화됨.
+    assert store.get_positions("scan") == [("NEARUSDT", -135.0)]
+
+
+@pytest.mark.asyncio
+async def test_broker_fetch_failure_returns_empty_outcome():
+    """Broker 조회 실패 시 절대 raise 안 함 → 다음 cycle 에 재시도."""
+    store = StrategyPositionStore()
+    store.force_sync_position(strategy_id="scan", symbol="NEARUSDT", qty=Decimal("135"))
+    broker = _FakeBroker({"NEARUSDT": Decimal("0")})
+    broker.raise_next = True
+    rec, wal_events, timeline = _make_reconciler(broker, store)
+
+    outcome = await rec.reconcile_once()  # 1st call raises → empty outcome
+    assert outcome.mismatches == ()
+    assert outcome.auto_fixed == ()
+    assert wal_events == []
+
+    # 다음 호출은 정상 → mismatch 감지 + fix.
+    outcome2 = await rec.reconcile_once()
+    assert len(outcome2.mismatches) == 1
+    assert outcome2.auto_fixed != ()
+
+
+@pytest.mark.asyncio
+async def test_tolerance_small_diff_ignored():
+    """tol 이하의 부동소수점 잔차는 무시 (broker 가 137.0001 같은 dust 줄 때)."""
+    store = StrategyPositionStore()
+    store.force_sync_position(strategy_id="scan", symbol="NEARUSDT", qty=Decimal("135"))
+    broker = _FakeBroker({"NEARUSDT": Decimal("135.0005")})  # < tol=0.001
+    rec, wal_events, timeline = _make_reconciler(broker, store)
+
+    outcome = await rec.reconcile_once()
+    assert outcome.mismatches == ()
+
+
+@pytest.mark.asyncio
+async def test_run_loop_stops_on_event():
+    """stop_event set 되면 loop 종료."""
+    store = StrategyPositionStore()
+    broker = _FakeBroker({})
+    rec = PositionReconciler(
+        position_store=store, broker=broker,
+        tol=Decimal("0.001"), interval_sec=0.05,
+    )
+    stop_event = asyncio.Event()
+
+    async def stop_soon():
+        await asyncio.sleep(0.15)
+        stop_event.set()
+
+    await asyncio.gather(rec.run_loop(stop_event), stop_soon())
+    # broker.calls 가 최소 1번 이상이어야 함 (loop 가 1 cycle 이상 돔).
+    assert broker.calls >= 1
