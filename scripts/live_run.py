@@ -975,6 +975,10 @@ async def _run_pipeline_attached(
             return
         # #238 — 청산 시 orchestrator 진입 기록 해제 → live-scanner 재진입 허용.
         risk_mgr._on_exit = orch.release_live_position
+        # 2026-05-21 — ATR 기반 동적 stop. Strategy 가 Signal 에 실어보낸 per-entry
+        # stop/TP/trailing pct override 를 risk manager 의 (sid, sym) dynamic
+        # policy 로 등록한다. 없으면 정적 policy fallback (기존 동작).
+        orch._on_entry = risk_mgr.register_entry_override
         _register_exit_policies(orch, risk_mgr, logger)
 
     config.on_orchestrator_ready = _on_orchestrator_ready
@@ -1322,6 +1326,10 @@ async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
             return
         # #238 — 청산 시 orchestrator 진입 기록 해제 → live-scanner 재진입 허용.
         risk_mgr._on_exit = orch.release_live_position
+        # 2026-05-21 — ATR 기반 동적 stop. Strategy 가 Signal 에 실어보낸 per-entry
+        # stop/TP/trailing pct override 를 risk manager 의 (sid, sym) dynamic
+        # policy 로 등록한다. 없으면 정적 policy fallback.
+        orch._on_entry = risk_mgr.register_entry_override
         _register_exit_policies(orch, risk_mgr, logger)
 
     config.on_orchestrator_ready = _on_orchestrator_ready

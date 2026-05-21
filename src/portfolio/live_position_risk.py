@@ -76,6 +76,13 @@ class LivePositionRiskManager:
         self._policies: dict[str, StopTpPolicy] = {}
         # high-water mark for trailing stop, keyed by (strategy_id, symbol)
         self._high_water: dict[tuple[str, str], Decimal] = {}
+        # 2026-05-21 — per-(sid, symbol) dynamic policy override. ATR 기반
+        # 동적 stop 등 strategy 가 진입 시점에 변동성 보고 계산한 값으로
+        # 정적 % policy 를 덮어쓰기. orchestrator 의 _on_entry 콜백을 통해
+        # `register_entry_override` 로 등록되고, evaluate 시 정적 _policies
+        # 보다 우선 적용. stop/TP fire 시 자동 cleanup → 다음 진입은 새로
+        # 계산된 override 로 다시 등록 (없으면 정적 fallback).
+        self._dynamic_policies: dict[tuple[str, str], StopTpPolicy] = {}
 
     def register_strategy_policy(
         self,
@@ -89,6 +96,40 @@ class LivePositionRiskManager:
             stop_loss_pct=stop_loss_pct,
             take_profit_pct=take_profit_pct,
             trailing_stop_pct=trailing_stop_pct,
+        )
+
+    def register_entry_override(
+        self,
+        strategy_id: str,
+        symbol: str,
+        *,
+        stop_loss_pct: float | None = None,
+        take_profit_pct: float | None = None,
+        trailing_stop_pct: float | None = None,
+    ) -> None:
+        """진입 시 dynamic policy override 등록 (ATR 기반 동적 stop 용).
+
+        None 인 필드는 strategy 의 정적 _policies 값으로 fallback. 모든 필드가
+        None 이면 등록 자체를 skip (정적 policy 그대로 사용). 다음 stop/TP 시
+        자동 cleanup → 같은 (sid, symbol) 의 새 진입은 다시 호출되어야 함.
+        """
+        if (stop_loss_pct is None
+                and take_profit_pct is None
+                and trailing_stop_pct is None):
+            return
+        base = self._policies.get(strategy_id)
+        if base is None:
+            logger.debug(
+                "register_entry_override: no static policy for sid=%s — override skipped",
+                strategy_id,
+            )
+            return
+        self._dynamic_policies[(strategy_id, symbol)] = StopTpPolicy(
+            stop_loss_pct=stop_loss_pct if stop_loss_pct is not None else base.stop_loss_pct,
+            take_profit_pct=take_profit_pct if take_profit_pct is not None else base.take_profit_pct,
+            trailing_stop_pct=(
+                trailing_stop_pct if trailing_stop_pct is not None else base.trailing_stop_pct
+            ),
         )
 
     def evaluate(
@@ -109,12 +150,19 @@ class LivePositionRiskManager:
             last_price = Decimal(str(last_price))
 
         intents: list[OrderIntent] = []
-        for strategy_id, policy in self._policies.items():
+        for strategy_id, static_policy in self._policies.items():
             held, avg_cost = self._lookup_position(strategy_id, symbol)
             if held == 0 or avg_cost <= 0:
-                # No position — clear any stale high-water tracking.
+                # No position — clear any stale high-water tracking +
+                # 이전 진입의 dynamic override 도 함께 정리 (이미 청산되어
+                # 의미 없음 — 다음 진입은 새로 register_entry_override 됨).
                 self._high_water.pop((strategy_id, symbol), None)
+                self._dynamic_policies.pop((strategy_id, symbol), None)
                 continue
+
+            # 2026-05-21 — dynamic override 가 등록되어 있으면 그것을, 없으면
+            # strategy 의 정적 policy 사용 (기존 동작). ATR 기반 동적 stop 활용.
+            policy = self._dynamic_policies.get((strategy_id, symbol), static_policy)
 
             is_short = held < 0
 
@@ -166,8 +214,11 @@ class LivePositionRiskManager:
                 pct_change=pct_change,
                 ts=ts,
             )
-            # Reset water mark for the next entry into this (sid, symbol).
+            # Reset water mark + dynamic policy override for the next entry
+            # into this (sid, symbol). 다음 진입은 새 ATR override 로 다시
+            # register 되거나 (override 미설정 시) 정적 policy 로 fallback.
             self._high_water.pop((strategy_id, symbol), None)
+            self._dynamic_policies.pop((strategy_id, symbol), None)
 
         return intents
 
