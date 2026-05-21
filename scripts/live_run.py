@@ -849,23 +849,44 @@ async def _run_pipeline_attached(
     # aggregator 가 빈 상태로 시작 → restore_live_entered 무효 → 매수 폭주).
     # 본 fix 는 wal_path 가 None 이어도 log_dir 추정해서 cross-run 시도. 메시지도
     # 항상 출력 (N=0 케이스 가시화 — 사용자 진단용).
+    #
+    # 2026-05-21 fix #2 (warm guard): dashboard 의 "거래 정지 → 시작" 토글마다
+    # 이 함수가 다시 호출되는데, pnl_aggregator/position_store 는 _serve() 의
+    # 싱글톤이라 이미 정확한 상태를 들고 있음. 그 위에 replay_from_wal_dir 가
+    # 또 돌면 모든 fill 이 두 번 카운트됨 → realized PnL 누적(78→156→234) +
+    # store 의 보유 qty 인플레(0.343→1.029=3x). risk manager 가 부풀린 qty
+    # 로 stop 발사 → 실제론 0.343 만 있는데 1.029 sell → broker 가 short
+    # 으로 뒤집힘 → 다음 tick 에 재진입 폭주. WAL 증거 (04:06:37) 확인.
+    # 그래서 싱글톤이 이미 warm 이면 replay 를 skip — 프로세스 첫 부팅 한 번만 함.
     if pnl_aggregator is not None and position_store is not None:
-        if config.wal_path:
-            log_dir = Path(config.wal_path).parent.parent
-        else:
-            log_dir = Path("logs/live")  # fallback
-        try:
-            n_store = position_store.replay_from_wal_dir(log_dir)
-            n_pnl = pnl_aggregator.replay_from_wal_dir(log_dir)
+        already_warm = (
+            pnl_aggregator.realtime != 0.0
+            or len(position_store.all_positions()) > 0
+        )
+        if already_warm:
             logger.info(
-                "cross-run replay: %d WAL files (store=%d / pnl=%d) from %s",
-                max(n_store, n_pnl), n_store, n_pnl, log_dir,
+                "cross-run replay: SKIPPED (싱글톤 already warm — "
+                "정지/시작 토글 재replay 방지). realized=%.4f positions=%d strategies",
+                pnl_aggregator.realtime,
+                len(position_store.all_positions()),
             )
-        except Exception as err:
-            logger.warning("cross-run replay failed: %s — fallback to single-path", err)
-            if config.wal_path and Path(config.wal_path).exists():
-                position_store.replay_from_wal(config.wal_path)
-                pnl_aggregator.replay_from_wal(config.wal_path)
+        else:
+            if config.wal_path:
+                log_dir = Path(config.wal_path).parent.parent
+            else:
+                log_dir = Path("logs/live")  # fallback
+            try:
+                n_store = position_store.replay_from_wal_dir(log_dir)
+                n_pnl = pnl_aggregator.replay_from_wal_dir(log_dir)
+                logger.info(
+                    "cross-run replay: %d WAL files (store=%d / pnl=%d) from %s",
+                    max(n_store, n_pnl), n_store, n_pnl, log_dir,
+                )
+            except Exception as err:
+                logger.warning("cross-run replay failed: %s — fallback to single-path", err)
+                if config.wal_path and Path(config.wal_path).exists():
+                    position_store.replay_from_wal(config.wal_path)
+                    pnl_aggregator.replay_from_wal(config.wal_path)
 
     def _wal_observer(ev) -> None:
         if state.timeline_broker is not None:
