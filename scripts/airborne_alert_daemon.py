@@ -210,46 +210,65 @@ def evaluate_and_dispatch(
     return long_dispatched, short_dispatched
 
 
-async def run_daemon(
-    *,
-    top_n: int = DEFAULT_TOP_N,
-    dry_run: bool = False,
-    ws_base_url: str = WS_BASE_LIVE,
-    rest_base_url: str = REST_BASE_LIVE,
-) -> None:
-    log.info("fetching 24h snapshot from %s ...", rest_base_url)
-    snap = await fetch_futures_24h_snapshot(base_url=rest_base_url)
-    universe = top_n_by_volume(snap, n=top_n)
-    if not universe:
-        log.error("empty universe — exiting")
-        return
-    log.info("universe (top-%d USDT-perp, %d symbols): %s",
-             top_n, len(universe), universe)
+DEFAULT_UNIVERSE_REFRESH_HOURS = 6.0
 
-    log.info("bootstrapping kline history (1h limit=100, 5m limit=50)...")
+
+def compute_universe_diff(
+    prev: list[str], curr: list[str],
+) -> tuple[list[str], list[str], list[str]]:
+    """Return ``(added, removed, unchanged)`` between two universe lists.
+
+    Pure function. ``added`` and ``unchanged`` follow ``curr`` ordering;
+    ``removed`` follows ``prev`` ordering.
+    """
+    prev_set = set(prev)
+    curr_set = set(curr)
+    added = [s for s in curr if s not in prev_set]
+    removed = [s for s in prev if s not in curr_set]
+    unchanged = [s for s in curr if s in prev_set]
+    return added, removed, unchanged
+
+
+async def _bootstrap_into_states(
+    symbols: list[str],
+    states: dict[str, SymbolState],
+    *,
+    rest_base_url: str,
+) -> None:
+    """REST-bootstrap ``symbols`` history into ``states`` (in-place).
+
+    Each new symbol gets a fresh :class:`SymbolState` with 1h+5m history
+    seeded. Existing entries in ``states`` are not touched — caller is
+    expected to have already removed stale entries.
+    """
+    if not symbols:
+        return
     boot = await bootstrap_history(
-        symbols=universe, intervals=("1h", "5m"),
+        symbols=symbols, intervals=("1h", "5m"),
         limit_per_interval={"1h": 100, "5m": 50},
         base_url=rest_base_url,
     )
-    states: dict[str, SymbolState] = {}
-    for s in universe:
+    for s in symbols:
         st = SymbolState()
         st.history_1h = boot.get(s, {}).get("1h", st.history_1h)
         st.history_5m = boot.get(s, {}).get("5m", st.history_5m)
         states[s] = st
-    log.info("bootstrap complete — %d symbols seeded", len(states))
 
-    stream = BinanceMarketDataStream(
-        symbols=universe, intervals=("1h", "5m"),
-        base_url=ws_base_url,
-        include_mark_price_arr=True,
-    )
-    log.info("opening WS combined stream (%d streams)...", stream.stream_count)
 
+async def _consume_stream(
+    stream: BinanceMarketDataStream,
+    states: dict[str, SymbolState],
+    dry_run: bool,
+) -> None:
+    """Drain ``stream`` until exhausted or cancelled. Dispatches alerts on
+    each confirmed 1h close for symbols currently in ``states``.
+
+    MarkPrice events are consumed silently (MVP). Events for symbols that
+    have been removed from the universe mid-cycle are dropped without
+    error (lookup miss in ``states``).
+    """
     async for ev in stream.stream():
         if isinstance(ev, MarkPriceEvent):
-            # MVP: consume silently — see module docstring for Phase 2 plan.
             continue
         sym = ev.symbol
         state = states.get(sym)
@@ -266,6 +285,98 @@ async def run_daemon(
             evaluate_and_dispatch(symbol=sym, state=state, ev=ev, dry_run=dry_run)
 
 
+async def run_daemon(
+    *,
+    top_n: int = DEFAULT_TOP_N,
+    dry_run: bool = False,
+    ws_base_url: str = WS_BASE_LIVE,
+    rest_base_url: str = REST_BASE_LIVE,
+    universe_refresh_hours: float = DEFAULT_UNIVERSE_REFRESH_HOURS,
+) -> None:
+    """Run the alert daemon.
+
+    If ``universe_refresh_hours > 0`` the universe is re-computed on that
+    cadence and the WS stream is rebuilt to reflect added / removed
+    symbols. Removed-symbol state is dropped; added-symbol history is
+    REST-bootstrapped before subscription. Cooldown state for unchanged
+    symbols is preserved across cycles.
+
+    Passing ``universe_refresh_hours <= 0`` disables periodic refresh
+    (legacy behaviour: universe locked at startup, stream runs forever).
+    """
+    states: dict[str, SymbolState] = {}
+    prev_universe: list[str] = []
+    refresh_secs: float | None = (
+        universe_refresh_hours * 3600 if universe_refresh_hours > 0 else None
+    )
+
+    while True:
+        log.info("fetching 24h snapshot from %s ...", rest_base_url)
+        snap = await fetch_futures_24h_snapshot(base_url=rest_base_url)
+        universe = top_n_by_volume(snap, n=top_n)
+        if not universe:
+            log.error("empty universe — retrying in 60s")
+            await asyncio.sleep(60)
+            continue
+
+        added, removed, unchanged = compute_universe_diff(prev_universe, universe)
+        if prev_universe:
+            log.info(
+                "universe refresh — added=%s removed=%s unchanged=%d",
+                added, removed, len(unchanged),
+            )
+        else:
+            log.info(
+                "initial universe (top-%d USDT-perp, %d symbols): %s",
+                top_n, len(universe), universe,
+            )
+
+        for sym in removed:
+            states.pop(sym, None)
+        await _bootstrap_into_states(added, states, rest_base_url=rest_base_url)
+        prev_universe = universe
+        log.info("states current: %d symbols seeded", len(states))
+
+        stream = BinanceMarketDataStream(
+            symbols=universe, intervals=("1h", "5m"),
+            base_url=ws_base_url,
+            include_mark_price_arr=True,
+        )
+
+        if refresh_secs is None:
+            log.info(
+                "opening WS (%d streams) — universe refresh disabled",
+                stream.stream_count,
+            )
+            await _consume_stream(stream, states, dry_run)
+            return  # stream exhausted (only happens on hard error)
+
+        log.info(
+            "opening WS (%d streams) — universe refresh in %.1fh",
+            stream.stream_count, universe_refresh_hours,
+        )
+        consume_task = asyncio.create_task(
+            _consume_stream(stream, states, dry_run),
+            name="airborne-stream-consumer",
+        )
+        try:
+            await asyncio.wait_for(
+                asyncio.shield(consume_task), timeout=refresh_secs,
+            )
+        except asyncio.TimeoutError:
+            log.info(
+                "universe refresh cycle triggered (%.1fh elapsed)",
+                universe_refresh_hours,
+            )
+        finally:
+            await stream.close()
+            consume_task.cancel()
+            try:
+                await consume_task
+            except (asyncio.CancelledError, Exception):
+                pass
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Airborne v1.1 USDT-perp alert daemon (Binance Futures, Telegram)",
@@ -276,6 +387,15 @@ def main(argv: list[str] | None = None) -> int:
                         help="Print alerts to stdout instead of Telegram")
     parser.add_argument("--testnet", action="store_true",
                         help="Use Binance testnet REST + WS endpoints")
+    parser.add_argument(
+        "--universe-refresh-hours", type=float,
+        default=DEFAULT_UNIVERSE_REFRESH_HOURS,
+        help=(
+            f"Re-compute top-N universe on this cadence (default "
+            f"{DEFAULT_UNIVERSE_REFRESH_HOURS}h). Pass 0 to disable "
+            "(universe locks at startup, legacy behaviour)."
+        ),
+    )
     parser.add_argument("--log-level", default="INFO")
     args = parser.parse_args(argv)
 
@@ -293,6 +413,7 @@ def main(argv: list[str] | None = None) -> int:
             dry_run=args.dry_run,
             ws_base_url=ws_base,
             rest_base_url=rest_base,
+            universe_refresh_hours=args.universe_refresh_hours,
         ))
     except KeyboardInterrupt:
         log.info("KeyboardInterrupt — shutting down")

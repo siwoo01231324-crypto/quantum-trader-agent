@@ -103,6 +103,12 @@ python scripts/airborne_alert_daemon.py --top-n 5 --dry-run
 
 # 테스트넷
 python scripts/airborne_alert_daemon.py --testnet --top-n 3 --dry-run
+
+# Universe 재산출 주기 변경 (default 6h)
+python scripts/airborne_alert_daemon.py --top-n 50 --universe-refresh-hours 12
+
+# Legacy: universe 고정 (startup 1회만, 재산출 비활성)
+python scripts/airborne_alert_daemon.py --top-n 50 --universe-refresh-hours 0
 ```
 
 ### Cooldown
@@ -111,8 +117,21 @@ python scripts/airborne_alert_daemon.py --testnet --top-n 3 --dry-run
 ### 재시작
 무상태 — 종료 시 마지막 fire 타임스탬프 휘발. 재시작 직후 동일 봉에서 다시 fire 할 수 있음 (cooldown reset). 의도된 단순화.
 
-### Universe 새로고침
-MVP 는 startup 시 1회만. 후속 PR 에서 N시간 주기 재산출 + 추가/제거 종목 WS 재구독 추가 예정.
+### Universe 새로고침 (2026-05-21 추가)
+**Default 6시간 주기 자동 재산출.** `--universe-refresh-hours <h>` 로 조정, `0` 으로 비활성화 (legacy: startup 1회 → 무한 stream).
+
+매 cycle:
+1. `fetch_futures_24h_snapshot` → `top_n_by_volume` 로 새 universe 산출
+2. `compute_universe_diff(prev, curr)` → `(added, removed, unchanged)`
+3. removed 종목의 `SymbolState` 삭제 (cooldown 포함 — 다시 들어오면 리셋)
+4. added 종목 REST kline bootstrap (1h×100 + 5m×50) → 새 `SymbolState`
+5. unchanged 종목 history/cooldown 은 **유지** — fire 연속성 보장
+6. 새 universe 로 `BinanceMarketDataStream` 재생성 → WS 재연결
+7. `asyncio.wait_for(consume_task, timeout=refresh_secs)` 로 다음 cycle 까지 소비
+
+**WS 재연결 영향**: cycle 경계에서 짧은 (~1초) 끊김. 다음 1h 봉 확정 시점 이전이라 신호 손실 없음. 5m bar 는 cycle 경계에 1~2개 누락 가능 — `_five_min_trend_preview` lookback 3 fallback 이라 무해.
+
+**테스트**: `tests/scripts/test_airborne_alert_daemon.py` 의 6개 `compute_universe_diff` 단위 테스트 (added/removed/unchanged, 빈 prev, full replace, 순서 보존).
 
 ## 한계 / 면책
 
@@ -122,7 +141,7 @@ MVP 는 startup 시 1회만. 후속 PR 에서 N시간 주기 재산출 + 추가/
 | 자동 매매 적합성 | **부적합** — 알림 본문에 "rejected; visual guide only" 라인 박힘 |
 | 신호 신뢰도 | 시각 재현 카논. 사용자 본인 손매매 판단 보조용 |
 | markPrice 활용 | MVP 미사용 (kline 봉 확정만으로 평가). Phase 2 에 5m 청산 트레일링 경고 추가 예정 |
-| 종목 추가/제거 (delisting) | universe 재새로고침 미구현 → 운영 1일 이상 지속 시 stale 가능 |
+| 종목 추가/제거 (delisting) | 6h 주기 자동 재산출 (default) — 새 종목 자동 구독, 빠진 종목 정리. `--universe-refresh-hours 0` 으로 legacy startup-only 동작 가능 |
 
 ## 5y backtest 게이트 면제 사유
 
