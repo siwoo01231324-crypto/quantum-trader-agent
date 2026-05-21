@@ -1,10 +1,10 @@
 ---
-type: work-note
+type: spec-architecture
 id: tv-copies-notes
 name: TradingView 카피본 작업 노트
 created: 2026-05-22
 owner: siwoo
-status: shipped
+status: accepted
 tags:
 - tradingview
 - pine-script
