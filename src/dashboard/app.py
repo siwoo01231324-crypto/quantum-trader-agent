@@ -2837,16 +2837,21 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
             except Exception:
                 pnl_by = {}
         rows = sorted(agg.values(), key=lambda r: (r["strategy_id"], r["symbol"]))
-        # realized_pnl is strategy-level only (PnLAggregator has no per-symbol
-        # realized) — attach it to the **first** symbol row of the strategy
-        # (alphabetically) so placement is stable across refreshes. The prior
-        # "most-recent last_ts" rule made -90 jump between symbols as fills
-        # arrived, which the user reported as "PnL disappeared from TRX".
-        realized_row: dict[str, dict] = {}
-        for r in rows:
-            sid = r["strategy_id"]
-            if sid not in realized_row:  # rows already sorted by (sid, symbol)
-                realized_row[sid] = r
+        # 2026-05-21: PER-(strategy_id, symbol) realized via reconstruct_trades.
+        # PnLAggregator.by_strategy is strategy-LEVEL only — attaching that to
+        # a single symbol row (any rule) shows the WRONG number on the WRONG
+        # symbol (user saw -91 on BTCUSDT even though BTCUSDT only had 2 tiny
+        # fills — the -91 was the whole strategy's loss, dominated by NEAR/TRX).
+        # Round-trip reconstruction gives proper per-(strategy, symbol) PnL.
+        realized_by_key: dict[tuple[str, str], float] = {}
+        try:
+            for t in reconstruct_trades(paths):
+                if t.realized_pnl is None:
+                    continue  # entry leg still open
+                key = (t.strategy_id, t.symbol)
+                realized_by_key[key] = realized_by_key.get(key, 0.0) + t.realized_pnl
+        except Exception:  # noqa: BLE001 — never 500 the dashboard
+            realized_by_key = {}
         # Live mark-price overlay — pulled from the mark-price feed's cache.
         # Each row gets ``mark_price`` (None if no live price yet) and
         # ``pnl_pct`` (= (mark - avg)/avg * 100, only when both are positive
@@ -2882,9 +2887,7 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
                 "mark_price": round(mark_price, 6) if mark_price is not None else None,
                 "mark_ts": mark_ts,
                 "pnl_pct": round(pnl_pct, 3) if pnl_pct is not None else None,
-                "realized_pnl": (
-                    pnl_by.get(sid) if realized_row.get(sid) is r else None
-                ),
+                "realized_pnl": realized_by_key.get((sid, sym)),
                 "last_ts": r["last_ts"],
             })
         return JSONResponse({"available": True, "strategies": out})
