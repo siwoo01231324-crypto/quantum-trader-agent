@@ -131,7 +131,7 @@ class DashboardState:
 
 
 def _pnl_view(state: "DashboardState") -> dict:
-    """Resolve the dashboard PnL snapshot.
+    """Resolve the dashboard PnL snapshot — *realized only*.
 
     Prefers the live `PnLAggregator` (#194). Falls back to the static
     `pnl_realtime / pnl_daily / pnl_monthly` fields when no aggregator is
@@ -140,6 +140,11 @@ def _pnl_view(state: "DashboardState") -> dict:
     The *_by_venue dicts are keyed "binance" (USDT), "kis" (KRW), "unknown".
     They are NEVER cross-summed — each value is in the venue's own currency.
     Legacy scalar realtime/daily/monthly are kept for backward compatibility.
+
+    **Purely synchronous** — no broker IO. The `/api/pnl` endpoint augments
+    with broker `unrealized_pnl` via ``_augment_pnl_with_unrealized`` after
+    fetching it through `asyncio.to_thread`. Initial server-side HTML render
+    shows realized only; the JS poll updates with unrealized within ~5s.
     """
     agg = state.pnl_aggregator
     if agg is not None:
@@ -152,6 +157,7 @@ def _pnl_view(state: "DashboardState") -> dict:
             "realtime_by_venue": {k: float(v) for k, v in agg.realtime_by_venue().items()},
             "daily_by_venue": {k: float(v) for k, v in agg.daily_by_venue().items()},
             "monthly_by_venue": {k: float(v) for k, v in agg.monthly_by_venue().items()},
+            "unrealized_by_venue": {},  # _augment_pnl_with_unrealized 이 채움
         }
     return {
         "realtime": state.pnl_realtime,
@@ -161,7 +167,37 @@ def _pnl_view(state: "DashboardState") -> dict:
         "realtime_by_venue": {},
         "daily_by_venue": {},
         "monthly_by_venue": {},
+        "unrealized_by_venue": {},
     }
+
+
+def _augment_pnl_with_unrealized(
+    view: dict, unrealized_by_venue: dict[str, float],
+) -> dict:
+    """In-place mutation: realtime 표시에 broker unrealized 를 더한다.
+
+    2026-05-22: 사용자 보고 "실시간 -96.45 가 월간 -96.45 와 똑같아서 lifetime
+    누적인지 live current 인지 안 헷갈리네" — "실시간" label 의 의도는 *현재
+    상태 (실현 + 미실현)*. 본 헬퍼가 `_pnl_view` 의 realized-only base 에
+    Binance unrealized 를 더해 진짜 "실시간" 으로 만들어줌.
+
+    영향 범위:
+    - ``realtime``: scalar mixed (KRW + USDT) — 기존 cross-sum 컨벤션 그대로
+      유지. unrealized 의 cross-venue 합산만 추가.
+    - ``realtime_by_venue[venue]``: 그 venue 의 realized cum + unrealized.
+      Currency-correct (KIS 는 unrealized 가 None/0 이라 변동 X).
+    - ``daily`` / ``monthly``: realized only — 본 헬퍼 영향 X (window-bounded
+      값에 unrealized 가 안 어울림).
+    """
+    if not unrealized_by_venue:
+        return view
+    view["unrealized_by_venue"] = {k: float(v) for k, v in unrealized_by_venue.items()}
+    sum_unrealized = sum(unrealized_by_venue.values())
+    view["realtime"] = float(view.get("realtime", 0.0)) + sum_unrealized
+    rt_by_venue = view.setdefault("realtime_by_venue", {})
+    for venue, upnl in unrealized_by_venue.items():
+        rt_by_venue[venue] = float(rt_by_venue.get(venue, 0.0)) + float(upnl)
+    return view
 
 
 def _gauge_html(name: str, value: float) -> str:
@@ -2960,7 +2996,24 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
 
     @app.get("/api/pnl")
     async def api_pnl() -> JSONResponse:
-        return JSONResponse(_pnl_view(state))
+        view = _pnl_view(state)
+        # 2026-05-22: "실시간" = realized cum + Binance unrealized 로 augment.
+        # 사용자 보고 — 실시간이 lifetime cumulative 인지 live current 인지
+        # 안 헷갈리네 (월간과 똑같이 표시). broker ground-truth 미실현을 더해
+        # 진짜 실시간 값으로. KIS 는 unrealized 미지원 → 변동 X.
+        try:
+            provider = state.account_info_provider
+            if provider is not None:
+                fb = getattr(provider, "fetch_binance", None)
+                if callable(fb):
+                    bn = await asyncio.to_thread(fb)
+                    if isinstance(bn, dict) and bn.get("ok"):
+                        upnl = bn.get("total_unrealized_pnl")
+                        if isinstance(upnl, (int, float)) and upnl != 0:
+                            _augment_pnl_with_unrealized(view, {"binance": float(upnl)})
+        except Exception:  # noqa: BLE001 — never 500 the dashboard
+            pass
+        return JSONResponse(view)
 
     @app.get("/api/ops")
     async def api_ops() -> JSONResponse:
