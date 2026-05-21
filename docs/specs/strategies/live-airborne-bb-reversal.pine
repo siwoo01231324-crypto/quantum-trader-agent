@@ -1,0 +1,200 @@
+//@version=5
+// =============================================================================
+// Airborne BB Reversal — Reverse-Engineered v1.1
+// =============================================================================
+// v1 (high/low 기반 돌파) 가 차트 비교에서 원본보다 신호를 자주 띄움을 발견.
+// 같은 봉에서 v1 은 "숏 대기" 진입했지만 원본은 "신호 없음" 케이스 분석:
+//
+//   bar: O=115,208,000  H=115,549,000  L=115,090,000  C=115,497,000
+//   BB_upper = 115,492,429
+//   close - BB_upper = 4,571원 (0.004%)  ← v1 만 잡음
+//   body / open = 0.25%                 ← 매우 작은 봉
+//
+// → 원본은 *의미 있는* 돌파만 인정. v1.1 추가 게이트:
+//   1. 돌파 기준 high/low → close (강의 §1.2 "종가 기준 이탈 확인" 일치)
+//   2. close margin: close > BB_upper × (1 + min_close_margin)
+//   3. min body: |close - open| / open >= min_body_pct
+//
+// 사양: docs/specs/strategies/live-airborne-bb-reversal.md
+// 역공학 노트: docs/background/38-airborne-indicator-reverse-engineering.md
+// =============================================================================
+
+indicator(
+     title="Airborne BB Reversal (RE v1)",
+     shorttitle="Airborne RE v1",
+     overlay=true,
+     max_lines_count=100,
+     max_labels_count=200)
+
+// ============== Inputs ==============
+group_bb     = "Bollinger Bands"
+bb_length    = input.int(20,   "BB Length",  minval=2,   group=group_bb)
+bb_std       = input.float(2.0,"BB StdDev",  minval=0.1, step=0.1, group=group_bb)
+
+group_logic  = "Trigger Logic"
+retrace      = input.float(0.4,"Retrace Ratio", minval=0.05, maxval=0.95, step=0.05,
+     tooltip="역공학 확정값 0.4", group=group_logic)
+
+group_break  = "Breakout Filter (v1.1 NEW)"
+min_margin   = input.float(0.001, "Min close margin (% of price)",
+     minval=0.0, step=0.0001,
+     tooltip="close 와 BB 사이 최소 거리. 0.001 = 0.1%. wick-only 무시.",
+     group=group_break)
+min_body     = input.float(0.005, "Min body (% of open)",
+     minval=0.0, step=0.0001,
+     tooltip="돌파봉의 body 최소 크기. 0.005 = 0.5%. 작은 봉 무시.",
+     group=group_break)
+
+group_ltf    = "Lower Timeframe BB"
+ltf_tf       = input.timeframe("5", "LTF", group=group_ltf)
+
+group_disp   = "Display"
+show_bands   = input.bool(true, "HTF BB 표시", group=group_disp)
+show_ltf     = input.bool(true, "LTF BB 표시", group=group_disp)
+show_table   = input.bool(true, "상태 테이블 표시", group=group_disp)
+show_setup   = input.bool(true, "대기 진입 마커 표시", group=group_disp)
+table_pos    = input.string("top_right", "테이블 위치",
+     options=["top_left","top_right","bottom_left","bottom_right"], group=group_disp)
+
+// ============== HTF BB ==============
+htf_basis = ta.sma(close, bb_length)
+htf_dev   = ta.stdev(close, bb_length) * bb_std
+htf_upper = htf_basis + htf_dev
+htf_lower = htf_basis - htf_dev
+
+// ============== LTF BB ==============
+ltf_basis = request.security(syminfo.tickerid, ltf_tf,
+     ta.sma(close, bb_length), lookahead=barmerge.lookahead_off)
+ltf_dev_v = request.security(syminfo.tickerid, ltf_tf,
+     ta.stdev(close, bb_length) * bb_std, lookahead=barmerge.lookahead_off)
+ltf_upper = ltf_basis + ltf_dev_v
+ltf_lower = ltf_basis - ltf_dev_v
+
+// ============== Body + breakout thresholds ==============
+body_pct = open == 0 ? 0.0 : math.abs(close - open) / open
+upper_thr = htf_upper * (1 + min_margin)
+lower_thr = htf_lower * (1 - min_margin)
+upper_thr_prev = htf_upper[1] * (1 + min_margin)
+lower_thr_prev = htf_lower[1] * (1 - min_margin)
+
+// v1.1: close 기준 + margin + body 필터.
+upper_break = close > upper_thr and close[1] <= upper_thr_prev and body_pct >= min_body
+lower_break = close < lower_thr and close[1] >= lower_thr_prev and body_pct >= min_body
+
+// ============== State Machine ==============
+var int   state    = 0
+var float base     = na
+var float extreme  = na
+
+if state == 0
+    if upper_break
+        state   := 2
+        base    := close
+        extreme := high
+    else if lower_break
+        state   := 1
+        base    := close
+        extreme := low
+
+if state == 1 and not na(extreme)
+    extreme := math.min(extreme, low)
+if state == 2 and not na(extreme)
+    extreme := math.max(extreme, high)
+
+trigger = state == 1 ? extreme + retrace * (base - extreme) :
+          state == 2 ? extreme - retrace * (extreme - base) : float(na)
+
+long_fire  = false
+short_fire = false
+
+if barstate.isconfirmed
+    if state == 1 and close >= trigger
+        long_fire := true
+        state := 0
+        base := na
+        extreme := na
+    else if state == 2 and close <= trigger
+        short_fire := true
+        state := 0
+        base := na
+        extreme := na
+
+new_long_setup  = state == 1 and (state[1] != 1)
+new_short_setup = state == 2 and (state[1] != 2)
+
+// ============== Plots ==============
+plot(long_fire  ? 1 : 0, "에어본 롱", color=color.lime,   display=display.data_window)
+plot(short_fire ? 1 : 0, "에어본 숏", color=color.red,    display=display.data_window)
+plot(state == 1 ? 1 : 0, "롱 대기",   color=color.green,  display=display.data_window)
+plot(state == 2 ? 1 : 0, "숏 대기",   color=color.maroon, display=display.data_window)
+
+plot(show_bands ? htf_upper : na, "HTF BB 상단",
+     color=color.new(color.blue, 40), linewidth=1)
+plot(show_bands ? htf_basis : na, "HTF BB 중심(20이평)",
+     color=color.new(color.orange, 30), linewidth=1)
+plot(show_bands ? htf_lower : na, "HTF BB 하단",
+     color=color.new(color.blue, 40), linewidth=1)
+plot(show_ltf ? ltf_upper : na, "LTF BB 상단",
+     color=color.new(color.aqua, 30), linewidth=1)
+plot(show_ltf ? ltf_lower : na, "LTF BB 하단",
+     color=color.new(color.aqua, 30), linewidth=1)
+
+plotshape(long_fire,  title="에어본 롱 발화", style=shape.triangleup,
+     location=location.belowbar, color=color.lime, size=size.normal, text="에어본")
+plotshape(short_fire, title="에어본 숏 발화", style=shape.triangledown,
+     location=location.abovebar, color=color.red,  size=size.normal, text="에어본")
+plotshape(show_setup and new_long_setup,  title="롱 대기 진입",
+     style=shape.circle, location=location.belowbar, color=color.green,
+     size=size.tiny, text="대기")
+plotshape(show_setup and new_short_setup, title="숏 대기 진입",
+     style=shape.circle, location=location.abovebar, color=color.maroon,
+     size=size.tiny, text="대기")
+
+// ============== Status Table ==============
+table_position(pos) =>
+    switch pos
+        "top_left"     => position.top_left
+        "top_right"    => position.top_right
+        "bottom_left"  => position.bottom_left
+        "bottom_right" => position.bottom_right
+        =>                position.top_right
+
+var table status_tbl = na
+
+if show_table
+    if barstate.islast
+        if na(status_tbl)
+            status_tbl := table.new(table_position(table_pos), 2, 6,
+                 frame_color=color.gray, frame_width=1,
+                 border_color=color.gray, border_width=1)
+        state_lbl = state == 1 ? "🟢 에어본 롱 대기" : state == 2 ? "🔴 에어본 숏 대기" : "⏸ 신호 없음"
+        bg_hdr    = color.new(color.black, 50)
+        bg_row    = color.new(color.black, 75)
+        tc        = color.white
+        table.cell(status_tbl, 0, 0, "상태",      bgcolor=bg_hdr, text_color=tc)
+        table.cell(status_tbl, 1, 0, state_lbl,   bgcolor=bg_hdr, text_color=tc)
+        table.cell(status_tbl, 0, 1, "기준 시가", bgcolor=bg_row, text_color=tc)
+        table.cell(status_tbl, 1, 1, na(base)    ? "-" : str.tostring(base,    "#"),
+             bgcolor=bg_row, text_color=tc)
+        table.cell(status_tbl, 0, 2, "현재 극값", bgcolor=bg_row, text_color=tc)
+        table.cell(status_tbl, 1, 2, na(extreme) ? "-" : str.tostring(extreme, "#"),
+             bgcolor=bg_row, text_color=tc)
+        table.cell(status_tbl, 0, 3, "트리거가",  bgcolor=bg_row, text_color=tc)
+        table.cell(status_tbl, 1, 3, na(trigger) ? "-" : str.tostring(trigger, "#"),
+             bgcolor=bg_row, text_color=tc)
+        table.cell(status_tbl, 0, 4, ltf_tf + "분 BB 상단", bgcolor=bg_row, text_color=tc)
+        table.cell(status_tbl, 1, 4, str.tostring(ltf_upper, "#"),
+             bgcolor=bg_row, text_color=tc)
+        table.cell(status_tbl, 0, 5, ltf_tf + "분 BB 하단", bgcolor=bg_row, text_color=tc)
+        table.cell(status_tbl, 1, 5, str.tostring(ltf_lower, "#"),
+             bgcolor=bg_row, text_color=tc)
+
+// ============== Alerts ==============
+alertcondition(long_fire,  title="에어본 롱 발화",
+     message="Airborne v1.1 LONG fired @ {{ticker}} {{interval}}  close={{close}}")
+alertcondition(short_fire, title="에어본 숏 발화",
+     message="Airborne v1.1 SHORT fired @ {{ticker}} {{interval}}  close={{close}}")
+alertcondition(new_long_setup,  title="롱 대기 진입",
+     message="Airborne v1.1 long setup armed @ {{ticker}} {{interval}}")
+alertcondition(new_short_setup, title="숏 대기 진입",
+     message="Airborne v1.1 short setup armed @ {{ticker}} {{interval}}")

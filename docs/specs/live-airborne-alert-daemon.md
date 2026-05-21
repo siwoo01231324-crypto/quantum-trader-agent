@@ -1,0 +1,147 @@
+---
+type: spec-architecture
+id: live-airborne-alert-daemon
+name: Live Airborne v1.1 USDT-perp alert daemon (Binance Futures + Telegram)
+owner: siwoo
+status: accepted
+tags:
+- airborne
+- alerts
+- live
+- binance
+- telegram
+---
+
+# Live Airborne v1.1 Alert Daemon
+
+`scripts/airborne_alert_daemon.py` — Binance USDM Futures **top-N USDT-perp** 유니버스를 실시간 감시하며 Airborne BB-reversal v1.1 신호가 봉 확정될 때 Telegram 알림을 발송한다.
+
+> **이 데몬은 자동 매매가 아니다.** [[airborne-family-overview]] 의 가족 전체 `status: rejected`. 5y multi-regime backtest 에서 PF<1, 알파 ≈ 0. 알림은 *시각 가이드 / 재현 카논* 용이며, 어떤 자동 매매 의존도 금지 (CLAUDE.md "주문 실행 LLM 위임 금지" 와 별개로 정책적 제약).
+
+## 신호 정의 (v1.1)
+
+[[live-airborne-bb-reversal-v11]] 의 close-based 돌파 + 40% 되돌림. Pine 보존본 `docs/specs/strategies/live-airborne-bb-reversal.pine` (TV slot `USER;d9f4857aaf05421ab3817870c8e99934`). 트리거 수식:
+
+```
+# Long (BB 하단 돌파 → 40% 되돌림 후 close 회복)
+lower_thr   = bb_lower * (1 - min_close_margin)         # default margin = 0.001
+breakout    = close[i] < lower_thr[i]
+            AND close[i-1] >= lower_thr[i-1]
+            AND |close[i] - open[i]| / open[i] >= min_body_pct   # default = 0.005
+base        = close[i]
+extreme     = min(low[j])   for j >= i (running)
+trigger     = extreme + 0.4 * (base - extreme)
+fire        = barstate.isconfirmed AND close >= trigger
+
+# Short = mirror (BB 상단 돌파 + 40% pullback)
+```
+
+코드: `src/signals/airborne_bb_reversal.py::evaluate_long_fire_v11` / `evaluate_short_fire_v11` (16 unit tests, hermetic).
+
+## 데이터 흐름
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│ Startup                                                       │
+│   1. fetch_futures_24h_snapshot()  ← fapi /ticker/24hr        │
+│   2. top_n_by_volume(snapshot, n)  ← USDT-quote 필터          │
+│      stablecoin/leverage 토큰 자동 제외                       │
+│   3. bootstrap_history(symbols, intervals=(1h,5m))            │
+│      ← /fapi/v1/klines limit=100(1h), 50(5m) per symbol       │
+│      → states[symbol].history_1h / history_5m                 │
+├──────────────────────────────────────────────────────────────┤
+│ Steady state                                                  │
+│   BinanceMarketDataStream(symbols, ["1h","5m"], !markPrice…)  │
+│     wss://fstream.binance.com/stream?streams=...              │
+│   ▼                                                           │
+│   for ev in stream:                                           │
+│     ├─ KlineEvent(interval="5m", is_closed=True)              │
+│     │    → append to history_5m  (max 100 bars)               │
+│     ├─ KlineEvent(interval="1h", is_closed=True)              │
+│     │    → append to history_1h  (max 200 bars)               │
+│     │    → evaluate_and_dispatch() ← Airborne v1.1 long+short │
+│     │       └─ fires → cooldown check → notify()              │
+│     └─ MarkPriceEvent  → consumed silently (MVP)              │
+└──────────────────────────────────────────────────────────────┘
+```
+
+핵심 모듈:
+- `src/universe/binance_futures_snapshot.py` — fapi 24h ticker → snapshot DataFrame
+- `src/universe/binance_top.py::top_n_by_volume` — stablecoin/leverage 자동 제외
+- `src/brokers/binance/market_ws.py` — 공개 마켓 WS (kline + markPrice) + REST kline bootstrap
+- `src/signals/airborne_bb_reversal.py` — v1.1 helpers (long + short)
+- `src/observability/alerts.py::notify` — Telegram dispatch (LIVE > QTA > legacy token chain)
+
+## Telegram 페이로드
+
+```
+ℹ️ [INFO] Airborne v1.1 LONG — BTCUSDT (1h)
+40% retrace fired at 55234.5 (trigger 55210.1, base 56100, extreme 54800)
+• symbol: BTCUSDT
+• timeframe: 1h
+• side: long
+• fire_close: 55234.5
+• trigger: 55210.1
+• base: 56100
+• extreme: 54800
+• 5m_preview: ascending          ← 최근 3×5m close 방향
+• note: v1.1 reproduction — family rejected; visual guide only
+```
+
+## 운영
+
+### 토큰 (이미 설정됨)
+`.env` 에 `TELEGRAM_LIVE_BOT_TOKEN` / `TELEGRAM_LIVE_CHAT_ID` (LIVE > QTA > legacy fallback). `_resolve_telegram_env` 가 자동 라우팅 — 미설정 시 stdout 으로 graceful degrade.
+
+### 실행
+```bash
+# 운영
+python scripts/airborne_alert_daemon.py --top-n 50
+
+# 드라이런 (stdout, no Telegram)
+python scripts/airborne_alert_daemon.py --top-n 5 --dry-run
+
+# 테스트넷
+python scripts/airborne_alert_daemon.py --testnet --top-n 3 --dry-run
+```
+
+### Cooldown
+같은 `(symbol, side)` 쌍은 4시간 (`COOLDOWN_HOURS=4`, 1h 봉 4개) 이내 재발화 억제. long/short 는 독립 (long fire 가 short cooldown 에 영향 X).
+
+### 재시작
+무상태 — 종료 시 마지막 fire 타임스탬프 휘발. 재시작 직후 동일 봉에서 다시 fire 할 수 있음 (cooldown reset). 의도된 단순화.
+
+### Universe 새로고침
+MVP 는 startup 시 1회만. 후속 PR 에서 N시간 주기 재산출 + 추가/제거 종목 WS 재구독 추가 예정.
+
+## 한계 / 면책
+
+| 항목 | 상태 |
+|---|---|
+| 5y 알파 | **없음** (가족 전체 PF<1) |
+| 자동 매매 적합성 | **부적합** — 알림 본문에 "rejected; visual guide only" 라인 박힘 |
+| 신호 신뢰도 | 시각 재현 카논. 사용자 본인 손매매 판단 보조용 |
+| markPrice 활용 | MVP 미사용 (kline 봉 확정만으로 평가). Phase 2 에 5m 청산 트레일링 경고 추가 예정 |
+| 종목 추가/제거 (delisting) | universe 재새로고침 미구현 → 운영 1일 이상 지속 시 stale 가능 |
+
+## 5y backtest 게이트 면제 사유
+
+CLAUDE.md "새 전략 추가 시 5y backtest gate" 는 *새 전략* 에 적용. 본 데몬은 [[live-airborne-bb-reversal-v11]] 의 알림 wrapper 일 뿐 신규 전략 아님. v1.1 의 5y backtest 결과는 spec 에 이미 기재 (PF<0.82, all cost; rejected 등록). 알림 wrapper 는 알파를 *추가하지 않으며*, 신호 정의를 *변경하지도 않는다*. 따라서 신규 backtest 게이트 불필요.
+
+## 테스트 (모두 통과)
+
+| 파일 | 통과 | 설명 |
+|------|---|---|
+| `tests/signals/test_airborne_v11_helpers.py` | 16/16 | v1.1 long+short helper 단위 테스트 — hermetic OHLCV |
+| `tests/universe/test_binance_futures_snapshot.py` | 6/6 | fapi 24h ticker 매핑 + http error 전파 (respx mock) |
+| `tests/brokers/binance/test_market_ws.py` | 11/11 | kline/markPrice 파서 + URL 빌더 + REST kline (respx mock) |
+| `tests/scripts/test_airborne_alert_daemon.py` | 8/8 | dispatcher + cooldown (long/short 독립) + 5m 트렌드 미리보기 + 바 append/eviction |
+
+총 41 단위 테스트.
+
+## 관련 노트
+
+- [[airborne-family-overview]] — 가족 4 변형 비교 + 코드/Pine 위치 entry point
+- [[live-airborne-bb-reversal-v11]] — v1.1 strategy spec (재현 카논)
+- [[38-airborne-indicator-reverse-engineering]] — 역공학 사양
+- [[live-universe-scanner-paradigm]] — 실시간 유니버스 스캔 패러다임
