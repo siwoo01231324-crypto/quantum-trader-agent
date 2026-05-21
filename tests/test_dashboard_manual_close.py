@@ -121,6 +121,165 @@ def test_strategy_positions_works_without_cache(tmp_path: Path, monkeypatch) -> 
     assert row["pnl_pct"] is None
 
 
+# ── 2026-05-22 — Binance ground-truth unrealized_pnl per row ──────────────
+
+
+class _FakeBinanceProvider:
+    """fetch_binance() 결과를 고정 반환하는 stub.
+
+    `state.account_info_provider` 가 expose 하는 인터페이스 — sync 메서드.
+    endpoint 는 `asyncio.to_thread` 로 호출하므로 sync 그대로 OK.
+    """
+
+    def __init__(self, positions: list[dict]) -> None:
+        self._positions = positions
+
+    def fetch_binance(self) -> dict:
+        return {
+            "ok": True,
+            "positions": self._positions,
+            "total_unrealized_pnl": sum(
+                p["unrealized_pnl"] for p in self._positions
+            ),
+        }
+
+
+def _fake_fill(strategy_id: str, symbol: str, side: str, qty: str, price: str):
+    from src.live.types import WALEvent
+    return WALEvent(
+        ts="2026-05-22T00:00:00+00:00",
+        event_type="order_filled",
+        payload={
+            "strategy_id": strategy_id, "symbol": symbol, "side": side,
+            "qty": qty, "fill_price": price,
+        },
+    )
+
+
+def test_unrealized_pnl_from_binance_ground_truth_single_holder(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    """Binance 가 NEARUSDT 에 -14 USDT unrealized 라고 보고하면, 그 symbol 을
+    단일 strategy 가 보유 중이라면 그대로 row 의 unrealized_pnl 에 들어가야.
+    """
+    state = DashboardState()
+    state.account_info_provider = _FakeBinanceProvider([
+        {"symbol": "NEARUSDT", "amt": 135.0, "unrealized_pnl": -14.0},
+    ])
+    fake = [_fake_fill("cand-c-bb", "NEARUSDT", "buy", "135", "1.75")]
+    monkeypatch.setattr("src.dashboard.app.wal_replay", lambda _p: (fake, []))
+    wal_path = tmp_path / "wal.jsonl"
+    wal_path.write_text("")
+    state.wal_path = wal_path
+
+    app = create_app(state)
+    with TestClient(app) as client:
+        resp = client.get("/api/strategy_positions")
+    assert resp.status_code == 200
+    row = resp.json()["strategies"][0]
+    assert row["symbol"] == "NEARUSDT"
+    assert row["unrealized_pnl"] == pytest.approx(-14.0)
+
+
+def test_unrealized_pnl_prorated_when_multi_strategy_share_symbol(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    """Binance 가 NEARUSDT 에 -10 USDT 보고하고 strategy 2개가 100 / 50 NEAR
+    보유 중이면 share = |net_qty|/total → strat_a -6.667, strat_b -3.333.
+    """
+    state = DashboardState()
+    state.account_info_provider = _FakeBinanceProvider([
+        {"symbol": "NEARUSDT", "amt": 150.0, "unrealized_pnl": -10.0},
+    ])
+    fake = [
+        _fake_fill("strat_a", "NEARUSDT", "buy", "100", "1.0"),
+        _fake_fill("strat_b", "NEARUSDT", "buy", "50", "1.0"),
+    ]
+    monkeypatch.setattr("src.dashboard.app.wal_replay", lambda _p: (fake, []))
+    wal_path = tmp_path / "wal.jsonl"
+    wal_path.write_text("")
+    state.wal_path = wal_path
+
+    app = create_app(state)
+    with TestClient(app) as client:
+        resp = client.get("/api/strategy_positions")
+    rows = {r["strategy_id"]: r for r in resp.json()["strategies"]}
+    assert rows["strat_a"]["unrealized_pnl"] == pytest.approx(-6.6667, rel=1e-3)
+    assert rows["strat_b"]["unrealized_pnl"] == pytest.approx(-3.3333, rel=1e-3)
+
+
+def test_unrealized_pnl_none_when_broker_provider_absent(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    """account_info_provider 미주입 (paper 모드 등) → unrealized_pnl=None.
+
+    기존 endpoint 동작 (pnl_pct / realized_pnl / qty 집계) 는 변경 X.
+    """
+    state = DashboardState()  # no account_info_provider
+    fake = [_fake_fill("x", "ABC", "buy", "1", "100")]
+    monkeypatch.setattr("src.dashboard.app.wal_replay", lambda _p: (fake, []))
+    wal_path = tmp_path / "wal.jsonl"
+    wal_path.write_text("")
+    state.wal_path = wal_path
+
+    app = create_app(state)
+    with TestClient(app) as client:
+        resp = client.get("/api/strategy_positions")
+    row = resp.json()["strategies"][0]
+    assert row["unrealized_pnl"] is None
+
+
+def test_unrealized_pnl_none_when_broker_does_not_have_symbol(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    """Broker positions 에 해당 symbol 이 없으면 (= 실제 broker flat) row 의
+    unrealized_pnl=None — phantom store 신호.
+    """
+    state = DashboardState()
+    state.account_info_provider = _FakeBinanceProvider([])  # broker flat
+    fake = [_fake_fill("strat_x", "NEARUSDT", "buy", "100", "1.0")]
+    monkeypatch.setattr("src.dashboard.app.wal_replay", lambda _p: (fake, []))
+    wal_path = tmp_path / "wal.jsonl"
+    wal_path.write_text("")
+    state.wal_path = wal_path
+
+    app = create_app(state)
+    with TestClient(app) as client:
+        resp = client.get("/api/strategy_positions")
+    row = resp.json()["strategies"][0]
+    assert row["symbol"] == "NEARUSDT"
+    assert row["unrealized_pnl"] is None
+    # 기존 필드들 (pnl_pct/realized_pnl/qty) 은 본 fix 와 무관 — 변경 X.
+    assert "net_qty" in row
+    assert "pnl_pct" in row
+
+
+def test_unrealized_pnl_provider_failure_does_not_500(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    """Broker fetch 예외 시 unrealized_pnl=None 으로 fallback. endpoint 는
+    200 유지 — never 500 the dashboard.
+    """
+    class _RaisingProvider:
+        def fetch_binance(self):
+            raise RuntimeError("simulated broker error")
+
+    state = DashboardState()
+    state.account_info_provider = _RaisingProvider()
+    fake = [_fake_fill("s", "NEARUSDT", "buy", "10", "1.0")]
+    monkeypatch.setattr("src.dashboard.app.wal_replay", lambda _p: (fake, []))
+    wal_path = tmp_path / "wal.jsonl"
+    wal_path.write_text("")
+    state.wal_path = wal_path
+
+    app = create_app(state)
+    with TestClient(app) as client:
+        resp = client.get("/api/strategy_positions")
+    assert resp.status_code == 200
+    row = resp.json()["strategies"][0]
+    assert row["unrealized_pnl"] is None
+
+
 # ── /api/strategies/{sid}/positions/{sym}/close ───────────────────────
 
 
