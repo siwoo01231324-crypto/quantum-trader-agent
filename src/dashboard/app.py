@@ -569,7 +569,7 @@ body{{
 .stratpos-id{{font-size:10px;color:var(--text3);margin-top:1px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
 /* 2026-05-21: stratpos 카드 첫 컬럼 — 전략 큰 글자 + 종목 옆 가로 배치 */
 .stratpos-row{{display:flex;align-items:baseline;gap:8px}}
-.stratpos-strat-big{{font-family:var(--mono);font-weight:600;font-size:13px;color:var(--text);max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+.stratpos-strat-big{{font-family:var(--mono);font-weight:600;font-size:13px;color:var(--text);max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
 .stratpos-close-btn{{background:#2b1414;color:#ff6b6b;border:1px solid #4a2020;border-radius:4px;padding:4px 10px;font-family:var(--sans);font-size:10px;cursor:pointer;transition:background .12s,color .12s}}
 .stratpos-close-btn:hover:not(:disabled){{background:#4a2020;color:#fff}}
 .stratpos-close-btn:disabled{{opacity:.5;cursor:not-allowed}}
@@ -1504,10 +1504,12 @@ async function stratPosRefresh() {{
       const closeBtn = (net !== 0)
         ? `<button class="stratpos-close-btn" data-sid="${{escHtml(s.strategy_id)}}" data-sym="${{escHtml(s.symbol)}}" title="시장가 전량 청산">청산</button>`
         : '<span class="col-dim">—</span>';
+      // 전략 표시: cand-c-YYYY-MM-DD- prefix 제거 (긴 ID 잘림 방지). full ID 는 hover title 에 유지.
+      const stratLabel = String(s.strategy_id || '').replace(/^cand-c-\\d{{4}}-\\d{{2}}-\\d{{2}}-/, '');
       return `<tr>
         <td style="padding-left:16px">
           <div class="stratpos-row">
-            <div class="stratpos-strat-big" title="${{escHtml(s.strategy_id)}}">${{escHtml(s.strategy_id)}}</div>
+            <div class="stratpos-strat-big" title="${{escHtml(s.strategy_id)}}">${{escHtml(stratLabel)}}</div>
             <div class="stratpos-sym-small">${{escHtml(s.symbol || '—')}}</div>
           </div>
         </td>
