@@ -1,0 +1,48 @@
+//@version=6
+// HMA — 홀 이동평균선 (TradingView 카피본 v5) — 2026-05-22
+//
+// 원본: TradingView "HMA - 훌 이동평균선" (closed-source, 체험판 만료 대비)
+// 원본 settings (image ground truth):
+//   Source: close, Hull Variation: Hma, Length: 200, Multiplier: 1
+//   Show as Band: ON, Line Thickness: 1, Band Transparency: 40
+//   Color Hull according to trend: ON
+//
+// Band = HMA(close, length) 와 HMA(close, length + multiplier*40) 사이 fill
+// 출력값 검증 (BTCUSDT 1h): MHULL≈81,288.01, SHULL≈81,202.81
+
+indicator("HMA - 홀 이동평균선 (카피)",
+          shorttitle="HMA copy",
+          overlay=true)
+
+i_source     = input.source(close, "Source")
+i_length     = input.int(200, "Length (180-200 for floating S/R, 55 for swing)", minval=2)
+i_band_off   = input.int(40,  "Band offset (secondary length = length + offset)", minval=0)
+i_thickness  = input.int(1,   "Line Thickness", minval=1, maxval=8)
+i_band_alpha = input.int(40,  "Band Transparency", minval=0, maxval=100)
+i_color_trend = input.bool(true, "Color Hull according to trend")
+i_show_band   = input.bool(true, "Show as Band")
+
+// Alan Hull 1994 표준 공식
+hma(src, len) =>
+    half  = math.max(1, math.floor(len / 2))
+    sqrtn = math.max(1, math.floor(math.sqrt(len)))
+    ta.wma(2 * ta.wma(src, half) - ta.wma(src, len), sqrtn)
+
+mhull = hma(i_source, i_length)
+shull = hma(i_source, i_length + i_band_off)
+
+mhull_up = mhull > mhull[1]
+c_up   = color.rgb(0, 200, 180)
+c_down = color.rgb(255, 80, 110)
+c_main = i_color_trend ? (mhull_up ? c_up : c_down) : c_up
+c_fill = color.new(c_main, i_band_alpha + 30)
+
+p_main = plot(mhull, "MHULL", color=c_main, linewidth=i_thickness)
+p_sec  = plot(i_show_band ? shull : na, "SHULL",
+              color=color.new(c_main, 100), linewidth=1)
+fill(p_main, p_sec, color=i_show_band ? c_fill : na, title="HMA Band")
+
+flip_up   = mhull_up     and not (mhull[1] > mhull[2])
+flip_down = not mhull_up and (mhull[1] > mhull[2])
+alertcondition(flip_up,   title="HMA trend → UP",   message="HMA trend turned UP")
+alertcondition(flip_down, title="HMA trend → DOWN", message="HMA trend turned DOWN")
