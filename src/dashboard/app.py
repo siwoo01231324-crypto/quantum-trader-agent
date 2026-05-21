@@ -1709,18 +1709,31 @@ async function tradeHistoryRefresh() {{
         note.style.display = 'none';
       }}
     }}
+    // Binance ground-truth: open(보유중) 인데 거래소엔 그 심볼 포지션이
+    // 없으면 = 거래소가 청산한 것 (수동 청산 시 우리 WAL 에 sell fill 못
+    // 받은 케이스 포함). 표시만 "거래소 청산" 으로 정정 — pnl 정확치 모름.
+    const bnbBySymTh = window._bnbPosBySym || {{}};
+    const bnbApiOkTh = !!window._bnbApiOk;
     tb.innerHTML = trades.map(t => {{
-      const isOpen = t.status === 'open';
+      const isOpenRaw = t.status === 'open';
+      const symTh = t.symbol || '';
+      const isUsdtTh = symTh.endsWith('USDT');
+      const venueClosedTh = isOpenRaw && isUsdtTh && bnbApiOkTh && !bnbBySymTh[symTh];
+      const isOpen = isOpenRaw && !venueClosedTh;  // 거래소-청산 케이스는 청산됨 취급
       const rowCls = isOpen ? 'th-open' : '';
       const sideCls = t.side === 'long' ? 'side-badge side-long' : 'side-badge side-short';
       const sideTxt = (t.side || '').toUpperCase();
       const venueTxt = escHtml(t.venue || '—');
       const pnlHtml = isOpen
         ? '<span class="th-dim">보유중</span>'
-        : fmtPnl(t.realized_pnl, '&nbsp;' + escHtml(t.venue === 'binance' ? 'USDT' : t.venue === 'kis' ? 'KRW' : ''));
+        : (venueClosedTh
+            ? '<span class="th-dim" title="거래소가 청산 — 우리 WAL 에 fill 미동기">거래소 청산</span>'
+            : fmtPnl(t.realized_pnl, '&nbsp;' + escHtml(t.venue === 'binance' ? 'USDT' : t.venue === 'kis' ? 'KRW' : '')));
       const statusBadge = isOpen
         ? '<span class="th-open-badge">보유중</span>'
-        : '<span class="th-closed-badge">청산됨</span>';
+        : (venueClosedTh
+            ? '<span class="th-closed-badge" style="background:#3a2a14;color:#f0a500" title="거래소에서 청산됨 (WAL 미동기)">거래소 청산</span>'
+            : '<span class="th-closed-badge">청산됨</span>');
       const exitTs = isOpen ? '<span class="th-dim">—</span>' : escHtml(fmtTs(t.exit_ts));
       const exitPx = isOpen ? '<span class="th-dim">—</span>' : fmtNum(t.exit_price, 2);
       const qtyStr = t.qty != null ? String(fmtNum(t.qty, 6)).replace(/\\.?0+$/, '') : '—';
