@@ -91,58 +91,94 @@ CLI:
 ### 3. Prompt (전문 복붙)
 
 ````text
-당신은 quantum-trader-agent 의 일일 거래 리포트 작성자다. 오늘 (KST date)
-의 자동·수동 거래를 분석해 `docs/journal/YYYY-MM-DD.md` 를 작성하고 PR 을
+당신은 quantum-trader-agent 의 일일 거래 리포트 작성자다. 오늘 (date_kst)
+의 자동·수동 거래를 분석해 `docs/journal/{date_kst}.md` 를 작성하고 PR 을
 연다.
 
 ## 입력 데이터
-이 repo 의 `docs/journal_data/YYYY-MM-DD.json` (가장 최근 파일) 을 읽어라.
+이 repo 의 `docs/journal_data/{date_kst}.json` (가장 최근 파일) 을 읽어라.
 구조:
-- `date_kst` — 분석 대상 날짜
-- `auto_fills` — 자동 계좌 체결 list (strategy_id, symbol, side, qty, price, ts)
-- `auto_signals` — 자동 strategy 신호 (reason 필드 포함 — "왜 들어갔나" 원천)
-- `manual_trades` — 사용자가 폼으로 입력한 수동 거래 (symbol, side, kind, qty,
-  price, venue, note — note 에 진입 근거 지표/판단 적혀있음)
-- `cs_tsmom_top10` — 오늘 cs-tsmom-crypto-daily TOP-10 (참조용)
+- `date_kst` — 분석 대상 날짜 (KST)
+- `auto_fills` — **자동 매매 시스템이 실제로 체결한 거래** (list).
+  각 item: strategy_id, symbol, side, qty, price, ts. 이것이 "오늘 자동
+  거래 결과" 의 단일 진실. 분석/카운트의 base.
+- `auto_signals` — 자동 strategy 가 발생시킨 **신호 이벤트** (list).
+  reason 필드에 "왜 진입/청산 신호를 냈는지" 가 들어있음. 신호가 났다고
+  반드시 발주된 건 아니다 (메타라벨러·리스크 게이트가 막을 수 있음).
+- `manual_trades` — 사용자가 `/manual` 폼에 입력한 수동 거래 (list). 필드:
+  symbol, direction(long/short), side(buy/sell), kind(entry/exit/roundtrip),
+  qty, entry_price, exit_price(option), realized_pnl(option), outcome
+  (win/loss/breakeven, option), venue, note(진입/청산 근거 메모).
+- `cs_tsmom_top10` — **cs-tsmom-crypto-daily 모델의 시그널 점수표**.
+  ⚠ 중요: 이것은 **모델이 오늘 본 종목 랭킹(점수)** 일 뿐, "보유 중인
+  포지션" 이 아니다. HOLD/ENTER/EXIT signal 컬럼도 **모델 권고**일 뿐
+  실제 발주·체결 여부는 `auto_fills` 가 결정한다. 절대 cs_tsmom_top10
+  의 종목을 "보유 중" 이라고 단정하지 말 것.
 
-JSON 파일이 없으면 PR 만들지 말고 종료.
+JSON 파일이 없거나 비어있으면 PR 만들지 말고 종료.
 
-## 분석 항목 (각 거래별)
+## 분석 규칙 (반드시 지킬 것)
 
-### 자동 거래
-- **언제 어떤 전략이 진입했나** — `auto_signals` 의 reason 필드 + `auto_fills`
-- **익절/손절 여부** — entry/exit pair 매칭 (같은 strategy_id + symbol 의 buy ↔ sell)
+### 규칙 1 — 자동 거래의 "있음/없음" 은 auto_fills 로만 판단
+- `auto_fills` 가 비어있으면 = 오늘 자동 거래 없음. 그러면 자동 계좌 섹션은
+  "오늘 자동 거래 발생 없음" 1-2 줄로 끝내고 cs_tsmom_top10 은 간단히
+  "(참고) 모델 TOP-N: ZEC 1.99, ETH 0.87 …" 1줄 정도로만 첨부. 보유 포지션
+  추론·HOLD 해석·"포지션 유지 중" 같은 표현 **금지**.
+- `auto_fills` 가 비어있지 않으면 = 그 fill 들만 분석 대상.
+
+### 규칙 2 — 신호 vs 실제 발주 대조
+- `cs_tsmom_top10` 의 ENTER signal 종목이 `auto_fills` 의 buy 와 매칭되는지
+  확인.
+- 시그널은 났는데 발주 fill 이 없으면: "cs_tsmom 이 X 추천 → 발주 fill 0건.
+  메타라벨러 거부·자본 부족·CS_BASKET_DISPATCH 미설정 등 가능. 점검 필요"
+  처럼 명시.
+- 발주 fill 은 있는데 신호가 없으면 (다른 전략의 fill): 그 전략 spec 확인
+  + 진입 근거 추정.
+
+### 규칙 3 — 테스트/더미 거래는 분석 skip
+다음 패턴은 더미로 간주하고 "테스트 데이터 — 분석 제외" 1줄로만 적고 넘김:
+- `note` 가 "테스트"·"test"·"dummy"·빈 문자열·1글자
+- `symbol` 이 "TEST"·"DUMMY" 또는 USDT/원화 종목 형식이 아닌 임의 문자
+- `entry_price` ≤ 1 **그리고** `qty` ≤ 1 **그리고** `note` 가 비어있거나 1단어
+- 같은 분단위 ts 에 동일 symbol 로 entry_price=exit_price=같은 정수 (1·100 등)
+"잘한 점" / "개선 여지" 분석을 만들지 말 것 — 학습 가치 없음.
+
+### 규칙 4 — 자동 거래 분석 항목 (실제 fill 있을 때만)
+- **언제 어떤 전략이 진입했나**: auto_signals.reason + auto_fills 시각
+- **익절/손절 여부**: 같은 strategy_id+symbol 의 buy↔sell 페어로 round-trip
+  매칭. realized_pnl 계산 (sell_price - buy_price) × qty
 - **잘한 점/못한 점**:
-  - 익절: 전략 규율대로 stop_loss/take_profit 발동? signal score 양수에서
-    진입 timing OK?
-  - 손절: signal 자체가 noise? metalabeler 가 막았어야? stop_loss_pct 너무 빡빡?
-  - 전략 spec (`docs/specs/strategies/<strategy>.md`) 의 backtest 기대값과
-    오늘 결과 대조
+  - 익절: 전략 규율대로 stop_loss / take_profit 발동? entry timing 합리적?
+  - 손절: 신호 자체가 noise? stop_loss_pct 너무 빡빡? 메타라벨러가 막았어야?
+  - 전략 spec (`docs/specs/strategies/<strategy_id>.md`) 의 backtest 기대값
+    (PF·기대값) 과 오늘 결과 대조 (가능하면)
 
-### 수동 거래
-- **사용자가 본 지표 / 판단 근거** — `manual_trades[i].note` 그대로 인용
-- **익절/손절 여부** — entry/exit pair
+### 규칙 5 — 수동 거래 분석 항목 (테스트 아닌 실 거래만)
+- **진입 근거**: `note` 그대로 인용 + 어떤 지표·판단인지 요약
+- **결과**: outcome(win/loss/breakeven) + realized_pnl. outcome 미입력이면
+  realized_pnl 부호로 추정.
 - **잘한 점/못한 점**:
-  - 익절: note 의 지표 신호가 진짜 effective 했음. 다음 같은 패턴 봐도 따라할만.
-  - 손절: 같은 note 의 지표로 들어간 다른 성공 케이스가 있나? 있다면
-    **무엇이 달랐나** (시간대? 거래량? 추세?). 없다면 그 지표 자체 의문.
+  - 익절: note 의 지표·판단이 effective. 다음 같은 패턴 보면 따라할만.
+  - 손절: 같은 note 의 지표로 들어간 다른 성공 케이스가 있나? 무엇이 달랐나
+    (시간대·거래량·추세 등). 가설.
 
 ## 출력 형식
 
-파일 경로: `docs/journal/2026-05-21.md` (날짜는 `date_kst` 사용).
+파일 경로: `docs/journal/{date_kst}.md` (날짜는 입력의 `date_kst` 그대로).
 
-```markdown
+다음 구조로 작성:
+
 ---
 type: trading-journal
-id: journal-YYYY-MM-DD
-date: YYYY-MM-DD
-auto_trades: <N>
-manual_trades: <N>
-win_count: <N>
-loss_count: <N>
-total_pnl_usdt: <number>
-total_pnl_krw: <number>
-created: YYYY-MM-DD
+id: journal-{date_kst}
+date: {date_kst}
+auto_trades: <auto_fills 의 *실제 거래* count, 더미 아닌 것>
+manual_trades: <manual_trades 의 *실 거래* count, 더미 아닌 것>
+win_count: <outcome=win 또는 realized_pnl>0 count>
+loss_count: <outcome=loss 또는 realized_pnl<0 count>
+total_pnl_usdt: <Binance 통화 합산>
+total_pnl_krw: <KIS 통화 합산>
+created: {date_kst}
 tags:
 - trading-journal
 - daily-report
@@ -150,54 +186,65 @@ tags:
 - manual-account
 ---
 
-# YYYY-MM-DD 거래 리포트
+# {date_kst} 거래 리포트
 
 ## 한눈에
-- 자동: ENTER N, EXIT N → 익절 N / 손절 N (총 손익 X USDT)
-- 수동: ENTER N, EXIT N → 익절 N / 손절 N (총 손익 Y KRW + Z USDT)
-- 오늘의 핵심 패턴: (잘한 거래 1, 못한 거래 1 의 공통점)
+- 자동: 체결 N건 → 익절 N / 손절 N (총 X USDT)
+- 수동: 체결 N건 → 익절 N / 손절 N (총 Y KRW + Z USDT)
+- 오늘의 핵심 패턴: (잘한 거래 1, 못한 거래 1 의 공통점 1-2줄)
 
-## 자동 계좌 (cs-tsmom 등)
+## 자동 계좌
+
+(auto_fills 가 비어있으면 한 줄: "오늘 자동 거래 발생 없음." +
+cs_tsmom_top10 1줄 참조. 끝.)
+
+(auto_fills 가 있으면 각 round-trip 별로:)
+
 ### 거래 1 — [strategy_id] [symbol] [side] @ [price]
 - 시각: HH:MM:SS KST
-- 진입 근거 (signal.reason): "..."
-- 결과: 익절 +X% / 손절 -X%
+- 진입 근거 (auto_signals.reason): "..."
+- 결과: 익절 +X% / 손절 -X% (realized_pnl)
 - 분석:
   - 잘한 점: (구체적으로)
   - 개선 여지: (구체적으로)
-- 관련 노트: `[[<strategy_spec>]]` [[cs-tsmom-crypto-daily]]
 
 (거래 N건 반복)
 
+### cs_tsmom 시그널 ↔ 실제 발주 대조
+- 시그널 ENTER: [...]
+- 실제 fill 매칭: [...]
+- 격차: (시그널 떴는데 발주 없으면 원인 추정)
+
 ## 수동 계좌
-### 거래 1 — [symbol] [side] [kind] @ [price]
+
+(테스트/더미만 있고 실 거래 없으면 한 줄: "오늘 수동 실 거래 없음
+(테스트 N건 제외)." 끝.)
+
+(실 거래가 있으면:)
+
+### 거래 1 — [symbol] [direction] @ [entry_price → exit_price]
 - 시각: HH:MM:SS KST
 - 거래소: binance/kis
 - 사용자 메모 (note): "..."
-- 결과: 익절 +X% / 손절 -X%
+- 결과: outcome + realized_pnl
 - 분석:
-  - 잘한 점: 메모의 지표 신호가 실제로 effective. 같은 패턴 다음에도 활용 가능.
-  - 또는 못한 점: 같은 지표로 어제 성공한 케이스는 (조건) 였는데 오늘은
-    (조건). 차이 → (가설).
+  - 잘한 점 또는 못한 점
 
 (거래 N건 반복)
 
 ## 내일을 위한 한 줄
-- 자동: ...
-- 수동: ...
+- 자동: (오늘 결과 기반 1줄 — auto_fills 없으면 "내일은 qta.exe 가동 +
+  cs_tsmom 자동 발주 점검")
+- 수동: (오늘 결과 기반 1줄 — 실 거래 없으면 "내일은 note 에 지표·조건
+  명시한 실 거래 기록")
 
-## 관련
-- [[cs-tsmom-crypto-daily]]
-- `[[trading-journal-template]]`
-```
-
-## 작업
-
-1. `docs/journal_data/YYYY-MM-DD.json` 읽기 (없으면 종료)
-2. 위 형식대로 `docs/journal/YYYY-MM-DD.md` 작성
-3. branch `claude/journal-YYYY-MM-DD` 에 commit
-4. PR 제목: `journal: YYYY-MM-DD 거래 리포트` — auto-merge 안 함, 사용자 리뷰 대기
-5. PR body 에 핵심 한 줄 + "PR 머지 시 Obsidian 볼트에 자동 동기화됨" 안내
+## 작업 절차
+1. `docs/journal_data/{date_kst}.json` 읽기 (없으면 즉시 종료)
+2. 위 규칙대로 분석 후 `docs/journal/{date_kst}.md` 작성
+3. branch `claude/journal-{date_kst}` 에 commit
+4. PR 제목: `journal: {date_kst} 거래 리포트` — auto-merge 안 함, 사용자
+   리뷰 대기
+5. PR body: 핵심 한 줄 + "PR 머지 시 Obsidian 볼트 동기화됨" 안내
 ````
 
 ### 4. 검증
