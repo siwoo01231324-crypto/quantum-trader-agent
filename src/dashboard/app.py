@@ -726,6 +726,7 @@ body{{
     <a href="/strategies" class="nav-pill">전략 카탈로그</a>
     <a href="/signals" class="nav-pill">신호 목록</a>
     <a href="/cs-tsmom" class="nav-pill">cs-tsmom (90%)</a>
+    <a href="/manual" class="nav-pill">수동 거래</a>
     <a href="/shadow_runs" class="nav-pill">Shadow Runs</a>
   </div>
   <span class="topbar-ts">{datetime.now(_KST).strftime('%Y-%m-%d %H:%M:%S KST')}</span>
@@ -748,6 +749,14 @@ body{{
       <span class="quick-link-body">
         <span class="quick-link-title">cs-tsmom 신호 (90% 전략)</span>
         <span class="quick-link-sub">12-1m 모멘텀 · 30종목 top-10 랭킹 · Pine Script 동일 식</span>
+      </span>
+      <span class="quick-link-arrow">→</span>
+    </a>
+    <a href="/manual" class="quick-link-card">
+      <span class="quick-link-icon">✍️</span>
+      <span class="quick-link-body">
+        <span class="quick-link-title">수동 거래 입력</span>
+        <span class="quick-link-sub">손으로 산 거래 + 지표 근거 메모 · 일일 리포트 대상</span>
       </span>
       <span class="quick-link-arrow">→</span>
     </a>
@@ -1460,7 +1469,48 @@ async function stratPosRefresh() {{
       return;
     }}
     const bnbBySym = window._bnbPosBySym || {{}};
-    tb.innerHTML = rows.map(s => {{
+    // 2026-05-21: Binance ground-truth reconcile — if WAL aggregate still shows
+    // a residual net on a USDT symbol, but Binance reports NO such position,
+    // hide the row (our WAL is stale relative to the venue; the residual is
+    // dust from prior runs or rounding). Carry realized_pnl forward as a
+    // single "(closed)" summary row per strategy so the user can still see the
+    // strategy total even when all its symbol rows are filtered out.
+    const realizedBySid = {{}};  // strategy_id → realized_pnl
+    const filteredRows = [];
+    for (const s of rows) {{
+      const sym = s.symbol || '';
+      const sid = s.strategy_id || '';
+      if (s.realized_pnl != null) realizedBySid[sid] = s.realized_pnl;
+      const isUsdt = sym.endsWith('USDT');
+      const netQ = Math.abs(s.net_qty || 0);
+      const bnbHas = !!bnbBySym[sym];
+      // Hide only USDT positions that Binance says are closed but our WAL
+      // residual is dust (< 0.5% of cumulative volume). Keeps NEAR with a
+      // real 310-unit position visible; hides TRX with a 0.788 ghost.
+      const cum = Math.max(s.buy_qty || 0, s.sell_qty || 0);
+      const isDust = cum > 0 && netQ > 0 && (netQ / cum) < 0.005;
+      const venueClosed = isUsdt && !bnbHas && (netQ === 0 || isDust);
+      if (venueClosed) continue;
+      filteredRows.push(s);
+    }}
+    // For each strategy that has realized PnL but no surviving rows, emit a
+    // single "(closed)" summary row so the user can still see the total.
+    const survivedSids = new Set(filteredRows.map(r => r.strategy_id || ''));
+    for (const sid of Object.keys(realizedBySid)) {{
+      if (!survivedSids.has(sid)) {{
+        filteredRows.push({{
+          strategy_id: sid, symbol: '(closed)', __closedSummary: true,
+          buy_n: 0, buy_qty: 0, sell_n: 0, sell_qty: 0, net_qty: 0,
+          avg_price: null, mark_price: null, pnl_pct: null,
+          realized_pnl: realizedBySid[sid], last_ts: '',
+        }});
+      }}
+    }}
+    if (filteredRows.length === 0) {{
+      tb.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--text3);padding:20px;font-size:11px">현재 보유 포지션 없음</td></tr>';
+      return;
+    }}
+    tb.innerHTML = filteredRows.map(s => {{
       const net = s.net_qty || 0;
       let sideBadge;
       if (net > 0)       sideBadge = '<span class="side-badge side-long">LONG</span>';
@@ -2147,6 +2197,209 @@ setInterval(refresh, 5000);
 </html>"""
 
 
+def _render_manual_page() -> str:
+    """수동 계좌 거래 입력 폼 (2026-05-21 — Claude Routines 일일 리포트용).
+
+    사용자가 Binance/KIS 에서 직접 손으로 거래한 내역을 폼으로 입력. 자동
+    fill 과 구분되도록 별도 event_type `manual_trade` 로 WAL 포맷 JSONL 에
+    append. Claude Routines 가 매일 자정 GET /api/journal/today 호출 시
+    함께 fetch 되어 분석 대상에 포함.
+    """
+    return """<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>QTA — 수동 거래 입력</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#0b0e11;--surface:#161a1e;--surface2:#1e2329;--border:#2b3139;
+  --text:#eaecef;--text2:#b7bdc6;--text3:#848e9c;--green:#0ecb81;--red:#f6465d;--yellow:#f0a500;
+  --mono:'IBM Plex Mono','Consolas',monospace;--sans:'IBM Plex Sans KR','Segoe UI',sans-serif}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);padding:14px;font-size:13px}
+h1{font-size:1.05rem;color:var(--text);margin-bottom:6px;font-weight:600}
+.subtitle{font-size:.75rem;color:var(--text3);margin-bottom:10px}
+.nav{margin-bottom:14px}
+.nav a{color:var(--text2);text-decoration:none;margin-right:12px;font-size:.8rem;
+  background:var(--surface);padding:6px 12px;border-radius:4px;border:1px solid var(--border)}
+.nav a:hover{color:var(--text);background:var(--surface2)}
+.form-card{background:var(--surface);border:1px solid var(--border);border-radius:6px;
+  padding:18px;margin-bottom:16px;max-width:780px}
+.row{display:grid;grid-template-columns:120px 1fr;gap:12px;align-items:center;margin-bottom:10px}
+.row label{font-size:.8rem;color:var(--text2);font-weight:500}
+.row input,.row select,.row textarea{
+  background:var(--bg);border:1px solid var(--border);color:var(--text);
+  padding:7px 10px;border-radius:4px;font-size:.85rem;font-family:var(--mono);width:100%}
+.row textarea{font-family:var(--sans);min-height:80px;resize:vertical}
+.row input:focus,.row select:focus,.row textarea:focus{outline:none;border-color:var(--green)}
+.btn-row{display:flex;gap:10px;margin-top:14px}
+.btn{padding:8px 18px;border-radius:4px;border:none;cursor:pointer;font-weight:600;font-size:.85rem}
+.btn-primary{background:var(--green);color:#000}
+.btn-primary:hover{background:#0bbd76}
+.btn-primary:disabled{opacity:.4;cursor:wait}
+.help{color:var(--text3);font-size:.72rem;line-height:1.6;margin-top:6px;font-family:var(--mono)}
+.status{margin-top:10px;padding:10px;border-radius:4px;font-size:.78rem;display:none}
+.status.success{background:rgba(14,203,129,.12);color:var(--green);display:block;border:1px solid rgba(14,203,129,.35)}
+.status.error{background:rgba(246,70,93,.12);color:var(--red);display:block;border:1px solid rgba(246,70,93,.35)}
+.h2{font-size:.9rem;color:var(--text);font-weight:600;margin:18px 0 10px 0}
+table{width:100%;border-collapse:separate;border-spacing:0;
+  background:var(--surface);border-radius:6px;overflow:hidden;border:1px solid var(--border)}
+thead th{position:sticky;top:0;background:var(--surface2);color:var(--text2);font-weight:600;
+  text-align:left;padding:8px 10px;font-size:.72rem;text-transform:uppercase;letter-spacing:.4px;
+  border-bottom:1px solid var(--border);z-index:5}
+tbody td{padding:7px 10px;font-size:.78rem;border-bottom:1px solid #20262d;
+  font-family:var(--mono);color:var(--text)}
+.kind-entry{color:var(--green);font-weight:700}
+.kind-exit{color:var(--red);font-weight:700}
+.side-buy{color:var(--green)}.side-sell{color:var(--red)}
+.note-cell{color:var(--text2);max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--sans)}
+.empty{padding:30px;text-align:center;color:var(--text3);background:var(--surface);
+  border-radius:6px;border:1px solid var(--border)}
+</style>
+</head>
+<body>
+<h1>QTA — 수동 거래 입력</h1>
+<div class="subtitle">Binance / KIS 에서 직접 손으로 거래한 내역을 여기에 입력. Claude Routines 일일 리포트가 자동/수동 거래를 함께 분석.</div>
+<div class="nav">
+  <a href="/">← 대시보드</a>
+  <a href="/cs-tsmom">cs-tsmom</a>
+  <a href="/signals">신호 목록</a>
+</div>
+<div class="form-card">
+  <div class="row">
+    <label for="symbol">종목</label>
+    <input id="symbol" placeholder="BTCUSDT, 005930 등" autofocus>
+  </div>
+  <div class="row">
+    <label for="side">방향</label>
+    <select id="side"><option value="buy">BUY (매수)</option><option value="sell">SELL (매도)</option></select>
+  </div>
+  <div class="row">
+    <label for="kind">분류</label>
+    <select id="kind">
+      <option value="entry">진입 (entry)</option>
+      <option value="exit">청산 (exit)</option>
+    </select>
+  </div>
+  <div class="row">
+    <label for="qty">수량</label>
+    <input id="qty" type="number" step="any" placeholder="0.01">
+  </div>
+  <div class="row">
+    <label for="price">가격</label>
+    <input id="price" type="number" step="any" placeholder="진입/청산 단가">
+  </div>
+  <div class="row">
+    <label for="venue">거래소</label>
+    <select id="venue">
+      <option value="binance">Binance</option>
+      <option value="kis">KIS</option>
+      <option value="other">기타</option>
+    </select>
+  </div>
+  <div class="row">
+    <label for="note">메모</label>
+    <textarea id="note" placeholder="진입 근거 (RSI 30 + BB 하단, 30분봉 도지 등) · 청산 근거 (TP 도달, 손절 룰)"></textarea>
+  </div>
+  <div class="help">
+    Claude Routines 가 일일 리포트 생성 시 이 메모를 자동 vs 수동 거래 대조 분석에 사용. 익절·손절 시 "어떤 지표 / 어떤 판단으로 들어갔다" 가 기록되어야 "왜 잘했나 / 왜 못했나" 분석 가능.
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-primary" id="submit-btn" onclick="submitTrade()">거래 추가</button>
+  </div>
+  <div class="status" id="status"></div>
+</div>
+
+<div class="h2">📋 오늘 입력한 수동 거래</div>
+<div id="today-list"><div class="empty">로딩 중…</div></div>
+
+<script>
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function fmtKst(iso){
+  if(!iso) return '—';
+  try{
+    const d=new Date(iso);
+    return new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',month:'2-digit',
+      day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).format(d);
+  }catch(e){ return iso; }
+}
+async function submitTrade(){
+  const btn=document.getElementById('submit-btn');
+  const status=document.getElementById('status');
+  const payload={
+    symbol:document.getElementById('symbol').value.trim().toUpperCase(),
+    side:document.getElementById('side').value,
+    kind:document.getElementById('kind').value,
+    qty:parseFloat(document.getElementById('qty').value),
+    price:parseFloat(document.getElementById('price').value),
+    venue:document.getElementById('venue').value,
+    note:document.getElementById('note').value.trim(),
+  };
+  if(!payload.symbol||!payload.qty||!payload.price){
+    status.className='status error';
+    status.textContent='종목/수량/가격은 필수';
+    return;
+  }
+  btn.disabled=true;
+  btn.textContent='저장 중…';
+  try{
+    const r=await fetch('/api/manual_trade',{method:'POST',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const j=await r.json();
+    if(j.ok){
+      status.className='status success';
+      status.textContent=`거래 추가 완료 — ${payload.symbol} ${payload.side.toUpperCase()} ${payload.qty} @ ${payload.price}`;
+      document.getElementById('symbol').value='';
+      document.getElementById('qty').value='';
+      document.getElementById('price').value='';
+      document.getElementById('note').value='';
+      document.getElementById('symbol').focus();
+      await loadToday();
+    }else{
+      status.className='status error';
+      status.textContent='저장 실패: '+(j.reason||'unknown');
+    }
+  }catch(e){
+    status.className='status error';
+    status.textContent='요청 실패: '+e;
+  }finally{
+    btn.disabled=false;
+    btn.textContent='거래 추가';
+  }
+}
+async function loadToday(){
+  try{
+    const r=await fetch('/api/manual_trade/today');
+    const j=await r.json();
+    const list=document.getElementById('today-list');
+    const trades=j.trades||[];
+    if(trades.length===0){
+      list.innerHTML='<div class="empty">오늘 입력한 수동 거래 없음.</div>';
+      return;
+    }
+    let html='<table><thead><tr><th>시각</th><th>거래소</th><th>종목</th><th>방향</th><th>분류</th><th>수량</th><th>가격</th><th>메모</th></tr></thead><tbody>';
+    for(const t of trades){
+      html+=`<tr>
+        <td>${esc(fmtKst(t.ts))}</td>
+        <td>${esc(t.venue||'—')}</td>
+        <td>${esc(t.symbol)}</td>
+        <td class="side-${esc(t.side)}">${esc((t.side||'').toUpperCase())}</td>
+        <td class="kind-${esc(t.kind)}">${esc((t.kind||'').toUpperCase())}</td>
+        <td>${esc(t.qty)}</td>
+        <td>${esc(t.price)}</td>
+        <td class="note-cell" title="${esc(t.note)}">${esc(t.note)}</td>
+      </tr>`;
+    }
+    html+='</tbody></table>';
+    list.innerHTML=html;
+  }catch(e){
+    document.getElementById('today-list').innerHTML='<div class="empty">로딩 실패: '+esc(String(e))+'</div>';
+  }
+}
+loadToday();
+</script>
+</body></html>"""
+
+
 def _render_cs_tsmom_page() -> str:
     """cs-tsmom-crypto-daily 신호 페이지 — Pine Script 와 동일 score 정의 + cross-sectional 랭킹."""
     return """<!DOCTYPE html>
@@ -2543,8 +2796,15 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
                 if ev.event_type not in ("order_acked", "order_filled", "fill_received"):
                     continue
                 pl = ev.payload or {}
-                sid = pl.get("strategy_id", "") or "?"
-                sym = pl.get("symbol", "") or "?"
+                sid = pl.get("strategy_id") or ""
+                sym = pl.get("symbol") or ""
+                # 2026-05-21: WAL has some legacy/partial events without a
+                # strategy_id or symbol (e.g. older heartbeats, malformed
+                # payloads). Skipping them prevents a "?"/"?" row from
+                # showing in the dashboard. Require BOTH — without symbol
+                # we can't attribute, without strategy_id we can't aggregate.
+                if not sid or not sym:
+                    continue
                 side = (pl.get("side") or "").lower()
                 try:
                     qty = float(pl.get("qty") or pl.get("quantity") or 0)
@@ -2578,13 +2838,14 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
                 pnl_by = {}
         rows = sorted(agg.values(), key=lambda r: (r["strategy_id"], r["symbol"]))
         # realized_pnl is strategy-level only (PnLAggregator has no per-symbol
-        # realized) — attach it to a strategy's most-recent symbol row only,
-        # so the strategy total is not duplicated across its symbol rows.
+        # realized) — attach it to the **first** symbol row of the strategy
+        # (alphabetically) so placement is stable across refreshes. The prior
+        # "most-recent last_ts" rule made -90 jump between symbols as fills
+        # arrived, which the user reported as "PnL disappeared from TRX".
         realized_row: dict[str, dict] = {}
         for r in rows:
             sid = r["strategy_id"]
-            cur = realized_row.get(sid)
-            if cur is None or r["last_ts"] > cur["last_ts"]:
+            if sid not in realized_row:  # rows already sorted by (sid, symbol)
                 realized_row[sid] = r
         # Live mark-price overlay — pulled from the mark-price feed's cache.
         # Each row gets ``mark_price`` (None if no live price yet) and
@@ -2900,6 +3161,220 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
     @app.get("/cs-tsmom", response_class=HTMLResponse)
     async def cs_tsmom_page() -> HTMLResponse:
         return HTMLResponse(content=_render_cs_tsmom_page())
+
+    # ── 수동 거래 입력 (2026-05-21 — Claude Routines 일일 리포트 준비) ────
+    def _manual_trade_log_path() -> Path:
+        """수동 거래 JSONL 위치 — `_resolve_log_dir()` 하위 `manual_trade.jsonl`.
+
+        자동 fill WAL 과는 별도 파일이지만 같은 디렉토리에 두어 cron 분석기 (Claude
+        Routines) 가 한 디렉토리만 보면 모든 거래 데이터를 합칠 수 있게.
+        """
+        log_dir = _resolve_log_dir()
+        if log_dir is None:
+            # fallback — 가장 자주 쓰는 logs/live 에 강제 생성
+            log_dir = Path("logs/live")
+            log_dir.mkdir(parents=True, exist_ok=True)
+        return Path(log_dir) / "manual_trade.jsonl"
+
+    @app.post("/api/manual_trade")
+    async def api_manual_trade_post(body: dict[str, Any]) -> JSONResponse:
+        """수동 거래 1건 append. body: {symbol, side, kind, qty, price, venue, note, ts?}.
+
+        - side: "buy" | "sell"
+        - kind: "entry" | "exit"
+        - venue: "binance" | "kis" | "other"
+        - note: 진입/청산 근거 (사용자가 자유 입력)
+        - ts: ISO8601 (생략 시 현재 UTC)
+        """
+        symbol = str(body.get("symbol") or "").strip().upper()
+        side = str(body.get("side") or "").strip().lower()
+        kind = str(body.get("kind") or "entry").strip().lower()
+        venue = str(body.get("venue") or "other").strip().lower()
+        note = str(body.get("note") or "").strip()
+        try:
+            qty = float(body.get("qty") or 0)
+            price = float(body.get("price") or 0)
+        except (TypeError, ValueError):
+            return JSONResponse(
+                {"ok": False, "reason": "qty/price must be numeric"},
+                status_code=400,
+            )
+        if not symbol or qty <= 0 or price <= 0:
+            return JSONResponse(
+                {"ok": False, "reason": "symbol/qty/price are required"},
+                status_code=400,
+            )
+        if side not in ("buy", "sell"):
+            return JSONResponse(
+                {"ok": False, "reason": "side must be buy or sell"},
+                status_code=400,
+            )
+        if kind not in ("entry", "exit"):
+            return JSONResponse(
+                {"ok": False, "reason": "kind must be entry or exit"},
+                status_code=400,
+            )
+        ts_raw = body.get("ts")
+        ts = (
+            str(ts_raw) if ts_raw
+            else datetime.now(timezone.utc).isoformat()
+        )
+        record = {
+            "schema_version": 1,
+            "ts": ts,
+            "event_type": "manual_trade",
+            "payload": {
+                "symbol": symbol, "side": side, "kind": kind,
+                "qty": qty, "price": price, "venue": venue, "note": note,
+            },
+        }
+        path = _manual_trade_log_path()
+        try:
+            import json as _json
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("a", encoding="utf-8") as f:
+                f.write(_json.dumps(record, ensure_ascii=False) + "\n")
+        except Exception as err:  # noqa: BLE001
+            return JSONResponse(
+                {"ok": False, "reason": f"{type(err).__name__}: {err}"},
+                status_code=500,
+            )
+        return JSONResponse({"ok": True, "ts": ts, "log_path": str(path)})
+
+    @app.get("/api/manual_trade/today")
+    async def api_manual_trade_today() -> JSONResponse:
+        """오늘(KST 자정~) 의 수동 거래 list. /manual 페이지 + Routines 가 사용."""
+        path = _manual_trade_log_path()
+        if not path.exists():
+            return JSONResponse({"trades": [], "log_path": str(path)})
+        kst_now = datetime.now(_KST)
+        kst_midnight = kst_now.replace(hour=0, minute=0, second=0, microsecond=0)
+        utc_cutoff = kst_midnight.astimezone(timezone.utc)
+        out: list[dict] = []
+        try:
+            import json as _json
+            for line in path.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    rec = _json.loads(line)
+                except _json.JSONDecodeError:
+                    continue
+                try:
+                    rec_ts = datetime.fromisoformat(
+                        str(rec.get("ts", "")).replace("Z", "+00:00")
+                    )
+                except ValueError:
+                    continue
+                if rec_ts >= utc_cutoff:
+                    pl = rec.get("payload") or {}
+                    out.append({"ts": rec.get("ts"), **pl})
+        except Exception as err:  # noqa: BLE001
+            return JSONResponse({
+                "trades": [], "log_path": str(path),
+                "error": f"{type(err).__name__}: {err}",
+            })
+        out.sort(key=lambda r: str(r.get("ts") or ""), reverse=True)
+        return JSONResponse({"trades": out, "log_path": str(path)})
+
+    @app.get("/manual", response_class=HTMLResponse)
+    async def manual_page() -> HTMLResponse:
+        return HTMLResponse(content=_render_manual_page())
+
+    # ── 일일 리포트 통합 endpoint (Claude Routines 가 fetch 함) ────────────
+    @app.get("/api/journal/today")
+    async def api_journal_today() -> JSONResponse:
+        """오늘 KST 자정~지금 사이의 모든 거래·신호·메모 통합 (2026-05-21).
+
+        Claude Routines 일일 리포트 routine 이 이 endpoint 하나만 GET 하면
+        오늘의 모든 분석 데이터를 한꺼번에 받음. 자동 fill (WAL) + 자동
+        signal_emitted + 수동 거래 (`manual_trade.jsonl`) + cs-tsmom 오늘
+        TOP-10 모두 포함. 분석 prompt 는 `docs/routines/cs-tsmom-daily-report.md`
+        템플릿 참조.
+        """
+        kst_now = datetime.now(_KST)
+        kst_midnight = kst_now.replace(hour=0, minute=0, second=0, microsecond=0)
+        utc_cutoff = kst_midnight.astimezone(timezone.utc)
+
+        def _ts_after_cutoff(iso: str) -> bool:
+            try:
+                t = datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
+                return t >= utc_cutoff
+            except (ValueError, TypeError):
+                return False
+
+        # ── 자동 fill + signal (WAL) ──
+        auto_fills: list[dict] = []
+        auto_signals: list[dict] = []
+        log_dir = _resolve_log_dir()
+        if log_dir is not None:
+            import asyncio as _asyncio
+            wal_paths = await _asyncio.to_thread(discover_wal_files, log_dir)
+            for p in wal_paths:
+                events, _ = wal_replay(p)
+                for ev in events:
+                    if not _ts_after_cutoff(ev.ts):
+                        continue
+                    pl = ev.payload or {}
+                    if ev.event_type in ("order_filled", "fill_received"):
+                        auto_fills.append({"ts": ev.ts, **pl})
+                    elif ev.event_type == "signal_emitted":
+                        auto_signals.append({"ts": ev.ts, **pl})
+
+        # ── 수동 거래 (manual_trade.jsonl) ──
+        manual: list[dict] = []
+        mpath = _manual_trade_log_path()
+        if mpath.exists():
+            import json as _json
+            for line in mpath.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    rec = _json.loads(line)
+                except _json.JSONDecodeError:
+                    continue
+                if not _ts_after_cutoff(rec.get("ts", "")):
+                    continue
+                pl = rec.get("payload") or {}
+                manual.append({"ts": rec.get("ts"), **pl})
+
+        # ── cs-tsmom 오늘 TOP-10 (computer 가 wired 면) ──
+        cs_tsmom_top10: dict | None = None
+        comp = state.cs_tsmom_computer
+        if comp is not None:
+            try:
+                cs_state = comp.peek()
+                if cs_state is None:
+                    import asyncio as _asyncio
+                    cs_state = await _asyncio.to_thread(comp.compute)
+                cs_tsmom_top10 = {
+                    "fetched_at": cs_state.fetched_at,
+                    "pin_date": cs_state.pin_date,
+                    "available": cs_state.available,
+                    "top10": [r for r in (cs_state.rows or []) if r.get("in_top_today")],
+                }
+            except Exception as err:  # noqa: BLE001
+                cs_tsmom_top10 = {"error": f"{type(err).__name__}: {err}"}
+
+        for arr in (auto_fills, auto_signals, manual):
+            arr.sort(key=lambda r: str(r.get("ts") or ""))
+
+        return JSONResponse({
+            "date_kst": kst_now.strftime("%Y-%m-%d"),
+            "kst_window_start": kst_midnight.isoformat(),
+            "now_kst": kst_now.isoformat(),
+            "counts": {
+                "auto_fills": len(auto_fills),
+                "auto_signals": len(auto_signals),
+                "manual_trades": len(manual),
+            },
+            "auto_fills": auto_fills,
+            "auto_signals": auto_signals,
+            "manual_trades": manual,
+            "cs_tsmom_top10": cs_tsmom_top10,
+        })
 
     @app.get("/api/limits")
     async def api_limits() -> JSONResponse:
