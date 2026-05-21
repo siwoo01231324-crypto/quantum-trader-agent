@@ -255,3 +255,58 @@ def test_diff_removed_follows_prev_ordering():
     assert removed == ["A", "C", "D"]  # prev order, minus B
     assert unchanged == ["B"]
     assert added == []
+
+
+# =============================================================================
+# REST polling mode (Task #17 — Korean-IP region-block safe path)
+# =============================================================================
+
+import datetime as _dt
+import asyncio
+import pytest
+
+
+def test_next_polling_wakeup_before_boundary():
+    """05:00:25 → 05:00:30 (same hour boundary +30s)."""
+    now = _dt.datetime(2026, 5, 21, 5, 0, 25, tzinfo=_dt.timezone.utc)
+    assert daemon._next_polling_wakeup(now) == _dt.datetime(
+        2026, 5, 21, 5, 0, 30, tzinfo=_dt.timezone.utc,
+    )
+
+
+def test_next_polling_wakeup_at_boundary():
+    """05:00:30 exact → next hour 06:00:30 (strictly after now_dt)."""
+    now = _dt.datetime(2026, 5, 21, 5, 0, 30, tzinfo=_dt.timezone.utc)
+    assert daemon._next_polling_wakeup(now) == _dt.datetime(
+        2026, 5, 21, 6, 0, 30, tzinfo=_dt.timezone.utc,
+    )
+
+
+def test_next_polling_wakeup_after_boundary():
+    """05:00:35 → 06:00:30 (next hour)."""
+    now = _dt.datetime(2026, 5, 21, 5, 0, 35, tzinfo=_dt.timezone.utc)
+    assert daemon._next_polling_wakeup(now) == _dt.datetime(
+        2026, 5, 21, 6, 0, 30, tzinfo=_dt.timezone.utc,
+    )
+
+
+def test_next_polling_wakeup_mid_hour():
+    """05:30:00 → 06:00:30 (skip to next boundary)."""
+    now = _dt.datetime(2026, 5, 21, 5, 30, 0, tzinfo=_dt.timezone.utc)
+    assert daemon._next_polling_wakeup(now) == _dt.datetime(
+        2026, 5, 21, 6, 0, 30, tzinfo=_dt.timezone.utc,
+    )
+
+
+def test_next_polling_wakeup_microsecond_precision():
+    """05:00:30.000001 → next hour (the boundary instant has already passed)."""
+    now = _dt.datetime(2026, 5, 21, 5, 0, 30, 1, tzinfo=_dt.timezone.utc)
+    assert daemon._next_polling_wakeup(now) == _dt.datetime(
+        2026, 5, 21, 6, 0, 30, tzinfo=_dt.timezone.utc,
+    )
+
+
+def test_run_daemon_rejects_unknown_mode():
+    """Invalid mode arg should raise ValueError (no silent fallthrough)."""
+    with pytest.raises(ValueError, match="unknown mode"):
+        asyncio.run(daemon.run_daemon(top_n=5, mode="bogus"))

@@ -93,10 +93,31 @@ fire        = barstate.isconfirmed AND close >= trigger
 ### 토큰 (이미 설정됨)
 `.env` 에 `TELEGRAM_LIVE_BOT_TOKEN` / `TELEGRAM_LIVE_CHAT_ID` (LIVE > QTA > legacy fallback). `_resolve_telegram_env` 가 자동 라우팅 — 미설정 시 stdout 으로 graceful degrade.
 
+### 모드 선택 — `--mode polling | ws` (default `polling`)
+
+**REST polling (default — 한국 IP region-block safe)**: Binance mainnet
+WebSocket (`fstream.binance.com`) 이 한국 IP 에 메시지 0건 push 하는 알려진
+이슈 회피. 매 1h boundary +30초 (UTC) 에 모든 종목 `/fapi/v1/klines` REST
+poll → 새 봉 감지 → dispatch. 신호 cadence = 1h 봉 grain 과 정확히 일치
+(에어본 v1.1 알람 grain 과 동일). REST 는 region block 없음.
+
+> **신호 정확성**: 에어본 v1.1 수식이 같은 OHLCV 입력에 같은 출력을 내므로,
+> REST polling 의 fire 가격·시점 = 차단 안 된 WS feed 와 *동일*. TV 차트에서
+> 본인이 볼 신호와 같은 봉/같은 가격에 발화. 데이터 path 만 다름.
+
+**WS (legacy)**: VPN 또는 한국 외 cloud host 에서만. WS push 가 markPrice
+1Hz + 5m 즉시 → future intra-bar 경고 features 용 데이터 밀도.
+
 ### 실행
 ```bash
-# 운영
+# 운영 (한국 IP — default polling)
 python scripts/airborne_alert_daemon.py --top-n 50
+
+# 명시: REST polling
+python scripts/airborne_alert_daemon.py --top-n 50 --mode polling
+
+# WS (VPN/cloud 한국 외)
+python scripts/airborne_alert_daemon.py --top-n 50 --mode ws
 
 # 드라이런 (stdout, no Telegram)
 python scripts/airborne_alert_daemon.py --top-n 5 --dry-run
@@ -107,7 +128,7 @@ python scripts/airborne_alert_daemon.py --testnet --top-n 3 --dry-run
 # Universe 재산출 주기 변경 (default 6h)
 python scripts/airborne_alert_daemon.py --top-n 50 --universe-refresh-hours 12
 
-# Legacy: universe 고정 (startup 1회만, 재산출 비활성)
+# Legacy: universe 고정 (startup 1회만)
 python scripts/airborne_alert_daemon.py --top-n 50 --universe-refresh-hours 0
 ```
 
@@ -140,7 +161,8 @@ python scripts/airborne_alert_daemon.py --top-n 50 --universe-refresh-hours 0
 | 5y 알파 | **없음** (가족 전체 PF<1) |
 | 자동 매매 적합성 | **부적합** — 알림 본문에 "rejected; visual guide only" 라인 박힘 |
 | 신호 신뢰도 | 시각 재현 카논. 사용자 본인 손매매 판단 보조용 |
-| markPrice 활용 | MVP 미사용 (kline 봉 확정만으로 평가). Phase 2 에 5m 청산 트레일링 경고 추가 예정 |
+| markPrice 활용 | `--mode ws` 에서만 stream 구독 (현재 silent consume). `--mode polling` (default) 은 markPrice 미사용 — 1h 봉 확정 자체만으로 평가 충분 |
+| 한국 IP region block | **해결됨** — `--mode polling` (default) 가 REST API 사용 (region-block 없음). WS 가 메시지 0건 push 하는 문제 회피. 같은 신호 수식 → 동일 fire 결과 |
 | 종목 추가/제거 (delisting) | 6h 주기 자동 재산출 (default) — 새 종목 자동 구독, 빠진 종목 정리. `--universe-refresh-hours 0` 으로 legacy startup-only 동작 가능 |
 
 ## 5y backtest 게이트 면제 사유
