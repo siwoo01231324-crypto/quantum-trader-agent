@@ -187,6 +187,16 @@ def test_evaluate_uses_dynamic_override_when_present():
     assert len(intents_static) == 1
     assert intents_static[0].side == "sell"
 
+    # broker fill 도착 시뮬 — store 가 held=0 으로 갱신 → 다음 evaluate 에서
+    # _pending_exit / _dynamic_policies / high_water 자동 cleanup. 이 단계가
+    # 없으면 in-flight exit guard (2026-05-21) 가 추가 평가를 차단함.
+    store.record_fill(strategy_id="scan", symbol="NEARUSDT", side="sell", qty=Decimal("135"))
+    pnl.record_fill(
+        strategy_id="scan", symbol="NEARUSDT", side="sell",
+        qty=Decimal("135"), price=Decimal("1.7400"),
+    )
+    mgr.evaluate("NEARUSDT", Decimal("1.7400"), datetime.now(timezone.utc))
+
     # 다시 진입 (이전 stop 으로 cleanup 됨) + dynamic override 등록 (stop=0.02).
     store.record_fill(strategy_id="scan", symbol="NEARUSDT", side="buy", qty=Decimal("135"))
     pnl.record_fill(

@@ -83,6 +83,14 @@ class LivePositionRiskManager:
         # 보다 우선 적용. stop/TP fire 시 자동 cleanup → 다음 진입은 새로
         # 계산된 override 로 다시 등록 (없으면 정적 fallback).
         self._dynamic_policies: dict[tuple[str, str], StopTpPolicy] = {}
+        # 2026-05-21 — in-flight exit guard. stop/TP 발사 후 broker fill 도착
+        # 전까진 같은 (sid, symbol) 에 대해 추가 SELL emit 차단. 미가드 시
+        # 1초 간격 mark-price tick 마다 evaluate 가 돌면서 store 가 아직 갱신
+        # 안 됐을 때 (fill 도착 < 1초 지연) 같은 SELL 을 또 fire → broker 가
+        # 이미 청산된 포지션에 또 SELL 받음 → 예상치 못한 SHORT 진입 (실측
+        # 2026-05-21 19:52:34 NEARUSDT -135 short). held=0 (= fill 반영됨)
+        # 감지 시 자동 cleanup.
+        self._pending_exit: set[tuple[str, str]] = set()
 
     def register_strategy_policy(
         self,
@@ -170,7 +178,21 @@ class LivePositionRiskManager:
                 # close, 강제 청산) 으로 인한 잔여 override 는 다음
                 # register_entry_override 호출이 정확히 overwrite → stale 폐해
                 # 없음.
+                #
+                # 2026-05-21 — in-flight exit guard 의 자연 cleanup. held=0 이
+                # 되었다는 건 sell fill 이 도착해서 store 가 갱신된 것 → pending
+                # 마크 해제. 다음 진입은 처음부터 가드 없이 정상 평가.
                 self._high_water.pop((strategy_id, symbol), None)
+                self._pending_exit.discard((strategy_id, symbol))
+                continue
+
+            # 2026-05-21 in-flight exit guard — 이전 evaluate 에서 stop/TP
+            # 가 발사돼 SELL intent 가 broker 로 전송 중인 (sid, symbol) 은
+            # broker fill 이 도착해 store 가 0 으로 갱신될 때까지 추가 stop
+            # 평가 skip. 미가드 시: mark-price tick (1초 간격) 마다 evaluate
+            # 가 돌면서 같은 (이미 발사된) stop 을 또 fire → broker 에
+            # redundant SELL → 이미 청산된 포지션 위에 SHORT 진입.
+            if (strategy_id, symbol) in self._pending_exit:
                 continue
 
             # 2026-05-21 — dynamic override 가 등록되어 있으면 그것을, 없으면
@@ -232,6 +254,10 @@ class LivePositionRiskManager:
             # register 되거나 (override 미설정 시) 정적 policy 로 fallback.
             self._high_water.pop((strategy_id, symbol), None)
             self._dynamic_policies.pop((strategy_id, symbol), None)
+            # 2026-05-21 — in-flight exit guard. broker fill 이 도착해 store
+            # 가 held=0 으로 갱신되기 전까지 같은 (sid, symbol) 추가 stop
+            # 평가 차단. held=0 진입 시 위쪽 분기에서 자동 cleanup.
+            self._pending_exit.add((strategy_id, symbol))
 
         return intents
 
