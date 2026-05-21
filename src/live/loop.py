@@ -16,8 +16,6 @@ from src.brokers.async_router import AsyncOrderRouter
 from src.execution.base import MarketState, Tick as ExecTick
 from src.execution.mock_matching import MockMatchingEngine
 from src.execution.paper_broker import PaperBroker
-import os as _os  # CS_BASKET_DISPATCH env gate (#218 follow-up 2026-05-21)
-
 from src.live.executor import execute_intents
 from src.live.feed import MarketDataFeed, BinancePublicFeed, BinanceMarkPriceFeed
 from src.live.fill_consumer import run_binance_fill_consumer
@@ -525,14 +523,15 @@ async def run_shadow_loop(
             # 을 받으면 size_to_qty 가 basket 가격을 못 찾아 OrderIntent 가
             # silent drop 됨. 별도 polling 으로 strategy.latest_weights →
             # 종목별 dispatch_rebalance() → broker.place_order.
-            # env gate ``CS_BASKET_DISPATCH=1`` — 기본 OFF (회귀 zero-impact).
-            basket_dispatcher = None
-            if _os.environ.get("CS_BASKET_DISPATCH") == "1":
-                from src.live.cs_basket_dispatcher import BasketDispatcher
-                basket_dispatcher = BasketDispatcher()
-                logger.info(
-                    "cs_basket_dispatcher.enabled — universe-scan auto-orders ON",
-                )
+            #
+            # 2026-05-21 — env gate 제거, 항상 활성. broker_mode 가 binance 가
+            # 아니거나 universe-scan strategy 가 등록 안 된 경우 dispatcher 가
+            # graceful no-op (latest_weights empty → skip). 즉 모든 모드에서
+            # 안전, 자동발주 필요한 모드 (binance-testnet-shadow + cs-tsmom
+            # active) 에서만 실제 동작.
+            from src.live.cs_basket_dispatcher import BasketDispatcher
+            basket_dispatcher = BasketDispatcher()
+            logger.info("cs_basket_dispatcher.enabled — universe-scan auto-orders")
             while not stop_event.is_set():
                 try:
                     tick = await asyncio.wait_for(tick_queue.get(), timeout=1.0)

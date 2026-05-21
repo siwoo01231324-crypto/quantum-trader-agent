@@ -188,11 +188,18 @@ class TestBasketDispatcher:
         assert len(broker.calls) > 0
 
 
-class TestEnvGateOff:
-    """live/loop.py 의 env gate 가 OFF 일 때 dispatcher 가 wire 안 됨."""
+class TestAlwaysOnGracefulNoOp:
+    """2026-05-21 — env gate 제거 후 항상 활성. broker_mode 가 binance 가
+    아니거나 universe-scan strategy 등록 안 됐을 때 graceful no-op 검증."""
 
-    def test_default_env_disabled_no_import_needed(self, monkeypatch):
-        # 단순 sanity — env 없으면 BasketDispatcher 인스턴스 안 만들어지면 됨.
-        monkeypatch.delenv("CS_BASKET_DISPATCH", raising=False)
-        import os
-        assert os.environ.get("CS_BASKET_DISPATCH") != "1"
+    @pytest.mark.asyncio
+    async def test_empty_strategies_no_op(self):
+        bd = BasketDispatcher()
+        broker = _StubBroker()
+        orch = _StubOrch({})  # no strategies registered
+        reports = await bd.dispatch(
+            orchestrator=orch, snapshot=_snapshot(equity_usdt=10000),
+            broker=broker, ohlcv_history=None,
+        )
+        assert reports == []
+        assert broker.calls == []  # 발주 0건 — KIS 모드처럼 cs-tsmom 미등록 시

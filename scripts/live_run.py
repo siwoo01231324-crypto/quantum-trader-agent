@@ -412,10 +412,11 @@ def _build_parser() -> argparse.ArgumentParser:
             "binance-testnet-shadow",  # #231 S1 — Binance shadow live-daemon
             "smoke-dual",              # smoke test — KIS paper 005930 + Binance testnet BTCUSDT 동시
         ],
-        default="kis-paper-shadow",
-        help="브로커 모드 (default: kis-paper-shadow). "
-             "binance-testnet-shadow 는 별도 컨테이너 qta-live-daemon-binance 용. "
-             "smoke-dual 은 KIS + Binance 둘 다 병렬 (SMOKE_TEST_ENABLED=1 필요).",
+        default="binance-testnet-shadow",
+        help="브로커 모드 (default: binance-testnet-shadow — cs-tsmom-crypto-daily "
+             "자동발주 가능). KIS 모의 가동은 명시적으로 --broker kis-paper-shadow. "
+             "smoke-dual 은 KIS + Binance 둘 다 병렬 (SMOKE_TEST_ENABLED=1 필요). "
+             "기본값 변경 2026-05-21 — 직전엔 kis-paper-shadow 였음.",
     )
     parser.add_argument(
         "--duration", default="0",
