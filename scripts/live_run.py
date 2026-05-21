@@ -982,10 +982,43 @@ async def _run_pipeline_attached(
         _register_exit_policies(orch, risk_mgr, logger)
 
     config.on_orchestrator_ready = _on_orchestrator_ready
-    await _run_with_duration(
-        run_shadow_loop(config, kis_adapter=kis_adapter, binance_adapter=binance_adapter),
-        duration_sec,
-    )
+
+    # 2026-05-21 — Binance broker ↔ position_store reconciler. 사용자가
+    # Binance UI 에서 직접 close 했을 때 store 가 모르고 phantom long 보유 →
+    # stop fire → broker SHORT 진입 사이클을 차단. WAL + dashboard timeline
+    # 양쪽으로 알림. single-holder mismatch 는 auto-fix, 그 외는 알림만.
+    reconciler_task: asyncio.Task | None = None
+    reconciler_stop = asyncio.Event()
+    if binance_adapter is not None and position_store is not None:
+        from src.live.position_reconciler import PositionReconciler  # noqa: PLC0415
+        reconciler = PositionReconciler(
+            position_store=position_store,
+            broker=binance_adapter,
+            wal_observer=_wal_observer,
+            alert_publisher=(
+                (lambda p: state.timeline_broker.publish(p))
+                if state.timeline_broker is not None else None
+            ),
+            tol=Decimal("0.001"),
+            interval_sec=float(os.environ.get("QTA_RECONCILE_INTERVAL_SEC", "60")),
+        )
+        reconciler_task = asyncio.create_task(
+            reconciler.run_loop(reconciler_stop), name="qta-position-reconciler",
+        )
+        logger.info("PositionReconciler started (attached)")
+
+    try:
+        await _run_with_duration(
+            run_shadow_loop(config, kis_adapter=kis_adapter, binance_adapter=binance_adapter),
+            duration_sec,
+        )
+    finally:
+        if reconciler_task is not None:
+            reconciler_stop.set()
+            try:
+                await asyncio.wait_for(reconciler_task, timeout=3.0)
+            except (asyncio.TimeoutError, asyncio.CancelledError):
+                reconciler_task.cancel()
 
 
 def _build_pipeline_factory(
@@ -1354,6 +1387,25 @@ async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
                 dashboard_port, err,
             )
 
+    # 2026-05-21 — Binance broker ↔ position_store reconciler (CLI 경로).
+    # _run_pipeline_attached 와 동일 와이어링. Binance broker 모드일 때만 가동.
+    reconciler_task: asyncio.Task | None = None
+    reconciler_stop = asyncio.Event()
+    if binance_adapter is not None:
+        from src.live.position_reconciler import PositionReconciler  # noqa: PLC0415
+        reconciler = PositionReconciler(
+            position_store=position_store,
+            broker=binance_adapter,
+            wal_observer=_wal_observer,
+            alert_publisher=lambda p: timeline_broker.publish(p),
+            tol=Decimal("0.001"),
+            interval_sec=float(os.environ.get("QTA_RECONCILE_INTERVAL_SEC", "60")),
+        )
+        reconciler_task = asyncio.create_task(
+            reconciler.run_loop(reconciler_stop), name="qta-position-reconciler",
+        )
+        logger.info("PositionReconciler started (CLI)")
+
     try:
         await _run_with_duration(
             run_shadow_loop(
@@ -1362,6 +1414,12 @@ async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
             duration_sec,
         )
     finally:
+        if reconciler_task is not None:
+            reconciler_stop.set()
+            try:
+                await asyncio.wait_for(reconciler_task, timeout=3.0)
+            except (asyncio.TimeoutError, asyncio.CancelledError):
+                reconciler_task.cancel()
         if shutdown_dashboard is not None:
             await shutdown_dashboard()
 

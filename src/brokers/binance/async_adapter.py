@@ -232,6 +232,25 @@ class AsyncBinanceFuturesAdapter:
             )
         return positions
 
+    async def get_net_positions(self) -> dict[str, Decimal]:
+        """SIGNED net qty per symbol (one-way mode: 단일 net, hedge mode: long-short).
+
+        2026-05-21: PositionReconciler 가 broker ground-truth 를 store 와
+        비교하려면 부호 있는 net 이 필요. ``get_positions()`` 는 abs(qty) 로
+        가공해 부호를 잃어버림 (Position 모델이 PositionSide 별 row 라서). 본
+        메서드는 raw ``positionAmt`` (signed) 를 그대로 dict 로 반환. 0 인
+        symbol 은 제외 — caller 에서 absent 면 net 0 으로 간주.
+        """
+        risks = await self._client.get_position_risk(None)
+        out: dict[str, Decimal] = {}
+        for r in risks:
+            if r.positionAmt == Decimal("0"):
+                continue
+            # hedge mode 에서 같은 symbol 의 LONG/SHORT 가 따로 row 일 수 있어
+            # 합산 (one-way 모드는 항상 BOTH 1건이라 무영향).
+            out[r.symbol] = out.get(r.symbol, Decimal("0")) + r.positionAmt
+        return out
+
     async def get_balance(self) -> list[Balance]:
         items = await self._client.get_balance()
         return [

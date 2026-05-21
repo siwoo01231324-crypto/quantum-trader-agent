@@ -105,6 +105,25 @@ class StrategyPositionStore:
             return
         self.record_fill(strategy_id=strategy_id, symbol=symbol, side=side, qty=qty)
 
+    def force_sync_position(
+        self,
+        *,
+        strategy_id: str,
+        symbol: str,
+        qty: Decimal,
+    ) -> None:
+        """Broker reconciliation 용 강제 setter (record_fill 의 delta 누적과 별개).
+
+        2026-05-21: PositionReconciler 가 broker ground truth 와 store 가 어긋
+        났을 때 store 를 broker 에 맞추는 단일 호출. qty 가 0 이면 해당 bucket
+        엔트리 제거 (정상 flat 상태 = bucket 부재).
+        """
+        bucket = self._positions.setdefault(strategy_id, {})
+        if qty == 0:
+            bucket.pop(symbol, None)
+        else:
+            bucket[symbol] = Decimal(str(qty))
+
     def get_positions(self, strategy_id: str) -> list[tuple[str, float]]:
         bucket = self._positions.get(strategy_id, {})
         return [
