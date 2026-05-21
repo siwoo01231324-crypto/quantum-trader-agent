@@ -190,3 +190,68 @@ def test_append_bar_evicts_oldest_beyond_max():
         ev = _make_kline_event(open_time_ms=1_700_000_000_000 + i * 3_600_000)
         state.history_1h = daemon._append_bar(state.history_1h, ev, max_bars=3)
     assert len(state.history_1h) == 3
+
+
+# =============================================================================
+# compute_universe_diff (Task #13 — universe refresh)
+# =============================================================================
+
+def test_diff_added_removed_unchanged():
+    added, removed, unchanged = daemon.compute_universe_diff(
+        ["BTCUSDT", "ETHUSDT", "SOLUSDT"],
+        ["ETHUSDT", "SOLUSDT", "DOGEUSDT", "XRPUSDT"],
+    )
+    assert added == ["DOGEUSDT", "XRPUSDT"]
+    assert removed == ["BTCUSDT"]
+    assert unchanged == ["ETHUSDT", "SOLUSDT"]
+
+
+def test_diff_first_cycle_empty_prev():
+    """First refresh: prev=[] → everything is 'added', nothing removed/unchanged."""
+    added, removed, unchanged = daemon.compute_universe_diff(
+        [], ["BTCUSDT", "ETHUSDT"],
+    )
+    assert added == ["BTCUSDT", "ETHUSDT"]
+    assert removed == []
+    assert unchanged == []
+
+
+def test_diff_universe_unchanged():
+    """Same universe → no added/removed, everything unchanged."""
+    universe = ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
+    added, removed, unchanged = daemon.compute_universe_diff(universe, universe)
+    assert added == []
+    assert removed == []
+    assert unchanged == universe
+
+
+def test_diff_universe_fully_replaced():
+    added, removed, unchanged = daemon.compute_universe_diff(
+        ["BTCUSDT", "ETHUSDT"],
+        ["DOGEUSDT", "XRPUSDT"],
+    )
+    assert added == ["DOGEUSDT", "XRPUSDT"]
+    assert removed == ["BTCUSDT", "ETHUSDT"]
+    assert unchanged == []
+
+
+def test_diff_preserves_curr_ordering_for_added_and_unchanged():
+    """added/unchanged follow curr ordering (caller may rely on this for log readability)."""
+    added, removed, unchanged = daemon.compute_universe_diff(
+        ["B", "A"],
+        ["C", "A", "B", "D"],
+    )
+    # curr-order traversal: C(new), A(old), B(old), D(new)
+    assert added == ["C", "D"]
+    assert unchanged == ["A", "B"]
+    assert removed == []
+
+
+def test_diff_removed_follows_prev_ordering():
+    added, removed, unchanged = daemon.compute_universe_diff(
+        ["A", "B", "C", "D"],
+        ["B"],
+    )
+    assert removed == ["A", "C", "D"]  # prev order, minus B
+    assert unchanged == ["B"]
+    assert added == []
