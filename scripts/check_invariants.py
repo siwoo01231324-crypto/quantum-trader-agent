@@ -54,6 +54,9 @@ REQUIRED_FIELDS: dict[str, list[str]] = {
     "whitepaper": ["type", "id", "name", "version"],
     "work-done": ["type", "id", "name", "status"],
     "work-plan": ["type"],  # planning docs — minimal validation
+    "trading-journal": ["type", "id", "date", "auto_trades", "manual_trades",
+                        "win_count", "loss_count", "total_pnl_usdt",
+                        "total_pnl_krw", "created"],
 }
 
 # 필수 필드 중 "비어 있어도 허용" 하는 필드 (빈 리스트 등).

@@ -28,6 +28,7 @@
 | `onboarding` | `docs/onboarding/` | 온보딩 가이드 |
 | `whitepaper` | `docs/whitepaper/` | 백서 |
 | `work-done` | `docs/work/done/*/` · `docs/work/active/*/` | 이슈 작업 내역 (보조 타입) |
+| `trading-journal` | `docs/journal/` | 일일 거래 리포트 (자동 + 수동 대조 분석) |
 
 ---
 
@@ -310,3 +311,34 @@ name: "#9 시스템 구성요소 개괄"    # 필수
 status: done                     # 필수: active|done
 ---
 ```
+
+---
+
+## 14. TradingJournal (일일 거래 리포트)
+
+Claude Routines 가 매일 자정 자동 생성. 자동 매매 fills + 사용자 수동 거래 + cs-tsmom 시그널 대조 분석. 파일명·id 는 `YYYY-MM-DD` 형식 (예: `docs/journal/2026-05-22.md`, id=`2026-05-22`).
+
+```yaml
+---
+type: trading-journal
+id: 2026-05-22                   # 필수 (파일명과 일치, ISO 날짜)
+date: 2026-05-22                 # 필수, 분석 대상 KST 날짜
+auto_trades: 0                   # 필수, 더미 제외 실 거래 수
+manual_trades: 1                 # 필수, 더미 제외 실 거래 수
+win_count: 1                     # 필수
+loss_count: 0                    # 필수
+total_pnl_usdt: 1.0              # 필수, Binance 통화 합산
+total_pnl_krw: 0                 # 필수, KIS 통화 합산
+created: 2026-05-22              # 필수
+tags:                            # 권장
+- trading-journal
+- daily-report
+---
+```
+
+### 필수 필드
+`type`, `id`, `date`, `auto_trades`, `manual_trades`, `win_count`, `loss_count`, `total_pnl_usdt`, `total_pnl_krw`, `created`
+
+### 본문 규칙
+- 위키링크는 실제 노트가 존재하는 id 만 사용. 템플릿/placeholder 위키링크는 inline backtick 으로 escape (예: `` `[[trading-journal-template]]` `` ).
+- LLM 위임 금지 (CLAUDE.md 불변식 #6) — routine 은 거래 분석/요약만, 발주 결정 X.
