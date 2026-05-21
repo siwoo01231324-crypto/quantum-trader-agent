@@ -259,4 +259,51 @@ services:
         limits:
           memory: 384M
 
+  # #256 / #259 — airborne v1.1 USDT-perp 실시간 알림 데몬.
+  # Binance public WS (101 streams) + 1h universe scan + Telegram alert.
+  # 단독 process (PID 1 = python). 죽으면 unless-stopped 으로 즉시 재시작.
+  # 2026-05-22 추가 — 사용자 host 에서 직접 띄워두던 게 어제 18:00 silent
+  # exit (절전 모드 아님, 원인 미상) → 컨테이너화로 안정 가동 + Docker
+  # restart 정책으로 crash 자동 복구.
+  #
+  # 가동:
+  #   docker compose -f docker-compose.live.yml build airborne-daemon
+  #   docker compose -f docker-compose.live.yml up -d airborne-daemon
+  #   docker compose -f docker-compose.live.yml logs -f airborne-daemon
+  airborne-daemon:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: qta-phase2:latest
+    container_name: qta-airborne-daemon
+    entrypoint:
+      - "python"
+      - "/app/scripts/airborne_alert_daemon.py"
+    env_file:
+      - ./.env
+    environment:
+      TZ: Asia/Seoul
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - ./logs/airborne:/data/logs
+    restart: unless-stopped
+    healthcheck:
+      # process alive — 데몬 entrypoint 가 PID 1, 죽으면 컨테이너 종료 →
+      # unless-stopped 로 재시작. healthcheck 는 stuck 상태 가시화 용도.
+      # heartbeat-file 기반 stuck 감지는 후속 PR.
+      test: ["CMD-SHELL", "pgrep -f airborne_alert_daemon || exit 1"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
 # Named volumes 미사용 - bind mount 로 호스트 ./data/ 직접 inspect 가능 (운영 일지 작성 시).
