@@ -2401,6 +2401,21 @@ tbody td{padding:7px 10px;font-size:.78rem;border-bottom:1px solid #20262d;
 <div class="h2" id="list-hdr">📋 오늘 입력한 수동 거래</div>
 <div id="today-list"><div class="empty">로딩 중…</div></div>
 
+<div class="h2" style="margin-top:24px">📤 일일 리포트 export</div>
+<div class="form-card">
+  <div class="help" style="margin-bottom:10px">
+    오늘의 자동 거래 + 수동 거래 + 신호 + cs-tsmom TOP-10 을 한 JSON 으로
+    묶어 <code>docs/journal_data/YYYY-MM-DD.json</code> 에 저장 + git
+    commit/push. Claude Routines 가 자정 분석 시 이 파일을 fetch.
+    <strong>매일 23:50 KST 쯤 한 번 클릭</strong> 권장.
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-primary" id="export-btn" onclick="exportJournal(true)">오늘 journal export + git push</button>
+    <button class="btn" id="export-local-btn" onclick="exportJournal(false)" style="background:var(--surface2);color:var(--text)">파일만 저장 (push X)</button>
+  </div>
+  <div class="status" id="export-status"></div>
+</div>
+
 <script>
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function fmtKst(iso){
@@ -2548,6 +2563,41 @@ async function loadList(){
   }
 }
 loadList();
+
+async function exportJournal(doPush){
+  const btn=document.getElementById('export-btn');
+  const btn2=document.getElementById('export-local-btn');
+  const status=document.getElementById('export-status');
+  btn.disabled=true; btn2.disabled=true;
+  const orig=btn.textContent;
+  btn.textContent='저장 중…';
+  status.className='status';
+  status.textContent='';
+  status.style.display='block';
+  try{
+    const r=await fetch('/api/journal/export',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({push:!!doPush})});
+    const j=await r.json();
+    if(j.ok){
+      status.className='status success';
+      const c=j.counts||{};
+      const counts=`auto_fills:${c.auto_fills||0}, signals:${c.auto_signals||0}, manual:${c.manual_trades||0}`;
+      status.textContent=`✅ ${j.path} 저장 (${counts}) · `+
+        (j.pushed?'git push 완료 — Routines 가 fetch 가능':
+         (j.committed?'commit 완료 (push 생략)':'변경 없음'));
+    }else{
+      status.className='status error';
+      status.textContent=`❌ ${j.stage||'?'} 단계 실패: ${j.detail||j.reason||JSON.stringify(j)}`;
+    }
+  }catch(e){
+    status.className='status error';
+    status.textContent='요청 실패: '+e;
+  }finally{
+    btn.disabled=false; btn2.disabled=false;
+    btn.textContent=orig;
+  }
+}
 </script>
 </body></html>"""
 
@@ -3519,16 +3569,8 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
         return HTMLResponse(content=_render_manual_page())
 
     # ── 일일 리포트 통합 endpoint (Claude Routines 가 fetch 함) ────────────
-    @app.get("/api/journal/today")
-    async def api_journal_today() -> JSONResponse:
-        """오늘 KST 자정~지금 사이의 모든 거래·신호·메모 통합 (2026-05-21).
-
-        Claude Routines 일일 리포트 routine 이 이 endpoint 하나만 GET 하면
-        오늘의 모든 분석 데이터를 한꺼번에 받음. 자동 fill (WAL) + 자동
-        signal_emitted + 수동 거래 (`manual_trade.jsonl`) + cs-tsmom 오늘
-        TOP-10 모두 포함. 분석 prompt 는 `docs/routines/cs-tsmom-daily-report.md`
-        템플릿 참조.
-        """
+    async def _build_journal_today() -> dict[str, Any]:
+        """Journal today JSON dict 빌더 — endpoint 와 export 가 공유."""
         kst_now = datetime.now(_KST)
         kst_midnight = kst_now.replace(hour=0, minute=0, second=0, microsecond=0)
         utc_cutoff = kst_midnight.astimezone(timezone.utc)
@@ -3597,7 +3639,7 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
         for arr in (auto_fills, auto_signals, manual):
             arr.sort(key=lambda r: str(r.get("ts") or ""))
 
-        return JSONResponse({
+        return {
             "date_kst": kst_now.strftime("%Y-%m-%d"),
             "kst_window_start": kst_midnight.isoformat(),
             "now_kst": kst_now.isoformat(),
@@ -3610,6 +3652,113 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
             "auto_signals": auto_signals,
             "manual_trades": manual,
             "cs_tsmom_top10": cs_tsmom_top10,
+        }
+
+    @app.get("/api/journal/today")
+    async def api_journal_today() -> JSONResponse:
+        """오늘 KST 자정~지금 사이의 모든 거래·신호·메모 통합 (2026-05-21).
+
+        Claude Routines 일일 리포트 routine 이 이 endpoint 하나만 GET 하면
+        오늘의 모든 분석 데이터를 한꺼번에 받음. 자동 fill (WAL) + 자동
+        signal_emitted + 수동 거래 (`manual_trade.jsonl`) + cs-tsmom 오늘
+        TOP-10 모두 포함. 분석 prompt 는 `docs/routines/cs-tsmom-daily-report.md`
+        템플릿 참조.
+        """
+        return JSONResponse(await _build_journal_today())
+
+    @app.post("/api/journal/export")
+    async def api_journal_export(body: dict[str, Any] | None = None) -> JSONResponse:
+        """오늘 journal data 를 ``docs/journal_data/{date_kst}.json`` 으로 저장
+        + (옵션) git add/commit/push. Claude Routines 가 fetch 하도록 repo 에
+        publish 하는 1-click 버튼용 (사용자가 매일 1회 클릭).
+
+        Body (모두 optional):
+        - ``push``: bool (default True) — false 면 commit 만, push 생략
+        - ``commit_message``: str — 기본 "chore(journal): export {date_kst} data"
+
+        repo root 는 ``git rev-parse --show-toplevel`` 로 검출. dashboard 가
+        repo 안에서 돌고 git credential helper 가 wincred 등으로 설정돼 있어야
+        push 성공. 실패 시 단계별 reason 명확화.
+        """
+        import subprocess
+        import json as _json
+        body = body or {}
+        do_push = bool(body.get("push", True))
+
+        journal = await _build_journal_today()
+        date_kst = journal["date_kst"]
+
+        try:
+            repo_root_bytes = subprocess.check_output(
+                ["git", "rev-parse", "--show-toplevel"],
+                stderr=subprocess.STDOUT, cwd=str(Path.cwd()),
+            )
+            repo_root = Path(repo_root_bytes.decode().strip())
+        except Exception as err:  # noqa: BLE001
+            return JSONResponse(
+                {"ok": False, "stage": "detect_repo",
+                 "reason": f"git repo not found: {err}"},
+                status_code=500,
+            )
+
+        path = repo_root / "docs" / "journal_data" / f"{date_kst}.json"
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(
+                _json.dumps(journal, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        except Exception as err:  # noqa: BLE001
+            return JSONResponse(
+                {"ok": False, "stage": "write_file",
+                 "reason": f"{type(err).__name__}: {err}"},
+                status_code=500,
+            )
+        rel_path = path.relative_to(repo_root).as_posix()
+
+        def _run(cmd: list[str]) -> tuple[int, str]:
+            p = subprocess.run(
+                cmd, cwd=str(repo_root), capture_output=True, text=True,
+            )
+            return p.returncode, (p.stdout + p.stderr).strip()
+
+        code, out = _run(["git", "add", rel_path])
+        if code != 0:
+            return JSONResponse(
+                {"ok": False, "stage": "add", "detail": out, "path": rel_path},
+                status_code=500,
+            )
+
+        msg = str(body.get("commit_message") or f"chore(journal): export {date_kst} data")
+        code, out = _run(["git", "commit", "-m", msg])
+        if code != 0:
+            # 이미 동일 내용이면 'nothing to commit' — 무해
+            if "nothing to commit" in out or "no changes added" in out:
+                return JSONResponse({
+                    "ok": True, "path": rel_path,
+                    "committed": False, "pushed": False,
+                    "note": "이미 같은 내용 — commit 생략",
+                })
+            return JSONResponse(
+                {"ok": False, "stage": "commit", "detail": out, "path": rel_path},
+                status_code=500,
+            )
+
+        pushed = False
+        if do_push:
+            code, out = _run(["git", "push"])
+            if code != 0:
+                return JSONResponse(
+                    {"ok": False, "stage": "push", "detail": out,
+                     "path": rel_path, "committed": True},
+                    status_code=500,
+                )
+            pushed = True
+
+        return JSONResponse({
+            "ok": True, "path": rel_path,
+            "committed": True, "pushed": pushed,
+            "counts": journal.get("counts"),
         })
 
     @app.get("/api/limits")
