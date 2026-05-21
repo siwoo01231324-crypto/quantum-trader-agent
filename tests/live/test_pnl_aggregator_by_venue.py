@@ -150,7 +150,7 @@ def test_per_venue_daily_excludes_yesterday_fills():
 
 
 def test_per_venue_daily_resets_when_business_date_advances():
-    """Crossing KST 09:00 next day resets per-venue daily (not cumulative)."""
+    """2026-05-22 변경: KST 자정 (00:00) 경계로 per-venue daily 리셋."""
     fixed_now = [_kst("2026-05-06T14:00:00")]
     agg = PnLAggregator(kst_now=lambda: fixed_now[0])
     agg.record_fill(
@@ -164,8 +164,8 @@ def test_per_venue_daily_resets_when_business_date_advances():
         ts=_kst("2026-05-06T14:00:00"),
     )
     assert agg.daily_by_venue() == {"binance": 10.0}
-    # Advance past KST 09:00 next day
-    fixed_now[0] = _kst("2026-05-07T09:30:00")
+    # Advance past KST 자정
+    fixed_now[0] = _kst("2026-05-07T00:30:00")
     assert agg.daily_by_venue() == {}
     assert agg.realtime_by_venue() == {"binance": 10.0}  # cumulative untouched
 
@@ -190,19 +190,21 @@ def test_per_venue_monthly_resets_when_business_month_advances():
     assert agg.realtime_by_venue() == {"binance": 30.0}
 
 
-def test_per_venue_kst_0900_boundary_for_binance():
-    """Binance fill at 08:30 KST belongs to previous BD → not in daily."""
+def test_per_venue_midnight_boundary_for_binance():
+    """2026-05-22 변경: KST 자정 경계. 어제 23:30 KST 의 binance fill 은 어제
+    BD → 오늘 daily 미포함. Crypto 24/7 운영 직관과 일치.
+    """
     now_kst = _kst("2026-05-06T14:00:00")
     agg = _aggregator(now_kst)
     agg.record_fill(
         strategy_id="alpha", symbol="BTCUSDT", side="buy",
         qty=Decimal("1"), price=Decimal("100"), fee=Decimal("0"),
-        ts=_kst("2026-05-06T08:00:00"),
+        ts=_kst("2026-05-05T23:00:00"),
     )
     agg.record_fill(
         strategy_id="alpha", symbol="BTCUSDT", side="sell",
         qty=Decimal("1"), price=Decimal("110"), fee=Decimal("0"),
-        ts=_kst("2026-05-06T08:30:00"),
+        ts=_kst("2026-05-05T23:30:00"),
     )
     assert agg.realtime_by_venue() == {"binance": 10.0}
-    assert agg.daily_by_venue() == {}  # 08:30 fill belongs to yesterday BD
+    assert agg.daily_by_venue() == {}  # 어제 BD — 오늘 daily 미포함

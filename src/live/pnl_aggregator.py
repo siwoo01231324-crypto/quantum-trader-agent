@@ -7,10 +7,12 @@ Realized PnL only:
   buy:  cost_basis updated (qty-weighted average), realized = -fee
   sell: realized = (price - avg_cost) * qty - fee, holdings -= qty
 
-KST 09:00 business-date convention (KRX trading day):
-  - A fill timestamped before 09:00 KST belongs to the previous business day.
-  - daily / monthly only accumulate fills whose business date == today's BD.
-  - Reading `daily` / `monthly` after the BD has rolled returns 0 (auto-reset).
+KST 자정 (00:00) business-date convention (2026-05-22 변경, 이전 09:00):
+  - 모든 fill 은 KST 캘린더 날짜로 그대로 분류 (자정 경계).
+  - daily / monthly 는 fill 의 business date == today's BD 일 때만 누적.
+  - BD roll 후 `daily` / `monthly` 호출 시 자동 reset 으로 0 반환.
+  - 자정 컨벤션은 crypto 24/7 운영자 직관과 일치. KRX 장 (09:00~15:30) 은
+    자정 boundary 안쪽이라 KIS paper PnL 카운팅 zero impact.
 
 Strategy attribution comes from the explicit ``strategy_id`` persisted in the
 `order_filled` WAL payload (PaperBroker copies `OrderRequest.strategy_id`,
@@ -24,7 +26,7 @@ for new fills. A fill with neither is dropped (logged) — unattributable.
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, time as dtime, timedelta
+from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Callable
@@ -71,7 +73,7 @@ class PnLAggregator:
         # Per-venue realized P&L (currency-correct — never cross-summed).
         # Keyed by classify_venue(symbol): "binance" (USDT) / "kis" (KRW) /
         # "unknown". Mirrors the cumulative/daily/monthly scalar lifecycle
-        # incl. the SAME KST-09:00 business-window resets.
+        # incl. the SAME KST 자정 business-window resets.
         self._cum_by_venue: dict[str, float] = {}
         self._daily_by_venue: dict[str, float] = {}
         self._monthly_by_venue: dict[str, float] = {}
@@ -310,8 +312,15 @@ class PnLAggregator:
 
     @staticmethod
     def _business_date(kst_dt: datetime) -> date:
-        if kst_dt.time() < dtime(hour=9):
-            return (kst_dt - timedelta(days=1)).date()
+        """KST 자정 (00:00) 영업일 경계 — fill 의 KST 캘린더 날짜 그대로.
+
+        2026-05-22 변경: 이전엔 KRX 장 시작 시각인 KST 09:00 을 경계로 사용
+        ("어제 09:00 ~ 오늘 09:00 = 오늘 영업일"). Crypto 24/7 운영자 관점
+        에선 직관적이지 않음 ("새벽 거래 = 어제로 카운트" 헷갈림). 자정 컨벤션
+        으로 변경 — 일간 PnL 이 매일 KST 자정에 0 으로 리셋. KRX 영업 시간
+        (09:00 ~ 15:30) 은 자정 boundary 안쪽이라 KIS paper 거래 PnL 카운팅
+        은 zero impact.
+        """
         return kst_dt.date()
 
     @staticmethod
