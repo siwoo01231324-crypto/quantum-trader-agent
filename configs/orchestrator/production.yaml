@@ -286,13 +286,17 @@ strategies:
   - id: cand-c-2026-05-20-live-rsi-oversold-volume-spike
     class: backtest.strategies.live_rsi_oversold_volume_spike.LiveRsiOversoldVolumeSpike
     kwargs:
-      default_size: 0.050  # avail cash 5%
+      # 2026-05-22 사이즈 x10 (마진 5% 운영). default_size 는 *노셔널* 비율.
+      # 노셔널 = 0.5 × equity, 10x 레버리지 가정 → 마진 = 5% × equity.
+      # Stop_loss 0.5% 코인 = -5% 마진 = 0.25% equity / trade max loss.
+      # 전제: Binance UI 에서 종목별 leverage = 10x 설정.
+      default_size: 0.500
       stop_loss_pct: 0.005   # 코인 -0.5% (포지션 -5% at 10x)
       take_profit_pct: 0.010 # 코인 +1.0% (포지션 +10% at 10x)
   - id: cand-c-2026-05-20-live-breakout-with-atr-stop
     class: backtest.strategies.live_breakout_with_atr_stop.LiveBreakoutWithAtrStop
     kwargs:
-      default_size: 0.050  # avail cash 5%
+      default_size: 0.500  # 2026-05-22 사이즈 x10 — 노셔널 50% (마진 5% at 10x)
       # 정적 fallback (ATR 계산 실패 / mult 미설정 시 사용). ATR mult 활성 시
       # 진입마다 동적 override 로 덮어쓰임.
       stop_loss_pct: 0.005
@@ -311,13 +315,13 @@ strategies:
   - id: cand-c-2026-05-20-live-bb-lower-bounce
     class: backtest.strategies.live_bb_lower_bounce.LiveBbLowerBounce
     kwargs:
-      default_size: 0.033  # avail cash 3.3%
+      default_size: 0.330  # 2026-05-22 x10 — 노셔널 33% (마진 3.3% at 10x), 상대 비중 유지
       stop_loss_pct: 0.005
       take_profit_pct: 0.010
   - id: cand-c-2026-05-20-live-oversold-with-divergence
     class: backtest.strategies.live_oversold_with_divergence.LiveOversoldWithDivergence
     kwargs:
-      default_size: 0.033  # avail cash 3.3%
+      default_size: 0.330  # 2026-05-22 x10 — 노셔널 33% (마진 3.3% at 10x), 상대 비중 유지
       stop_loss_pct: 0.005
       take_profit_pct: 0.010
   #
