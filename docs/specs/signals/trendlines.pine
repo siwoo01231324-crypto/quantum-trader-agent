@@ -1,0 +1,96 @@
+//@version=6
+// Pivot Trendlines (TradingView 카피본 v7) — 2026-05-22
+//
+// 원본: TradingView "[Trendlines]" (closed-source, 체험판 만료 대비)
+// 사용자 피드백 5회 iteration 후 "얼추 맞는다" 시점의 안정본.
+//
+// 원본 settings (image ground truth):
+//   Period: 10, Type: Wicks, Extend: 20, Draw Targets: ON
+//   Trendline Width 1, Transparency 0, Fill Transparency 70
+//
+// 사용자 customization (원본 default 와 다름):
+//   - 색 swap: 상승=빨강 (color.red), 하강=완전 초록 (color.green)
+//   - transparency 30 (덜 진함)
+//   - lookback 10
+//   - 노란 dashed box 미사용 (사용자 요청으로 v6 에서 제거)
+
+indicator("Pivot Trendlines (역공학 v7)",
+          shorttitle="Trendlines v7",
+          overlay=true,
+          max_lines_count=100,
+          max_labels_count=200)
+
+i_lookback     = input.int(10,  "Pivot lookback", minval=1)
+i_keep_lines   = input.int(60,  "추세선 N 유지 (과거 포함)", minval=2, maxval=100)
+i_target_ratio = input.float(1.0, "Target projection 비율", minval=0.3, step=0.1)
+i_target_offset = input.int(8, "Target 라벨 가로 offset (bars)", minval=1)
+i_show_marks   = input.bool(true, "▲▼ pivot 마커")
+i_show_targets = input.bool(true, "Target 라벨")
+
+C_UP_TL    = color.new(color.red, 30)
+C_DOWN_TL  = color.new(color.green, 30)
+C_TGT_UP   = color.new(color.green, 30)
+C_TGT_DOWN = color.new(color.red, 30)
+
+ph = ta.pivothigh(high, i_lookback, i_lookback)
+pl = ta.pivotlow(low,   i_lookback, i_lookback)
+
+var int   last_ph_bar = na
+var float last_ph_price = na
+var int   prev_ph_bar = na
+var float prev_ph_price = na
+var int   last_pl_bar = na
+var float last_pl_price = na
+var int   prev_pl_bar = na
+var float prev_pl_price = na
+
+var line[] tl_lines = array.new<line>()
+
+prune_lines() =>
+    while array.size(tl_lines) > i_keep_lines
+        old = array.shift(tl_lines)
+        line.delete(old)
+
+if not na(ph)
+    pivot_bar = bar_index - i_lookback
+    if i_show_marks
+        label.new(pivot_bar, ph, "",
+                  style=label.style_triangledown,
+                  color=color.new(color.red, 0),
+                  size=size.tiny, yloc=yloc.abovebar)
+    prev_ph_bar := last_ph_bar
+    prev_ph_price := last_ph_price
+    last_ph_bar := pivot_bar
+    last_ph_price := ph
+    if not na(prev_ph_bar) and ph < prev_ph_price
+        ln = line.new(prev_ph_bar, prev_ph_price, pivot_bar, ph,
+                      color=C_DOWN_TL, width=3, extend=extend.none)
+        array.push(tl_lines, ln)
+        prune_lines()
+        target_down = ph - (prev_ph_price - ph) * i_target_ratio
+        if i_show_targets
+            label.new(pivot_bar + i_target_offset, target_down, "Target",
+                      style=label.style_label_left,
+                      color=C_TGT_DOWN, textcolor=color.white, size=size.small)
+
+if not na(pl)
+    pivot_bar = bar_index - i_lookback
+    if i_show_marks
+        label.new(pivot_bar, pl, "",
+                  style=label.style_triangleup,
+                  color=color.new(color.green, 0),
+                  size=size.tiny, yloc=yloc.belowbar)
+    prev_pl_bar := last_pl_bar
+    prev_pl_price := last_pl_price
+    last_pl_bar := pivot_bar
+    last_pl_price := pl
+    if not na(prev_pl_bar) and pl > prev_pl_price
+        ln = line.new(prev_pl_bar, prev_pl_price, pivot_bar, pl,
+                      color=C_UP_TL, width=3, extend=extend.none)
+        array.push(tl_lines, ln)
+        prune_lines()
+        target_up = pl + (pl - prev_pl_price) * i_target_ratio
+        if i_show_targets
+            label.new(pivot_bar + i_target_offset, target_up, "Target",
+                      style=label.style_label_left,
+                      color=C_TGT_UP, textcolor=color.white, size=size.small)
