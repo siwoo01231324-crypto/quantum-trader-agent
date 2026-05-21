@@ -1633,11 +1633,23 @@ async function stratPosRefresh() {{
         curHtml = '<span class="' + cls + '">' + fmtNum(markVal, 4) + '</span>';
       }}
       // PnL% — server-computed (sign-corrected for LONG/SHORT)
+      // + 2026-05-22: unrealized_pnl 도 표시 (Binance ground truth 의
+      //   unRealizedProfit 을 |net_qty| 비율로 prorate 한 USDT 값).
+      //   자체 (mark-avg)×qty 계산 vs Binance UI 사이의 mismatch 차단.
       let pnlPctHtml = '<span class="col-dim">—</span>';
-      if (s.pnl_pct != null) {{
-        const cls = (s.pnl_pct > 0) ? 'col-green' : (s.pnl_pct < 0 ? 'col-red' : 'col-dim');
-        const sign = s.pnl_pct > 0 ? '+' : '';
-        pnlPctHtml = '<span class="' + cls + '">' + sign + fmtNum(s.pnl_pct, 2) + '%</span>';
+      if (s.pnl_pct != null || s.unrealized_pnl != null) {{
+        const parts = [];
+        if (s.pnl_pct != null) {{
+          const cls = (s.pnl_pct > 0) ? 'col-green' : (s.pnl_pct < 0 ? 'col-red' : 'col-dim');
+          const sign = s.pnl_pct > 0 ? '+' : '';
+          parts.push('<span class="' + cls + '">' + sign + fmtNum(s.pnl_pct, 2) + '%</span>');
+        }}
+        if (s.unrealized_pnl != null) {{
+          const ucls = (s.unrealized_pnl > 0) ? 'col-green' : (s.unrealized_pnl < 0 ? 'col-red' : 'col-dim');
+          const usign = s.unrealized_pnl > 0 ? '+' : '';
+          parts.push('<div style="font-size:11px;margin-top:2px"><span class="' + ucls + '">' + usign + fmtNum(s.unrealized_pnl, 2) + ' USDT</span></div>');
+        }}
+        pnlPctHtml = parts.join('');
       }}
       const pnlHtml = fmtPnl(s.realized_pnl);
       const ts = fmtKst(s.last_ts);
@@ -3101,6 +3113,40 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
         # ``pnl_pct`` (= (mark - avg)/avg * 100, only when both are positive
         # and the position is held NET LONG; short positions invert the sign).
         cache = state.price_cache
+
+        # 2026-05-22: Binance ground-truth 의 unRealizedProfit 을 row 마다
+        # 부여. 자체 (mark - avg) × qty 계산은 store qty 가 broker 와 어긋
+        # 났을 때 dashboard 가 다른 숫자를 보여주는 사고 (10x 사이즈 변경
+        # 직후 -1.4 vs Binance -14) 원인. 단일 source-of-truth 로 통일.
+        # 다중 전략이 같은 symbol 보유 시 |net_qty| 비율로 prorate. broker
+        # 조회 실패/empty 면 ``unrealized_pnl=None`` — 기존 row 들의 기타
+        # 필드 (pnl_pct / realized_pnl / qty 집계) 는 변경 zero.
+        broker_upnl_by_sym: dict[str, float] = {}
+        try:
+            provider = state.account_info_provider
+            if provider is not None:
+                fb = getattr(provider, "fetch_binance", None)
+                if callable(fb):
+                    bn = await asyncio.to_thread(fb)
+                    if isinstance(bn, dict) and bn.get("ok"):
+                        for p in bn.get("positions") or []:
+                            sym_u = (p.get("symbol") or "").upper()
+                            upnl = p.get("unrealized_pnl")
+                            if sym_u and isinstance(upnl, (int, float)):
+                                broker_upnl_by_sym[sym_u] = float(upnl)
+        except Exception:  # noqa: BLE001 — never 500 the dashboard
+            broker_upnl_by_sym = {}
+
+        # Pre-pass — per-symbol total store abs qty for multi-strategy prorate.
+        store_abs_by_sym: dict[str, float] = {}
+        for r in rows:
+            sym_u = (r["symbol"] or "").upper()
+            if sym_u:
+                store_abs_by_sym[sym_u] = (
+                    store_abs_by_sym.get(sym_u, 0.0)
+                    + abs(r["buy_qty"] - r["sell_qty"])
+                )
+
         out = []
         for r in rows:
             avg_px = (r["_px_sum"] / r["_px_n"]) if r["_px_n"] > 0 else None
@@ -3119,6 +3165,18 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
                 raw_pct = (mark_price - avg_px) / avg_px * 100.0
                 # NET short → invert (a price drop is a gain)
                 pnl_pct = raw_pct if net_qty > 0 else -raw_pct
+
+            # Broker ground-truth unrealized_pnl prorate by |net_qty| share.
+            unrealized_pnl: float | None = None
+            sym_u = (sym or "").upper()
+            broker_upnl_total = broker_upnl_by_sym.get(sym_u)
+            store_abs_total = store_abs_by_sym.get(sym_u, 0.0)
+            if broker_upnl_total is not None and store_abs_total > 0 and net_qty != 0:
+                share = abs(net_qty) / store_abs_total
+                # Clamp share to (0, 1] in case of pathological numeric edge.
+                share = min(1.0, max(0.0, share))
+                unrealized_pnl = broker_upnl_total * share
+
             out.append({
                 "strategy_id": sid,
                 "symbol": sym,
@@ -3131,6 +3189,7 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
                 "mark_price": round(mark_price, 6) if mark_price is not None else None,
                 "mark_ts": mark_ts,
                 "pnl_pct": round(pnl_pct, 3) if pnl_pct is not None else None,
+                "unrealized_pnl": round(unrealized_pnl, 4) if unrealized_pnl is not None else None,
                 "realized_pnl": realized_by_key.get((sid, sym)),
                 "last_ts": r["last_ts"],
             })
