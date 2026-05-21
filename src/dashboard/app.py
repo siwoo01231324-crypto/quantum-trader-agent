@@ -2314,7 +2314,19 @@ tbody td{padding:7px 10px;font-size:.78rem;border-bottom:1px solid #20262d;
   font-family:var(--mono);color:var(--text)}
 .kind-entry{color:var(--green);font-weight:700}
 .kind-exit{color:var(--red);font-weight:700}
-.side-buy{color:var(--green)}.side-sell{color:var(--red)}
+.side-buy,.dir-long{color:var(--green)}
+.side-sell,.dir-short{color:var(--red)}
+.outcome-win{color:var(--green);font-weight:700}
+.outcome-loss{color:var(--red);font-weight:700}
+.outcome-breakeven{color:var(--text2)}
+.toggle-group{display:inline-flex;gap:6px;flex-wrap:wrap}
+.tg-btn{padding:7px 14px;border-radius:4px;border:1px solid var(--border);background:var(--surface2);
+  color:var(--text2);font-size:.82rem;cursor:pointer;font-family:var(--sans);transition:all .12s}
+.tg-btn:hover{background:#252a30;color:var(--text)}
+.tg-btn.active{background:#1b2a44;border-color:#3b6acc;color:#fff;font-weight:600}
+.tg-btn.tg-win.active{background:rgba(14,203,129,.18);border-color:var(--green);color:var(--green)}
+.tg-btn.tg-loss.active{background:rgba(246,70,93,.18);border-color:var(--red);color:var(--red)}
+.pnl-pos{color:var(--green);font-weight:600}.pnl-neg{color:var(--red);font-weight:600}
 .note-cell{color:var(--text2);max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--sans)}
 .empty{padding:30px;text-align:center;color:var(--text3);background:var(--surface);
   border-radius:6px;border:1px solid var(--border)}
@@ -2334,23 +2346,36 @@ tbody td{padding:7px 10px;font-size:.78rem;border-bottom:1px solid #20262d;
     <input id="symbol" placeholder="BTCUSDT, 005930 등" autofocus>
   </div>
   <div class="row">
-    <label for="side">방향</label>
-    <select id="side"><option value="buy">BUY (매수)</option><option value="sell">SELL (매도)</option></select>
-  </div>
-  <div class="row">
-    <label for="kind">분류</label>
-    <select id="kind">
-      <option value="entry">진입 (entry)</option>
-      <option value="exit">청산 (exit)</option>
-    </select>
+    <label>방향</label>
+    <div class="toggle-group" id="dir-group">
+      <button type="button" class="tg-btn active" data-val="long">LONG (롱)</button>
+      <button type="button" class="tg-btn" data-val="short">SHORT (숏)</button>
+    </div>
   </div>
   <div class="row">
     <label for="qty">수량</label>
     <input id="qty" type="number" step="any" placeholder="0.01">
   </div>
   <div class="row">
-    <label for="price">가격</label>
-    <input id="price" type="number" step="any" placeholder="진입/청산 단가">
+    <label for="entry_price">진입가</label>
+    <input id="entry_price" type="number" step="any" placeholder="진입 단가 (필수)">
+  </div>
+  <div class="row">
+    <label for="exit_price">청산가</label>
+    <input id="exit_price" type="number" step="any" placeholder="청산 단가 (보유중이면 비워두기)">
+  </div>
+  <div class="row">
+    <label for="realized_pnl">실현손익</label>
+    <input id="realized_pnl" type="number" step="any" placeholder="예: +0.054 (USDT/KRW, 사용자 입력)">
+  </div>
+  <div class="row">
+    <label>결과</label>
+    <div class="toggle-group" id="outcome-group">
+      <button type="button" class="tg-btn" data-val="">미지정</button>
+      <button type="button" class="tg-btn tg-win" data-val="win">익절</button>
+      <button type="button" class="tg-btn tg-loss" data-val="loss">손절</button>
+      <button type="button" class="tg-btn" data-val="breakeven">본전</button>
+    </div>
   </div>
   <div class="row">
     <label for="venue">거래소</label>
@@ -2365,7 +2390,7 @@ tbody td{padding:7px 10px;font-size:.78rem;border-bottom:1px solid #20262d;
     <textarea id="note" placeholder="진입 근거 (RSI 30 + BB 하단, 30분봉 도지 등) · 청산 근거 (TP 도달, 손절 룰)"></textarea>
   </div>
   <div class="help">
-    Claude Routines 가 일일 리포트 생성 시 이 메모를 자동 vs 수동 거래 대조 분석에 사용. 익절·손절 시 "어떤 지표 / 어떤 판단으로 들어갔다" 가 기록되어야 "왜 잘했나 / 왜 못했나" 분석 가능.
+    청산가·실현손익·결과는 보유중인 거래면 비워둬도 됨. Routines 가 일일 리포트 생성 시 메모를 자동 vs 수동 대조 분석에 사용.
   </div>
   <div class="btn-row">
     <button class="btn btn-primary" id="submit-btn" onclick="submitTrade()">거래 추가</button>
@@ -2373,7 +2398,7 @@ tbody td{padding:7px 10px;font-size:.78rem;border-bottom:1px solid #20262d;
   <div class="status" id="status"></div>
 </div>
 
-<div class="h2">📋 오늘 입력한 수동 거래</div>
+<div class="h2" id="list-hdr">📋 오늘 입력한 수동 거래</div>
 <div id="today-list"><div class="empty">로딩 중…</div></div>
 
 <script>
@@ -2386,21 +2411,45 @@ function fmtKst(iso){
       day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).format(d);
   }catch(e){ return iso; }
 }
+// 토글 그룹 활성화 헬퍼
+function bindToggle(groupId){
+  const g=document.getElementById(groupId);
+  if(!g) return;
+  g.addEventListener('click', e=>{
+    const b=e.target.closest('.tg-btn');
+    if(!b||!g.contains(b)) return;
+    g.querySelectorAll('.tg-btn').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+  });
+}
+bindToggle('dir-group');
+bindToggle('outcome-group');
+function toggleValue(groupId){
+  const g=document.getElementById(groupId);
+  if(!g) return '';
+  const a=g.querySelector('.tg-btn.active');
+  return a?a.getAttribute('data-val'):'';
+}
+let showAll=false;
 async function submitTrade(){
   const btn=document.getElementById('submit-btn');
   const status=document.getElementById('status');
+  const exit_v=document.getElementById('exit_price').value.trim();
+  const pnl_v=document.getElementById('realized_pnl').value.trim();
   const payload={
     symbol:document.getElementById('symbol').value.trim().toUpperCase(),
-    side:document.getElementById('side').value,
-    kind:document.getElementById('kind').value,
+    direction:toggleValue('dir-group')||'long',
     qty:parseFloat(document.getElementById('qty').value),
-    price:parseFloat(document.getElementById('price').value),
+    entry_price:parseFloat(document.getElementById('entry_price').value),
+    exit_price: exit_v===''?null:parseFloat(exit_v),
+    realized_pnl: pnl_v===''?null:parseFloat(pnl_v),
+    outcome:toggleValue('outcome-group')||null,
     venue:document.getElementById('venue').value,
     note:document.getElementById('note').value.trim(),
   };
-  if(!payload.symbol||!payload.qty||!payload.price){
+  if(!payload.symbol||!payload.qty||!payload.entry_price){
     status.className='status error';
-    status.textContent='종목/수량/가격은 필수';
+    status.textContent='종목/수량/진입가는 필수';
     return;
   }
   btn.disabled=true;
@@ -2411,13 +2460,22 @@ async function submitTrade(){
     const j=await r.json();
     if(j.ok){
       status.className='status success';
-      status.textContent=`거래 추가 완료 — ${payload.symbol} ${payload.side.toUpperCase()} ${payload.qty} @ ${payload.price}`;
+      const dirTag=payload.direction.toUpperCase();
+      status.textContent=`거래 추가 완료 — ${payload.symbol} ${dirTag} ${payload.qty} @ ${payload.entry_price}`+
+        (payload.exit_price?` → ${payload.exit_price}`:'')+
+        (payload.realized_pnl!=null?` (PnL ${payload.realized_pnl})`:'');
       document.getElementById('symbol').value='';
       document.getElementById('qty').value='';
-      document.getElementById('price').value='';
+      document.getElementById('entry_price').value='';
+      document.getElementById('exit_price').value='';
+      document.getElementById('realized_pnl').value='';
       document.getElementById('note').value='';
+      // outcome 토글 초기화
+      const og=document.getElementById('outcome-group');
+      og.querySelectorAll('.tg-btn').forEach(x=>x.classList.remove('active'));
+      og.querySelector('.tg-btn[data-val=""]').classList.add('active');
       document.getElementById('symbol').focus();
-      await loadToday();
+      await loadList();
     }else{
       status.className='status error';
       status.textContent='저장 실패: '+(j.reason||'unknown');
@@ -2430,26 +2488,56 @@ async function submitTrade(){
     btn.textContent='거래 추가';
   }
 }
-async function loadToday(){
+function fmtPnlCell(v){
+  if(v==null||v==='') return '<span style="color:var(--text3)">—</span>';
+  const n=Number(v);
+  if(!Number.isFinite(n)) return esc(String(v));
+  const cls=n>0?'pnl-pos':(n<0?'pnl-neg':'');
+  const sign=n>0?'+':'';
+  return `<span class="${cls}">${sign}${n}</span>`;
+}
+async function loadList(){
+  const url=showAll?'/api/manual_trade/recent?limit=50':'/api/manual_trade/today';
   try{
-    const r=await fetch('/api/manual_trade/today');
+    const r=await fetch(url);
     const j=await r.json();
     const list=document.getElementById('today-list');
     const trades=j.trades||[];
+    const total=j.total_all_time||0;
+    const hdr=document.getElementById('list-hdr');
+    if(hdr){
+      hdr.innerHTML='📋 '+(showAll?'최근 50건':'오늘 입력')+
+        ' <span style="color:var(--text3);font-size:.8rem;font-weight:400">(전체 누적 '+total+'건 저장됨)</span>'+
+        ' <button class="tg-btn" id="toggle-list-btn" style="margin-left:10px;font-size:.7rem">'+
+        (showAll?'오늘만 보기':'전체 보기')+'</button>';
+      const tb=document.getElementById('toggle-list-btn');
+      if(tb) tb.addEventListener('click',()=>{showAll=!showAll;loadList();});
+    }
     if(trades.length===0){
-      list.innerHTML='<div class="empty">오늘 입력한 수동 거래 없음.</div>';
+      const hint=(!showAll&&total>0)?' (전체 '+total+'건 있음 — "전체 보기" 클릭)':'';
+      list.innerHTML='<div class="empty">'+(showAll?'저장된 수동 거래 없음.':'오늘 입력한 수동 거래 없음.'+hint)+'</div>';
       return;
     }
-    let html='<table><thead><tr><th>시각</th><th>거래소</th><th>종목</th><th>방향</th><th>분류</th><th>수량</th><th>가격</th><th>메모</th></tr></thead><tbody>';
+    let html='<table><thead><tr><th>시각</th><th>거래소</th><th>종목</th><th>방향</th><th>수량</th><th>진입가</th><th>청산가</th><th>실현손익</th><th>결과</th><th>메모</th></tr></thead><tbody>';
     for(const t of trades){
+      const dir=t.direction||(t.side==='buy'?'long':t.side==='sell'?'short':'');
+      const dirTxt=dir?dir.toUpperCase():(t.side||'').toUpperCase();
+      const dirCls=dir==='long'?'dir-long':(dir==='short'?'dir-short':'');
+      const entry=t.entry_price!=null?t.entry_price:(t.price!=null?t.price:'—');
+      const exitP=t.exit_price!=null&&t.exit_price!==''?t.exit_price:'—';
+      const outcome=t.outcome||'';
+      const outcomeTxt=outcome==='win'?'익절':outcome==='loss'?'손절':outcome==='breakeven'?'본전':'—';
+      const outcomeCls=outcome?('outcome-'+outcome):'';
       html+=`<tr>
         <td>${esc(fmtKst(t.ts))}</td>
         <td>${esc(t.venue||'—')}</td>
         <td>${esc(t.symbol)}</td>
-        <td class="side-${esc(t.side)}">${esc((t.side||'').toUpperCase())}</td>
-        <td class="kind-${esc(t.kind)}">${esc((t.kind||'').toUpperCase())}</td>
+        <td class="${dirCls}">${esc(dirTxt)}</td>
         <td>${esc(t.qty)}</td>
-        <td>${esc(t.price)}</td>
+        <td>${esc(entry)}</td>
+        <td>${esc(exitP)}</td>
+        <td>${fmtPnlCell(t.realized_pnl)}</td>
+        <td class="${outcomeCls}">${esc(outcomeTxt)}</td>
         <td class="note-cell" title="${esc(t.note)}">${esc(t.note)}</td>
       </tr>`;
     }
@@ -2459,7 +2547,7 @@ async function loadToday(){
     document.getElementById('today-list').innerHTML='<div class="empty">로딩 실패: '+esc(String(e))+'</div>';
   }
 }
-loadToday();
+loadList();
 </script>
 </body></html>"""
 
@@ -3245,54 +3333,105 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
 
     @app.post("/api/manual_trade")
     async def api_manual_trade_post(body: dict[str, Any]) -> JSONResponse:
-        """수동 거래 1건 append. body: {symbol, side, kind, qty, price, venue, note, ts?}.
+        """수동 거래 1건 append.
 
-        - side: "buy" | "sell"
-        - kind: "entry" | "exit"
-        - venue: "binance" | "kis" | "other"
-        - note: 진입/청산 근거 (사용자가 자유 입력)
-        - ts: ISO8601 (생략 시 현재 UTC)
+        Required: ``symbol``, ``qty``, (``entry_price`` or ``price``).
+        Optional new (v2 schema): ``direction`` ("long"/"short"),
+        ``exit_price``, ``realized_pnl``, ``outcome`` ("win"/"loss"/"breakeven").
+        Legacy (v1) 호환: ``side`` ("buy"/"sell"), ``kind`` ("entry"/"exit"),
+        ``price`` 도 그대로 받음.
+
+        Auto-derived (사용자 편의):
+        - ``side`` ← direction (long→buy, short→sell) when only direction given
+        - ``direction`` ← side (buy→long, sell→short) when only legacy side given
+        - ``kind="roundtrip"`` when ``exit_price`` > 0; else "entry"
+        - ``price`` ← entry_price (legacy reader 호환)
         """
         symbol = str(body.get("symbol") or "").strip().upper()
+        direction = str(body.get("direction") or "").strip().lower()
         side = str(body.get("side") or "").strip().lower()
-        kind = str(body.get("kind") or "entry").strip().lower()
+        kind = str(body.get("kind") or "").strip().lower()
         venue = str(body.get("venue") or "other").strip().lower()
         note = str(body.get("note") or "").strip()
-        try:
-            qty = float(body.get("qty") or 0)
-            price = float(body.get("price") or 0)
-        except (TypeError, ValueError):
+        outcome = str(body.get("outcome") or "").strip().lower() or None
+
+        def _num(v: Any) -> float | None:
+            if v is None or v == "":
+                return None
+            try:
+                return float(v)
+            except (TypeError, ValueError):
+                return None
+
+        qty = _num(body.get("qty"))
+        entry_price = _num(body.get("entry_price"))
+        if entry_price is None:
+            entry_price = _num(body.get("price"))
+        exit_price = _num(body.get("exit_price"))
+        realized_pnl = _num(body.get("realized_pnl"))
+
+        if qty is None or entry_price is None:
             return JSONResponse(
-                {"ok": False, "reason": "qty/price must be numeric"},
+                {"ok": False, "reason": "qty/entry_price must be numeric"},
                 status_code=400,
             )
-        if not symbol or qty <= 0 or price <= 0:
+        if not symbol or qty <= 0 or entry_price <= 0:
             return JSONResponse(
-                {"ok": False, "reason": "symbol/qty/price are required"},
+                {"ok": False, "reason": "symbol/qty/entry_price are required"},
                 status_code=400,
             )
+
+        if direction not in ("long", "short", ""):
+            return JSONResponse(
+                {"ok": False, "reason": "direction must be long or short"},
+                status_code=400,
+            )
+        if outcome and outcome not in ("win", "loss", "breakeven"):
+            return JSONResponse(
+                {"ok": False, "reason": "outcome must be win/loss/breakeven"},
+                status_code=400,
+            )
+
+        if direction and side not in ("buy", "sell"):
+            side = "buy" if direction == "long" else "sell"
+        if not direction and side in ("buy", "sell"):
+            direction = "long" if side == "buy" else "short"
         if side not in ("buy", "sell"):
             return JSONResponse(
-                {"ok": False, "reason": "side must be buy or sell"},
+                {"ok": False, "reason": "side or direction is required"},
                 status_code=400,
             )
-        if kind not in ("entry", "exit"):
+
+        if not kind:
+            kind = "roundtrip" if (exit_price is not None and exit_price > 0) else "entry"
+        if kind not in ("entry", "exit", "roundtrip"):
             return JSONResponse(
-                {"ok": False, "reason": "kind must be entry or exit"},
+                {"ok": False, "reason": "kind must be entry/exit/roundtrip"},
                 status_code=400,
             )
+
         ts_raw = body.get("ts")
         ts = (
             str(ts_raw) if ts_raw
             else datetime.now(timezone.utc).isoformat()
         )
         record = {
-            "schema_version": 1,
+            "schema_version": 2,
             "ts": ts,
             "event_type": "manual_trade",
             "payload": {
-                "symbol": symbol, "side": side, "kind": kind,
-                "qty": qty, "price": price, "venue": venue, "note": note,
+                "symbol": symbol,
+                "direction": direction,
+                "side": side,  # legacy 호환
+                "kind": kind,
+                "qty": qty,
+                "entry_price": entry_price,
+                "price": entry_price,  # legacy: Routines prompt 가 price 로 읽음
+                "exit_price": exit_price,
+                "realized_pnl": realized_pnl,
+                "outcome": outcome,
+                "venue": venue,
+                "note": note,
             },
         }
         path = _manual_trade_log_path()
@@ -3308,18 +3447,17 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
             )
         return JSONResponse({"ok": True, "ts": ts, "log_path": str(path)})
 
-    @app.get("/api/manual_trade/today")
-    async def api_manual_trade_today() -> JSONResponse:
-        """오늘(KST 자정~) 의 수동 거래 list. /manual 페이지 + Routines 가 사용."""
+    def _read_manual_trades_all() -> list[dict]:
+        """log JSONL 전체를 list[{ts, ...payload}] 로 읽음. corruption tolerant.
+
+        시각 내림차순. 디스크 read 1회 — today/recent 양쪽이 재사용.
+        """
         path = _manual_trade_log_path()
         if not path.exists():
-            return JSONResponse({"trades": [], "log_path": str(path)})
-        kst_now = datetime.now(_KST)
-        kst_midnight = kst_now.replace(hour=0, minute=0, second=0, microsecond=0)
-        utc_cutoff = kst_midnight.astimezone(timezone.utc)
+            return []
         out: list[dict] = []
+        import json as _json
         try:
-            import json as _json
             for line in path.read_text(encoding="utf-8").splitlines():
                 line = line.strip()
                 if not line:
@@ -3328,22 +3466,53 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
                     rec = _json.loads(line)
                 except _json.JSONDecodeError:
                     continue
-                try:
-                    rec_ts = datetime.fromisoformat(
-                        str(rec.get("ts", "")).replace("Z", "+00:00")
-                    )
-                except ValueError:
-                    continue
-                if rec_ts >= utc_cutoff:
-                    pl = rec.get("payload") or {}
-                    out.append({"ts": rec.get("ts"), **pl})
-        except Exception as err:  # noqa: BLE001
-            return JSONResponse({
-                "trades": [], "log_path": str(path),
-                "error": f"{type(err).__name__}: {err}",
-            })
+                pl = rec.get("payload") or {}
+                out.append({"ts": rec.get("ts"), **pl})
+        except Exception:  # noqa: BLE001 — never 500
+            return []
         out.sort(key=lambda r: str(r.get("ts") or ""), reverse=True)
-        return JSONResponse({"trades": out, "log_path": str(path)})
+        return out
+
+    @app.get("/api/manual_trade/today")
+    async def api_manual_trade_today() -> JSONResponse:
+        """오늘(KST 자정~) 수동 거래 list + 전체 누적 count.
+
+        Routines 는 trades(오늘분)만 쓰지만 dashboard /manual UI 는
+        ``total_all_time`` 으로 "어제까지 입력한 것도 살아있음" 안내 가능.
+        """
+        path = _manual_trade_log_path()
+        all_trades = _read_manual_trades_all()
+        kst_now = datetime.now(_KST)
+        kst_midnight = kst_now.replace(hour=0, minute=0, second=0, microsecond=0)
+        utc_cutoff = kst_midnight.astimezone(timezone.utc)
+        today: list[dict] = []
+        for r in all_trades:
+            try:
+                rec_ts = datetime.fromisoformat(
+                    str(r.get("ts", "")).replace("Z", "+00:00")
+                )
+            except ValueError:
+                continue
+            if rec_ts >= utc_cutoff:
+                today.append(r)
+        return JSONResponse({
+            "trades": today,
+            "log_path": str(path),
+            "total_all_time": len(all_trades),
+        })
+
+    @app.get("/api/manual_trade/recent")
+    async def api_manual_trade_recent(
+        limit: int = Query(default=50, ge=1, le=500),
+    ) -> JSONResponse:
+        """시각 무관 최신 N건. 자정 컷오프 없음 — 사용자가 어제 입력한 거 확인용."""
+        path = _manual_trade_log_path()
+        all_trades = _read_manual_trades_all()
+        return JSONResponse({
+            "trades": all_trades[:limit],
+            "log_path": str(path),
+            "total_all_time": len(all_trades),
+        })
 
     @app.get("/manual", response_class=HTMLResponse)
     async def manual_page() -> HTMLResponse:
