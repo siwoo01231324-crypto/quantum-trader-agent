@@ -84,6 +84,12 @@ class AsyncStrategyOrchestrator:
         self._bar_count = 0
         self._refresh_every_n_bars = refresh_every_n_bars
         self._wal_observer = wal_observer
+        # 2026-05-21 — live-scanner BUY 통과 시 호출 콜백. ATR 기반 동적 stop
+        # 등 strategy 가 Signal 에 실어보낸 per-entry stop/TP/trailing pct 를
+        # LivePositionRiskManager.register_entry_override 로 전달한다. live_run
+        # 에서 risk_mgr.register_entry_override 메서드로 와이어. None 이면
+        # 콜백 안 함 (정적 policy 만 사용) = 기존 동작.
+        self._on_entry: Callable[..., None] | None = None
 
     # ---- sync delegation API -----------------------------------------------
 
@@ -452,6 +458,27 @@ class AsyncStrategyOrchestrator:
                     )
                     continue
                 self._live_entered.add(key)
+                # 2026-05-21 — Signal 에 동적 stop/TP/trailing pct override 가
+                # 들어있으면 risk manager 의 per-(sid, sym) dynamic policy 로
+                # 등록. 콜백 미연결 또는 override 셋이 모두 None 이면 no-op
+                # (정적 policy fallback). 단일 register 호출에 모두 모아 전달.
+                if self._on_entry is not None and (
+                    getattr(signal, "stop_loss_pct_override", None) is not None
+                    or getattr(signal, "take_profit_pct_override", None) is not None
+                    or getattr(signal, "trailing_stop_pct_override", None) is not None
+                ):
+                    try:
+                        self._on_entry(
+                            sid, order_symbol,
+                            stop_loss_pct=getattr(signal, "stop_loss_pct_override", None),
+                            take_profit_pct=getattr(signal, "take_profit_pct_override", None),
+                            trailing_stop_pct=getattr(signal, "trailing_stop_pct_override", None),
+                        )
+                    except Exception as err:  # noqa: BLE001 — defensive
+                        logger.warning(
+                            "_on_entry callback failed sid=%s sym=%s err=%s",
+                            sid, order_symbol, err,
+                        )
 
             # #238 Item 3 — orchestrator-level duplicate-order backstop for
             # non-live-scanner strategies. While a strategy's condition

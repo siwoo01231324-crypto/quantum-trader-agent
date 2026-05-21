@@ -28,6 +28,16 @@ class Signal:
     expected_return: Optional[float] = field(default=None, kw_only=True)
     win_probability: Optional[float] = field(default=None, kw_only=True)
     confidence: Optional[float] = field(default=None, kw_only=True)
+    # 2026-05-21 — per-entry 동적 stop/TP/trailing 거리 (% of entry price).
+    # ATR 기반 동적 stop 등 strategy 가 진입 시점에 변동성 보고 계산한 값을
+    # 한 번만 전달한다. None 이면 strategy class 의 정적 `stop_loss_pct` 등
+    # ClassVar 가 사용됨 (기존 동작). 본 필드는 LivePositionRiskManager 가
+    # orchestrator 의 _on_entry 콜백을 통해 받아 (sid, symbol) 별 dynamic
+    # policy override 로 저장 → 해당 포지션이 살아있는 동안 그 값으로 평가.
+    # Stop/TP fire 시 자동 정리.
+    stop_loss_pct_override: Optional[float] = field(default=None, kw_only=True)
+    take_profit_pct_override: Optional[float] = field(default=None, kw_only=True)
+    trailing_stop_pct_override: Optional[float] = field(default=None, kw_only=True)
 
 
 @runtime_checkable
