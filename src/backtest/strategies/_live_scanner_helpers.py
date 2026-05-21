@@ -46,3 +46,10 @@ class LiveScannerMixin:
     stop_loss_pct: ClassVar[float] = 0.03
     take_profit_pct: ClassVar[float] = 0.06
     trailing_stop_pct: ClassVar[float | None] = None
+    # 2026-05-21: stop/TP 청산 직후 같은 (sid, symbol) 재진입 차단 시간 (초).
+    # Default 0.0 = 차단 없음 (기존 동작 보존). 0 보다 크면 orchestrator 가
+    # `release_live_position()` 호출 시점에 monotonic 타임스탬프를 기록하고,
+    # 그 시점 + cooldown 안에 들어오는 BUY 신호는 통과시키지 않는다.
+    # Churn 방지용 (예: ATR breakout 직후 stop 맞고 즉시 재진입 반복).
+    # production.yaml 의 strategy kwargs 로 override 가능.
+    cooldown_after_stop_sec: ClassVar[float] = 0.0

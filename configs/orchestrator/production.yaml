@@ -296,6 +296,10 @@ strategies:
       stop_loss_pct: 0.005   # 코인 -0.5% (포지션 -5% at 10x)
       take_profit_pct: 0.010 # 코인 +1.0% (포지션 +10% at 10x)
       trailing_stop_pct: 0.005  # 코인 -0.5% trailing (포지션 -5% at 10x)
+      # 2026-05-21: stop 직후 같은 (sid, symbol) 5분간 재진입 차단.
+      # Breakout 자리에서 stop → 1초 만에 재진입 churn 으로 18초간 30회 거래
+      # / -$20 손실 사례 (NEARUSDT 16:57:49~16:58:07). cooldown 으로 차단.
+      cooldown_after_stop_sec: 300
   - id: cand-c-2026-05-20-live-bb-lower-bounce
     class: backtest.strategies.live_bb_lower_bounce.LiveBbLowerBounce
     kwargs:
