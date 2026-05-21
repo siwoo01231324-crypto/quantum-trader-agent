@@ -1,0 +1,48 @@
+{
+  "date_kst": "2026-05-22",
+  "kst_window_start": "2026-05-22T00:00:00+09:00",
+  "now_kst": "2026-05-22T01:07:42.095678+09:00",
+  "counts": {
+    "auto_fills": 0,
+    "auto_signals": 0,
+    "manual_trades": 1
+  },
+  "auto_fills": [],
+  "auto_signals": [],
+  "manual_trades": [
+    {
+      "ts": "2026-05-21T15:13:13.943177+00:00",
+      "symbol": "테스트",
+      "direction": "long",
+      "side": "buy",
+      "kind": "roundtrip",
+      "qty": 1.0,
+      "entry_price": 1.0,
+      "price": 1.0,
+      "exit_price": 1.0,
+      "realized_pnl": 1.0,
+      "outcome": "win",
+      "venue": "binance",
+      "note": "테스트"
+    }
+  ],
+  "cs_tsmom_top10": {
+    "fetched_at": "2026-05-21T16:07:42.108711+00:00",
+    "pin_date": "2026-05-21",
+    "available": true,
+    "top10": [
+      {
+        "symbol": "ZECUSDT",
+        "last_close": 671.13,
+        "last_ts": "2026-05-21T00:00:00",
+        "score": 1.9895531206467385,
+        "rank": 1,
+        "in_top_today": true,
+        "in_top_yday": true,
+        "liquid": true,
+        "signal": "HOLD",
+        "reason": "ok"
+      }
+    ]
+  }
+}
