@@ -61,6 +61,16 @@ class AsyncStrategyOrchestrator:
         # symbol) 진입 시 기록, LivePositionRiskManager 가 청산하면
         # release_live_position() 으로 해제 → 재진입 허용.
         self._live_entered: set[tuple[str, str]] = set()
+        # 2026-05-21 — stop/TP 청산 직후 cooldown 차단. release_live_position()
+        # 이 호출되면 strategy 의 `cooldown_after_stop_sec` 만큼 monotonic 타임
+        # 스탬프를 기록 → 그 안에 들어오는 BUY 신호는 통과 안 시킴. 본 dict 이
+        # 없으면 ATR breakout 자리에서 stop → 1초 만에 재진입 → 또 stop … 패턴
+        # 으로 18초간 30회 churn 하며 $20+ 손실 발생 사례 있음 (2026-05-21
+        # cand-c-breakout NEARUSDT 16:57:49~16:58:07). 키 = (sid, symbol),
+        # value = monotonic 만료 시각. 만료된 entry 는 dispatch 에서 자연
+        # cleanup. cooldown=0 인 strategy 는 dict 에 아예 안 들어감 = 기존
+        # 동작 100% 보존.
+        self._stop_cooldown_until: dict[tuple[str, str], float] = {}
         # #238 — orchestrator-level duplicate-order backstop (Item 3). Item 1
         # throttles momo at the strategy layer; this catches ANY non-live-
         # scanner strategy flooding identical (sid, symbol, side) intents per
@@ -88,8 +98,17 @@ class AsyncStrategyOrchestrator:
     def release_live_position(self, strategy_id: str, symbol: str) -> None:
         """#238 — LivePositionRiskManager 가 stop/TP 청산 시 호출. (sid, symbol)
         진입 기록을 해제해 다음 조건 충족 시 재진입 허용. 미호출 시 해당
-        strategy-symbol 은 프로세스 수명 동안 1회만 진입 (안전 측 fail-safe)."""
-        self._live_entered.discard((strategy_id, symbol))
+        strategy-symbol 은 프로세스 수명 동안 1회만 진입 (안전 측 fail-safe).
+
+        2026-05-21: strategy 가 `cooldown_after_stop_sec > 0` 을 선언했다면
+        그만큼 monotonic 시각을 기록 → dispatch 에서 cooldown 안의 BUY 신호
+        차단. cooldown=0 (default) 이면 dict 변경 0 → 기존 동작 보존."""
+        key = (strategy_id, symbol)
+        self._live_entered.discard(key)
+        strat = self._strategies.get(strategy_id)
+        cooldown_sec = float(getattr(strat, "cooldown_after_stop_sec", 0.0) or 0.0)
+        if cooldown_sec > 0.0:
+            self._stop_cooldown_until[key] = time.monotonic() + cooldown_sec
 
     def restore_live_entered(
         self, positions: dict[str, list[tuple[str, float]]],
@@ -413,6 +432,19 @@ class AsyncStrategyOrchestrator:
             is_live = getattr(self._strategies.get(sid), "is_live_scanner", False)
             if is_live and signal.action == "buy":
                 key = (sid, order_symbol)
+                # 2026-05-21 — stop 직후 cooldown 차단. release_live_position()
+                # 에서 기록한 만료 시각이 지났는지 확인. 만료된 entry 는 여기서
+                # 정리 (lazy cleanup) → dict 무한 성장 방지.
+                cooldown_until = self._stop_cooldown_until.get(key, 0.0)
+                if cooldown_until > 0.0:
+                    if time.monotonic() < cooldown_until:
+                        self._emit_strategy_evaluated(
+                            sid, symbol=order_symbol, decision="hold",
+                            reason="stop_cooldown_active", ts=ts,
+                        )
+                        continue
+                    # cooldown 만료 → cleanup
+                    self._stop_cooldown_until.pop(key, None)
                 if key in self._live_entered:
                     self._emit_strategy_evaluated(
                         sid, symbol=order_symbol, decision="hold",
