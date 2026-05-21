@@ -147,26 +147,59 @@ def test_daily_only_includes_today_fills():
     assert agg.daily == 5.0
 
 
-def test_kst_0900_business_date_boundary():
-    """A fill at KST 08:30 on 2026-05-06 belongs to the *previous* business
-    day (2026-05-05). Today (now=2026-05-06 14:00) → should NOT count."""
+def test_kst_midnight_business_date_boundary():
+    """2026-05-22 변경: KST 자정 (00:00) 경계. 2026-05-05T23:30 KST 의 fill
+    은 BD 2026-05-05. Now=2026-05-06 14:00 → 다음 BD 라 daily 미카운트."""
     now_kst = _kst("2026-05-06T14:00:00")
     agg = _aggregator(now_kst)
 
-    # Pre-position the realised gain at 08:30 KST on 2026-05-06 (= 2026-05-05 BD)
+    # 어제 BD (2026-05-05 KST) 안에서 round-trip (자정 boundary 안쪽).
     agg.record_fill(
         strategy_id="alpha", symbol="BTCUSDT", side="buy",
         qty=Decimal("1"), price=Decimal("100"), fee=Decimal("0"),
-        ts=_kst("2026-05-06T08:00:00"),
+        ts=_kst("2026-05-05T23:00:00"),
     )
     agg.record_fill(
         strategy_id="alpha", symbol="BTCUSDT", side="sell",
         qty=Decimal("1"), price=Decimal("110"), fee=Decimal("0"),
-        ts=_kst("2026-05-06T08:30:00"),
+        ts=_kst("2026-05-05T23:30:00"),
     )
 
     assert agg.realtime == 10.0
-    assert agg.daily == 0.0  # 08:30 fill belongs to yesterday's BD
+    assert agg.daily == 0.0  # 어제 BD — 오늘 daily 미카운트
+
+    # Sanity — 같은 종목 오늘 (2026-05-06 13:00 KST) 의 일부 거래는 daily 에 들어감.
+    agg.record_fill(
+        strategy_id="alpha", symbol="BTCUSDT", side="buy",
+        qty=Decimal("1"), price=Decimal("200"), fee=Decimal("0"),
+        ts=_kst("2026-05-06T13:00:00"),
+    )
+    agg.record_fill(
+        strategy_id="alpha", symbol="BTCUSDT", side="sell",
+        qty=Decimal("1"), price=Decimal("205"), fee=Decimal("0"),
+        ts=_kst("2026-05-06T13:30:00"),
+    )
+    assert agg.daily == 5.0
+    assert agg.realtime == 15.0
+
+
+def test_kst_0030_belongs_to_today_not_yesterday():
+    """2026-05-22 변경 검증: 자정 직후 (00:30) fill 은 *그 날* BD 에 속함.
+    이전 09:00 컨벤션이었다면 어제 BD 였음.
+    """
+    now_kst = _kst("2026-05-06T14:00:00")
+    agg = _aggregator(now_kst)
+    agg.record_fill(
+        strategy_id="alpha", symbol="BTCUSDT", side="buy",
+        qty=Decimal("1"), price=Decimal("100"), fee=Decimal("0"),
+        ts=_kst("2026-05-06T00:15:00"),
+    )
+    agg.record_fill(
+        strategy_id="alpha", symbol="BTCUSDT", side="sell",
+        qty=Decimal("1"), price=Decimal("110"), fee=Decimal("0"),
+        ts=_kst("2026-05-06T00:30:00"),
+    )
+    assert agg.daily == 10.0, "자정 직후 fill 은 오늘 BD"
 
 
 def test_replay_from_wal_reconstructs_state(tmp_path: Path):
@@ -221,8 +254,8 @@ def test_daily_resets_when_business_date_advances():
     )
     assert agg.daily == 10.0
 
-    # Advance time past KST 09:00 next day
-    fixed_now[0] = _kst("2026-05-07T09:30:00")
+    # Advance time past KST 자정 (2026-05-22 변경: 00:00 boundary)
+    fixed_now[0] = _kst("2026-05-07T00:30:00")
     assert agg.daily == 0.0
     assert agg.realtime == 10.0  # cumulative untouched
 
