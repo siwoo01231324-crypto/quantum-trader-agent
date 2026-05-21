@@ -1216,42 +1216,84 @@ if (typeof WebSocket !== 'undefined') {{ tlConnect(); }}
 
 // 2026-05-21 — Reconciliation 알림 토스트.
 function showReconcileBanner(payload) {{
-  let bar = document.getElementById('reconcile-banner');
-  if (!bar) {{
-    bar = document.createElement('div');
-    bar.id = 'reconcile-banner';
-    bar.style.cssText = 'position:fixed;top:8px;right:8px;max-width:520px;'
-      + 'background:#fff3cd;border:2px solid #ffc107;border-radius:8px;'
-      + 'padding:12px 16px;box-shadow:0 4px 12px rgba(0,0,0,0.15);'
-      + 'z-index:9999;font-size:13px;line-height:1.5;';
-    document.body.appendChild(bar);
+  // 2026-05-22 — 다크 테마 매칭 + auto_fix / alert_only_* 색상 구분 +
+  // (symbol, action) 단위 stack (중복 알림 합치고 timestamp 만 갱신).
+  let stack = document.getElementById('reconcile-stack');
+  if (!stack) {{
+    stack = document.createElement('div');
+    stack.id = 'reconcile-stack';
+    stack.style.cssText = 'position:fixed;top:12px;right:12px;'
+      + 'display:flex;flex-direction:column;gap:8px;'
+      + 'z-index:9999;max-width:380px;font-family:ui-monospace,Menlo,Consolas,monospace;';
+    document.body.appendChild(stack);
   }}
   const action = payload.action || 'unknown';
-  const actionLabel = action === 'auto_fix' ? '자동 동기화 완료'
-    : action === 'alert_only_phantom_broker' ? '⚠️ Broker 에 phantom 포지션'
-    : action === 'alert_only_multi_holder' ? '⚠️ 다중 전략 보유 — 수동 확인 필요'
+  const sym = payload.symbol || '?';
+  const dedupeKey = `${{sym}}:${{action}}`;
+  const isAutoFix = action === 'auto_fix';
+  const isPhantom = action === 'alert_only_phantom_broker';
+  const isMulti = action === 'alert_only_multi_holder';
+
+  let toast = stack.querySelector(`[data-key="${{dedupeKey}}"]`);
+  if (!toast) {{
+    toast = document.createElement('div');
+    toast.dataset.key = dedupeKey;
+    toast.style.cssText = 'background:#0f1116;border:1px solid;border-radius:6px;'
+      + 'padding:10px 12px;color:#d8dde7;font-size:12px;line-height:1.45;'
+      + 'box-shadow:0 4px 14px rgba(0,0,0,0.4);min-width:340px;';
+    toast.style.borderColor = isAutoFix ? '#15803d'
+      : isPhantom ? '#dc2626'
+      : isMulti ? '#d97706'
+      : '#64748b';
+    stack.appendChild(toast);
+  }}
+
+  const badgeColor = isAutoFix ? '#22c55e'
+    : isPhantom ? '#ef4444'
+    : isMulti ? '#f59e0b'
+    : '#94a3b8';
+  const badgeLabel = isAutoFix ? '자동 동기화 완료'
+    : isPhantom ? '브로커 phantom 포지션'
+    : isMulti ? '다중 전략 — 수동 확인'
     : action;
   const holders = payload.holders || {{}};
-  const holdersStr = Object.keys(holders).length
-    ? Object.entries(holders).map(([k,v]) => `${{k.slice(0,30)}}:${{v}}`).join(', ')
-    : '(없음)';
-  bar.innerHTML = `
-    <div style="font-weight:600;margin-bottom:6px;">📡 포지션 동기화 알림</div>
-    <div><b>${{payload.symbol || '?'}}</b> — ${{actionLabel}}</div>
-    <div style="font-family:monospace;font-size:12px;margin-top:4px;">
-      logical=${{payload.logical_net}} / broker=${{payload.broker_net}}
-      / delta=${{payload.delta}}
+  const holderEntries = Object.entries(holders);
+  const holderLine = holderEntries.length
+    ? holderEntries.map(([k, v]) => {{
+        const short = k.length > 28 ? k.slice(0, 28) + '…' : k;
+        return `<span style="color:#94a3b8">${{short}}</span> ${{v}}`;
+      }}).join(' · ')
+    : '<span style="color:#64748b">(없음)</span>';
+
+  toast.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+      <span style="font-size:11px;font-weight:700;color:${{badgeColor}};letter-spacing:0.5px;">
+        ${{badgeLabel}}
+      </span>
+      <button onclick="this.closest('[data-key]').remove()"
+        style="background:transparent;border:none;color:#64748b;cursor:pointer;
+          font-size:14px;padding:0;line-height:1;">✕</button>
     </div>
-    <div style="font-size:11px;margin-top:4px;color:#555;">holders: ${{holdersStr}}</div>
-    <button onclick="this.parentElement.remove()"
-      style="margin-top:8px;padding:4px 10px;font-size:12px;cursor:pointer;">
-      닫기
-    </button>
+    <div style="font-size:14px;font-weight:600;color:#e2e8f0;margin-bottom:6px;">
+      ${{sym}}
+    </div>
+    <div style="font-size:11px;color:#94a3b8;margin-bottom:2px;">
+      logical <span style="color:#e2e8f0">${{payload.logical_net}}</span>
+      <span style="margin:0 4px;color:#475569">→</span>
+      broker <span style="color:#e2e8f0">${{payload.broker_net}}</span>
+    </div>
+    <div style="font-size:11px;color:#94a3b8;margin-bottom:6px;">
+      delta <span style="color:${{badgeColor}}">${{payload.delta}}</span>
+    </div>
+    <div style="font-size:10px;color:#64748b;border-top:1px solid #1e293b;padding-top:6px;">
+      ${{holderLine}}
+    </div>
   `;
-  // alert_only 케이스는 사용자 액션이 필요해 자동 dismiss 안 함. auto_fix 는
-  // 30 초 후 자동 dismiss.
-  if (action === 'auto_fix') {{
-    setTimeout(() => {{ if (bar) bar.remove(); }}, 30000);
+
+  // auto_fix 는 정보성 → 20초 자동 dismiss. alert_only_* 는 사용자가 ✕ 닫을 때까지 유지.
+  if (isAutoFix) {{
+    clearTimeout(toast._dismissTimer);
+    toast._dismissTimer = setTimeout(() => toast.remove(), 20000);
   }}
 }}
 
