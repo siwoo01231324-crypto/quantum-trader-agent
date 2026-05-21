@@ -209,6 +209,59 @@ def test_evaluate_uses_dynamic_override_when_present():
     assert len(intents_dyn_fire) == 1
 
 
+def test_override_persists_across_intent_to_fill_window():
+    """Race fix (2026-05-21): BUY intent register_entry_override → broker fill
+    도착 사이의 held=0 윈도우에서 evaluate() 가 한 번 이상 돌아도 override 는
+    살아남아야 함. 이전 코드는 held=0 분기에서 _dynamic_policies 도 즉시 POP
+    해버려서 fill 도착 후엔 정적 policy 로 fallback → NEAR 같은 변동성 큰 종목
+    이 진입 직후 정적 trailing 0.5% 노이즈로 fire (실측 -0.28% churn).
+    """
+    store = StrategyPositionStore()
+    pnl = PnLAggregator()
+    mgr = LivePositionRiskManager(position_store=store, pnl_aggregator=pnl)
+    mgr.register_strategy_policy(
+        "scan", stop_loss_pct=0.005, take_profit_pct=0.01, trailing_stop_pct=0.005,
+    )
+
+    # T1: BUY intent dispatch — register_entry_override 호출됨.
+    mgr.register_entry_override(
+        "scan", "NEARUSDT",
+        stop_loss_pct=0.09, take_profit_pct=0.18, trailing_stop_pct=0.09,
+    )
+    assert ("scan", "NEARUSDT") in mgr._dynamic_policies
+
+    # T2: broker fill 도착 전 — store/pnl 아직 비어있음 (held=0).
+    # 이 윈도우에서 evaluate 가 한 번이라도 돌면 안 됨.
+    for tick_price in ("1.75", "1.74", "1.76"):
+        intents = mgr.evaluate(
+            "NEARUSDT", Decimal(tick_price), datetime.now(timezone.utc),
+        )
+        assert intents == [], "no position → no intent"
+    # KEY: override 가 살아남아야 함 (race fix 핵심).
+    assert ("scan", "NEARUSDT") in mgr._dynamic_policies, (
+        "_dynamic_policies must SURVIVE held=0 window between intent and fill"
+    )
+
+    # T3: broker fill 도착 — store/pnl 갱신, held > 0.
+    store.record_fill(
+        strategy_id="scan", symbol="NEARUSDT", side="buy", qty=Decimal("135"),
+    )
+    pnl.record_fill(
+        strategy_id="scan", symbol="NEARUSDT", side="buy",
+        qty=Decimal("135"), price=Decimal("1.76"),
+    )
+
+    # T4: mark price 가 진입가 대비 -0.3% — 정적 trailing 0.5% 면 high_water
+    # 가 entry 위로만 살짝 갔어도 fire 가능. dynamic 9% trailing 이 살아있으면
+    # 무시. 진입 직후 high_water 살짝 갱신을 모사 — entry 위 1.77 한 번 →
+    # 1.7530 (-0.4% from peak) 으로 떨어짐.
+    mgr.evaluate("NEARUSDT", Decimal("1.77"), datetime.now(timezone.utc))
+    intents = mgr.evaluate("NEARUSDT", Decimal("1.7530"), datetime.now(timezone.utc))
+    assert intents == [], (
+        "dynamic 9% trailing/stop intact → 0.4% peak-pullback noise 무시되어야 함"
+    )
+
+
 def test_dynamic_policy_cleaned_up_after_stop_fires():
     """Stop 발사 → dynamic override 자동 cleanup → 다음 진입은 정적 fallback."""
     store = StrategyPositionStore()

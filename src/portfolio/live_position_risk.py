@@ -153,11 +153,24 @@ class LivePositionRiskManager:
         for strategy_id, static_policy in self._policies.items():
             held, avg_cost = self._lookup_position(strategy_id, symbol)
             if held == 0 or avg_cost <= 0:
-                # No position — clear any stale high-water tracking +
-                # 이전 진입의 dynamic override 도 함께 정리 (이미 청산되어
-                # 의미 없음 — 다음 진입은 새로 register_entry_override 됨).
+                # No position — clear any stale high-water tracking.
+                #
+                # 2026-05-21 race fix: 이전엔 여기서도 _dynamic_policies 를
+                # POP 했었는데, 그게 진짜 race condition 의 원인이었음.
+                # orchestrator._on_entry 는 BUY intent dispatch 시점에 호출되어
+                # _dynamic_policies 에 새 override 가 들어가는데, broker fill
+                # 도착 전엔 held=0 상태. 그 짧은 윈도우 동안 evaluate() 가 한 번
+                # 이라도 돌면 방금 등록한 override 가 즉시 cleanup 으로 날아감
+                # → 정적 policy (예: trailing 0.5%) 로 fallback → NEAR 같은
+                # 변동성 큰 종목이 진입 직후 노이즈로 trailing fire (실측
+                # 0.28% 손실).
+                #
+                # Legitimate cleanup 은 stop fire 직후 (아래쪽 _dynamic_policies
+                # .pop) 에 이미 있음 — 그게 정상 청산 경로. 외부 청산 (manual
+                # close, 강제 청산) 으로 인한 잔여 override 는 다음
+                # register_entry_override 호출이 정확히 overwrite → stale 폐해
+                # 없음.
                 self._high_water.pop((strategy_id, symbol), None)
-                self._dynamic_policies.pop((strategy_id, symbol), None)
                 continue
 
             # 2026-05-21 — dynamic override 가 등록되어 있으면 그것을, 없으면
