@@ -887,6 +887,18 @@ async def _run_pipeline_attached(
     # the coid→(symbol, side, strategy_id) context it resolves. Harmless for
     # paper/kis (no fill-stream task is created without binance_adapter).
     config.position_store = position_store
+    # #238 follow-up — multi-symbol mark-price cache + manual close executor.
+    # Same instance the mark-price feed writes and the dashboard reads. The
+    # manual-close callback parks the executor closure (built by
+    # run_shadow_loop) on the dashboard state so the operator can submit
+    # market orders via POST /api/strategies/{sid}/positions/{sym}/close.
+    from src.live.price_cache import LivePriceCache
+    price_cache = LivePriceCache()
+    config.live_price_cache = price_cache
+    setattr(state, "price_cache", price_cache)
+    config.on_manual_close_executor_ready = lambda closure: setattr(
+        state, "manual_close_executor", closure,
+    )
     # #238 follow-up root cause — reuse the dashboard's already-warm
     # AccountInfoProvider (15s cache kept fresh by /api/account/info polling)
     # so the KIS snapshot path rides a successful cached balance instead of a
@@ -1236,6 +1248,20 @@ async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
     # (otherwise the live Binance path shows the submitted intent forever).
     config.position_store = position_store
     _wire_balance_provider(config)  # #238 Item 9
+
+    # #238 follow-up — multi-symbol mark-price cache + manual close executor.
+    # One ``LivePriceCache`` shared between the mark-price feed (writer) and
+    # the dashboard (reader). The manual-close callback receives the executor
+    # closure built by ``run_shadow_loop`` and parks it on ``DashboardState``
+    # so the dashboard's POST /api/strategies/{sid}/positions/{sym}/close can
+    # submit market orders through the same path as the strategy loop.
+    from src.live.price_cache import LivePriceCache
+    price_cache = LivePriceCache()
+    config.live_price_cache = price_cache
+    dashboard_state.price_cache = price_cache
+    config.on_manual_close_executor_ready = lambda closure: setattr(
+        dashboard_state, "manual_close_executor", closure,
+    )
 
     # #227 S3: env-gated Live Universe Scanner — when LIVE_SCANNER_ENABLED=1,
     # construct LivePositionRiskManager + register exit policies for every

@@ -109,6 +109,21 @@ class ShadowConfig:
     # ``config.symbols`` — universe-scanner positions on other symbols are
     # never evaluated and never auto-closed.
     enable_mark_price_feed: bool = True
+    # Optional ``LivePriceCache`` written by ``_run_mark_price_consumer`` so
+    # the dashboard can render live mark price + unrealized PnL% on every
+    # open position without polling Binance REST. Same instance is wired to
+    # ``DashboardState.price_cache`` by ``scripts/live_run.py``. ``None``
+    # (default) → cache writes skipped, byte-identical to the previous path.
+    live_price_cache: Any | None = None
+    # Callback invoked once the broker/router + WAL + kill-switch are all
+    # constructed. Receives a closure ``async (intents) -> dict`` that fires
+    # the supplied intents through ``execute_intents`` with the same router /
+    # WAL / metrics / position_store the trading loop uses. ``scripts/live_run.py``
+    # uses this to wire ``DashboardState.manual_close_executor`` so the
+    # dashboard's manual-close endpoint can submit market orders without
+    # importing any broker internals. ``None`` (default) → no wiring, manual
+    # close endpoint returns 503.
+    on_manual_close_executor_ready: Callable[[Callable[..., Any]], None] | None = None
 
 
 def _load_orchestrator(config: ShadowConfig, broker: PaperBroker) -> AsyncStrategyOrchestrator:
@@ -377,6 +392,30 @@ async def run_shadow_loop(
             config.broker_mode, kill_switch, metrics, paper_broker,
             kis_adapter=kis_adapter, binance_adapter=binance_adapter,
         )
+        # Build the manual-close executor closure as soon as the broker
+        # pipeline is wired. The dashboard's manual-close endpoint calls this
+        # to submit market orders through the *same* executor path the
+        # strategy loop uses — identical risk gate, WAL trail, and store
+        # registration. ``market_state=None`` is acceptable here: the
+        # executor's risk gate degrades gracefully when no order book is
+        # supplied, and manual close is operator-initiated rather than
+        # signal-driven, so there's no risk of accidental cascading orders.
+        if config.on_manual_close_executor_ready is not None:
+            async def _manual_close_executor(intents):
+                await execute_intents(
+                    intents, broker=router, kill_switch=kill_switch,
+                    wal=wal, metrics=metrics, market_state=None,
+                    position_store=config.position_store,
+                )
+                return {"submitted": len(intents)}
+            try:
+                config.on_manual_close_executor_ready(_manual_close_executor)
+            except Exception as err:
+                logger.warning(
+                    "live.loop.on_manual_close_executor_ready_failed error=%s",
+                    err,
+                )
+
         orchestrator = _load_orchestrator(config, paper_broker)
         if config.on_orchestrator_ready is not None:
             try:
@@ -625,6 +664,7 @@ async def run_shadow_loop(
                     metrics=metrics,
                     position_store=config.position_store,
                     stop_event=stop_event,
+                    live_price_cache=config.live_price_cache,
                 ),
                 name="binance-mark-price-consumer",
             )
@@ -672,6 +712,7 @@ async def _run_mark_price_consumer(
     position_store,
     stop_event: asyncio.Event,
     feed_factory: Callable[[], "BinanceMarkPriceFeed"] | None = None,
+    live_price_cache=None,
 ) -> None:
     """Run the Binance ``!markPrice@arr@1s`` consumer until ``stop_event`` fires.
 
@@ -711,6 +752,19 @@ async def _run_mark_price_consumer(
                 # is required when an exit fires. Build a minimal MarketState
                 # per symbol from the mark price itself (no order book).
                 for symbol, mark_price, ts in batch:
+                    # Dashboard live-price overlay: write *every* mark-price
+                    # update — including symbols with no open position. Cheap
+                    # (dict assignment under a single lock), and lets the
+                    # dashboard render a useful price the moment a future
+                    # position opens. Errors must never break the consumer.
+                    if live_price_cache is not None:
+                        try:
+                            live_price_cache.set_price(symbol, mark_price, ts)
+                        except Exception as cache_err:
+                            logger.warning(
+                                "live_price_cache.set_price failed sym=%s err=%s",
+                                symbol, cache_err,
+                            )
                     try:
                         risk_intents = position_risk_manager.evaluate(
                             symbol, mark_price, ts,
