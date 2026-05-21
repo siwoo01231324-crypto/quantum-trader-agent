@@ -87,6 +87,97 @@ class TestManualTradePost:
         assert resp.status_code == 400
 
 
+# ── v2 schema (direction / entry_price / exit_price / realized_pnl / outcome)
+
+class TestManualTradeV2Schema:
+    def test_direction_long_with_exit_price_becomes_roundtrip(
+        self, tmp_path: Path,
+    ) -> None:
+        client = TestClient(create_app(DashboardState(log_dir=tmp_path)))
+        resp = client.post("/api/manual_trade", json={
+            "symbol": "BTCUSDT",
+            "direction": "long",
+            "qty": 0.01,
+            "entry_price": 77500,
+            "exit_price": 77800,
+            "realized_pnl": 3.0,
+            "outcome": "win",
+            "venue": "binance",
+            "note": "BB lower bounce",
+        })
+        assert resp.status_code == 200, resp.text
+        path = Path(resp.json()["log_path"])
+        rec = json.loads(path.read_text(encoding="utf-8").strip())
+        pl = rec["payload"]
+        assert pl["direction"] == "long"
+        assert pl["side"] == "buy"  # legacy 호환 자동 채움
+        assert pl["kind"] == "roundtrip"  # exit_price 있으니 roundtrip
+        assert pl["entry_price"] == 77500
+        assert pl["exit_price"] == 77800
+        assert pl["realized_pnl"] == 3.0
+        assert pl["outcome"] == "win"
+
+    def test_direction_short_only_entry_becomes_entry(
+        self, tmp_path: Path,
+    ) -> None:
+        client = TestClient(create_app(DashboardState(log_dir=tmp_path)))
+        resp = client.post("/api/manual_trade", json={
+            "symbol": "AVAXUSDT",
+            "direction": "short",
+            "qty": 1,
+            "entry_price": 9.5,
+            "venue": "binance",
+            "note": "airborne signal",
+        })
+        assert resp.status_code == 200
+        path = Path(resp.json()["log_path"])
+        rec = json.loads(path.read_text(encoding="utf-8").strip())
+        pl = rec["payload"]
+        assert pl["direction"] == "short"
+        assert pl["side"] == "sell"
+        assert pl["kind"] == "entry"
+        assert pl["exit_price"] is None
+        assert pl["realized_pnl"] is None
+        assert pl["outcome"] is None
+
+    def test_legacy_side_buy_back_compat(self, tmp_path: Path) -> None:
+        """v1 payload (side='buy', price=N) 가 그대로 동작 + direction 자동 채움."""
+        client = TestClient(create_app(DashboardState(log_dir=tmp_path)))
+        resp = client.post("/api/manual_trade", json={
+            "symbol": "BTCUSDT", "side": "buy", "kind": "entry",
+            "qty": 0.01, "price": 78000, "venue": "binance",
+        })
+        assert resp.status_code == 200
+        rec = json.loads(
+            Path(resp.json()["log_path"]).read_text(encoding="utf-8").strip()
+        )
+        pl = rec["payload"]
+        assert pl["side"] == "buy"
+        assert pl["direction"] == "long"  # auto-derive
+        assert pl["entry_price"] == 78000
+        assert pl["price"] == 78000  # legacy 호환 유지
+
+    def test_bad_outcome_400(self, tmp_path: Path) -> None:
+        client = TestClient(create_app(DashboardState(log_dir=tmp_path)))
+        resp = client.post("/api/manual_trade", json={
+            "symbol": "BTCUSDT", "direction": "long", "qty": 0.01,
+            "entry_price": 78000, "outcome": "win-ish",
+        })
+        assert resp.status_code == 400
+
+    def test_recent_endpoint_returns_all_time(self, tmp_path: Path) -> None:
+        client = TestClient(create_app(DashboardState(log_dir=tmp_path)))
+        client.post("/api/manual_trade", json={
+            "symbol": "BTCUSDT", "direction": "long",
+            "qty": 0.01, "entry_price": 78000,
+        })
+        resp = client.get("/api/manual_trade/recent?limit=10")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total_all_time"] == 1
+        assert len(body["trades"]) == 1
+
+
 # ── GET /api/manual_trade/today ────────────────────────────────────────────
 
 
