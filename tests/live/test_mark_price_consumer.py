@@ -198,6 +198,73 @@ async def test_consumer_swallows_evaluate_exceptions(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_consumer_writes_every_price_to_cache(monkeypatch) -> None:
+    """Every mark-price update — including symbols with no open position —
+    must reach ``live_price_cache.set_price`` so the dashboard's PnL overlay
+    has data even before the strategy opens a position there."""
+    from src.live.price_cache import LivePriceCache
+
+    cache = LivePriceCache()
+    fake_feed = _FakeMarkPriceFeed([
+        [
+            ("BTCUSDT", Decimal("30000"), datetime.now(timezone.utc)),
+            ("ETHUSDT", Decimal("1800"), datetime.now(timezone.utc)),
+            ("ZECUSDT", Decimal("45"), datetime.now(timezone.utc)),
+        ],
+    ])
+
+    async def _noop_execute(intents, **kwargs):
+        pass
+
+    monkeypatch.setattr("src.live.loop.execute_intents", _noop_execute)
+
+    stop_event = asyncio.Event()
+    await _run_mark_price_consumer(
+        position_risk_manager=_FakeRiskManager(trigger_for=set()),
+        router=object(),
+        kill_switch=KillSwitch(),
+        wal=_RecordingWAL(events=[]),
+        metrics=Metrics(),
+        position_store=None,
+        stop_event=stop_event,
+        feed_factory=lambda: fake_feed,
+        live_price_cache=cache,
+    )
+
+    assert cache.get_price("BTCUSDT").price == Decimal("30000")
+    assert cache.get_price("ETHUSDT").price == Decimal("1800")
+    assert cache.get_price("ZECUSDT").price == Decimal("45")
+    assert len(cache) == 3
+
+
+@pytest.mark.asyncio
+async def test_consumer_no_cache_when_disabled(monkeypatch) -> None:
+    """``live_price_cache=None`` (default) keeps the legacy code path —
+    no AttributeError, no log spam."""
+    fake_feed = _FakeMarkPriceFeed([
+        [("BTCUSDT", Decimal("30000"), datetime.now(timezone.utc))],
+    ])
+
+    async def _noop_execute(intents, **kwargs):
+        pass
+
+    monkeypatch.setattr("src.live.loop.execute_intents", _noop_execute)
+
+    stop_event = asyncio.Event()
+    await _run_mark_price_consumer(
+        position_risk_manager=_FakeRiskManager(trigger_for=set()),
+        router=object(),
+        kill_switch=KillSwitch(),
+        wal=_RecordingWAL(events=[]),
+        metrics=Metrics(),
+        position_store=None,
+        stop_event=stop_event,
+        feed_factory=lambda: fake_feed,
+        live_price_cache=None,
+    )
+
+
+@pytest.mark.asyncio
 async def test_consumer_stops_on_stop_event() -> None:
     """``stop_event.set()`` interrupts the batch loop quickly."""
 

@@ -115,6 +115,20 @@ class DashboardState:
     # (boot before any run has written a WAL is normal/safe).
     log_dir: Path | None = None
 
+    # Live mark-price cache (#238 follow-up — manual close + live-price card).
+    # Same instance the mark-price consumer writes to. ``/api/strategy_positions``
+    # reads it to overlay ``mark_price`` + ``pnl_pct`` per row so the operator
+    # sees current PnL% without polling Binance.
+    price_cache: Any | None = None
+
+    # Manual-close executor closure. Called by the manual-close endpoint with
+    # a list[OrderIntent] — closure handles broker.place_order + WAL + metrics
+    # so the dashboard never imports broker internals. ``scripts/live_run.py``
+    # builds the closure from the live router/kill_switch/WAL/store and wires
+    # it here; dashboard-only / paper-mode keeps it ``None`` (manual close
+    # returns 503 instead of half-acting).
+    manual_close_executor: Any | None = None
+
 
 def _pnl_view(state: "DashboardState") -> dict:
     """Resolve the dashboard PnL snapshot.
@@ -556,6 +570,9 @@ body{{
 /* 2026-05-21: stratpos 카드 첫 컬럼 — 전략 큰 글자 + 종목 옆 가로 배치 */
 .stratpos-row{{display:flex;align-items:baseline;gap:8px}}
 .stratpos-strat-big{{font-family:var(--mono);font-weight:600;font-size:13px;color:var(--text);max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+.stratpos-close-btn{{background:#2b1414;color:#ff6b6b;border:1px solid #4a2020;border-radius:4px;padding:4px 10px;font-family:var(--sans);font-size:10px;cursor:pointer;transition:background .12s,color .12s}}
+.stratpos-close-btn:hover:not(:disabled){{background:#4a2020;color:#fff}}
+.stratpos-close-btn:disabled{{opacity:.5;cursor:not-allowed}}
 .stratpos-sym-small{{font-family:var(--mono);font-size:11px;color:var(--text2)}}
 .side-badge{{
   display:inline-block;
@@ -917,12 +934,14 @@ body{{
               <th>순포지션</th>
               <th>평단가</th>
               <th>현재가</th>
+              <th>손익%</th>
               <th>실현손익</th>
-              <th style="padding-right:16px">최근 체결</th>
+              <th>최근 체결</th>
+              <th style="padding-right:16px">청산</th>
             </tr>
           </thead>
           <tbody id="stratpos-tbody">
-            <tr><td colspan="9" style="text-align:center;color:var(--text3);padding:20px;font-family:var(--sans);font-size:11px">조회 중…</td></tr>
+            <tr><td colspan="11" style="text-align:center;color:var(--text3);padding:20px;font-family:var(--sans);font-size:11px">조회 중…</td></tr>
           </tbody>
         </table>
       </div>
@@ -1437,7 +1456,7 @@ async function stratPosRefresh() {{
     if (!tb) return;
     const rows = d.strategies || [];
     if (rows.length === 0) {{
-      tb.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:20px;font-size:11px">아직 거래한 전략 없음</td></tr>';
+      tb.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--text3);padding:20px;font-size:11px">아직 거래한 전략 없음</td></tr>';
       return;
     }}
     const bnbBySym = window._bnbPosBySym || {{}};
@@ -1456,21 +1475,35 @@ async function stratPosRefresh() {{
       const avg = (avgVal != null)
         ? fmtNum(avgVal, 4) + (s.avg_price == null && lp ? '<span class="col-dim" style="font-size:9px"> live</span>' : '')
         : '<span class="col-dim">—</span>';
-      // 현재가: 라이브 mark price. 진입가 대비 손익 방향으로 색칠
-      // (LONG 은 현재가>평단 이면 이익, SHORT 은 반대).
+      // 현재가: server cache (1Hz mark-price feed) 우선, 없으면 라이브 Binance
+      // 포지션 응답의 mark_price fallback. 진입가 대비 손익 방향으로 색칠.
+      const markVal = (s.mark_price != null)
+        ? s.mark_price
+        : (lp && lp.mark_price != null ? lp.mark_price : null);
       let curHtml = '<span class="col-dim">—</span>';
-      if (lp && lp.mark_price != null) {{
+      if (markVal != null) {{
         let cls = 'col-dim';
         if (avgVal != null && net !== 0) {{
-          const up = (net > 0) ? (lp.mark_price > avgVal) : (lp.mark_price < avgVal);
-          cls = (lp.mark_price === avgVal) ? 'col-dim' : (up ? 'col-green' : 'col-red');
+          const up = (net > 0) ? (markVal > avgVal) : (markVal < avgVal);
+          cls = (markVal === avgVal) ? 'col-dim' : (up ? 'col-green' : 'col-red');
         }}
-        curHtml = '<span class="' + cls + '">' + fmtNum(lp.mark_price, 4) + '</span>';
+        curHtml = '<span class="' + cls + '">' + fmtNum(markVal, 4) + '</span>';
+      }}
+      // PnL% — server-computed (sign-corrected for LONG/SHORT)
+      let pnlPctHtml = '<span class="col-dim">—</span>';
+      if (s.pnl_pct != null) {{
+        const cls = (s.pnl_pct > 0) ? 'col-green' : (s.pnl_pct < 0 ? 'col-red' : 'col-dim');
+        const sign = s.pnl_pct > 0 ? '+' : '';
+        pnlPctHtml = '<span class="' + cls + '">' + sign + fmtNum(s.pnl_pct, 2) + '%</span>';
       }}
       const pnlHtml = fmtPnl(s.realized_pnl);
       const ts = fmtKst(s.last_ts);
       const buyQtyStr  = fmtNum(s.buy_qty,  6).replace(/\\.?0+$/, '');
       const sellQtyStr = fmtNum(s.sell_qty, 6).replace(/\\.?0+$/, '');
+      // 청산 버튼 — net_qty != 0 일 때만 enabled.
+      const closeBtn = (net !== 0)
+        ? `<button class="stratpos-close-btn" data-sid="${{escHtml(s.strategy_id)}}" data-sym="${{escHtml(s.symbol)}}" title="시장가 전량 청산">청산</button>`
+        : '<span class="col-dim">—</span>';
       return `<tr>
         <td style="padding-left:16px">
           <div class="stratpos-row">
@@ -1484,10 +1517,45 @@ async function stratPosRefresh() {{
         <td style="font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right">${{netStr}}</td>
         <td style="font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right">${{avg}}</td>
         <td style="font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right">${{curHtml}}</td>
+        <td style="font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right">${{pnlPctHtml}}</td>
         <td style="text-align:right">${{pnlHtml}}</td>
-        <td style="font-family:var(--mono);color:var(--text3);padding-right:16px;text-align:right">${{escHtml(ts)}}</td>
+        <td style="font-family:var(--mono);color:var(--text3);text-align:right">${{escHtml(ts)}}</td>
+        <td style="text-align:center;padding-right:16px">${{closeBtn}}</td>
       </tr>`;
     }}).join('');
+    // 청산 버튼 이벤트 바인딩 — innerHTML 갱신마다 재 attach.
+    tb.querySelectorAll('.stratpos-close-btn').forEach(btn => {{
+      btn.addEventListener('click', async () => {{
+        const sid = btn.getAttribute('data-sid');
+        const sym = btn.getAttribute('data-sym');
+        if (!confirm(`${{sid}}\\n${{sym}}\\n\\n전량 시장가 청산할까요?`)) return;
+        btn.disabled = true;
+        btn.textContent = '청산중…';
+        try {{
+          const r = await fetch(
+            `/api/strategies/${{encodeURIComponent(sid)}}/positions/${{encodeURIComponent(sym)}}/close`,
+            {{
+              method: 'POST',
+              headers: {{'Content-Type': 'application/json'}},
+              body: JSON.stringify({{qty: 'all'}}),
+            }},
+          );
+          const d = await r.json();
+          if (!r.ok || !d.ok) {{
+            alert(`청산 실패: ${{d.detail || JSON.stringify(d)}}`);
+            btn.disabled = false;
+            btn.textContent = '청산';
+            return;
+          }}
+          btn.textContent = '제출됨';
+          setTimeout(stratPosRefresh, 1500);
+        }} catch (err) {{
+          alert(`청산 요청 오류: ${{err}}`);
+          btn.disabled = false;
+          btn.textContent = '청산';
+        }}
+      }});
+    }});
   }} catch (err) {{ console.warn('stratpos', err); }}
 }}
 stratPosRefresh();
@@ -2397,19 +2465,41 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
             cur = realized_row.get(sid)
             if cur is None or r["last_ts"] > cur["last_ts"]:
                 realized_row[sid] = r
+        # Live mark-price overlay — pulled from the mark-price feed's cache.
+        # Each row gets ``mark_price`` (None if no live price yet) and
+        # ``pnl_pct`` (= (mark - avg)/avg * 100, only when both are positive
+        # and the position is held NET LONG; short positions invert the sign).
+        cache = state.price_cache
         out = []
         for r in rows:
             avg_px = (r["_px_sum"] / r["_px_n"]) if r["_px_n"] > 0 else None
             sid = r["strategy_id"]
+            sym = r["symbol"]
+            net_qty = r["buy_qty"] - r["sell_qty"]
+            mark_price = None
+            mark_ts = None
+            if cache is not None and sym and sym != "?":
+                snap = cache.get_price(sym)
+                if snap is not None:
+                    mark_price = float(snap.price)
+                    mark_ts = snap.ts.isoformat()
+            pnl_pct = None
+            if mark_price is not None and avg_px is not None and avg_px > 0 and net_qty != 0:
+                raw_pct = (mark_price - avg_px) / avg_px * 100.0
+                # NET short → invert (a price drop is a gain)
+                pnl_pct = raw_pct if net_qty > 0 else -raw_pct
             out.append({
                 "strategy_id": sid,
-                "symbol": r["symbol"],
+                "symbol": sym,
                 "buy_n": r["buy_n"],
                 "buy_qty": round(r["buy_qty"], 6),
                 "sell_n": r["sell_n"],
                 "sell_qty": round(r["sell_qty"], 6),
-                "net_qty": round(r["buy_qty"] - r["sell_qty"], 6),
+                "net_qty": round(net_qty, 6),
                 "avg_price": round(avg_px, 4) if avg_px is not None else None,
+                "mark_price": round(mark_price, 6) if mark_price is not None else None,
+                "mark_ts": mark_ts,
+                "pnl_pct": round(pnl_pct, 3) if pnl_pct is not None else None,
                 "realized_pnl": (
                     pnl_by.get(sid) if realized_row.get(sid) is r else None
                 ),
@@ -2798,6 +2888,88 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
             "strategy_id": strategy_id,
             "enabled": body["enabled"],
             "liquidation_intents": intents,
+        })
+
+    @app.post("/api/strategies/{strategy_id}/positions/{symbol}/close")
+    async def api_manual_close_position(
+        strategy_id: str, symbol: str, body: dict | None = None,
+    ) -> JSONResponse:
+        """대시보드 수동 청산 — 보유 종목 즉시 시장가 매도/커버.
+
+        Body: ``{"qty": "all"}`` (default, 전량) or ``{"qty": <number>}``.
+        Binance UI 직접 청산은 우리 client_order_id 매핑 밖이라 strategy 귀속이
+        끊어진다 — 본 endpoint 는 우리 system 발급 coid 로 broker 에 보내므로
+        WAL → pnl_aggregator → trade_history 까지 정상 갱신된다.
+        """
+        executor = state.manual_close_executor
+        if executor is None:
+            raise HTTPException(
+                status_code=503,
+                detail="manual_close_executor not wired (dashboard-only / paper mode)",
+            )
+        if state.position_provider is None:
+            raise HTTPException(
+                status_code=503, detail="position_provider not wired",
+            )
+        # Resolve current NET position. position_provider returns
+        # [(symbol, signed_qty), ...] for the strategy.
+        try:
+            positions = list(state.position_provider(strategy_id) or [])
+        except Exception as err:  # noqa: BLE001 — defensive
+            raise HTTPException(
+                status_code=500, detail=f"position_provider failed: {err}",
+            )
+        held = next((q for sym, q in positions if sym.upper() == symbol.upper()), 0.0)
+        if held == 0.0:
+            raise HTTPException(
+                status_code=404,
+                detail=f"no open position for {strategy_id} / {symbol}",
+            )
+        body = body or {}
+        qty_request = body.get("qty", "all")
+        if qty_request == "all":
+            close_qty = abs(float(held))
+        else:
+            try:
+                close_qty = float(qty_request)
+            except (TypeError, ValueError):
+                raise HTTPException(
+                    status_code=400, detail="qty must be 'all' or a number",
+                )
+            if close_qty <= 0:
+                raise HTTPException(status_code=400, detail="qty must be > 0")
+            if close_qty > abs(float(held)) + 1e-9:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"qty {close_qty} exceeds held {abs(float(held))}",
+                )
+        # NET LONG → SELL; NET SHORT → BUY (cover). ``reduce_only=True``
+        # is critical here: it makes the exchange itself refuse to flip the
+        # position past flat, so a stale qty cannot accidentally open a
+        # naked opposite-side position.
+        side = "sell" if float(held) > 0 else "buy"
+        from src.portfolio.order_intent import OrderIntent
+        intent = OrderIntent(
+            strategy_id=strategy_id,
+            symbol=symbol,
+            side=side,
+            qty=close_qty,
+            reason="manual_close_from_dashboard",
+            reduce_only=True,
+        )
+        try:
+            result = await executor([intent])
+        except Exception as err:  # noqa: BLE001 — surface to operator
+            raise HTTPException(
+                status_code=500, detail=f"executor failed: {err}",
+            )
+        return JSONResponse({
+            "ok": True,
+            "strategy_id": strategy_id,
+            "symbol": symbol,
+            "side": side,
+            "submitted_qty": close_qty,
+            "result": result if isinstance(result, dict) else None,
         })
 
     @app.websocket("/ws/timeline")
