@@ -2190,6 +2190,41 @@ tbody tr:hover{background:#1c2229}
 .score-pos{color:var(--green)}
 .score-neg{color:var(--red)}
 .illiq{color:var(--yellow)}
+.reason-cell{font-size:.7rem;color:var(--text3);font-family:var(--mono)}
+.reason-ok{color:var(--green)}
+.reason-no_data{color:var(--red)}
+.reason-warmup{color:var(--yellow)}
+.reason-low_volume{color:var(--yellow)}
+.reason-negative_score{color:var(--text3)}
+.reason-out_of_top_n{color:var(--text3)}
+.refresh-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text);
+  padding:6px 14px;border-radius:4px;font-size:.78rem;cursor:pointer;font-family:var(--sans);
+  margin-left:auto;transition:border-color .15s,color .15s}
+.refresh-btn:hover{border-color:var(--green);color:var(--green)}
+.refresh-btn:disabled{opacity:.4;cursor:wait}
+.header-row{display:flex;align-items:center;gap:14px;margin-bottom:8px}
+.pin-badge{background:var(--surface2);border:1px solid var(--border);color:var(--text2);
+  padding:3px 8px;border-radius:4px;font-size:.7rem;font-family:var(--mono)}
+.section-h2{font-size:.85rem;color:var(--text);font-weight:600;margin:18px 0 10px 0;
+  display:flex;align-items:center;gap:10px}
+.section-h2 .count{font-size:.7rem;color:var(--text3);font-family:var(--mono);font-weight:400}
+.top-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;
+  margin-bottom:16px}
+.top-card{background:var(--surface);border:1px solid var(--border);border-radius:6px;
+  padding:12px;display:flex;flex-direction:column;gap:6px;transition:border-color .15s}
+.top-card.is-ENTER{border-color:var(--green);background:rgba(14,203,129,.05);
+  box-shadow:0 0 0 1px rgba(14,203,129,.25)}
+.top-card.is-HOLD{border-color:var(--border)}
+.top-card-head{display:flex;justify-content:space-between;align-items:baseline}
+.top-card-rank{font-size:.7rem;color:var(--text3);font-family:var(--mono);font-weight:600}
+.top-card-sym{font-size:1.15rem;color:#f0b90b;font-weight:700;font-family:var(--mono);
+  letter-spacing:.5px}
+.top-card-score{font-size:1.05rem;font-weight:700;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.top-card-close{font-size:.75rem;color:var(--text3);font-family:var(--mono);
+  font-variant-numeric:tabular-nums}
+.top-card-sig{margin-top:2px}
+.top-empty{padding:30px;text-align:center;color:var(--text3);background:var(--surface);
+  border-radius:6px;border:1px solid var(--border);font-size:.85rem}
 .note{color:var(--text3);font-size:.72rem;margin-top:10px;font-family:var(--mono);line-height:1.55}
 </style>
 </head>
@@ -2201,7 +2236,11 @@ tbody tr:hover{background:#1c2229}
   <a href="/strategies">전략 카탈로그</a>
   <a href="/signals">신호 목록</a>
 </div>
-<div class="meta" id="meta">로딩 중…</div>
+<div class="header-row">
+  <div class="meta" id="meta">로딩 중…</div>
+  <span class="pin-badge" id="pin-badge" style="display:none">universe pin: —</span>
+  <button class="refresh-btn" id="refresh-btn" onclick="forceRefresh()">↻ 캐시 무효화 + 재계산</button>
+</div>
 <div id="content"><div class="empty">신호 데이터를 불러오는 중입니다 (첫 호출은 30종목 fetch 로 ~10초 소요 가능).</div></div>
 <script>
 const KST = 'Asia/Seoul';
@@ -2228,7 +2267,58 @@ function fmtClose(v){
   if(v==null||isNaN(v)) return '—';
   return Number(v).toLocaleString('ko-KR',{maximumFractionDigits:6});
 }
-function render(rows){
+const REASON_LABELS = {
+  'ok':             {text:'✓ 정상',         cls:'reason-ok'},
+  'no_data':        {text:'데이터 없음',     cls:'reason-no_data'},
+  'warmup':         {text:'워밍업 (252d 미달)', cls:'reason-warmup'},
+  'low_volume':     {text:'거래량 부족',     cls:'reason-low_volume'},
+  'negative_score': {text:'모멘텀 음수',     cls:'reason-negative_score'},
+  'out_of_top_n':   {text:'top10 밖',        cls:'reason-out_of_top_n'},
+};
+function fmtReason(reason){
+  const info = REASON_LABELS[reason] || {text:esc(reason||'—'), cls:''};
+  return `<span class="reason-cell ${info.cls}">${esc(info.text)}</span>`;
+}
+function renderTopCards(rows){
+  // top-N (in_top_today=true) + EXIT (어제 top, 오늘 out) 한 묶음.
+  // ENTER/HOLD 강조 → 오늘 신규 BUY / 보유 유지 가시. EXIT 은 청산 안내.
+  const buyRows = rows
+    .filter(r => r.in_top_today)
+    .sort((a,b) => (a.rank||999) - (b.rank||999));
+  const exitRows = rows.filter(r => !r.in_top_today && r.in_top_yday);
+  const enterN = buyRows.filter(r => r.signal === 'ENTER').length;
+  const holdN  = buyRows.filter(r => r.signal === 'HOLD').length;
+  const exitN  = exitRows.length;
+
+  function card(r){
+    const sig = r.signal || 'HOLD';
+    const sym = (r.symbol||'').replace(/USDT$/,'');
+    const scorePct = r.score!=null ? (r.score*100).toFixed(1) + '%' : '—';
+    const scoreCls = (r.score||0) > 0 ? 'score-pos' : 'score-neg';
+    return `<div class="top-card is-${esc(sig)}">
+      <div class="top-card-head">
+        <span class="top-card-rank">#${esc(r.rank!=null?r.rank:'—')}</span>
+        <span class="sig-badge sig-${esc(sig)}">${esc(sig)}</span>
+      </div>
+      <div class="top-card-sym">${esc(sym)}</div>
+      <div class="top-card-score ${scoreCls}">${esc(scorePct)}</div>
+      <div class="top-card-close">$${esc(fmtClose(r.last_close))}</div>
+    </div>`;
+  }
+
+  let html = `<div class="section-h2">📈 오늘의 BUY 후보 (top-10) <span class="count">·  ENTER ${enterN}  ·  HOLD ${holdN}  ·  EXIT ${exitN}</span></div>`;
+  if (buyRows.length === 0 && exitRows.length === 0){
+    html += '<div class="top-empty">오늘 BUY 후보 없음 — 30종 모두 음수 score / 데이터 부족 / OUT. 우상단 ↻ 로 강제 갱신해도 BUY 가 안 생기면 시장이 약세 (BTC -30% drawdown 부근) 일 가능성.</div>';
+    return html;
+  }
+  html += '<div class="top-grid">';
+  html += buyRows.map(card).join('');
+  // EXIT 도 같은 그리드에 (사용자 청산 결정 즉시 보이게)
+  html += exitRows.map(card).join('');
+  html += '</div>';
+  return html;
+}
+function renderFullTable(rows){
   if(rows.length===0) return '<div class="empty">데이터 없음 — 패널 빌드 실패 또는 워밍업 부족.</div>';
   const trs = rows.map(r => {
     const sig = r.signal || 'OUT';
@@ -2242,26 +2332,37 @@ function render(rows){
       <td class="td-num">${esc(fmtClose(r.last_close))}</td>
       <td><span class="sig-badge sig-${esc(sig)}">${esc(sig)}</span></td>
       <td>${liq}</td>
+      <td>${fmtReason(r.reason)}</td>
     </tr>`;
   }).join('');
-  return `<table><thead><tr>
+  return `<div class="section-h2">🔍 전체 진단 — 30종 score 테이블 <span class="count">· 디버깅용</span></div>
+  <table><thead><tr>
     <th>Rank</th><th>Symbol</th><th class="td-num">Score (12-1m)</th>
-    <th class="td-num">Last Close</th><th>Signal</th><th>Liquid</th>
+    <th class="td-num">Last Close</th><th>Signal</th><th>Liq</th><th>사유</th>
   </tr></thead><tbody>${trs}</tbody></table>
   <div class="note">
     Signal: <b>ENTER</b> = 어제 top10 외 → 오늘 top10 진입 (BUY). <b>HOLD</b> = 어제·오늘 모두 top10. <b>EXIT</b> = 어제 top10 → 오늘 이탈. <b>OUT</b> = 비보유.<br>
-    실거래 wiring 무관, 대시보드 서버가 매일 자체 fetch + 계산 (1h 캐시). production 전략과 동일 score 식 → TV Pine Script (cs-tsmom-crypto-daily 12-1m) 와 정확히 같은 숫자.
+    사유 — <b>워밍업</b>: 252d lookback 데이터 부족 (신규 listing 등). <b>데이터 없음</b>: fetch 실패 또는 캐시 비어있음 → 우상단 ↻ 버튼 클릭. <b>거래량 부족</b>: 60d 평균 거래대금 &lt; 1천만 USDT. <b>모멘텀 음수</b>: 12-1m score ≤ 0 → 후보 제외. <b>top10 밖</b>: score 양수지만 cutoff 밖.<br>
+    실거래 wiring 무관, 대시보드 서버가 매일 자체 fetch + 계산 (1h 캐시). production 전략과 동일 score 식 + 동일 universe → TV Pine Script (cs-tsmom-crypto-daily 12-1m) 와 정확히 같은 숫자.
   </div>`;
+}
+function render(rows){
+  return renderTopCards(rows) + renderFullTable(rows);
 }
 async function refresh(){
   try{
     const r = await fetch('/api/cs-tsmom');
     const j = await r.json();
     const meta = document.getElementById('meta');
+    const pinEl = document.getElementById('pin-badge');
     const content = document.getElementById('content');
+    if(j.pin_date){
+      pinEl.textContent = `universe pin: ${j.pin_date}`;
+      pinEl.style.display = '';
+    }
     if(!j.available){
       meta.textContent = `미가용 — ${j.reason||'unknown'} · 마지막 시도 ${fmtKst(j.fetched_at)}`;
-      content.innerHTML = `<div class="error">계산 실패: ${esc(j.reason||'unknown')} — 잠시 후 다시 시도</div>`;
+      content.innerHTML = `<div class="error">계산 실패: ${esc(j.reason||'unknown')} — 우상단 ↻ 버튼으로 강제 재시도</div>`;
       return;
     }
     meta.textContent = `${j.universe_size||0} 종목 · 캐시 시각 ${fmtKst(j.fetched_at)}`;
@@ -2269,6 +2370,24 @@ async function refresh(){
   }catch(e){
     document.getElementById('content').innerHTML =
       `<div class="error">로딩 실패: ${esc(String(e))}</div>`;
+  }
+}
+async function forceRefresh(){
+  const btn = document.getElementById('refresh-btn');
+  btn.disabled = true;
+  btn.textContent = '재계산 중 (~10초)…';
+  try{
+    const r = await fetch('/api/cs-tsmom/refresh', {method:'POST'});
+    const j = await r.json();
+    if(!j.ok){
+      alert('재계산 실패: ' + (j.reason || 'unknown'));
+    }
+    await refresh();
+  }catch(e){
+    alert('재계산 호출 실패: ' + e);
+  }finally{
+    btn.disabled = false;
+    btn.textContent = '↻ 캐시 무효화 + 재계산';
   }
 }
 refresh();
@@ -2731,6 +2850,7 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
             "reason": result.reason,
             "fetched_at": result.fetched_at,
             "universe_size": result.universe_size,
+            "pin_date": result.pin_date,
             "rows": result.rows,
         }
         try:
@@ -2741,8 +2861,39 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
                 "reason": f"serialize_failed: {type(err).__name__}: {err}",
                 "fetched_at": result.fetched_at,
                 "universe_size": result.universe_size,
+                "pin_date": result.pin_date,
                 "rows": [],
             })
+
+    @app.post("/api/cs-tsmom/refresh")
+    async def api_cs_tsmom_refresh() -> JSONResponse:
+        """캐시 무효화 + 강제 재계산 (2026-05-21 fix).
+
+        사용자가 "지금 메이저 누락 / 점수 이상" 같은 상황에서 1h TTL 안 기다리고
+        즉시 재페치 가능. 동시 요청은 single-flight 락이 직렬화.
+        """
+        comp = state.cs_tsmom_computer
+        if comp is None:
+            return JSONResponse(
+                {"ok": False, "reason": "cs_tsmom_computer not wired"},
+                status_code=503,
+            )
+        import asyncio as _asyncio
+        try:
+            result = await _asyncio.to_thread(comp.compute, True)  # force=True
+        except Exception as err:  # noqa: BLE001
+            return JSONResponse(
+                {"ok": False, "reason": f"{type(err).__name__}: {err}"},
+                status_code=500,
+            )
+        return JSONResponse({
+            "ok": True,
+            "available": result.available,
+            "fetched_at": result.fetched_at,
+            "universe_size": result.universe_size,
+            "pin_date": result.pin_date,
+            "row_count": len(result.rows),
+        })
 
     @app.get("/cs-tsmom", response_class=HTMLResponse)
     async def cs_tsmom_page() -> HTMLResponse:

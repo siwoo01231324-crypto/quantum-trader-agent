@@ -628,19 +628,13 @@ def _build_universe_quote_provider(broker_mode: str, kis_client, args):
 
     if broker_mode == "binance-testnet-shadow":
         from src.brokers.binance.universe_quote import fetch_universe_klines
-        # Binance top-30 USDT — same universe as bench_cs_tsmom_crypto.
-        # Avoid expensive top_universe fetch on every refresh: hard-code subset.
-        _BINANCE_TOP30 = [
-            "BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "ADAUSDT",
-            "DOGEUSDT", "AVAXUSDT", "LINKUSDT", "TRXUSDT", "LTCUSDT", "UNIUSDT",
-            "NEARUSDT", "ICPUSDT", "AAVEUSDT", "INJUSDT", "TAOUSDT", "ONDOUSDT",
-            "TONUSDT", "SUIUSDT", "PEPEUSDT", "LAYERUSDT", "OSMOUSDT", "SAGAUSDT",
-            "EURUSDT", "ZECUSDT", "AIUSDT", "KITEUSDT", "SPKUSDT", "CHIPUSDT",
-        ]
+        from src.portfolio.binance_universe import get_universe as _binance_top30
+        # cs-tsmom-crypto-daily universe — dashboard / live / backtest 단일 소스
+        # ``src/portfolio/binance_universe.py``. 갱신 시 그 파일 한 곳만 수정.
 
         def _binance_provider():
             try:
-                return fetch_universe_klines(_BINANCE_TOP30, interval="1d")
+                return fetch_universe_klines(_binance_top30(), interval="1d")
             except Exception:
                 return {}
         return _binance_provider

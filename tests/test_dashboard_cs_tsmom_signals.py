@@ -192,6 +192,227 @@ class TestNaNSafeSerialization:
         json.dumps(payload, allow_nan=False)  # raises ValueError 면 fail
 
 
+class TestReasonField:
+    """2026-05-21 fix — row 별 `reason` 필드가 사용자에게 왜 OUT 인지 가시화."""
+
+    def test_no_data_reason_when_close_is_nan(self):
+        # AAA 정상, BBB 마지막 close NaN (fetch 실패 흉내)
+        n = 280
+        idx = pd.date_range("2024-01-01", periods=n, freq="D")
+        closes = pd.DataFrame(index=idx, columns=["AAA", "BBB"], dtype=float)
+        for i in range(n):
+            closes.iloc[i] = [100 + i * 0.3, 100 + i * 0.3]
+        closes.iloc[-1, closes.columns.get_loc("BBB")] = float("nan")
+        qv = pd.DataFrame(2e7, index=idx, columns=closes.columns)
+        rows = compute_signals_from_panels(closes, qv)
+        bbb = next(r for r in rows if r["symbol"] == "BBB")
+        assert bbb["reason"] == "no_data", bbb
+
+    def test_warmup_reason_when_score_is_nan(self):
+        # 252d lookback 범위에 NaN → score NaN, last_close 는 있음
+        n = 280
+        idx = pd.date_range("2024-01-01", periods=n, freq="D")
+        closes = pd.DataFrame(index=idx, columns=["AAA", "BBB"], dtype=float)
+        for i in range(n):
+            closes.iloc[i] = [100 + i * 0.3, 100 + i * 0.3]
+        # BBB 의 t-252 위치에 NaN → score=NaN, last_close 는 정상
+        closes.iloc[0:30, closes.columns.get_loc("BBB")] = float("nan")
+        qv = pd.DataFrame(2e7, index=idx, columns=closes.columns)
+        rows = compute_signals_from_panels(closes, qv)
+        bbb = next(r for r in rows if r["symbol"] == "BBB")
+        assert bbb["reason"] == "warmup", bbb
+
+    def test_low_volume_reason(self):
+        n = 280
+        idx = pd.date_range("2024-01-01", periods=n, freq="D")
+        closes = pd.DataFrame(index=idx, columns=["LIQ", "ILLIQ"], dtype=float)
+        for i in range(n):
+            closes.iloc[i] = [100 + i * 0.3, 100 + i * 0.5]
+        qv = pd.DataFrame(index=idx, columns=closes.columns, dtype=float)
+        qv["LIQ"] = 2e7
+        qv["ILLIQ"] = 5e6  # 미달
+        rows = compute_signals_from_panels(closes, qv)
+        illiq = next(r for r in rows if r["symbol"] == "ILLIQ")
+        assert illiq["reason"] == "low_volume", illiq
+
+    def test_negative_score_reason(self):
+        # 명백한 하락 추세 → score < 0
+        n = 280
+        idx = pd.date_range("2024-01-01", periods=n, freq="D")
+        closes = pd.DataFrame(index=idx, columns=["AAA", "BBB"], dtype=float)
+        for i in range(n):
+            closes.iloc[i] = [100 + i * 0.3, 200 - i * 0.5]  # BBB 하락
+        qv = pd.DataFrame(2e7, index=idx, columns=closes.columns)
+        rows = compute_signals_from_panels(closes, qv)
+        bbb = next(r for r in rows if r["symbol"] == "BBB")
+        assert bbb["reason"] == "negative_score", bbb
+
+    def test_ok_reason_when_in_top(self):
+        # 강한 상승 + top1 → reason=ok
+        n = 280
+        idx = pd.date_range("2024-01-01", periods=n, freq="D")
+        closes = pd.DataFrame(index=idx, columns=["AAA"], dtype=float)
+        for i in range(n):
+            closes.iloc[i] = [100 + i * 0.5]
+        qv = pd.DataFrame(2e7, index=idx, columns=closes.columns)
+        rows = compute_signals_from_panels(closes, qv, top_n=1)
+        aaa = rows[0]
+        assert aaa["reason"] == "ok", aaa
+        assert aaa["in_top_today"] is True
+
+    def test_out_of_top_n_when_positive_but_below_cutoff(self):
+        # 3종목 모두 양수 score, top_n=1 → 2/3등은 out_of_top_n
+        n = 280
+        idx = pd.date_range("2024-01-01", periods=n, freq="D")
+        closes = pd.DataFrame(index=idx, columns=["AAA", "BBB", "CCC"], dtype=float)
+        for i in range(n):
+            closes.iloc[i] = [100 + i * 0.5, 100 + i * 0.3, 100 + i * 0.1]
+        qv = pd.DataFrame(2e7, index=idx, columns=closes.columns)
+        rows = compute_signals_from_panels(closes, qv, top_n=1)
+        by_sym = {r["symbol"]: r for r in rows}
+        assert by_sym["AAA"]["reason"] == "ok"
+        assert by_sym["BBB"]["reason"] == "out_of_top_n"
+        assert by_sym["CCC"]["reason"] == "out_of_top_n"
+
+
+class TestCacheStaleAutoRefresh:
+    """2026-05-21 fix — BTC 캐시가 5개월 전 데이터까지만 있던 사고 회귀 방지.
+
+    panel build outer-join 으로 신생 코인 마지막 row 가 base index 되면 BTC
+    의 그 row 는 NaN → "데이터 없음". `_refresh()` 가 stale 캐시 검출해서
+    `refresh=True` 로 강제 재페치 호출하는지 검증.
+    """
+
+    def test_stale_panel_triggers_force_refresh(self, monkeypatch):
+        from src.dashboard.cs_tsmom_signals import CsTsmomComputer
+
+        # Stub bench module — fetch_universe 가 호출될 때 refresh 값 기록.
+        refresh_calls: list[bool] = []
+
+        # 5개월 전이 마지막인 stale BTC panel (252+ rows, but old).
+        stale_idx = pd.date_range("2025-04-01", periods=260, freq="D")
+        stale_btc = pd.DataFrame({
+            "close": np.linspace(60000, 90000, 260),
+            "quote_volume": np.full(260, 1e9),
+        }, index=stale_idx)
+
+        # 어제까지 fresh 한 SOL panel.
+        from datetime import datetime as _dt, timezone as _tz, timedelta as _td
+        now = _dt.now(_tz.utc)
+        fresh_idx = pd.date_range(now - _td(days=260), periods=260, freq="D").normalize()
+        fresh_sol = pd.DataFrame({
+            "close": np.linspace(80, 180, 260),
+            "quote_volume": np.full(260, 5e8),
+        }, index=fresh_idx)
+
+        cached_panels = {"BTCUSDT": stale_btc, "SOLUSDT": fresh_sol}
+
+        def _fake_fetch_universe(symbols, start, end, refresh, **kw):
+            refresh_calls.append((tuple(sorted(symbols)), refresh))
+            if not refresh:
+                # 첫 호출 — 캐시된 panel 그대로 (BTC stale, SOL fresh)
+                return {s: cached_panels[s] for s in symbols if s in cached_panels}
+            # refresh=True — 강제 재페치 흉내 (BTC 도 fresh 로 갱신).
+            refreshed_btc = stale_btc.copy()
+            refreshed_btc.index = fresh_idx  # 어제까지로 갱신
+            return {s: (refreshed_btc if s == "BTCUSDT" else cached_panels.get(s))
+                    for s in symbols if s in cached_panels or s == "BTCUSDT"}
+
+        # bench 모듈을 in-process stub 으로 교체.
+        import sys, types
+        fake_bench = types.SimpleNamespace(
+            fetch_universe=_fake_fetch_universe,
+            build_panels=lambda panels: (
+                pd.DataFrame({s: df["close"] for s, df in panels.items()}).sort_index().dropna(how="all"),
+                pd.DataFrame({s: df["quote_volume"] for s, df in panels.items()}).reindex(
+                    pd.DataFrame({s: df["close"] for s, df in panels.items()}).sort_index().dropna(how="all").index,
+                ),
+            ),
+        )
+        monkeypatch.setitem(sys.modules, "bench_cs_tsmom_crypto", fake_bench)
+
+        # Universe pin import → 30종이 아니라 BTC+SOL 만 시뮬.
+        monkeypatch.setattr(
+            "src.portfolio.binance_universe.BINANCE_USDT_TOP30",
+            ("BTCUSDT", "SOLUSDT"),
+        )
+
+        comp = CsTsmomComputer()
+        state = comp.compute(force=True)
+        assert state.available
+
+        # 첫 호출 (refresh=False) + 두 번째 호출 (refresh=True for stale BTC)
+        # 두 호출 모두 있어야 한다.
+        refresh_flags = [r for _, r in refresh_calls]
+        assert refresh_flags == [False, True], refresh_calls
+        # 두 번째 호출 symbols 에는 stale BTC 가 포함되어 있어야.
+        stale_symbols = refresh_calls[1][0]
+        assert "BTCUSDT" in stale_symbols, refresh_calls
+
+
+class TestBinanceUniversePin:
+    """2026-05-21 fix — single source of truth pin."""
+
+    def test_universe_has_exactly_30_symbols(self):
+        from src.portfolio.binance_universe import BINANCE_USDT_TOP30
+        assert len(BINANCE_USDT_TOP30) == 30
+
+    def test_universe_includes_majors(self):
+        # 메이저 8종 필수 — dashboard 가 이들을 잃으면 BUY 후보 0 사고 재현.
+        from src.portfolio.binance_universe import BINANCE_USDT_TOP30
+        majors = {"BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT",
+                  "XRPUSDT", "ADAUSDT", "DOGEUSDT", "AVAXUSDT"}
+        assert majors.issubset(set(BINANCE_USDT_TOP30)), (
+            "메이저 누락 — 2026-05-21 dashboard 사고 회귀: "
+            f"missing = {majors - set(BINANCE_USDT_TOP30)}"
+        )
+
+    def test_all_symbols_end_with_usdt(self):
+        from src.portfolio.binance_universe import BINANCE_USDT_TOP30
+        non_usdt = [s for s in BINANCE_USDT_TOP30 if not s.endswith("USDT")]
+        assert non_usdt == [], f"non-USDT pairs leaked into pin: {non_usdt}"
+
+    def test_pin_is_immutable_tuple(self):
+        from src.portfolio import binance_universe
+        assert isinstance(binance_universe.BINANCE_USDT_TOP30, tuple)
+
+    def test_get_universe_returns_mutable_copy(self):
+        from src.portfolio.binance_universe import (
+            BINANCE_USDT_TOP30, get_universe,
+        )
+        u = get_universe()
+        assert isinstance(u, list)
+        u.append("BREAK")  # 호출자가 mutate 해도 원본 pin 깨지지 않음
+        assert "BREAK" not in BINANCE_USDT_TOP30
+
+
+class TestCsTsmomPageHtml:
+    """2026-05-21 fix — 페이지 레이아웃 재정의 (TOP-10 카드 + 30종 테이블)."""
+
+    def test_page_has_top_card_section(self):
+        from src.dashboard.app import _render_cs_tsmom_page
+        html = _render_cs_tsmom_page()
+        # TOP-10 BUY 후보 섹션 + 카드 그리드 CSS
+        assert "오늘의 BUY 후보" in html
+        assert ".top-grid" in html
+        assert ".top-card" in html
+        assert "renderTopCards" in html
+
+    def test_page_has_full_diagnostic_table(self):
+        from src.dashboard.app import _render_cs_tsmom_page
+        html = _render_cs_tsmom_page()
+        # 기존 30종 테이블도 유지
+        assert "전체 진단" in html
+        assert "renderFullTable" in html
+
+    def test_page_has_pin_badge_and_refresh_button(self):
+        from src.dashboard.app import _render_cs_tsmom_page
+        html = _render_cs_tsmom_page()
+        assert "universe pin" in html
+        assert "캐시 무효화" in html
+        assert "forceRefresh" in html
+
+
 class TestCsTsmomComputerCache:
     def test_returns_cached_within_ttl(self, monkeypatch):
         comp = CsTsmomComputer(ttl_sec=1000)

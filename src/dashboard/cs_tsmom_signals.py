@@ -113,16 +113,33 @@ def compute_signals_from_panels(
             sig = "OUT"
         rank_v = ranks.get(sym)
         rank_i: int | None = int(rank_v) if pd.notna(rank_v) else None
+        # 사유 분류 (2026-05-21 fix — UI 에서 왜 OUT 인지 가시화).
+        sym_close = _safe_float(last_close.get(sym))
+        sym_score = _safe_float(score_today.get(sym))
+        sym_liquid = bool(liquid_today.get(sym, False))
+        if sym_close is None:
+            reason = "no_data"        # fetch 실패 / 캐시 없음 → panel 전체 NaN
+        elif sym_score is None:
+            reason = "warmup"         # 252d lookback 미달 (신규 listing 등)
+        elif not sym_liquid:
+            reason = "low_volume"     # 60d 평균 거래대금 < 1e7 USDT
+        elif sym_score <= 0:
+            reason = "negative_score" # 12-1m 모멘텀 ≤ 0 → 후보 제외
+        elif not is_today:
+            reason = "out_of_top_n"   # score>0 인데 top-N 컷오프 밖
+        else:
+            reason = "ok"
         rows.append({
             "symbol": str(sym),
-            "last_close": _safe_float(last_close.get(sym)),
+            "last_close": sym_close,
             "last_ts": last_ts.isoformat() if hasattr(last_ts, "isoformat") else str(last_ts),
-            "score": _safe_float(score_today.get(sym)),
+            "score": sym_score,
             "rank": rank_i,
             "in_top_today": is_today,
             "in_top_yday": is_yday,
-            "liquid": bool(liquid_today.get(sym, False)),
+            "liquid": sym_liquid,
             "signal": sig,
+            "reason": reason,
         })
     # 정렬: in_top 우선, 그 다음 score desc; nan/음수는 뒤로.
     rows.sort(key=lambda r: (
@@ -139,6 +156,7 @@ class CsTsmomState:
     fetched_at: str | None = None
     universe_size: int = 0
     rows: list[dict] = field(default_factory=list)
+    pin_date: str = ""   # 2026-05-21 fix — universe pin-date 가시화 (dashboard 헤더 표시)
 
 
 class CsTsmomComputer:
@@ -193,13 +211,56 @@ class CsTsmomComputer:
                 sys.path.insert(0, scripts_dir)
             import importlib
             bench = importlib.import_module("bench_cs_tsmom_crypto")
-            symbols = bench.fetch_top_universe(DEFAULT_UNIVERSE_SIZE)
+            # 단일 source of truth: src/portfolio/binance_universe.BINANCE_USDT_TOP30
+            # (live broker 와 동일 universe). 동적 fetch_top_universe(30) 은 24h
+            # 거래량 변동으로 메이저(BTC/ETH/SOL) 가 매번 들락날락해 NaN score
+            # 양산 → 2026-05-21 버그 재발 방지.
+            from src.portfolio.binance_universe import (
+                BINANCE_USDT_TOP30, PIN_DATE,
+            )
+            symbols = list(BINANCE_USDT_TOP30)
             now = datetime.now(timezone.utc)
             start = (now - timedelta(days=DEFAULT_LONG_LB + 100)).strftime("%Y-%m-%d")
             end = now.strftime("%Y-%m-%d")
             panels = bench.fetch_universe(symbols, start, end, refresh=False)
+            # 캐시에 없거나 / 길이 부족 / **마지막 close 가 7일 초과 stale** 인
+            # 종목은 강제 재페치 (2026-05-21 fix).
+            #
+            # ``stale`` 검사를 빠뜨리면 BTC 캐시가 2025-12-31 까지만 있는데
+            # KITE/CHIP 같은 신생 코인은 어제까지 갱신되어 있을 때 build_panels
+            # 의 outer-join 으로 마지막 row index 가 신생 코인 시각으로 정렬되고
+            # BTC 의 그 row 는 NaN → "데이터 없음" 사고 (실제 발생, 2026-05-21).
+            stale_cutoff = pd.Timestamp(now.date()) - pd.Timedelta(days=7)
+
+            def _needs_refresh(sym: str) -> bool:
+                if sym not in panels:
+                    return True
+                df = panels[sym]
+                if len(df) < DEFAULT_LONG_LB + 2:
+                    return True
+                try:
+                    last_ts = pd.Timestamp(df.index[-1])
+                    if last_ts.tz is not None:
+                        last_ts = last_ts.tz_convert(None)
+                    return last_ts < stale_cutoff
+                except Exception:
+                    return True
+
+            missing_or_stale = [s for s in symbols if _needs_refresh(s)]
+            if missing_or_stale:
+                logger.info(
+                    "cs_tsmom: forcing refresh for %d missing/short/stale symbols: %s",
+                    len(missing_or_stale), missing_or_stale[:5],
+                )
+                refreshed = bench.fetch_universe(
+                    missing_or_stale, start, end, refresh=True,
+                )
+                panels.update(refreshed)
             if not panels:
-                return CsTsmomState(available=False, reason="no panels fetched")
+                return CsTsmomState(
+                    available=False,
+                    reason="no panels fetched (Binance API unreachable?)",
+                )
             closes, qv = bench.build_panels(panels)
             rows = compute_signals_from_panels(closes, qv)
             return CsTsmomState(
@@ -207,6 +268,7 @@ class CsTsmomComputer:
                 fetched_at=now.isoformat(),
                 universe_size=len(symbols),
                 rows=rows,
+                pin_date=PIN_DATE,
             )
         except Exception as err:  # noqa: BLE001 — dashboard 절대 500 금지
             logger.warning("cs_tsmom refresh failed: %s", err)
