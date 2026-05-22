@@ -35,8 +35,7 @@ from src.observability.metrics import Metrics
 class DashboardState:
     """Mutable runtime state shared across request handlers."""
 
-    # 손익
-    pnl_realtime: float = 0.0
+    # 손익 (realized — 일간/월간. "실시간" 칸은 2026-05-22 제거)
     pnl_daily: float = 0.0
     pnl_monthly: float = 0.0
 
@@ -93,9 +92,8 @@ class DashboardState:
     shadow_log_dir: Path | None = None
 
     # 라이브 PnL aggregator (#194). When wired, /api/pnl and per-card
-    # pnl_today are sourced from this object instead of the legacy
-    # pnl_realtime / pnl_daily / pnl_monthly fields above (kept for
-    # backwards compatibility with callers that set them directly).
+    # pnl_today are sourced from this object instead of the static
+    # pnl_daily / pnl_monthly fields above.
     pnl_aggregator: Any | None = None
 
     # Operational diagnostics — bars seen, dispatch counts, last signal/order/fill.
@@ -131,73 +129,34 @@ class DashboardState:
 
 
 def _pnl_view(state: "DashboardState") -> dict:
-    """Resolve the dashboard PnL snapshot — *realized only*.
+    """Resolve the dashboard PnL snapshot — realized only, daily + monthly.
 
     Prefers the live `PnLAggregator` (#194). Falls back to the static
-    `pnl_realtime / pnl_daily / pnl_monthly` fields when no aggregator is
-    wired (legacy callers, dashboard-only mode).
+    `pnl_daily / pnl_monthly` fields when no aggregator is wired.
 
     The *_by_venue dicts are keyed "binance" (USDT), "kis" (KRW), "unknown".
     They are NEVER cross-summed — each value is in the venue's own currency.
-    Legacy scalar realtime/daily/monthly are kept for backward compatibility.
 
-    **Purely synchronous** — no broker IO. The `/api/pnl` endpoint augments
-    with broker `unrealized_pnl` via ``_augment_pnl_with_unrealized`` after
-    fetching it through `asyncio.to_thread`. Initial server-side HTML render
-    shows realized only; the JS poll updates with unrealized within ~5s.
+    2026-05-22: "실시간" 칸 제거. 미실현 손익은 Binance 계좌 카드 hero
+    (id=bnb-upnl) 와 전략별 포지션 row 의 unrealized_pnl 컬럼에서 이미
+    노출되므로 PnL 카드에 또 합쳐 보여주는 건 redundant + 헷갈림.
     """
     agg = state.pnl_aggregator
     if agg is not None:
         return {
-            "realtime": float(agg.realtime),
             "daily": float(agg.daily),
             "monthly": float(agg.monthly),
             "by_strategy": {k: float(v) for k, v in agg.by_strategy.items()},
-            # Per-venue splits — currency-correct, never cross-summed.
-            "realtime_by_venue": {k: float(v) for k, v in agg.realtime_by_venue().items()},
             "daily_by_venue": {k: float(v) for k, v in agg.daily_by_venue().items()},
             "monthly_by_venue": {k: float(v) for k, v in agg.monthly_by_venue().items()},
-            "unrealized_by_venue": {},  # _augment_pnl_with_unrealized 이 채움
         }
     return {
-        "realtime": state.pnl_realtime,
         "daily": state.pnl_daily,
         "monthly": state.pnl_monthly,
         "by_strategy": {},
-        "realtime_by_venue": {},
         "daily_by_venue": {},
         "monthly_by_venue": {},
-        "unrealized_by_venue": {},
     }
-
-
-def _augment_pnl_with_unrealized(
-    view: dict, unrealized_by_venue: dict[str, float],
-) -> dict:
-    """In-place mutation: realtime 표시에 broker unrealized 를 더한다.
-
-    2026-05-22: 사용자 보고 "실시간 -96.45 가 월간 -96.45 와 똑같아서 lifetime
-    누적인지 live current 인지 안 헷갈리네" — "실시간" label 의 의도는 *현재
-    상태 (실현 + 미실현)*. 본 헬퍼가 `_pnl_view` 의 realized-only base 에
-    Binance unrealized 를 더해 진짜 "실시간" 으로 만들어줌.
-
-    영향 범위:
-    - ``realtime``: scalar mixed (KRW + USDT) — 기존 cross-sum 컨벤션 그대로
-      유지. unrealized 의 cross-venue 합산만 추가.
-    - ``realtime_by_venue[venue]``: 그 venue 의 realized cum + unrealized.
-      Currency-correct (KIS 는 unrealized 가 None/0 이라 변동 X).
-    - ``daily`` / ``monthly``: realized only — 본 헬퍼 영향 X (window-bounded
-      값에 unrealized 가 안 어울림).
-    """
-    if not unrealized_by_venue:
-        return view
-    view["unrealized_by_venue"] = {k: float(v) for k, v in unrealized_by_venue.items()}
-    sum_unrealized = sum(unrealized_by_venue.values())
-    view["realtime"] = float(view.get("realtime", 0.0)) + sum_unrealized
-    rt_by_venue = view.setdefault("realtime_by_venue", {})
-    for venue, upnl in unrealized_by_venue.items():
-        rt_by_venue[venue] = float(rt_by_venue.get(venue, 0.0)) + float(upnl)
-    return view
 
 
 def _gauge_html(name: str, value: float) -> str:
@@ -238,7 +197,6 @@ def _render_dashboard(state: DashboardState, catalog_items: list[dict] | None = 
 
     # Q1: 손익 — scalar + per-venue splits
     pnl = _pnl_view(state)
-    pnl_realtime_fmt = f"{pnl['realtime']:,.2f}"
     pnl_daily_fmt = f"{pnl['daily']:,.2f}"
     pnl_monthly_fmt = f"{pnl['monthly']:,.2f}"
 
@@ -248,11 +206,9 @@ def _render_dashboard(state: DashboardState, catalog_items: list[dict] | None = 
         return f"{v:,.2f}" if v is not None else None
 
     # KIS (KRW) per-period values
-    kis_rt  = _venue_val(pnl["realtime_by_venue"],  "kis")
     kis_day = _venue_val(pnl["daily_by_venue"],     "kis")
     kis_mon = _venue_val(pnl["monthly_by_venue"],   "kis")
     # Binance (USDT) per-period values
-    bnb_rt  = _venue_val(pnl["realtime_by_venue"],  "binance")
     bnb_day = _venue_val(pnl["daily_by_venue"],     "binance")
     bnb_mon = _venue_val(pnl["monthly_by_venue"],   "binance")
 
@@ -817,12 +773,9 @@ body{{
   <!-- ── 섹션 1: PnL 요약 (venue 분리) ── -->
   <div>
     <div class="section-hdr"><h2>손익 (PnL)</h2><div class="section-hdr-line"></div></div>
-    <!-- 통합 스칼라 (레거시 호환 / 단일 venue 운영 시 참조) -->
-    <div class="grid-3" style="margin-bottom:10px">
-      <div class="pnl-card">
-        <div class="pnl-label">실시간 (통합)</div>
-        <div class="pnl-value {('neg' if pnl['realtime'] < 0 else 'zero' if pnl['realtime'] == 0 else '')}" id="pnl-realtime">{pnl_realtime_fmt}</div>
-      </div>
+    <!-- 통합 스칼라 (단일 venue 운영 시 참조). "실시간" 칸은 2026-05-22 제거
+         — 미실현은 Binance 계좌 카드 hero + 전략별 포지션 row 에서 노출. -->
+    <div class="grid-2" style="margin-bottom:10px">
       <div class="pnl-card">
         <div class="pnl-label">일간 (통합)</div>
         <div class="pnl-value {('neg' if pnl['daily'] < 0 else 'zero' if pnl['daily'] == 0 else '')}" id="pnl-daily">{pnl_daily_fmt}</div>
@@ -843,10 +796,6 @@ body{{
         </div>
         <div class="pnl-venue-rows" id="pnl-venue-kis">
           <div class="pnl-venue-row">
-            <span class="pnl-venue-period">실시간</span>
-            <span>{_pnl_cell(kis_rt, 'KRW')}</span>
-          </div>
-          <div class="pnl-venue-row">
             <span class="pnl-venue-period">일간</span>
             <span>{_pnl_cell(kis_day, 'KRW')}</span>
           </div>
@@ -864,10 +813,6 @@ body{{
           <span class="pnl-venue-currency">USDT</span>
         </div>
         <div class="pnl-venue-rows" id="pnl-venue-binance">
-          <div class="pnl-venue-row">
-            <span class="pnl-venue-period">실시간</span>
-            <span>{_pnl_cell(bnb_rt, 'USDT')}</span>
-          </div>
           <div class="pnl-venue-row">
             <span class="pnl-venue-period">일간</span>
             <span>{_pnl_cell(bnb_day, 'USDT')}</span>
@@ -1766,7 +1711,7 @@ function fmtPnlVenue(v, currency) {{
 function renderVenueRows(containerId, data, currency) {{
   const el = document.getElementById(containerId);
   if (!el) return;
-  const periods = [['실시간','realtime_by_venue'],['일간','daily_by_venue'],['월간','monthly_by_venue']];
+  const periods = [['일간','daily_by_venue'],['월간','monthly_by_venue']];
   el.innerHTML = periods.map(([label, key]) => {{
     const venueKey = containerId.includes('kis') ? 'kis' : 'binance';
     const val = (data[key] || {{}})[venueKey];
@@ -1778,7 +1723,7 @@ async function pnlVenueRefresh() {{
   try {{
     const r = await fetch('/api/pnl');
     const d = await r.json();
-    // Legacy scalar highlights (top 3-card row)
+    // 통합 스칼라 (일간/월간 2칸 — 실시간 칸은 2026-05-22 제거)
     const setColor = (id, v) => {{
       const el = document.getElementById(id);
       if (!el) return;
@@ -1786,7 +1731,6 @@ async function pnlVenueRefresh() {{
       el.style.color = n > 0 ? 'var(--green)' : n < 0 ? 'var(--red)' : 'var(--text2)';
       el.textContent = (n > 0 ? '+' : '') + fmtNum(n, 2);
     }};
-    setColor('pnl-realtime', d.realtime);
     setColor('pnl-daily',    d.daily);
     setColor('pnl-monthly',  d.monthly);
     // Venue split rows
@@ -2996,24 +2940,9 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
 
     @app.get("/api/pnl")
     async def api_pnl() -> JSONResponse:
-        view = _pnl_view(state)
-        # 2026-05-22: "실시간" = realized cum + Binance unrealized 로 augment.
-        # 사용자 보고 — 실시간이 lifetime cumulative 인지 live current 인지
-        # 안 헷갈리네 (월간과 똑같이 표시). broker ground-truth 미실현을 더해
-        # 진짜 실시간 값으로. KIS 는 unrealized 미지원 → 변동 X.
-        try:
-            provider = state.account_info_provider
-            if provider is not None:
-                fb = getattr(provider, "fetch_binance", None)
-                if callable(fb):
-                    bn = await asyncio.to_thread(fb)
-                    if isinstance(bn, dict) and bn.get("ok"):
-                        upnl = bn.get("total_unrealized_pnl")
-                        if isinstance(upnl, (int, float)) and upnl != 0:
-                            _augment_pnl_with_unrealized(view, {"binance": float(upnl)})
-        except Exception:  # noqa: BLE001 — never 500 the dashboard
-            pass
-        return JSONResponse(view)
+        # 2026-05-22: "실시간" 칸 제거 — realized 일간/월간만. 미실현은 Binance
+        # 계좌 카드 hero + 전략별 포지션 row 에서 노출되므로 broker IO 불필요.
+        return JSONResponse(_pnl_view(state))
 
     @app.get("/api/ops")
     async def api_ops() -> JSONResponse:
