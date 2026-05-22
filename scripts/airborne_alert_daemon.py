@@ -246,15 +246,38 @@ async def _bootstrap_into_states(
     """
     if not symbols:
         return
-    boot = await bootstrap_history(
-        symbols=symbols, intervals=("1h", "5m"),
-        limit_per_interval={"1h": 100, "5m": 50},
-        base_url=rest_base_url,
-    )
+    # 2026-05-22: batch bootstrap 이 심볼 1개라도 실패하면 (예: always-include
+    # 에 Binance Futures 에 없는 EURUSDT 가 들어가 400 Bad Request) 예외가
+    # 전파돼 데몬 전체가 crash → unless-stopped 재시작 → 무한 crash loop.
+    # batch 실패 시 심볼별 개별 재시도로 강등 — 잘못된 심볼 1개가 나머지
+    # 99개 + 데몬 전체를 죽이지 못하게 한다.
+    try:
+        boot = await bootstrap_history(
+            symbols=symbols, intervals=("1h", "5m"),
+            limit_per_interval={"1h": 100, "5m": 50},
+            base_url=rest_base_url,
+        )
+    except Exception as err:  # noqa: BLE001 — degrade to per-symbol
+        log.warning(
+            "batch bootstrap failed (%s) — per-symbol 재시도", err,
+        )
+        boot = {}
+        for s in symbols:
+            try:
+                one = await bootstrap_history(
+                    symbols=[s], intervals=("1h", "5m"),
+                    limit_per_interval={"1h": 100, "5m": 50},
+                    base_url=rest_base_url,
+                )
+                boot.update(one)
+            except Exception as e2:  # noqa: BLE001
+                log.warning("bootstrap skip %s — %s", s, e2)
     for s in symbols:
         st = SymbolState()
         st.history_1h = boot.get(s, {}).get("1h", st.history_1h)
         st.history_5m = boot.get(s, {}).get("5m", st.history_5m)
+        # boot 에 없는 심볼 (fetch 실패) = 빈 history → evaluate 가 warmup
+        # 으로 자연 skip. 데몬은 정상 가동.
         states[s] = st
 
 

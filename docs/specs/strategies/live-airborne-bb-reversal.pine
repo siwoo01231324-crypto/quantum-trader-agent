@@ -1,6 +1,6 @@
 //@version=5
 // =============================================================================
-// Airborne BB Reversal — Reverse-Engineered v1.1
+// Airborne BB Reversal — Reverse-Engineered v1.2
 // =============================================================================
 // v1 (high/low 기반 돌파) 가 차트 비교에서 원본보다 신호를 자주 띄움을 발견.
 // 같은 봉에서 v1 은 "숏 대기" 진입했지만 원본은 "신호 없음" 케이스 분석:
@@ -14,6 +14,13 @@
 //   1. 돌파 기준 high/low → close (강의 §1.2 "종가 기준 이탈 확인" 일치)
 //   2. close margin: close > BB_upper × (1 + min_close_margin)
 //   3. min body: |close - open| / open >= min_body_pct
+//
+// v1.2 (2026-05-22) — body 게이트를 절대% → 변동성 적응형(ATR) 으로:
+//   v1.1 의 min_body 0.5% 절대 게이트가 TRXUSDT 같은 저변동성 종목의
+//   1h 봉을 전부 걸러냄 (검증: TRX 60봉 중 body 0.5% 넘는 봉 0개 → 시그널
+//   전멸). 원본은 TRX 에서 4개를 띄움 → 절대% 게이트가 잘못된 역공학.
+//   변경: |close - open| >= atr_body_mult × ATR(atr_period). 종목이 자기
+//   변동성 기준으로 평가받음.
 //
 // 사양: docs/specs/strategies/live-airborne-bb-reversal.md
 // 역공학 노트: docs/background/38-airborne-indicator-reverse-engineering.md
@@ -35,14 +42,17 @@ group_logic  = "Trigger Logic"
 retrace      = input.float(0.4,"Retrace Ratio", minval=0.05, maxval=0.95, step=0.05,
      tooltip="역공학 확정값 0.4", group=group_logic)
 
-group_break  = "Breakout Filter (v1.1 NEW)"
+group_break  = "Breakout Filter (v1.2 — ATR adaptive)"
 min_margin   = input.float(0.001, "Min close margin (% of price)",
      minval=0.0, step=0.0001,
      tooltip="close 와 BB 사이 최소 거리. 0.001 = 0.1%. wick-only 무시.",
      group=group_break)
-min_body     = input.float(0.005, "Min body (% of open)",
-     minval=0.0, step=0.0001,
-     tooltip="돌파봉의 body 최소 크기. 0.005 = 0.5%. 작은 봉 무시.",
+atr_period   = input.int(14, "ATR period (body 게이트)", minval=1,
+     tooltip="body 게이트 기준 ATR 의 길이.", group=group_break)
+atr_body_mult = input.float(0.6, "Min body (× ATR)",
+     minval=0.0, step=0.1,
+     tooltip="돌파봉 body 최소 크기 = ATR × 이 배수. 종목 변동성에 적응 "
+       + "(v1.1 의 절대 0.5% 게이트가 저변동성 종목 시그널을 전멸시킨 것 fix).",
      group=group_break)
 
 group_ltf    = "Lower Timeframe BB"
@@ -62,6 +72,9 @@ htf_dev   = ta.stdev(close, bb_length) * bb_std
 htf_upper = htf_basis + htf_dev
 htf_lower = htf_basis - htf_dev
 
+// ============== ATR (v1.2 body gate) ==============
+atr_v = ta.atr(atr_period)
+
 // ============== LTF BB ==============
 ltf_basis = request.security(syminfo.tickerid, ltf_tf,
      ta.sma(close, bb_length), lookahead=barmerge.lookahead_off)
@@ -71,15 +84,17 @@ ltf_upper = ltf_basis + ltf_dev_v
 ltf_lower = ltf_basis - ltf_dev_v
 
 // ============== Body + breakout thresholds ==============
-body_pct = open == 0 ? 0.0 : math.abs(close - open) / open
+// v1.2: body 게이트를 절대값(|close-open|) vs ATR 배수로 — 종목 변동성 적응.
+body_abs = math.abs(close - open)
+min_body_abs = atr_body_mult * atr_v
 upper_thr = htf_upper * (1 + min_margin)
 lower_thr = htf_lower * (1 - min_margin)
 upper_thr_prev = htf_upper[1] * (1 + min_margin)
 lower_thr_prev = htf_lower[1] * (1 - min_margin)
 
-// v1.1: close 기준 + margin + body 필터.
-upper_break = close > upper_thr and close[1] <= upper_thr_prev and body_pct >= min_body
-lower_break = close < lower_thr and close[1] >= lower_thr_prev and body_pct >= min_body
+// v1.2: close 기준 + margin + ATR-적응 body 필터.
+upper_break = close > upper_thr and close[1] <= upper_thr_prev and body_abs >= min_body_abs
+lower_break = close < lower_thr and close[1] >= lower_thr_prev and body_abs >= min_body_abs
 
 // ============== State Machine ==============
 var int   state    = 0
@@ -164,7 +179,7 @@ var table status_tbl = na
 if show_table
     if barstate.islast
         if na(status_tbl)
-            status_tbl := table.new(table_position(table_pos), 2, 6,
+            status_tbl := table.new(table_position(table_pos), 2, 7,
                  frame_color=color.gray, frame_width=1,
                  border_color=color.gray, border_width=1)
         state_lbl = state == 1 ? "🟢 에어본 롱 대기" : state == 2 ? "🔴 에어본 숏 대기" : "⏸ 신호 없음"
@@ -187,6 +202,12 @@ if show_table
              bgcolor=bg_row, text_color=tc)
         table.cell(status_tbl, 0, 5, ltf_tf + "분 BB 하단", bgcolor=bg_row, text_color=tc)
         table.cell(status_tbl, 1, 5, str.tostring(ltf_lower, "#"),
+             bgcolor=bg_row, text_color=tc)
+        table.cell(status_tbl, 0, 6, "body 게이트", bgcolor=bg_row, text_color=tc)
+        table.cell(status_tbl, 1, 6,
+             str.tostring(body_abs, format.mintick) + " / "
+               + str.tostring(min_body_abs, format.mintick)
+               + (body_abs >= min_body_abs ? " ✓" : " ✗"),
              bgcolor=bg_row, text_color=tc)
 
 // ============== Alerts ==============
