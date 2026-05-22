@@ -159,18 +159,41 @@ def evaluate_long_fire(
 # (after refactor) by ``backtest.strategies.live_airborne_bb_reversal_v11``.
 
 DEFAULT_MIN_CLOSE_MARGIN_V11 = 0.001  # 0.1% — close vs BB threshold
-DEFAULT_MIN_BODY_PCT_V11 = 0.005       # 0.5% — breakout bar body filter
+# v1.2 (2026-05-22): body 게이트를 절대% → 변동성 적응형(ATR) 으로.
+# 기존 절대 0.5% (min_body_pct) 게이트가 TRX 같은 저변동성 종목의 1h 봉을
+# 전부 걸러 시그널 0개를 만들던 사고 fix (TRX 60봉 중 body 0.5% 넘는 봉 0개).
+# body 절대값을 ATR 의 배수와 비교 — 종목이 자기 변동성 기준으로 평가됨.
+DEFAULT_ATR_PERIOD_V11 = 14
+DEFAULT_ATR_BODY_MULT_V11 = 0.6
 
 
-def _body_pct(open_: pd.Series, close: pd.Series) -> pd.Series:
-    return (close - open_).abs() / open_.where(open_ != 0, 1.0)
+def _body_abs(open_: pd.Series, close: pd.Series) -> pd.Series:
+    return (close - open_).abs()
 
 
-def _validate_v11_params(min_close_margin: float, min_body_pct: float) -> None:
+def _atr(
+    high: pd.Series, low: pd.Series, close: pd.Series, period: int
+) -> pd.Series:
+    """Wilder ATR — Pine ``ta.atr`` 와 동일 (RMA of True Range).
+
+    True Range = max(high-low, |high-prev_close|, |low-prev_close|).
+    첫 봉은 prev_close 가 없어 high-low. RMA = ``ewm(alpha=1/period)``.
+    """
+    prev_close = close.shift(1)
+    tr = pd.concat(
+        [high - low, (high - prev_close).abs(), (low - prev_close).abs()],
+        axis=1,
+    ).max(axis=1)
+    if len(tr) > 0:
+        tr.iloc[0] = float(high.iloc[0]) - float(low.iloc[0])
+    return tr.ewm(alpha=1.0 / period, adjust=False).mean()
+
+
+def _validate_v11_params(min_close_margin: float, atr_body_mult: float) -> None:
     if min_close_margin < 0:
         raise ValueError(f"min_close_margin >= 0 required, got {min_close_margin}")
-    if min_body_pct < 0:
-        raise ValueError(f"min_body_pct >= 0 required, got {min_body_pct}")
+    if atr_body_mult < 0:
+        raise ValueError(f"atr_body_mult >= 0 required, got {atr_body_mult}")
 
 
 def find_active_long_setup_v11(
@@ -179,29 +202,35 @@ def find_active_long_setup_v11(
     bb_lower: pd.Series,
     max_lookback: int,
     min_close_margin: float = DEFAULT_MIN_CLOSE_MARGIN_V11,
-    min_body_pct: float = DEFAULT_MIN_BODY_PCT_V11,
+    atr_period: int = DEFAULT_ATR_PERIOD_V11,
+    atr_body_mult: float = DEFAULT_ATR_BODY_MULT_V11,
 ) -> AirborneSetup | None:
-    """Find the most recent unterminated v1.1 long setup.
+    """Find the most recent unterminated v1.2 long setup.
 
     A long breakout at index ``i`` requires (close-based, not high/low):
         close[i]   <  bb_lower[i]   * (1 - min_close_margin)
         close[i-1] >= bb_lower[i-1] * (1 - min_close_margin)
-        |close[i] - open[i]| / open[i] >= min_body_pct
+        |close[i] - open[i]| >= atr_body_mult * ATR(atr_period)[i]
+
+    The body gate (v1.2) is ATR-relative — adapts to each symbol's own
+    volatility, so low-vol symbols (TRX 등) are no longer entirely filtered.
 
     Termination + return rules match ``find_active_long_setup``: scan backwards
     from N-2; setup terminates if any confirmed bar ``j`` (i < j <= N-2) has
     ``close[j] >= trigger(extreme_through_j, base)``; current bar (N-1) is
     excluded — caller evaluates firing against it via ``evaluate_long_fire_v11``.
     """
-    _validate_v11_params(min_close_margin, min_body_pct)
+    _validate_v11_params(min_close_margin, atr_body_mult)
     n = len(history)
     if n < 3:
         return None
     close = history["close"]
     open_ = history["open"]
+    high = history["high"]
     low = history["low"]
     lower_thr = bb_lower * (1 - min_close_margin)
-    body_pct = _body_pct(open_, close)
+    body_abs = _body_abs(open_, close)
+    atr = _atr(high, low, close, atr_period)
 
     start = n - 2
     end = max(n - max_lookback - 1, 0)
@@ -210,10 +239,12 @@ def find_active_long_setup_v11(
             continue
         if pd.isna(lower_thr.iloc[i]) or pd.isna(lower_thr.iloc[i - 1]):
             continue
+        if pd.isna(atr.iloc[i]):
+            continue
         if not (
             float(close.iloc[i]) < float(lower_thr.iloc[i])
             and float(close.iloc[i - 1]) >= float(lower_thr.iloc[i - 1])
-            and float(body_pct.iloc[i]) >= min_body_pct
+            and float(body_abs.iloc[i]) >= atr_body_mult * float(atr.iloc[i])
         ):
             continue
 
@@ -239,27 +270,30 @@ def find_active_short_setup_v11(
     bb_upper: pd.Series,
     max_lookback: int,
     min_close_margin: float = DEFAULT_MIN_CLOSE_MARGIN_V11,
-    min_body_pct: float = DEFAULT_MIN_BODY_PCT_V11,
+    atr_period: int = DEFAULT_ATR_PERIOD_V11,
+    atr_body_mult: float = DEFAULT_ATR_BODY_MULT_V11,
 ) -> AirborneSetup | None:
-    """Find the most recent unterminated v1.1 short setup (mirror of long).
+    """Find the most recent unterminated v1.2 short setup (mirror of long).
 
     A short breakout at index ``i`` requires:
         close[i]   >  bb_upper[i]   * (1 + min_close_margin)
         close[i-1] <= bb_upper[i-1] * (1 + min_close_margin)
-        |close[i] - open[i]| / open[i] >= min_body_pct
+        |close[i] - open[i]| >= atr_body_mult * ATR(atr_period)[i]
 
     Extreme is tracked via running max(high). Setup terminates if any confirmed
     bar ``j`` has ``close[j] <= trigger`` (trigger = extreme - 0.4 * (extreme - base)).
     """
-    _validate_v11_params(min_close_margin, min_body_pct)
+    _validate_v11_params(min_close_margin, atr_body_mult)
     n = len(history)
     if n < 3:
         return None
     close = history["close"]
     open_ = history["open"]
     high = history["high"]
+    low = history["low"]
     upper_thr = bb_upper * (1 + min_close_margin)
-    body_pct = _body_pct(open_, close)
+    body_abs = _body_abs(open_, close)
+    atr = _atr(high, low, close, atr_period)
 
     start = n - 2
     end = max(n - max_lookback - 1, 0)
@@ -268,10 +302,12 @@ def find_active_short_setup_v11(
             continue
         if pd.isna(upper_thr.iloc[i]) or pd.isna(upper_thr.iloc[i - 1]):
             continue
+        if pd.isna(atr.iloc[i]):
+            continue
         if not (
             float(close.iloc[i]) > float(upper_thr.iloc[i])
             and float(close.iloc[i - 1]) <= float(upper_thr.iloc[i - 1])
-            and float(body_pct.iloc[i]) >= min_body_pct
+            and float(body_abs.iloc[i]) >= atr_body_mult * float(atr.iloc[i])
         ):
             continue
 
@@ -297,9 +333,10 @@ def evaluate_long_fire_v11(
     bb_lower: pd.Series,
     max_lookback: int,
     min_close_margin: float = DEFAULT_MIN_CLOSE_MARGIN_V11,
-    min_body_pct: float = DEFAULT_MIN_BODY_PCT_V11,
+    atr_period: int = DEFAULT_ATR_PERIOD_V11,
+    atr_body_mult: float = DEFAULT_ATR_BODY_MULT_V11,
 ) -> tuple[bool, AirborneSetup | None, float]:
-    """Evaluate whether the current bar's confirmed close fires a v1.1 long signal.
+    """Evaluate whether the current bar's confirmed close fires a v1.2 long signal.
 
     Returns ``(fires, setup, trigger_at_current)``. Trigger folds the current
     bar's low into the running extreme (same semantics as v1).
@@ -309,7 +346,8 @@ def evaluate_long_fire_v11(
         bb_lower=bb_lower,
         max_lookback=max_lookback,
         min_close_margin=min_close_margin,
-        min_body_pct=min_body_pct,
+        atr_period=atr_period,
+        atr_body_mult=atr_body_mult,
     )
     if setup is None:
         return False, None, float("nan")
@@ -326,9 +364,10 @@ def evaluate_short_fire_v11(
     bb_upper: pd.Series,
     max_lookback: int,
     min_close_margin: float = DEFAULT_MIN_CLOSE_MARGIN_V11,
-    min_body_pct: float = DEFAULT_MIN_BODY_PCT_V11,
+    atr_period: int = DEFAULT_ATR_PERIOD_V11,
+    atr_body_mult: float = DEFAULT_ATR_BODY_MULT_V11,
 ) -> tuple[bool, AirborneSetup | None, float]:
-    """Evaluate whether the current bar's confirmed close fires a v1.1 short signal.
+    """Evaluate whether the current bar's confirmed close fires a v1.2 short signal.
 
     Mirror of ``evaluate_long_fire_v11``: folds current bar's high into extreme,
     fires when ``close <= trigger``.
@@ -338,7 +377,8 @@ def evaluate_short_fire_v11(
         bb_upper=bb_upper,
         max_lookback=max_lookback,
         min_close_margin=min_close_margin,
-        min_body_pct=min_body_pct,
+        atr_period=atr_period,
+        atr_body_mult=atr_body_mult,
     )
     if setup is None:
         return False, None, float("nan")
@@ -352,7 +392,8 @@ def evaluate_short_fire_v11(
 __all__ = [
     "RETRACE_RATIO",
     "DEFAULT_MIN_CLOSE_MARGIN_V11",
-    "DEFAULT_MIN_BODY_PCT_V11",
+    "DEFAULT_ATR_PERIOD_V11",
+    "DEFAULT_ATR_BODY_MULT_V11",
     "AirborneSetup",
     "find_active_long_setup",
     "evaluate_long_fire",

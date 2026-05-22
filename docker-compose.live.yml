@@ -286,7 +286,9 @@ services:
       PYTHONUNBUFFERED: "1"
       # 거래량 top-N in/out 으로 시그널 누락되던 관심 종목 강제 포함
       # (2026-05-22 SKYAI 11:00 시그널 누락 사고). 쉼표 구분.
-      AIRBORNE_ALWAYS_INCLUDE: "SKYAIUSDT,TRXUSDT,EURUSDT"
+      # 주의: Binance USDT-M 선물에 실재하는 심볼만 — EURUSDT 는 선물에
+      # 없어 400 Bad Request → crash loop 유발해 제거 (2026-05-22).
+      AIRBORNE_ALWAYS_INCLUDE: "SKYAIUSDT,TRXUSDT"
     volumes:
       - ./logs/airborne:/data/logs
     restart: unless-stopped
