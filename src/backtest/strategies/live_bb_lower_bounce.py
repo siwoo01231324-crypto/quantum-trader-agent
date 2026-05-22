@@ -34,6 +34,7 @@ class LiveBbLowerBounce(LiveScannerMixin):
         take_profit_roi: float | None = None,
         stop_loss_roi: float | None = None,
         leverage: float | None = None,
+        cooldown_after_stop_sec: float | None = None,
     ) -> None:
         if not 0 < default_size <= 1.0:
             raise ValueError(f"default_size must be in (0, 1], got {default_size}")
@@ -51,6 +52,13 @@ class LiveBbLowerBounce(LiveScannerMixin):
             stop_loss_roi=stop_loss_roi,
             leverage=leverage,
         )
+        # stop/TP 청산 직후 재진입 churn 차단 (수수료 폭증 방지).
+        if cooldown_after_stop_sec is not None:
+            if cooldown_after_stop_sec < 0:
+                raise ValueError(
+                    f"cooldown_after_stop_sec must be >= 0, got {cooldown_after_stop_sec}"
+                )
+            self.cooldown_after_stop_sec = cooldown_after_stop_sec
 
     async def on_bar(self, ctx: object) -> Signal | None:
         snap = ctx["market_snapshot"]  # type: ignore[index]
