@@ -4086,6 +4086,15 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
             raise HTTPException(
                 status_code=500, detail=f"executor failed: {err}",
             )
+        # 2026-05-22: 청산 후 orchestrator._live_entered 정합. 수동 청산은
+        # store·broker 가 함께 flat 이 되므로 reconciler mismatch 를 만들지
+        # 않아 PR #287 의 sync 가 안 걸리고, release_live_position(stop/TP
+        # 경로)도 안 거친다. 미정리 시 그 (strategy, symbol) 재진입이 영구
+        # 차단된다. remaining=0 → discard(재진입 허용), >0(부분청산) → 유지.
+        remaining = abs(float(held)) - close_qty
+        orch = getattr(state, "orchestrator", None)
+        if orch is not None and hasattr(orch, "sync_live_entered"):
+            orch.sync_live_entered(strategy_id, symbol, remaining)
         return JSONResponse({
             "ok": True,
             "strategy_id": strategy_id,
