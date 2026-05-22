@@ -127,7 +127,8 @@ class TestKillSwitchAPI:
 
 
 class TestPnLAPI:
-    def test_pnl_endpoint(self, client: TestClient) -> None:
+    def test_pnl_endpoint(self, client: TestClient, monkeypatch) -> None:
+        monkeypatch.setattr("src.dashboard.app.discover_wal_files", lambda _d: [])
         resp = client.get("/api/pnl")
         assert resp.status_code == 200
         data = resp.json()
