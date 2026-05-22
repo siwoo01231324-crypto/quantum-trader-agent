@@ -12,7 +12,8 @@ import pytest
 
 from signals.airborne_bb_reversal import (
     AirborneSetup,
-    DEFAULT_MIN_BODY_PCT_V11,
+    DEFAULT_ATR_BODY_MULT_V11,
+    DEFAULT_ATR_PERIOD_V11,
     DEFAULT_MIN_CLOSE_MARGIN_V11,
     RETRACE_RATIO,
     evaluate_long_fire_v11,
@@ -99,8 +100,9 @@ def test_long_no_breakout_returns_none():
 
 
 def test_long_body_filter_rejects_small_body():
-    """Breakout close < threshold + prev close >= threshold, but body < 0.5% → reject."""
-    # Body on breakout bar = |close-open|/open = |98.0-98.4|/98.4 ≈ 0.4% < 0.5%
+    """Breakout close < threshold + prev close >= threshold, but body < ATR gate → reject."""
+    # body_abs[2] = |98.0-98.4| = 0.4; ATR[2] ≈ 1.29 → min_body = 0.6×ATR ≈ 0.77.
+    # body 0.4 < 0.77 → reject.
     opens  = [100, 100, 98.4, 92, 91]
     highs  = [100.5, 100.5, 98.5, 92.5, 95.5]
     lows   = [99.5, 99.5, 95, 90, 88]
@@ -241,8 +243,9 @@ def test_short_no_breakout_returns_none():
 
 
 def test_short_body_filter_rejects_small_body():
-    """Body too small on breakout bar."""
-    # body[2] = |103-102.7|/102.7 ≈ 0.29% < 0.5%
+    """Body too small on breakout bar — below ATR gate."""
+    # body_abs[2] = |103-102.7| = 0.3; ATR[2] ≈ 1.29 → min_body ≈ 0.77.
+    # body 0.3 < 0.77 → reject.
     opens  = [100, 100, 102.7, 108, 109]
     highs  = [100.5, 100.5, 105, 110, 110]
     lows   = [99.5, 99.5, 102, 107, 103.5]
@@ -286,17 +289,48 @@ def test_invalid_min_close_margin_raises():
         )
 
 
-def test_invalid_min_body_pct_raises():
+def test_invalid_atr_body_mult_raises():
     history = _frame([100] * 5, [100] * 5, [99] * 5, [100] * 5)
     bb = _bb_series(99.0, 5)
-    with pytest.raises(ValueError, match="min_body_pct"):
+    with pytest.raises(ValueError, match="atr_body_mult"):
         find_active_short_setup_v11(
-            history=history, bb_upper=bb, max_lookback=10, min_body_pct=-0.001,
+            history=history, bb_upper=bb, max_lookback=10, atr_body_mult=-0.001,
         )
 
 
 def test_defaults_match_pine_source():
-    """Pine v1.1 source pins min_close_margin=0.001 and min_body_pct=0.005."""
+    """Pine v1.2 source pins min_close_margin=0.001, atr_period=14, atr_body_mult=0.6."""
     assert DEFAULT_MIN_CLOSE_MARGIN_V11 == 0.001
-    assert DEFAULT_MIN_BODY_PCT_V11 == 0.005
+    assert DEFAULT_ATR_PERIOD_V11 == 14
+    assert DEFAULT_ATR_BODY_MULT_V11 == 0.6
     assert RETRACE_RATIO == 0.4
+
+
+def test_v12_low_vol_body_passes_atr_gate():
+    """v1.1 절대 0.5% 게이트면 거부될 작은 body 가 ATR 대비로는 충분해
+    v1.2 게이트를 통과 — TRX 같은 저변동성 종목 시그널 전멸 회귀 방지.
+
+    breakout 봉 body = |99.7-100| = 0.3 → body_pct = 0.3% < 0.5% (v1.1 거부).
+    저변동성이라 ATR(≈0.41) 도 작아 min_body = 0.6×ATR ≈ 0.25 → body 0.3
+    통과. find_active_long_setup_v11 가 setup 을 반환해야 한다.
+    """
+    opens  = [100.0, 100.0, 100.0, 99.6, 99.5]
+    highs  = [100.2, 100.2, 100.2, 99.7, 99.6]
+    lows   = [99.8, 99.8, 99.6, 99.55, 99.4]
+    closes = [100.0, 100.0, 99.7, 99.5, 99.55]
+    history = _frame(opens, highs, lows, closes)
+    bb_lower = _bb_series(99.8, len(closes))
+
+    setup = find_active_long_setup_v11(
+        history=history, bb_lower=bb_lower, max_lookback=10,
+    )
+    assert setup is not None, "ATR 게이트가 저변동성 종목 시그널을 통과시켜야 함"
+    assert setup.breakout_index == 2
+
+    # 같은 fixture 에서 atr_body_mult 를 비현실적으로 크게 (10×ATR) 주면
+    # body 가 부족해 거부 — 게이트가 실제로 작동함을 대조 확인.
+    rejected = find_active_long_setup_v11(
+        history=history, bb_lower=bb_lower, max_lookback=10,
+        atr_body_mult=10.0,
+    )
+    assert rejected is None
