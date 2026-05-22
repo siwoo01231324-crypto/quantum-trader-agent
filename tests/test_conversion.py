@@ -60,3 +60,23 @@ def test_default_market_order():
     assert req.order_type == OrderType.MARKET
     assert req.tif == TimeInForce.GTC
     assert req.price is None
+
+
+def test_limit_post_only_order():
+    """2026-05-22 post-only Maker: order_type=LIMIT + price + tif=GTX 전달."""
+    req = intent_to_order_request(
+        _intent("BTCUSDT", "buy", 0.001), idempotency_key="k10",
+        order_type=OrderType.LIMIT, price=Decimal("77000"), tif=TimeInForce.GTX,
+    )
+    assert req.order_type == OrderType.LIMIT
+    assert req.price == Decimal("77000")
+    assert req.tif == TimeInForce.GTX
+
+
+def test_limit_order_without_price_rejected():
+    """LIMIT 인데 price 미지정 → ValueError (Binance LIMIT 은 price 필수)."""
+    with pytest.raises(ValueError, match="LIMIT order requires a price"):
+        intent_to_order_request(
+            _intent("BTCUSDT", "buy", 0.001), idempotency_key="k11",
+            order_type=OrderType.LIMIT,
+        )
