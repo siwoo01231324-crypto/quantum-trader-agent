@@ -294,6 +294,7 @@ strategies:
       take_profit_roi: 0.12   # ROI +12% 익절
       stop_loss_roi: 0.08     # ROI -8% 손절
       leverage: 10
+      cooldown_after_stop_sec: 300   # stop 후 5분 재진입 차단 (churn·수수료 방지)
   - id: cand-c-2026-05-20-live-breakout-with-atr-stop
     class: backtest.strategies.live_breakout_with_atr_stop.LiveBreakoutWithAtrStop
     kwargs:
@@ -319,6 +320,7 @@ strategies:
       take_profit_roi: 0.12   # ROI +12% 익절
       stop_loss_roi: 0.08     # ROI -8% 손절
       leverage: 10
+      cooldown_after_stop_sec: 300   # stop 후 5분 재진입 차단 (churn·수수료 방지)
   - id: cand-c-2026-05-20-live-oversold-with-divergence
     class: backtest.strategies.live_oversold_with_divergence.LiveOversoldWithDivergence
     kwargs:
@@ -327,6 +329,7 @@ strategies:
       take_profit_roi: 0.12   # ROI +12% 익절
       stop_loss_roi: 0.08     # ROI -8% 손절
       leverage: 10
+      cooldown_after_stop_sec: 300   # stop 후 5분 재진입 차단 (churn·수수료 방지)
   #
   # ─── live_scanner_ensemble_bn1d (1-instance wrapper) — REJECTED ──────────
   # OR-게이트 1-position 디자인이 4-parallel 분산 효과(MDD -23%)를 파괴 → 5y
