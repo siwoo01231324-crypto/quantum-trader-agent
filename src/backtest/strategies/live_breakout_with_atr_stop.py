@@ -71,6 +71,9 @@ class LiveBreakoutWithAtrStop(LiveScannerMixin):
         stop_loss_pct: float | None = None,
         take_profit_pct: float | None = None,
         trailing_stop_pct: float | None = None,
+        take_profit_roi: float | None = None,
+        stop_loss_roi: float | None = None,
+        leverage: float | None = None,
         cooldown_after_stop_sec: float | None = None,
         stop_atr_mult: float | None = None,
         take_profit_atr_mult: float | None = None,
@@ -105,6 +108,14 @@ class LiveBreakoutWithAtrStop(LiveScannerMixin):
             if atr_period < 2:
                 raise ValueError(f"atr_period must be >= 2, got {atr_period}")
             self.atr_period = atr_period
+        # 레버리지 트레이딩용 ROI 기반 익절/손절 — take_profit_pct /
+        # stop_loss_pct 를 ROI/leverage 로 덮어쓴다 (정적·ATR pct 보다 우선).
+        # ROI 인자 미지정 시 no-op (기존 동작).
+        self._apply_roi_targets(
+            take_profit_roi=take_profit_roi,
+            stop_loss_roi=stop_loss_roi,
+            leverage=leverage,
+        )
 
     async def on_bar(self, ctx: object) -> Signal | None:
         snap = ctx["market_snapshot"]  # type: ignore[index]
