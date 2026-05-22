@@ -102,7 +102,6 @@ def test_api_pnl_reflects_aggregator(
     )
 
     body = client.get("/api/pnl").json()
-    assert body["realtime"] == 5.0
     assert body["daily"] == 5.0
     assert body["monthly"] == 5.0
     assert body["by_strategy"] == {"alpha": 10.0, "beta": -5.0}
@@ -128,83 +127,8 @@ def test_per_strategy_card_shows_pnl_today(
     assert beta["pnl_today"] == 0.0
 
 
-class _FakeBinanceProvider:
-    """fetch_binance() stub for unrealized augment tests."""
-
-    def __init__(self, total_unrealized: float, ok: bool = True) -> None:
-        self._upnl = total_unrealized
-        self._ok = ok
-
-    def fetch_binance(self) -> dict:
-        return {"ok": self._ok, "total_unrealized_pnl": self._upnl, "positions": []}
-
-
-def test_api_pnl_augments_realtime_with_binance_unrealized() -> None:
-    """2026-05-22: /api/pnl 의 realtime = aggregator 의 realized cum + Binance
-    broker unrealized. 사용자 보고 "실시간이 월간과 같다" fix.
-    """
-    state = DashboardState()
-    agg = PnLAggregator()
-    # 어제 실현 -96.45 시뮬.
-    agg._cum_realized = -96.45
-    agg._cum_by_venue = {"binance": -96.45}
-    state.pnl_aggregator = agg
-    state.account_info_provider = _FakeBinanceProvider(total_unrealized=-14.0)
-
-    app = create_app(state)
-    with TestClient(app) as test_client:
-        d = test_client.get("/api/pnl").json()
-    # 실시간 = -96.45 + (-14) = -110.45.
-    assert d["realtime"] == pytest.approx(-110.45)
-    # Venue 분리도 binance row 가 합산.
-    assert d["realtime_by_venue"]["binance"] == pytest.approx(-110.45)
-    # 별도 expose 필드.
-    assert d["unrealized_by_venue"] == {"binance": -14.0}
-    # 일간/월간은 영향 X (window-bounded realized only).
-    assert d["daily"] == pytest.approx(agg.daily)
-    assert d["monthly"] == pytest.approx(agg.monthly)
-
-
-def test_api_pnl_without_provider_realtime_is_realized_only() -> None:
-    """Provider 미주입 (paper 모드) → unrealized 0 → realtime 변동 X (기존 동작)."""
-    state = DashboardState()
-    agg = PnLAggregator()
-    agg._cum_realized = -50.0
-    agg._cum_by_venue = {"binance": -50.0}
-    state.pnl_aggregator = agg
-    # account_info_provider 미주입.
-
-    app = create_app(state)
-    with TestClient(app) as test_client:
-        d = test_client.get("/api/pnl").json()
-    assert d["realtime"] == pytest.approx(-50.0)
-    assert d["unrealized_by_venue"] == {}
-    assert d["realtime_by_venue"]["binance"] == pytest.approx(-50.0)
-
-
-def test_api_pnl_provider_failure_does_not_500() -> None:
-    """Broker 호출 실패 시 augment skip — endpoint 는 realized only 로 200 응답."""
-
-    class _RaisingProvider:
-        def fetch_binance(self):
-            raise RuntimeError("simulated broker error")
-
-    state = DashboardState()
-    agg = PnLAggregator()
-    agg._cum_realized = -10.0
-    state.pnl_aggregator = agg
-    state.account_info_provider = _RaisingProvider()
-
-    app = create_app(state)
-    with TestClient(app) as test_client:
-        resp = test_client.get("/api/pnl")
-    assert resp.status_code == 200
-    assert resp.json()["realtime"] == pytest.approx(-10.0)
-
-
 def test_empty_aggregator_returns_zeros(client: TestClient):
     body = client.get("/api/pnl").json()
-    assert body["realtime"] == 0.0
     assert body["daily"] == 0.0
     assert body["monthly"] == 0.0
     assert body["by_strategy"] == {}
@@ -215,13 +139,11 @@ def test_no_aggregator_falls_back_to_state_defaults(specs_dir: Path):
     or whatever was set externally). Backwards-compat path."""
     s = DashboardState()
     s.specs_dir = specs_dir
-    s.pnl_realtime = 1234.5
     s.pnl_daily = 50.0
     s.pnl_monthly = 200.0
     c = TestClient(create_app(s))
 
     body = c.get("/api/pnl").json()
-    assert body["realtime"] == 1234.5
     assert body["daily"] == 50.0
     assert body["monthly"] == 200.0
     assert body["by_strategy"] == {}
