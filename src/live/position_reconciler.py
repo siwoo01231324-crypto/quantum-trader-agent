@@ -79,6 +79,7 @@ class PositionReconciler:
         broker: _BrokerWithNetPositions,
         wal_observer: Callable[[WALEvent], None] | None = None,
         alert_publisher: Callable[[dict[str, Any]], None] | None = None,
+        on_position_synced: Callable[[str, str, Decimal], None] | None = None,
         tol: Decimal = Decimal("0.001"),
         interval_sec: float = 60.0,
     ) -> None:
@@ -86,6 +87,10 @@ class PositionReconciler:
         self._broker = broker
         self._wal_observer = wal_observer
         self._alert_publisher = alert_publisher
+        # 2026-05-22: auto-fix 가 store qty 를 바꾼 직후 호출되는 콜백.
+        # orchestrator._live_entered 를 store 와 정합시키는 데 쓴다 — store 만
+        # 고치고 _live_entered 를 방치하면 청산된 종목이 영구 진입 차단된다.
+        self._on_position_synced = on_position_synced
         self._tol = tol
         self._interval_sec = interval_sec
 
@@ -121,6 +126,17 @@ class PositionReconciler:
                     "PositionReconciler: AUTO-FIX %s %s store=%s → broker=%s (delta=%s)",
                     sid, m.symbol, before, m.broker_net, m.delta,
                 )
+                # store 를 고쳤으면 orchestrator._live_entered 도 같이 정합한다.
+                # 미연결(None) 이면 no-op. 콜백 예외는 흡수 — reconcile loop 가
+                # 죽으면 사용자 보호 불가.
+                if self._on_position_synced is not None:
+                    try:
+                        self._on_position_synced(sid, m.symbol, m.broker_net)
+                    except Exception as err:  # noqa: BLE001 — defensive
+                        logger.warning(
+                            "PositionReconciler: on_position_synced failed "
+                            "sid=%s sym=%s: %s", sid, m.symbol, err,
+                        )
             else:
                 alerted_only.append(m)
                 logger.warning(

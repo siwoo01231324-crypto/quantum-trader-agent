@@ -991,6 +991,15 @@ async def _run_pipeline_attached(
     reconciler_stop = asyncio.Event()
     if binance_adapter is not None and position_store is not None:
         from src.live.position_reconciler import PositionReconciler  # noqa: PLC0415
+
+        def _sync_orch_live_entered(sid: str, symbol: str, qty) -> None:
+            # 2026-05-22 — reconciler auto-fix 가 store qty 를 바꾸면
+            # orchestrator._live_entered 도 정합. 미정합 시 청산된 종목이
+            # 영구 진입 차단된다 (재시작 후 11시간 매수 0 의 원인).
+            orch = getattr(state, "orchestrator", None)
+            if orch is not None and hasattr(orch, "sync_live_entered"):
+                orch.sync_live_entered(sid, symbol, float(qty))
+
         reconciler = PositionReconciler(
             position_store=position_store,
             broker=binance_adapter,
@@ -999,6 +1008,7 @@ async def _run_pipeline_attached(
                 (lambda p: state.timeline_broker.publish(p))
                 if state.timeline_broker is not None else None
             ),
+            on_position_synced=_sync_orch_live_entered,
             tol=Decimal("0.001"),
             interval_sec=float(os.environ.get("QTA_RECONCILE_INTERVAL_SEC", "60")),
         )
@@ -1393,11 +1403,21 @@ async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
     reconciler_stop = asyncio.Event()
     if binance_adapter is not None:
         from src.live.position_reconciler import PositionReconciler  # noqa: PLC0415
+
+        def _sync_orch_live_entered(sid: str, symbol: str, qty) -> None:
+            # 2026-05-22 — reconciler auto-fix 가 store qty 를 바꾸면
+            # orchestrator._live_entered 도 정합. 미정합 시 청산된 종목이
+            # 영구 진입 차단된다 (재시작 후 11시간 매수 0 의 원인).
+            orch = getattr(dashboard_state, "orchestrator", None)
+            if orch is not None and hasattr(orch, "sync_live_entered"):
+                orch.sync_live_entered(sid, symbol, float(qty))
+
         reconciler = PositionReconciler(
             position_store=position_store,
             broker=binance_adapter,
             wal_observer=_wal_observer,
             alert_publisher=lambda p: timeline_broker.publish(p),
+            on_position_synced=_sync_orch_live_entered,
             tol=Decimal("0.001"),
             interval_sec=float(os.environ.get("QTA_RECONCILE_INTERVAL_SEC", "60")),
         )
