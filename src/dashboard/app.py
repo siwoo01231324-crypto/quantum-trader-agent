@@ -3102,7 +3102,13 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
         for p in paths:
             events, _ = wal_replay(p)
             for ev in events:
-                if ev.event_type not in ("order_acked", "order_filled", "fill_received"):
+                # 2026-05-22: 포지션 집계는 체결(order_filled/fill_received)
+                # 만. order_acked 는 거래소 "접수"(NEW) 신호일 뿐 체결이
+                # 아니다 — 같은 주문 1건이 acked→filled 두 이벤트로 WAL 에
+                # 적히는데 둘 다 buy_n/buy_qty 에 더하면 정확히 2배가 된다
+                # (INJ 실체결 431 → dashboard 862 사고). phase 가 다른
+                # 이벤트를 한 단위로 합산하면 안 된다.
+                if ev.event_type not in ("order_filled", "fill_received"):
                     continue
                 pl = ev.payload or {}
                 sid = pl.get("strategy_id") or ""
