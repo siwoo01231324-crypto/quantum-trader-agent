@@ -576,6 +576,19 @@ class AsyncStrategyOrchestrator:
             decision = evaluate(self._policy, snap)
 
             if decision.action == Action.ALLOW:
+                # 2026-05-22 post-only Maker 진입 (post-only-maker-entry.draft.md).
+                # BUY 진입에 한해 strategy 의 ``entry_order_type`` 속성을 읽어
+                # OrderIntent 에 stamp. SELL(청산)은 항상 "market" — 확실한
+                # 체결이 수수료 절감보다 우선. ref_price 는 위에서 per-symbol
+                # 로 계산한 ``order_price`` — 멀티심볼 배치에서도 심볼별로
+                # 정확하므로 executor 가 market_state.tick.last (단일 심볼만
+                # 정확) 대신 이 값을 limit 가격 기준가로 쓴다 (gap A).
+                strat = self._strategies.get(sid)
+                entry_order_type = "market"
+                if signal.action == "buy":
+                    declared = getattr(strat, "entry_order_type", "market")
+                    if declared in ("market", "post_only"):
+                        entry_order_type = declared
                 order_intents.append(OrderIntent(
                     strategy_id=sid,
                     symbol=order.symbol,
@@ -587,6 +600,10 @@ class AsyncStrategyOrchestrator:
                     # exchange no-op a "sell with no long" instead of opening
                     # a naked short (the root incident).
                     reduce_only=(signal.action == "sell"),
+                    entry_order_type=entry_order_type,
+                    ref_price=(
+                        order_price if entry_order_type == "post_only" else None
+                    ),
                 ))
             else:
                 logger.info(
