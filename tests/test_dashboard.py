@@ -14,7 +14,6 @@ from src.dashboard.app import create_app, DashboardState
 def state() -> DashboardState:
     s = DashboardState()
     # 손익 데이터
-    s.pnl_realtime = 123456.78
     s.pnl_daily = 45000.0
     s.pnl_monthly = 180000.0
     # 한도 사용률 6종 (0.0~1.0)
@@ -82,7 +81,7 @@ class TestDashboardRoot:
 
     def test_root_shows_pnl_values(self, client: TestClient) -> None:
         body = client.get("/").text
-        assert "123456" in body or "123,456" in body
+        assert "45,000" in body or "180,000" in body
 
     def test_root_shows_limit_gauges(self, client: TestClient) -> None:
         body = client.get("/").text
@@ -132,10 +131,10 @@ class TestPnLAPI:
         resp = client.get("/api/pnl")
         assert resp.status_code == 200
         data = resp.json()
-        assert "realtime" in data
         assert "daily" in data
         assert "monthly" in data
-        assert data["realtime"] == pytest.approx(123456.78)
+        assert data["daily"] == pytest.approx(45000.0)
+        assert data["monthly"] == pytest.approx(180000.0)
 
 
 class TestLimitsAPI:
