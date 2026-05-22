@@ -1438,7 +1438,7 @@ function renderBinance(b) {{
         return `<tr>
           <td><span class="stratpos-sym">${{escHtml(p.symbol)}}</span><br><span class="side-badge ${{sideCls}}">${{sideTxt}}</span></td>
           <td style="text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums">${{escHtml(p.amt)}}</td>
-          <td style="text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums">${{fmtNum(p.entry_price,2)}}</td>
+          <td style="text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums">${{fmtNum(p.entry_price,4)}}</td>
           <td style="text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums">${{pnlHtml}}</td>
         </tr>`;
       }}).join('');
@@ -1565,7 +1565,7 @@ async function tradesRefresh() {{
       const stateTxt = t.filled ? '체결' : '제출';
       const ts = fmtKst(t.ts);
       const qtyStr = t.qty != null ? fmtNum(t.qty, 6).replace(/\\.?0+$/, '') : '—';
-      const pxStr  = t.price != null ? fmtNum(t.price, 2) : '—';
+      const pxStr  = t.price != null ? fmtNum(t.price, 4) : '—';
       return `<tr>
         <td class="tl-ts">${{escHtml(ts)}}</td>
         <td class="td-dim">${{escHtml(t.strategy_id)}}</td>
@@ -1869,7 +1869,7 @@ async function tradeHistoryRefresh() {{
             ? '<span class="th-closed-badge" style="background:#3a2a14;color:#f0a500" title="거래소에서 청산됨 (WAL 미동기)">거래소 청산</span>'
             : '<span class="th-closed-badge">청산됨</span>');
       const exitTs = isOpen ? '<span class="th-dim">—</span>' : escHtml(fmtTs(t.exit_ts));
-      const exitPx = isOpen ? '<span class="th-dim">—</span>' : fmtNum(t.exit_price, 2);
+      const exitPx = isOpen ? '<span class="th-dim">—</span>' : fmtNum(t.exit_price, 4);
       const qtyStr = t.qty != null ? String(fmtNum(t.qty, 6)).replace(/\\.?0+$/, '') : '—';
       return '<tr class="' + rowCls + '">'
         + '<td class="th-dim">' + escHtml(fmtTs(t.entry_ts)) + '</td>'
@@ -1880,7 +1880,7 @@ async function tradeHistoryRefresh() {{
         + '<td><span class="th-venue">' + venueTxt + '</span></td>'
         + '<td><span class="' + sideCls + '">' + sideTxt + '</span></td>'
         + '<td class="th-mono">' + qtyStr + '</td>'
-        + '<td class="th-mono">' + fmtNum(t.entry_price, 2) + '</td>'
+        + '<td class="th-mono">' + fmtNum(t.entry_price, 4) + '</td>'
         + '<td class="th-mono">' + exitPx + '</td>'
         + '<td style="text-align:right">' + pnlHtml + '</td>'
         + '<td>' + statusBadge + '</td>'
