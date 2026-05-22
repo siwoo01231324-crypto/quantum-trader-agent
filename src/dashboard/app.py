@@ -3211,9 +3211,10 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
     async def api_trade_history(limit: int = Query(default=200, ge=1, le=2000)) -> JSONResponse:
         """Reconstruct round-trip trades from all run WALs under log_dir.
 
-        Uses discover_wal_files(log_dir) → reconstruct_trades → sorted newest
-        entry first.  realized_pnl is in the venue's own currency (USDT for
-        binance, KRW for kis) and is NEVER cross-summed across venues.
+        Uses discover_wal_files(log_dir) → reconstruct_trades → sorted by
+        most-recent activity (청산 거래는 exit_ts, 미청산은 entry_ts) first.
+        realized_pnl is in the venue's own currency (USDT for binance, KRW
+        for kis) and is NEVER cross-summed across venues.
         Returns: {trades, total, truncated, log_dir_used}.
         """
         log_dir = _resolve_log_dir()
@@ -3228,8 +3229,15 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
         import asyncio as _asyncio
         wal_paths = await _asyncio.to_thread(discover_wal_files, log_dir)
         trades = await _asyncio.to_thread(reconstruct_trades, wal_paths)
-        # Sort newest entry first
-        trades_sorted = sorted(trades, key=lambda t: t.entry_ts, reverse=True)
+        # 2026-05-22: "최근 활동" 순 정렬 — 청산된 거래는 exit_ts(청산시각),
+        # 미청산은 entry_ts 기준 내림차순. 기존엔 entry_ts 만 봐서, 방금
+        # 청산한 거래라도 reconstruct 의 cross-run cost-basis 페어링 탓에
+        # entry_ts 가 과거로 박히면 목록 중간에 묻혔다 (사용자: "방금 거래한
+        # NEAR 가 거래내역에 안 보임"). 거래내역은 "무엇이 방금 끝났나" 를
+        # 보는 카드이므로 청산시각 기준이 직관적.
+        trades_sorted = sorted(
+            trades, key=lambda t: t.exit_ts or t.entry_ts, reverse=True,
+        )
         total = len(trades_sorted)
         truncated = total > limit
         page = trades_sorted[:limit]
