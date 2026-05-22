@@ -46,6 +46,9 @@ class LiveRsiOversoldVolumeSpike(LiveScannerMixin):
         stop_loss_pct: float | None = None,
         take_profit_pct: float | None = None,
         trailing_stop_pct: float | None = None,
+        take_profit_roi: float | None = None,
+        stop_loss_roi: float | None = None,
+        leverage: float | None = None,
     ) -> None:
         if not 0 < default_size <= 1.0:
             raise ValueError(f"default_size must be in (0, 1], got {default_size}")
@@ -56,6 +59,12 @@ class LiveRsiOversoldVolumeSpike(LiveScannerMixin):
             self.take_profit_pct = take_profit_pct
         if trailing_stop_pct is not None:
             self.trailing_stop_pct = trailing_stop_pct
+        # 레버리지 트레이딩용 ROI 기반 익절/손절 (정적 pct 보다 우선).
+        self._apply_roi_targets(
+            take_profit_roi=take_profit_roi,
+            stop_loss_roi=stop_loss_roi,
+            leverage=leverage,
+        )
 
     async def on_bar(self, ctx: object) -> Signal | None:
         # ctx is dict-shaped — match the convention used by momo_kis_v1 / breakout_donchian.
