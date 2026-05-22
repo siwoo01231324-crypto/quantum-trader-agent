@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import os
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -77,7 +78,9 @@ BB_WINDOW = 20
 BB_STD = 2.0
 MAX_LOOKBACK = 50
 MIN_HISTORY = BB_WINDOW + 2
-DEFAULT_TOP_N = 50
+DEFAULT_TOP_N = 100  # 2026-05-22: 50 → 100. SKYAI 처럼 거래량 변동 큰 종목이
+                     # top-50 in/out 을 반복하며 빠진 동안 시그널이 통째로
+                     # 누락되던 사고 (#airborne-watchlist) 완화.
 COOLDOWN_HOURS = 4  # suppress repeat (symbol, side) fires within this window
 BAR_MS_1H = 3_600_000
 
@@ -292,6 +295,7 @@ async def run_daemon(
     ws_base_url: str = WS_BASE_LIVE,
     rest_base_url: str = REST_BASE_LIVE,
     universe_refresh_hours: float = DEFAULT_UNIVERSE_REFRESH_HOURS,
+    always_include: list[str] | None = None,
 ) -> None:
     """Run the alert daemon.
 
@@ -310,6 +314,8 @@ async def run_daemon(
         universe_refresh_hours * 3600 if universe_refresh_hours > 0 else None
     )
 
+    pinned = [s.strip().upper() for s in (always_include or []) if s.strip()]
+
     while True:
         log.info("fetching 24h snapshot from %s ...", rest_base_url)
         snap = await fetch_futures_24h_snapshot(base_url=rest_base_url)
@@ -318,6 +324,12 @@ async def run_daemon(
             log.error("empty universe — retrying in 60s")
             await asyncio.sleep(60)
             continue
+        # 거래량 순위 무관 강제 포함 — SKYAI 처럼 top-N in/out 을 반복하며
+        # 빠진 동안 시그널이 누락되던 종목 (2026-05-22 #airborne-watchlist).
+        for sym in pinned:
+            if sym not in universe:
+                universe.append(sym)
+                log.info("pinned symbol force-added to universe: %s", sym)
 
         added, removed, unchanged = compute_universe_diff(prev_universe, universe)
         if prev_universe:
@@ -396,8 +408,23 @@ def main(argv: list[str] | None = None) -> int:
             "(universe locks at startup, legacy behaviour)."
         ),
     )
+    parser.add_argument(
+        "--always-include", default="",
+        help=(
+            "거래량 순위 무관 항상 universe 에 포함할 심볼 (쉼표 구분, 예: "
+            "SKYAIUSDT,TRXUSDT). 환경변수 AIRBORNE_ALWAYS_INCLUDE 로도 지정 "
+            "가능 (CLI 우선). top-N in/out 으로 시그널 누락되는 관심 종목용."
+        ),
+    )
     parser.add_argument("--log-level", default="INFO")
     args = parser.parse_args(argv)
+
+    always_include_raw = args.always_include or os.environ.get(
+        "AIRBORNE_ALWAYS_INCLUDE", ""
+    )
+    always_include = [
+        s.strip().upper() for s in always_include_raw.split(",") if s.strip()
+    ]
 
     logging.basicConfig(
         level=args.log_level.upper(),
@@ -414,6 +441,7 @@ def main(argv: list[str] | None = None) -> int:
             ws_base_url=ws_base,
             rest_base_url=rest_base,
             universe_refresh_hours=args.universe_refresh_hours,
+            always_include=always_include,
         ))
     except KeyboardInterrupt:
         log.info("KeyboardInterrupt — shutting down")
