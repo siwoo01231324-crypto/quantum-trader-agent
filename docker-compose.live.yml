@@ -279,6 +279,14 @@ services:
     entrypoint:
       - "python"
       - "/app/scripts/airborne_alert_daemon.py"
+      # 2026-05-22: --mode polling — Binance mainnet WebSocket 이 한국 IP 에
+      # 메시지 0건 push (region-block, handshake 만 되고 데이터 0). REST
+      # (/fapi/v1/klines) 는 차단 없음 → 매 1h boundary +30s 에 REST poll.
+      # WS streams 수 무관 (1개로도 stuck 검증됨).
+      - "--mode"
+      - "polling"
+      - "--top-n"
+      - "50"
     env_file:
       - ./.env
     environment:
@@ -292,15 +300,10 @@ services:
     volumes:
       - ./logs/airborne:/data/logs
     restart: unless-stopped
-    healthcheck:
-      # process alive — 데몬 entrypoint 가 PID 1, 죽으면 컨테이너 종료 →
-      # unless-stopped 로 재시작. healthcheck 는 stuck 상태 가시화 용도.
-      # heartbeat-file 기반 stuck 감지는 후속 PR.
-      test: ["CMD-SHELL", "pgrep -f airborne_alert_daemon || exit 1"]
-      interval: 60s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
+    # healthcheck 미설정 — python:slim 에 pgrep(procps) 미설치라 기존
+    # pgrep 기반 체크가 항상 'not found' → 거짓 unhealthy. process crash 는
+    # restart: unless-stopped 가 커버. stuck 감지(heartbeat-file 기반)는
+    # 후속 PR 에서 데몬 코드에 heartbeat 추가 후 재도입.
     logging:
       driver: json-file
       options:
