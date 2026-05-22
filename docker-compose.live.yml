@@ -285,8 +285,12 @@ services:
       # WS streams 수 무관 (1개로도 stuck 검증됨).
       - "--mode"
       - "polling"
+      # 2026-05-23: top-50 → 100. top-50 은 WS 201-stream 과부하 오진 때
+      # 임시로 줄였던 값 — 실제 원인은 region-block 이었고 polling 모드는
+      # WS streams 제약이 아예 없다. REST 100종목 × 2 interval = 200 콜/시간
+      # 으로 rate limit 한참 아래. 커버리지 2배 (SKYAI·ONDO in/out 누락 감소).
       - "--top-n"
-      - "50"
+      - "100"
     env_file:
       - ./.env
     environment:
