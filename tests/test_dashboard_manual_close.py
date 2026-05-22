@@ -156,6 +156,71 @@ def _fake_fill(strategy_id: str, symbol: str, side: str, qty: str, price: str):
     )
 
 
+def _fake_ack(strategy_id: str, symbol: str, side: str, qty: str):
+    """order_acked = 거래소 접수(NEW) 이벤트 — 체결 아님, 가격 없음."""
+    from src.live.types import WALEvent
+    return WALEvent(
+        ts="2026-05-22T00:00:00+00:00",
+        event_type="order_acked",
+        payload={
+            "strategy_id": strategy_id, "symbol": symbol, "side": side,
+            "qty": qty,
+        },
+    )
+
+
+def test_strategy_positions_counts_fills_only_not_acks(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    """★ 2026-05-22 회귀: order_acked 는 buy_n/buy_qty 에 집계하면 안 된다.
+
+    같은 주문 1건이 acked→filled 두 이벤트로 WAL 에 적히는데 둘 다 더하면
+    정확히 2배가 된다 (INJ 실체결 431 → dashboard 862 사고). 포지션 집계는
+    체결(order_filled)만 — phase 가 다른 이벤트를 한 단위로 합산 금지.
+    """
+    fake = [
+        _fake_ack("cand-c", "INJUSDT", "buy", "431.487"),
+        _fake_fill("cand-c", "INJUSDT", "buy", "431.4", "5.22"),
+    ]
+    monkeypatch.setattr("src.dashboard.app.wal_replay", lambda _p: (fake, []))
+    # discover_wal_files 도 격리 — 실제 logs/live WAL 까지 돌면 fake 가
+    # path 수만큼 중복 집계된다 (테스트 환경 격리).
+    monkeypatch.setattr("src.dashboard.app.discover_wal_files", lambda _d: [])
+    wal_path = tmp_path / "wal.jsonl"
+    wal_path.write_text("")
+    state = DashboardState()
+    state.wal_path = wal_path
+
+    app = create_app(state)
+    with TestClient(app) as client:
+        resp = client.get("/api/strategy_positions")
+    row = resp.json()["strategies"][0]
+    assert row["buy_n"] == 1, "ack 제외 — 체결 1건만 카운트"
+    assert row["buy_qty"] == pytest.approx(431.4), "체결 qty 만 (ack 431.487 제외)"
+
+
+def test_strategy_positions_ack_only_symbol_absent(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    """체결 없이 ack 만 있는 종목 (fill 누락) 은 row 에 안 나온다 — phantom 차단."""
+    fake = [
+        _fake_ack("cand-c", "ZECUSDT", "buy", "3.514"),
+        _fake_fill("cand-c", "INJUSDT", "buy", "431.4", "5.22"),
+    ]
+    monkeypatch.setattr("src.dashboard.app.wal_replay", lambda _p: (fake, []))
+    monkeypatch.setattr("src.dashboard.app.discover_wal_files", lambda _d: [])
+    wal_path = tmp_path / "wal.jsonl"
+    wal_path.write_text("")
+    state = DashboardState()
+    state.wal_path = wal_path
+
+    app = create_app(state)
+    with TestClient(app) as client:
+        resp = client.get("/api/strategy_positions")
+    symbols = {r["symbol"] for r in resp.json()["strategies"]}
+    assert symbols == {"INJUSDT"}, "ack-only ZEC 는 집계 제외"
+
+
 def test_unrealized_pnl_from_binance_ground_truth_single_holder(
     tmp_path: Path, monkeypatch,
 ) -> None:
