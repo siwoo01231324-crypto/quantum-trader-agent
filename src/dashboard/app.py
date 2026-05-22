@@ -159,6 +159,57 @@ def _pnl_view(state: "DashboardState") -> dict:
     }
 
 
+def _pnl_from_trades(trades: list) -> dict:
+    """closed round-trip 의 realized_pnl 을 청산시각(exit_ts) 기준 일/월 집계.
+
+    2026-05-22: `/api/pnl` 의 PnL 카드를 거래내역(`reconstruct_trades`) 과
+    동일 source 로 통일. 기존 `PnLAggregator` 는 cross-run cost-basis 누적
+    이라 broker 실현손익과 크게 어긋났다 (실측: aggregator daily +127 vs
+    Binance UI +54, 거래내역 round-trip 합 +48). 거래내역 합산이 broker 와
+    수수료 차이로 일치함을 사용자가 검증 → PnL 카드도 같은 round-trip
+    재구성으로 계산하면 항상 거래내역과 맞는다.
+
+    daily = 청산시각이 오늘(KST 자정~) 인 closed trade 의 realized 합.
+    monthly = 청산시각이 이번 달인 합. venue (USDT/KRW) 별로도 분리 —
+    절대 cross-sum 안 함.
+    """
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    kst = ZoneInfo("Asia/Seoul")
+    now = datetime.now(kst)
+    today = now.date()
+    this_month = (now.year, now.month)
+    daily = 0.0
+    monthly = 0.0
+    by_strategy: dict[str, float] = {}
+    daily_by_venue: dict[str, float] = {}
+    monthly_by_venue: dict[str, float] = {}
+    for t in trades:
+        if t.status != "closed" or t.realized_pnl is None or not t.exit_ts:
+            continue
+        try:
+            exit_kst = datetime.fromisoformat(t.exit_ts).astimezone(kst)
+        except (ValueError, TypeError):
+            continue
+        pnl = float(t.realized_pnl)
+        venue = t.venue or "unknown"
+        by_strategy[t.strategy_id] = by_strategy.get(t.strategy_id, 0.0) + pnl
+        if (exit_kst.year, exit_kst.month) == this_month:
+            monthly += pnl
+            monthly_by_venue[venue] = monthly_by_venue.get(venue, 0.0) + pnl
+        if exit_kst.date() == today:
+            daily += pnl
+            daily_by_venue[venue] = daily_by_venue.get(venue, 0.0) + pnl
+    return {
+        "daily": daily,
+        "monthly": monthly,
+        "by_strategy": by_strategy,
+        "daily_by_venue": daily_by_venue,
+        "monthly_by_venue": monthly_by_venue,
+    }
+
+
 def _gauge_html(name: str, value: float) -> str:
     pct = min(max(value * 100, 0), 100)
     color = "#f6465d" if pct >= 80 else "#f0a500" if pct >= 60 else "#0ecb81"
@@ -2940,9 +2991,23 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
 
     @app.get("/api/pnl")
     async def api_pnl() -> JSONResponse:
-        # 2026-05-22: "실시간" 칸 제거 — realized 일간/월간만. 미실현은 Binance
-        # 계좌 카드 hero + 전략별 포지션 row 에서 노출되므로 broker IO 불필요.
-        return JSONResponse(_pnl_view(state))
+        # 2026-05-22: PnL 카드를 거래내역(reconstruct_trades)과 동일 source
+        # 로 통일. PnLAggregator 의 cross-run cost-basis 누적이 broker 실현
+        # 손익과 크게 어긋났다 (aggregator daily +127 vs Binance UI +54,
+        # 거래내역 round-trip 합 +48). round-trip 재구성으로 계산하면 PnL
+        # 카드와 거래내역이 항상 일치. log_dir 부재 시 _pnl_view fallback.
+        import asyncio as _asyncio
+        log_dir = _resolve_log_dir()
+        if log_dir is None:
+            return JSONResponse(_pnl_view(state))
+        try:
+            wal_paths = await _asyncio.to_thread(discover_wal_files, log_dir)
+            if not wal_paths:
+                return JSONResponse(_pnl_view(state))
+            trades = await _asyncio.to_thread(reconstruct_trades, wal_paths)
+            return JSONResponse(_pnl_from_trades(trades))
+        except Exception:  # noqa: BLE001 — never 500 the dashboard
+            return JSONResponse(_pnl_view(state))
 
     @app.get("/api/ops")
     async def api_ops() -> JSONResponse:
