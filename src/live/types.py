@@ -118,6 +118,11 @@ EVENT_STRATEGY_TOGGLED = "strategy_toggled"
 # evaluation (one event per (strategy_id, symbol, tick)). Used by AC0 dispatch
 # proof + 운영 디버깅 (live-daemon 의 strategy 가 실제로 호출되는지 가시화).
 EVENT_STRATEGY_EVALUATED = "strategy_evaluated"
+# 2026-05-22 post-only Maker — emitted by src/live/post_only_fallback.py when a
+# post-only(GTX) LIMIT entry resolves. ``outcome`` ∈ {filled_maker,
+# filled_during_cancel, resubmitted_market, total_miss, cancel_failed_abort}.
+# 미체결률 모니터링 (5단계 mean-rev → breakout rollout 판단 근거).
+EVENT_POST_ONLY_FALLBACK = "post_only_fallback"
 
 
 @dataclass(frozen=True)

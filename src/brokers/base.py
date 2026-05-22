@@ -64,6 +64,11 @@ class OrderAck:
     qty: Decimal | None = None
     price: Decimal | None = None
     reject_reason: str | None = None  # WAL_WRITE_FAIL, KILL_SWITCH 등
+    # 2026-05-22 post-only Maker — 누적 체결 수량 (Binance ``executedQty``).
+    # ``get_order`` 응답에서 adapter 가 채운다. post-only 미체결 fallback 이
+    # 부분 체결 잔량(origQty - filled_qty)만 시장가로 재발주할 때 사용.
+    # None → 미지원 broker / 미조회 (legacy 경로 byte-identical).
+    filled_qty: Decimal | None = None
 
 
 @dataclass

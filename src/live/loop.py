@@ -18,6 +18,7 @@ from src.execution.mock_matching import MockMatchingEngine
 from src.execution.paper_broker import PaperBroker
 from src.live.executor import execute_intents
 from src.live.feed import MarketDataFeed, BinancePublicFeed, BinanceMarkPriceFeed
+from src.live.post_only_fallback import cancel_pending_fallbacks
 from src.live.fill_consumer import run_binance_fill_consumer
 from src.live.process_lock import ProcessLock
 from src.live.reconnect import backoff_delay
@@ -425,6 +426,14 @@ async def run_shadow_loop(
                     "live.loop.on_orchestrator_ready_failed error=%s", err,
                 )
 
+        # post-only Maker 진입(post-only-maker-entry.draft.md 4단계) — 완전
+        # 미체결 + 시장가 재발주도 REJECTED 일 때 `_live_entered` 박제를 푸는
+        # 콜백. executor 의 post-only fallback 경로에서만 호출되며
+        # `sync_live_entered(.., 0)` 으로 진입 기록을 discard 한다. legacy
+        # market 진입 경로는 이 콜백을 절대 타지 않는다 (동작 무영향).
+        def _release_live_entered(strategy_id: str, symbol: str) -> None:
+            orchestrator.sync_live_entered(strategy_id, symbol, 0)
+
         snapshot_builder = SnapshotBuilder(
             config.symbols,
             kis_client=config.kis_client,
@@ -582,6 +591,8 @@ async def run_shadow_loop(
                         intents, broker=router, kill_switch=kill_switch,
                         wal=wal, metrics=metrics, market_state=ms,
                         position_store=config.position_store,
+                        # post-only Maker fallback 이 완전 미체결 시 호출.
+                        on_entry_unfilled=_release_live_entered,
                     )
                 # cs-tsmom-crypto-daily universe-scan basket dispatch — see
                 # `src/live/cs_basket_dispatcher.py` for the why (orchestrator
@@ -731,6 +742,10 @@ async def run_shadow_loop(
                         # consumer/fill tasks. BaseException already
                         # covers CancelledError.
                         pass
+            # post-only Maker fallback task 취소 (post-only-maker-entry 3단계).
+            # 미취소 시 데몬 종료 후에도 sleep 중이던 task 가 깨어나 시장가를
+            # 발사할 수 있다.
+            await cancel_pending_fallbacks()
             await feed.aclose()
 
     finally:
