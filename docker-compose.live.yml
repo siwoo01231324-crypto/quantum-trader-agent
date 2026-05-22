@@ -284,6 +284,9 @@ services:
     environment:
       TZ: Asia/Seoul
       PYTHONUNBUFFERED: "1"
+      # 거래량 top-N in/out 으로 시그널 누락되던 관심 종목 강제 포함
+      # (2026-05-22 SKYAI 11:00 시그널 누락 사고). 쉼표 구분.
+      AIRBORNE_ALWAYS_INCLUDE: "SKYAIUSDT,TRXUSDT,EURUSDT"
     volumes:
       - ./logs/airborne:/data/logs
     restart: unless-stopped
