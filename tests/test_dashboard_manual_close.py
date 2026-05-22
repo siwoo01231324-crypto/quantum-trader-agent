@@ -468,3 +468,71 @@ def test_manual_close_rejects_bad_qty_payload() -> None:
             json={"qty": "not a number"},
         )
     assert resp.status_code == 400
+
+
+class _SpyOrch:
+    """orchestrator.sync_live_entered 호출 기록 + _live_entered 동기화 stub."""
+
+    def __init__(self) -> None:
+        self.synced: list = []
+        self._live_entered: set = set()
+
+    def sync_live_entered(self, sid: str, sym: str, qty: float) -> None:
+        self.synced.append((sid, sym, qty))
+        if qty == 0:
+            self._live_entered.discard((sid, sym))
+        else:
+            self._live_entered.add((sid, sym))
+
+
+def test_manual_close_full_clears_live_entered() -> None:
+    """★ 2026-05-22: 전량 수동 청산 시 orchestrator._live_entered 에서 제거.
+
+    수동 청산은 store·broker 가 함께 flat → reconciler mismatch 없음 →
+    PR #287 의 sync 가 안 걸린다. manual_close endpoint 가 직접
+    sync_live_entered 를 불러야 — 미호출 시 그 (strategy, symbol) 재진입
+    영구 차단 (사용자가 dashboard 청산 버튼 누른 종목이 다시 안 잡힘).
+    """
+    state = DashboardState()
+    state.position_provider = lambda sid: [("NEARUSDT", 10.0)]
+    orch = _SpyOrch()
+    orch._live_entered.add(("cand-c", "NEARUSDT"))
+    state.orchestrator = orch
+
+    async def fake_executor(intents):
+        return {"submitted": len(intents)}
+
+    state.manual_close_executor = fake_executor
+    app = create_app(state)
+    with TestClient(app) as client:
+        resp = client.post(
+            "/api/strategies/cand-c/positions/NEARUSDT/close",
+            json={"qty": "all"},
+        )
+    assert resp.status_code == 200
+    assert orch.synced == [("cand-c", "NEARUSDT", 0.0)]
+    assert ("cand-c", "NEARUSDT") not in orch._live_entered
+
+
+def test_manual_close_partial_keeps_live_entered() -> None:
+    """부분 청산 시 remaining>0 → _live_entered 유지 (포지션 남아있음)."""
+    state = DashboardState()
+    state.position_provider = lambda sid: [("NEARUSDT", 10.0)]
+    orch = _SpyOrch()
+    orch._live_entered.add(("cand-c", "NEARUSDT"))
+    state.orchestrator = orch
+
+    async def fake_executor(intents):
+        return None
+
+    state.manual_close_executor = fake_executor
+    app = create_app(state)
+    with TestClient(app) as client:
+        resp = client.post(
+            "/api/strategies/cand-c/positions/NEARUSDT/close",
+            json={"qty": 3.5},
+        )
+    assert resp.status_code == 200
+    # remaining = 10 - 3.5 = 6.5 > 0 → _live_entered 유지
+    assert orch.synced == [("cand-c", "NEARUSDT", 6.5)]
+    assert ("cand-c", "NEARUSDT") in orch._live_entered
