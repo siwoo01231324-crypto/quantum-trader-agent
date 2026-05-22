@@ -27,6 +27,7 @@ import logging
 import os
 import sys
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -311,7 +312,7 @@ async def _consume_stream(
             evaluate_and_dispatch(symbol=sym, state=state, ev=ev, dry_run=dry_run)
 
 
-async def run_daemon(
+async def _run_ws_loop(
     *,
     top_n: int = DEFAULT_TOP_N,
     dry_run: bool = False,
@@ -320,7 +321,11 @@ async def run_daemon(
     universe_refresh_hours: float = DEFAULT_UNIVERSE_REFRESH_HOURS,
     always_include: list[str] | None = None,
 ) -> None:
-    """Run the alert daemon.
+    """WebSocket-based mode (legacy) — needs an unblocked region (VPN/cloud).
+
+    Binance mainnet WS (``fstream.binance.com``) pushes 0 messages to Korean
+    IPs (region-block) — handshake succeeds but no data frames arrive. For
+    Korean-IP-safe operation use ``--mode polling`` (REST has no region block).
 
     If ``universe_refresh_hours > 0`` the universe is re-computed on that
     cadence and the WS stream is rebuilt to reflect added / removed
@@ -412,6 +417,198 @@ async def run_daemon(
                 pass
 
 
+def _next_polling_wakeup(now_dt: datetime) -> datetime:
+    """Return the next 1h boundary +30s (UTC) strictly after ``now_dt``.
+
+    e.g. now=05:00:25 → 05:00:30; now=05:00:35 → 06:00:30. The +30s offset
+    lets Binance finalize the just-closed 1h bar before we REST-fetch it.
+    Pure function — extracted for deterministic unit testing.
+    """
+    candidate = now_dt.replace(minute=0, second=30, microsecond=0)
+    if candidate <= now_dt:
+        candidate += timedelta(hours=1)
+    return candidate
+
+
+async def _run_polling_loop(
+    *,
+    top_n: int = DEFAULT_TOP_N,
+    dry_run: bool = False,
+    rest_base_url: str = REST_BASE_LIVE,
+    universe_refresh_hours: float = DEFAULT_UNIVERSE_REFRESH_HOURS,
+    always_include: list[str] | None = None,
+) -> None:
+    """REST polling mode — Korean-IP-safe (no WebSocket dependence).
+
+    Binance mainnet WS (``fstream.binance.com``) pushes 0 messages to Korean
+    IPs (region-block) — handshake succeeds but no data frames arrive. The
+    public REST API (``fapi.binance.com/fapi/v1/klines``) has no such block.
+    The Airborne signal is computed identically on identical OHLCV input
+    regardless of source, so REST polling delivers the same fires at the same
+    prices as a non-blocked WS feed — only the data path differs.
+
+    Wakes at each 1h boundary +30s (UTC), REST-fetches kline history for
+    every universe symbol, detects newly-confirmed 1h bars by comparing the
+    latest open_time against state, and dispatches alerts. Universe is
+    re-computed every ``universe_refresh_hours`` (default 6h). The pinned
+    ``always_include`` symbols are force-kept exactly as in the WS loop.
+    """
+    pinned = [s.strip().upper() for s in (always_include or []) if s.strip()]
+    states: dict[str, SymbolState] = {}
+    prev_universe: list[str] = []
+    last_universe_refresh: float = 0.0
+    refresh_secs: float | None = (
+        universe_refresh_hours * 3600 if universe_refresh_hours > 0 else None
+    )
+
+    while True:
+        # ── Universe refresh (first cycle + every N hours) ─────────────
+        now_loop = asyncio.get_event_loop().time()
+        need_refresh = (
+            not prev_universe
+            or (refresh_secs is not None
+                and now_loop - last_universe_refresh >= refresh_secs)
+        )
+        if need_refresh:
+            log.info("fetching 24h snapshot from %s ...", rest_base_url)
+            snap = await fetch_futures_24h_snapshot(base_url=rest_base_url)
+            universe = top_n_by_volume(snap, n=top_n)
+            if not universe:
+                log.error("empty universe — retrying in 60s")
+                await asyncio.sleep(60)
+                continue
+            # 거래량 순위 무관 강제 포함 — WS loop 와 동일 정책.
+            for sym in pinned:
+                if sym not in universe:
+                    universe.append(sym)
+                    log.info("pinned symbol force-added to universe: %s", sym)
+            added, removed, unchanged = compute_universe_diff(
+                prev_universe, universe
+            )
+            if prev_universe:
+                log.info(
+                    "universe refresh — added=%s removed=%s unchanged=%d",
+                    added, removed, len(unchanged),
+                )
+            else:
+                log.info(
+                    "initial universe (top-%d USDT-perp, %d symbols): %s",
+                    top_n, len(universe), universe,
+                )
+            for sym in removed:
+                states.pop(sym, None)
+            await _bootstrap_into_states(
+                added, states, rest_base_url=rest_base_url
+            )
+            prev_universe = universe
+            last_universe_refresh = now_loop
+            log.info("states current: %d symbols seeded", len(states))
+
+        # ── Sleep until next 1h boundary +30s (UTC) ────────────────────
+        now_dt = datetime.now(timezone.utc)
+        next_wakeup = _next_polling_wakeup(now_dt)
+        wait_secs = (next_wakeup - now_dt).total_seconds()
+        log.info(
+            "polling: next cycle at %s UTC (%.0fs sleep)",
+            next_wakeup.strftime("%H:%M:%S"), wait_secs,
+        )
+        await asyncio.sleep(wait_secs)
+
+        # ── REST poll all symbols (1h limit=100, 5m limit=50) ──────────
+        log.info("polling cycle start — %d symbols", len(prev_universe))
+        try:
+            poll = await bootstrap_history(
+                symbols=prev_universe,
+                intervals=("1h", "5m"),
+                limit_per_interval={"1h": 100, "5m": 50},
+                base_url=rest_base_url,
+            )
+        except Exception as exc:  # noqa: BLE001 — retry next cycle
+            log.error("polling fetch failed: %s — retrying next cycle", exc)
+            continue
+
+        # ── Detect new 1h bar per symbol → evaluate_and_dispatch ───────
+        new_bar_count = 0
+        for sym in prev_universe:
+            state = states.get(sym)
+            if state is None:
+                continue
+            new_1h = poll.get(sym, {}).get("1h")
+            new_5m = poll.get(sym, {}).get("5m")
+            if new_1h is None or new_1h.empty:
+                continue
+
+            new_last_ts = new_1h.index[-1]
+            had_prev = not state.history_1h.empty
+            prev_last_ts = state.history_1h.index[-1] if had_prev else None
+
+            # state 갱신 (history 통째 교체, cooldown 은 SymbolState 에 보존)
+            state.history_1h = new_1h
+            if new_5m is not None and not new_5m.empty:
+                state.history_5m = new_5m
+
+            if had_prev and new_last_ts <= prev_last_ts:
+                continue  # 아직 새 봉 없음
+
+            new_bar_count += 1
+            row = new_1h.iloc[-1]
+            open_ms = int(new_last_ts.timestamp() * 1000)
+            ev = KlineEvent(
+                symbol=sym, interval="1h",
+                open_time=open_ms,
+                close_time=open_ms + 3_599_999,
+                open=float(row["open"]),
+                high=float(row["high"]),
+                low=float(row["low"]),
+                close=float(row["close"]),
+                volume=float(row["volume"]),
+                is_closed=True,
+            )
+            evaluate_and_dispatch(symbol=sym, state=state, ev=ev, dry_run=dry_run)
+
+        log.info("polling cycle complete — %d new 1h bars evaluated", new_bar_count)
+
+
+async def run_daemon(
+    *,
+    top_n: int = DEFAULT_TOP_N,
+    dry_run: bool = False,
+    ws_base_url: str = WS_BASE_LIVE,
+    rest_base_url: str = REST_BASE_LIVE,
+    universe_refresh_hours: float = DEFAULT_UNIVERSE_REFRESH_HOURS,
+    always_include: list[str] | None = None,
+    mode: str = "polling",
+) -> None:
+    """Top-level entry — dispatches to polling or WS loop based on ``mode``.
+
+    ``mode='polling'`` (default): REST polling at each 1h boundary +30s —
+        Korean-IP-safe (WS region block doesn't affect REST). Signal cadence
+        matches the 1h bar grain exactly.
+    ``mode='ws'``: legacy WebSocket combined stream — needs an unblocked
+        region (cloud / VPN). Higher data density (markPrice, 5m kline).
+    """
+    log.info("daemon mode: %s", mode)
+    if mode == "polling":
+        await _run_polling_loop(
+            top_n=top_n,
+            dry_run=dry_run,
+            rest_base_url=rest_base_url,
+            universe_refresh_hours=universe_refresh_hours,
+            always_include=always_include,
+        )
+    elif mode == "ws":
+        await _run_ws_loop(
+            top_n=top_n,
+            dry_run=dry_run,
+            ws_base_url=ws_base_url,
+            rest_base_url=rest_base_url,
+            universe_refresh_hours=universe_refresh_hours,
+            always_include=always_include,
+        )
+    else:
+        raise ValueError(f"unknown mode: {mode!r} (expected 'polling' or 'ws')")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Airborne v1.1 USDT-perp alert daemon (Binance Futures, Telegram)",
@@ -439,8 +636,23 @@ def main(argv: list[str] | None = None) -> int:
             "가능 (CLI 우선). top-N in/out 으로 시그널 누락되는 관심 종목용."
         ),
     )
+    parser.add_argument(
+        "--mode", choices=["polling", "ws"], default=None,
+        help=(
+            "Data source mode. 'polling' (default): REST polling at each 1h "
+            "boundary +30s — Korean-IP-safe, no WS dependence. 'ws': legacy "
+            "WebSocket combined stream — needs VPN/cloud outside Korea "
+            "(Binance mainnet WS push is region-blocked for Korean IPs). "
+            "환경변수 AIRBORNE_MODE 로도 지정 가능 (CLI 우선)."
+        ),
+    )
     parser.add_argument("--log-level", default="INFO")
     args = parser.parse_args(argv)
+
+    # 우선순위: CLI --mode > 환경변수 AIRBORNE_MODE > 기본값 polling.
+    mode = args.mode or os.environ.get("AIRBORNE_MODE") or "polling"
+    if mode not in ("polling", "ws"):
+        mode = "polling"
 
     always_include_raw = args.always_include or os.environ.get(
         "AIRBORNE_ALWAYS_INCLUDE", ""
@@ -465,6 +677,7 @@ def main(argv: list[str] | None = None) -> int:
             rest_base_url=rest_base,
             universe_refresh_hours=args.universe_refresh_hours,
             always_include=always_include,
+            mode=mode,
         ))
     except KeyboardInterrupt:
         log.info("KeyboardInterrupt — shutting down")
