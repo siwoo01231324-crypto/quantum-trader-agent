@@ -115,6 +115,11 @@ class AsyncBinanceFuturesAdapter:
         # the maximum"). A sub-minQty result must NOT be submitted: a
         # guaranteed-reject flood is exactly the #238 incident class.
         req = self._quantize_qty_to_lot(req)
+        # 2026-05-22 post-only Maker — round a LIMIT price to the symbol's
+        # PRICE_FILTER tickSize. A non-tick-aligned price is rejected by
+        # Binance with -1111, so post-only entries MUST pass through here.
+        # No-op for MARKET orders (req.price is None) → byte-identical legacy.
+        req = self._quantize_price_to_tick(req)
 
         resp = await self._client.place_order(req, cid)
         return OrderAck(
@@ -179,6 +184,45 @@ class AsyncBinanceFuturesAdapter:
         )
         return replace(req, qty=floored)
 
+    def _quantize_price_to_tick(self, req: OrderRequest) -> OrderRequest:
+        """Round ``req.price`` to the symbol's PRICE_FILTER tickSize.
+
+        post-only Maker entries submit a LIMIT price computed as
+        ``ref × (1 ∓ 0.0005)`` — that raw value is almost never a tickSize
+        multiple, and Binance rejects a mis-aligned LIMIT price with -1111
+        ("Precision is over the maximum"). This mirrors
+        :meth:`_quantize_qty_to_lot` for the price axis.
+
+        - MARKET order (``req.price is None``) → returned untouched. The whole
+          legacy MARKET path stays byte-identical.
+        - ``SymbolFilters`` can't resolve the symbol (unknown / exchangeInfo
+          fetch failed) → safe fallback: keep the price + log, never crash the
+          order path (the exchange may still reject, but we never flood it).
+        """
+        if req.price is None:
+            return req
+
+        from dataclasses import replace  # noqa: PLC0415
+
+        try:
+            tick = self._symbol_filters.tick_size(req.symbol)
+            quantized = self._symbol_filters.quantize_price(req.symbol, req.price)
+        except Exception as exc:  # noqa: BLE001 — see _quantize_qty_to_lot
+            log.warning(
+                "price filter unavailable for %s (%s); submitting un-quantized "
+                "price %s — broker may still reject",
+                req.symbol, exc, req.price,
+            )
+            return req
+
+        if quantized == req.price:
+            return req  # already tick-aligned — no allocation churn
+        log.info(
+            "quantized %s price %s → %s (PRICE_FILTER tick %s)",
+            req.symbol, req.price, quantized, tick,
+        )
+        return replace(req, price=quantized)
+
     async def cancel_order(
         self,
         *,
@@ -212,6 +256,9 @@ class AsyncBinanceFuturesAdapter:
             ts=datetime.fromtimestamp(resp.updateTime / 1000, tz=timezone.utc),
             qty=resp.origQty,
             price=resp.price if resp.price != Decimal("0") else None,
+            # 2026-05-22 post-only Maker — surface executedQty so the
+            # post-only fallback can re-submit only the unfilled remainder.
+            filled_qty=resp.executedQty,
         )
 
     async def get_positions(self, symbol: str | None = None) -> list[Position]:

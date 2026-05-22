@@ -2,13 +2,19 @@ from __future__ import annotations
 import logging
 import time
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Iterable
+from decimal import Decimal
+from typing import TYPE_CHECKING, Callable, Iterable
 
 from src.brokers import client_id as client_id_mod
-from src.brokers.base import AsyncBrokerAdapter, OrderAck
+from src.brokers.base import AsyncBrokerAdapter, OrderAck, OrderRequest, OrderType
 from src.brokers.errors import BrokerError
-from src.execution.base import MarketState
+from src.execution.base import MarketState, TimeInForce
 from src.live.conversion import intent_to_order_request
+from src.live.post_only_fallback import (
+    is_post_only,
+    resubmit_post_only_as_market,
+    schedule_post_only_fallback,
+)
 from src.live.types import (
     EVENT_ORDER_ACKED,
     EVENT_TRACKING_SAMPLE,
@@ -24,6 +30,11 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# post-only Maker 진입 limit 가격 오프셋 (post-only-maker-entry.draft.md 2단계).
+# buy 는 기준가보다 0.05% 아래, sell 은 0.05% 위로 발주해 taker 가 되지 않도록
+# (= maker 보장) 한다. tick-size 정렬은 broker adapter 가 담당.
+_POST_ONLY_OFFSET = Decimal("0.0005")
+
 
 async def execute_intents(
     intents: Iterable[OrderIntent],
@@ -34,6 +45,7 @@ async def execute_intents(
     metrics: Metrics,
     market_state: MarketState | None = None,
     position_store: "StrategyPositionStore | None" = None,
+    on_entry_unfilled: Callable[[str, str], None] | None = None,
 ) -> list[OrderAck]:
     """OrderIntent 시퀀스를 broker 에 전달. Phase 2 전환 seam.
 
@@ -41,14 +53,23 @@ async def execute_intents(
 
     market_state: Architect note #1. None 시 self-sim skip (PaperBroker 단독 호환).
 
+    on_entry_unfilled: post-only Maker 진입(2~4단계)이 완전 미체결 + 시장가
+      재발주도 REJECTED 일 때 호출되는 ``(strategy_id, symbol) -> None`` 콜백.
+      ``orchestrator.sync_live_entered(sid, sym, 0)`` 에 연결돼 ``_live_entered``
+      박제를 푼다. None → post-only 강등(market) 시 그대로, legacy 동작 무영향.
+
     각 intent 처리 흐름:
       1. kill_switch.assert_allow_order() → tripped 시 REJECTED ack (KILL_SWITCH)
-      2. intent_to_order_request 변환 — ValueError (unknown symbol) 시 REJECTED ack (CONVERSION:...)
+      2. _build_order_request 변환 — MARKET, 또는 post-only 진입이면 GTX LIMIT.
+         ValueError (unknown symbol / LIMIT price 누락) 시 REJECTED ack (CONVERSION:...)
       3. broker.place_order() 호출 → ack
          - WALWriteFailed 또는 BrokerError 발생 시 catch → REJECTED ack (WAL_WRITE_FAIL / BROKER_ERROR)
       4. 정상 ack 시: order_acked WAL append (Architect note #2)
       5. self-sim tracking_sample (Architect note #3): KIS broker + market_state 제공 시만 실행
       6. 메트릭 기록: orders_total (status 라벨 = ack.status), order_latency_seconds (broker, algo='execute_intents')
+      7. post-only Maker fallback (post-only-maker-entry.draft.md 3단계):
+         GTX LIMIT 이 EXPIRED → 즉시 시장가 재발주, NEW/PARTIALLY_FILLED →
+         background task 로 미체결분 fallback (loop 비블로킹).
 
     WAL 기록은 broker (PaperBroker) 가 내부에서 처리. executor 는 메트릭 + order_acked/tracking_sample.
     """
@@ -71,9 +92,9 @@ async def execute_intents(
             ).inc()
             continue
 
-        # 2. 변환
+        # 2. 변환 — MARKET, 또는 post-only 진입이면 GTX LIMIT.
         try:
-            req = intent_to_order_request(intent, idempotency_key=idempotency_key)
+            req = _build_order_request(intent, idempotency_key)
         except ValueError as err:
             ack = _reject(intent, idempotency_key, f"CONVERSION:{err}")
             acks.append(ack)
@@ -172,6 +193,39 @@ async def execute_intents(
         ).inc()
         acks.append(ack)
 
+        # 7. post-only Maker 진입 fallback (post-only-maker-entry.draft.md 3단계).
+        # GTX LIMIT 은 즉시 체결되지 않는다:
+        #   EXPIRED — taker 가 될 주문이라 거래소가 거부 → 즉시 시장가 재발주.
+        #   NEW/PARTIALLY_FILLED — 호가창 안착 → background task 로 미체결분
+        #     fallback (절대 tick loop 을 블록하지 않음).
+        # REJECTED 는 fallback 대상 아님 (애초에 발주 실패).
+        if is_post_only(req) and ack.status not in ("REJECTED",):
+            if ack.status == "EXPIRED":
+                await resubmit_post_only_as_market(
+                    intent,
+                    qty=ack.qty if ack.qty is not None else req.qty,
+                    already_filled=Decimal("0"),
+                    broker=broker,
+                    kill_switch=kill_switch,
+                    wal=wal,
+                    metrics=metrics,
+                    market_state=market_state,
+                    position_store=position_store,
+                    on_entry_unfilled=on_entry_unfilled,
+                )
+            elif ack.status in ("NEW", "PARTIALLY_FILLED"):
+                schedule_post_only_fallback(
+                    intent,
+                    req,
+                    broker=broker,
+                    kill_switch=kill_switch,
+                    wal=wal,
+                    metrics=metrics,
+                    market_state=market_state,
+                    position_store=position_store,
+                    on_entry_unfilled=on_entry_unfilled,
+                )
+
     return acks
 
 
@@ -251,3 +305,41 @@ def _reject(intent: OrderIntent, key: str, reason: str) -> OrderAck:
         ts=datetime.now(timezone.utc),
         reject_reason=reason,
     )
+
+
+def _post_only_limit_price(side: str, ref_price: float) -> Decimal:
+    """Maker 보장 limit 가격 산출 (post-only-maker-entry.draft.md 2단계).
+
+    buy 는 기준가보다 0.05% 아래, sell 은 0.05% 위 — 어느 쪽도 즉시 taker 가
+    되지 않게 한다. tick-size 정렬은 broker adapter(``_quantize_price_to_tick``)
+    가 담당하므로 여기서는 raw Decimal 만 반환한다.
+
+    ``Decimal(str(...))`` 로 float 오염을 피한다 (conversion.py 와 동일 규약).
+    """
+    ref = Decimal(str(ref_price))
+    if side == "buy":
+        return ref * (Decimal("1") - _POST_ONLY_OFFSET)
+    return ref * (Decimal("1") + _POST_ONLY_OFFSET)
+
+
+def _build_order_request(intent: OrderIntent, idempotency_key: str) -> OrderRequest:
+    """OrderIntent → OrderRequest. post-only 진입이면 GTX LIMIT 으로 변환.
+
+    ``intent.entry_order_type == "post_only"`` 이고 ``ref_price`` 가 있으면
+    maker 보장 limit 가격을 산출해 ``order_type=LIMIT, tif=GTX`` 로 변환한다.
+    그 외(기본값 "market", 또는 ref_price 누락 = orchestrator 산출 실패)는
+    기존 MARKET 변환 — legacy 경로 byte-identical.
+
+    ValueError(미등록 심볼 / LIMIT price 누락)는 caller(execute_intents)가
+    잡아 REJECTED ack 으로 강등한다.
+    """
+    if intent.entry_order_type == "post_only" and intent.ref_price is not None:
+        limit_price = _post_only_limit_price(intent.side, intent.ref_price)
+        return intent_to_order_request(
+            intent,
+            idempotency_key=idempotency_key,
+            order_type=OrderType.LIMIT,
+            price=limit_price,
+            tif=TimeInForce.GTX,
+        )
+    return intent_to_order_request(intent, idempotency_key=idempotency_key)

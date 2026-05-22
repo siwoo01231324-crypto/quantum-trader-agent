@@ -42,11 +42,15 @@ class GetOrderResponse(BaseModel):
     symbol: str
     status: str
     origQty: Decimal
+    # 2026-05-22 post-only Maker — 누적 체결 수량. post-only LIMIT 미체결
+    # fallback 이 잔량(origQty - executedQty)만 시장가로 재발주할 때 필요.
+    # 부분 체결(PARTIALLY_FILLED) 주문은 cancel 후에도 이 값이 유효하다.
+    executedQty: Decimal = Decimal("0")
     price: Decimal
     avgPrice: Decimal = Decimal("0")
     updateTime: int
 
-    @field_validator("origQty", "price", "avgPrice", mode="before")
+    @field_validator("origQty", "executedQty", "price", "avgPrice", mode="before")
     @classmethod
     def coerce_decimal(cls, v: Any) -> Decimal:
         return Decimal(str(v))
