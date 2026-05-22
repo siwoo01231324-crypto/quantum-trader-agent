@@ -199,3 +199,74 @@ async def test_run_loop_stops_on_event():
     await asyncio.gather(rec.run_loop(stop_event), stop_soon())
     # broker.calls 가 최소 1번 이상이어야 함 (loop 가 1 cycle 이상 돔).
     assert broker.calls >= 1
+
+
+@pytest.mark.asyncio
+async def test_auto_fix_invokes_on_position_synced_callback():
+    """★ 2026-05-22 회귀: auto-fix 가 store qty 를 바꾸면 on_position_synced
+    콜백이 (sid, symbol, broker_net) 으로 호출된다.
+
+    이 콜백이 orchestrator._live_entered 정합의 진입점 — 미호출 시 reconciler
+    가 청산한 종목이 _live_entered 에 영구히 남아 진입 차단된다 (재시작 후
+    11시간 매수 0 의 원인).
+    """
+    store = StrategyPositionStore()
+    store.force_sync_position(strategy_id="scan", symbol="NEARUSDT", qty=Decimal("135"))
+    broker = _FakeBroker({})  # broker flat (사용자가 UI 로 수동 close)
+    synced: list = []
+    rec = PositionReconciler(
+        position_store=store, broker=broker,
+        on_position_synced=lambda sid, sym, qty: synced.append((sid, sym, qty)),
+        tol=Decimal("0.001"),
+    )
+    outcome = await rec.reconcile_once()
+    assert outcome.auto_fixed != ()
+    assert synced == [("scan", "NEARUSDT", Decimal("0"))]
+
+
+@pytest.mark.asyncio
+async def test_on_position_synced_skipped_for_phantom_and_multi_holder():
+    """auto-fix 안 하는 케이스 (phantom holder 0 / multi-holder ≥2) 는 콜백도
+    호출 안 한다 — store 를 안 고쳤으니 _live_entered 도 건드리면 안 된다."""
+    # phantom: broker 에 있고 store holder 0
+    store = StrategyPositionStore()
+    broker = _FakeBroker({"NEARUSDT": Decimal("135")})
+    synced: list = []
+    rec = PositionReconciler(
+        position_store=store, broker=broker,
+        on_position_synced=lambda *a: synced.append(a), tol=Decimal("0.001"),
+    )
+    await rec.reconcile_once()
+    assert synced == []
+
+    # multi-holder: 2 strategy 가 같은 symbol 보유
+    store2 = StrategyPositionStore()
+    store2.force_sync_position(strategy_id="a", symbol="NEARUSDT", qty=Decimal("100"))
+    store2.force_sync_position(strategy_id="b", symbol="NEARUSDT", qty=Decimal("50"))
+    broker2 = _FakeBroker({"NEARUSDT": Decimal("0")})
+    synced2: list = []
+    rec2 = PositionReconciler(
+        position_store=store2, broker=broker2,
+        on_position_synced=lambda *a: synced2.append(a), tol=Decimal("0.001"),
+    )
+    await rec2.reconcile_once()
+    assert synced2 == []
+
+
+@pytest.mark.asyncio
+async def test_on_position_synced_exception_does_not_break_reconcile():
+    """콜백이 raise 해도 reconcile 은 안 죽고 auto-fix 자체는 완료된다."""
+    store = StrategyPositionStore()
+    store.force_sync_position(strategy_id="scan", symbol="NEARUSDT", qty=Decimal("135"))
+    broker = _FakeBroker({})
+
+    def _boom(sid, sym, qty):
+        raise RuntimeError("callback boom")
+
+    rec = PositionReconciler(
+        position_store=store, broker=broker,
+        on_position_synced=_boom, tol=Decimal("0.001"),
+    )
+    outcome = await rec.reconcile_once()  # 안 raise
+    assert outcome.auto_fixed != ()
+    assert store.get_positions("scan") == []  # auto-fix 자체는 완료
