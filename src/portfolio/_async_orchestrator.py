@@ -116,6 +116,29 @@ class AsyncStrategyOrchestrator:
         if cooldown_sec > 0.0:
             self._stop_cooldown_until[key] = time.monotonic() + cooldown_sec
 
+    def sync_live_entered(
+        self, strategy_id: str, symbol: str, qty: float,
+    ) -> None:
+        """PositionReconciler 의 broker↔store auto-fix 와 `_live_entered` 정합.
+
+        2026-05-22 버그: ``restore_live_entered`` 가 부팅 시 store 의 phantom
+        포지션을 `_live_entered` 에 등록한 뒤, ``PositionReconciler`` 가 broker
+        ground-truth 와 비교해 store qty 를 0 으로 ``force_sync_position`` 해도
+        `_live_entered` set 은 그대로 남았다. 결과: store flat 인데 dispatch 가
+        그 (sid, symbol) 을 "live_position_open" 으로 영구 진입 차단 → 재진입
+        불가. reconciler 가 청소한 4종목이 11시간 매수 0 의 원인.
+
+        본 메서드를 reconciler 의 auto-fix 콜백으로 연결해 set 을 store 와
+        정합한다. qty==0 → discard (재진입 허용), qty!=0 → add (보유 표기).
+        cooldown(`_stop_cooldown_until`) 은 건드리지 않는다 — reconcile sync 는
+        stop 청산이 아니라 단순 상태 정합이므로 cooldown 을 걸 이유가 없다.
+        """
+        key = (strategy_id, symbol)
+        if qty == 0:
+            self._live_entered.discard(key)
+        else:
+            self._live_entered.add(key)
+
     def restore_live_entered(
         self, positions: dict[str, list[tuple[str, float]]],
     ) -> None:
