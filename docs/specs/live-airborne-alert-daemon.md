@@ -117,6 +117,44 @@ python scripts/airborne_alert_daemon.py --top-n 50 --universe-refresh-hours 0
 ### 재시작
 무상태 — 종료 시 마지막 fire 타임스탬프 휘발. 재시작 직후 동일 봉에서 다시 fire 할 수 있음 (cooldown reset). 의도된 단순화.
 
+### Windows 자동 시작 (영구 운영)
+ngrok 자동 시작과 동일한 패턴 — 부팅/로그온 시 자동 가동. 두 가지 fallback 패스 제공:
+
+**1차 — Task Scheduler (RestartOnFailure 자동 재시작 포함, admin 필요할 수 있음)**
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\setup_airborne_alert_task.ps1
+```
+- LogonTrigger + ExecutionTimeLimit 0 (무제한 long-running)
+- RestartOnFailure: 1분 간격 × 10회
+- 배터리 모드에서도 가동 (laptop-safe)
+- 작업 이름: `QuantumTrader_AirborneAlert`
+
+**2차 — Startup 폴더 (admin 무관, 권장 fallback)**
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\setup_airborne_alert_startup.ps1
+```
+- `shell:startup` 에 `QuantumTrader_AirborneAlert.lnk` 생성 → 다음 로그온 자동 시작
+- 등록 직후 detached minimized 로 즉시 가동 (재부팅 불요)
+- 자동 재시작 없음 (`BinanceMarketDataStream` 의 내부 reconnect 로 WS 끊김은 자동 회복)
+
+공통:
+- 로그: `logs/airborne_daemon.log` (append, 수동 rotation)
+- 실행 래퍼: `scripts/run_airborne_daemon.bat` (cd → python → log redirect)
+- 데몬 인자는 .bat 파일의 `python -u ...` 줄 직접 수정 (재등록 불필요)
+
+운영 상태 확인 / 정지 / 제거:
+```powershell
+# Task Scheduler 패스
+Get-ScheduledTask -TaskName "QuantumTrader_AirborneAlert" | Get-ScheduledTaskInfo
+Stop-ScheduledTask -TaskName "QuantumTrader_AirborneAlert"
+Unregister-ScheduledTask -TaskName "QuantumTrader_AirborneAlert" -Confirm:$false
+
+# Startup 폴더 패스
+Get-CimInstance Win32_Process -Filter "Name='python.exe'" | Where { $_.CommandLine -match 'airborne' }
+Stop-Process -Id <PID>
+Remove-Item "$([Environment]::GetFolderPath('Startup'))\QuantumTrader_AirborneAlert.lnk"
+```
+
 ### Universe 새로고침 (2026-05-21 추가)
 **Default 6시간 주기 자동 재산출.** `--universe-refresh-hours <h>` 로 조정, `0` 으로 비활성화 (legacy: startup 1회 → 무한 stream).
 
