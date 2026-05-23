@@ -35,10 +35,6 @@ from src.observability.metrics import Metrics
 class DashboardState:
     """Mutable runtime state shared across request handlers."""
 
-    # 손익 (realized — 일간/월간. "실시간" 칸은 2026-05-22 제거)
-    pnl_daily: float = 0.0
-    pnl_monthly: float = 0.0
-
     # 한도 사용률 (0.0–1.0)
     limit_per_trade: float = 0.0
     limit_per_day: float = 0.0
@@ -91,9 +87,9 @@ class DashboardState:
     # Shadow Runs 뷰어 (#198) — logs/shadow/{run_id}/wal.jsonl 디렉토리 루트
     shadow_log_dir: Path | None = None
 
-    # 라이브 PnL aggregator (#194). When wired, /api/pnl and per-card
-    # pnl_today are sourced from this object instead of the static
-    # pnl_daily / pnl_monthly fields above.
+    # 라이브 PnL aggregator (#194). /api/strategy_positions 의 전략별 realized
+    # 합계 source. (PnL 카드 일간/월간은 2026-05-23 부터 거래소 income 원장
+    # 직결 — _pnl_view / pnl_daily / pnl_monthly 정적 필드는 제거됨.)
     pnl_aggregator: Any | None = None
 
     # Operational diagnostics — bars seen, dispatch counts, last signal/order/fill.
@@ -126,37 +122,6 @@ class DashboardState:
     # it here; dashboard-only / paper-mode keeps it ``None`` (manual close
     # returns 503 instead of half-acting).
     manual_close_executor: Any | None = None
-
-
-def _pnl_view(state: "DashboardState") -> dict:
-    """Resolve the dashboard PnL snapshot — realized only, daily + monthly.
-
-    Prefers the live `PnLAggregator` (#194). Falls back to the static
-    `pnl_daily / pnl_monthly` fields when no aggregator is wired.
-
-    The *_by_venue dicts are keyed "binance" (USDT), "kis" (KRW), "unknown".
-    They are NEVER cross-summed — each value is in the venue's own currency.
-
-    2026-05-22: "실시간" 칸 제거. 미실현 손익은 Binance 계좌 카드 hero
-    (id=bnb-upnl) 와 전략별 포지션 row 의 unrealized_pnl 컬럼에서 이미
-    노출되므로 PnL 카드에 또 합쳐 보여주는 건 redundant + 헷갈림.
-    """
-    agg = state.pnl_aggregator
-    if agg is not None:
-        return {
-            "daily": float(agg.daily),
-            "monthly": float(agg.monthly),
-            "by_strategy": {k: float(v) for k, v in agg.by_strategy.items()},
-            "daily_by_venue": {k: float(v) for k, v in agg.daily_by_venue().items()},
-            "monthly_by_venue": {k: float(v) for k, v in agg.monthly_by_venue().items()},
-        }
-    return {
-        "daily": state.pnl_daily,
-        "monthly": state.pnl_monthly,
-        "by_strategy": {},
-        "daily_by_venue": {},
-        "monthly_by_venue": {},
-    }
 
 
 def _pnl_from_trades(trades: list) -> dict:
@@ -246,40 +211,8 @@ def _render_dashboard(state: DashboardState, catalog_items: list[dict] | None = 
     # 전략 카탈로그 카드 (#178+#180 인라인)
     catalog_cards_html = "".join(_strategy_card(it) for it in (catalog_items or []))
 
-    # Q1: 손익 — scalar + per-venue splits
-    pnl = _pnl_view(state)
-    pnl_daily_fmt = f"{pnl['daily']:,.2f}"
-    pnl_monthly_fmt = f"{pnl['monthly']:,.2f}"
-
-    def _venue_val(d: dict, key: str) -> str | None:
-        """Return formatted value from a by_venue dict, or None if absent."""
-        v = d.get(key)
-        return f"{v:,.2f}" if v is not None else None
-
-    # KIS (KRW) per-period values
-    kis_day = _venue_val(pnl["daily_by_venue"],     "kis")
-    kis_mon = _venue_val(pnl["monthly_by_venue"],   "kis")
-    # Binance (USDT) per-period values
-    bnb_day = _venue_val(pnl["daily_by_venue"],     "binance")
-    bnb_mon = _venue_val(pnl["monthly_by_venue"],   "binance")
-
-    def _pnl_color_cls(fmt_val: str | None) -> str:
-        if fmt_val is None:
-            return "zero"
-        raw = fmt_val.replace(",", "")
-        try:
-            n = float(raw)
-        except ValueError:
-            return "zero"
-        return "neg" if n < 0 else ("zero" if n == 0 else "")
-
-    def _pnl_cell(fmt_val: str | None, currency: str) -> str:
-        """Return HTML for one venue PnL number cell."""
-        if fmt_val is None:
-            return f'<span class="pnl-venue-val zero">—</span><span class="pnl-venue-cur">{currency}</span>'
-        cls = _pnl_color_cls(fmt_val)
-        sign = "+" if not fmt_val.startswith("-") and fmt_val.replace(",", "") != "0.00" else ""
-        return f'<span class="pnl-venue-val {cls}">{sign}{fmt_val}</span><span class="pnl-venue-cur">{currency}</span>'
+    # Q1: 손익 — venue 별 일간/월간은 클라이언트 JS(pnlVenueRefresh)가
+    # /api/pnl 로 채운다. Binance 는 거래소 income 원장, KIS 는 재구성 추정치.
 
     # Q2: 한도 게이지
     limits = [
@@ -821,42 +754,14 @@ body{{
     </a>
   </div>
 
-  <!-- ── 섹션 1: PnL 요약 (venue 분리) ── -->
+  <!-- ── 섹션 1: PnL 요약 (venue 별 — 거래소 원장 기준) ── -->
   <div>
     <div class="section-hdr"><h2>손익 (PnL)</h2><div class="section-hdr-line"></div></div>
-    <!-- 통합 스칼라 (단일 venue 운영 시 참조). "실시간" 칸은 2026-05-22 제거
-         — 미실현은 Binance 계좌 카드 hero + 전략별 포지션 row 에서 노출. -->
-    <div class="grid-2" style="margin-bottom:10px">
-      <div class="pnl-card">
-        <div class="pnl-label">일간 (통합)</div>
-        <div class="pnl-value {('neg' if pnl['daily'] < 0 else 'zero' if pnl['daily'] == 0 else '')}" id="pnl-daily">{pnl_daily_fmt}</div>
-      </div>
-      <div class="pnl-card">
-        <div class="pnl-label">월간 (통합)</div>
-        <div class="pnl-value {('neg' if pnl['monthly'] < 0 else 'zero' if pnl['monthly'] == 0 else '')}" id="pnl-monthly">{pnl_monthly_fmt}</div>
-      </div>
-    </div>
-    <!-- venue 분리 카드: KIS (KRW) + Binance (USDT) — 통화가 달라 합산 불가 -->
+    <!-- venue 별 일간/월간 실현손익. JS pnlVenueRefresh() 가 /api/pnl 로 채운다.
+         Binance = 거래소 income 원장 NET, KIS = round-trip 재구성(추정).
+         "통합" 카드는 제거 — KRW·USDT 는 별개 통화라 합산 불가. -->
     <div class="pnl-venue-grid">
-      <!-- KIS KRW -->
-      <div class="pnl-venue-card">
-        <div class="pnl-venue-header">
-          <span class="pnl-venue-flag">&#127472;&#127479;</span>
-          <span class="pnl-venue-name">KIS</span>
-          <span class="pnl-venue-currency">KRW</span>
-        </div>
-        <div class="pnl-venue-rows" id="pnl-venue-kis">
-          <div class="pnl-venue-row">
-            <span class="pnl-venue-period">일간</span>
-            <span>{_pnl_cell(kis_day, 'KRW')}</span>
-          </div>
-          <div class="pnl-venue-row">
-            <span class="pnl-venue-period">월간</span>
-            <span>{_pnl_cell(kis_mon, 'KRW')}</span>
-          </div>
-        </div>
-      </div>
-      <!-- Binance USDT -->
+      <!-- Binance USDT — 거래소 income 원장 (실제 실현손익) -->
       <div class="pnl-venue-card">
         <div class="pnl-venue-header">
           <span class="pnl-venue-flag">&#9651;</span>
@@ -864,18 +769,24 @@ body{{
           <span class="pnl-venue-currency">USDT</span>
         </div>
         <div class="pnl-venue-rows" id="pnl-venue-binance">
-          <div class="pnl-venue-row">
-            <span class="pnl-venue-period">일간</span>
-            <span>{_pnl_cell(bnb_day, 'USDT')}</span>
-          </div>
-          <div class="pnl-venue-row">
-            <span class="pnl-venue-period">월간</span>
-            <span>{_pnl_cell(bnb_mon, 'USDT')}</span>
-          </div>
+          <div class="pnl-venue-row"><span class="pnl-venue-period">일간</span><span class="pnl-venue-val zero">조회중…</span></div>
+          <div class="pnl-venue-row"><span class="pnl-venue-period">월간</span><span class="pnl-venue-val zero">조회중…</span></div>
+        </div>
+      </div>
+      <!-- KIS KRW — round-trip 재구성 추정치 (KIS income TR 연동은 후속) -->
+      <div class="pnl-venue-card">
+        <div class="pnl-venue-header">
+          <span class="pnl-venue-flag">&#127472;&#127479;</span>
+          <span class="pnl-venue-name">KIS</span>
+          <span class="pnl-venue-currency">KRW · 추정</span>
+        </div>
+        <div class="pnl-venue-rows" id="pnl-venue-kis">
+          <div class="pnl-venue-row"><span class="pnl-venue-period">일간</span><span class="pnl-venue-val zero">조회중…</span></div>
+          <div class="pnl-venue-row"><span class="pnl-venue-period">월간</span><span class="pnl-venue-val zero">조회중…</span></div>
         </div>
       </div>
     </div>
-    <div class="pnl-no-sum-note">KRW · USDT 는 별개 통화 — 합산 불가. 각 venue 수치는 해당 통화 기준입니다.</div>
+    <div class="pnl-no-sum-note">Binance = 거래소 income 원장 NET (실현손익 + 수수료 + 펀딩) — 거래소 화면과 일치. KIS = 거래 재구성 추정치 (income TR 연동 후속). KRW·USDT 는 별개 통화 — 합산 불가.</div>
   </div>
 
   <!-- ── 섹션 2: Binance 계좌 + KIS 계좌 나란히 ── -->
@@ -1774,19 +1685,9 @@ async function pnlVenueRefresh() {{
   try {{
     const r = await fetch('/api/pnl');
     const d = await r.json();
-    // 통합 스칼라 (일간/월간 2칸 — 실시간 칸은 2026-05-22 제거)
-    const setColor = (id, v) => {{
-      const el = document.getElementById(id);
-      if (!el) return;
-      const n = Number(v);
-      el.style.color = n > 0 ? 'var(--green)' : n < 0 ? 'var(--red)' : 'var(--text2)';
-      el.textContent = (n > 0 ? '+' : '') + fmtNum(n, 2);
-    }};
-    setColor('pnl-daily',    d.daily);
-    setColor('pnl-monthly',  d.monthly);
-    // Venue split rows
-    renderVenueRows('pnl-venue-kis',     d, 'KRW');
+    // venue 별 일간/월간 — Binance(거래소 income 원장) + KIS(재구성 추정).
     renderVenueRows('pnl-venue-binance', d, 'USDT');
+    renderVenueRows('pnl-venue-kis',     d, 'KRW');
   }} catch(err) {{ console.warn('pnlVenue', err); }}
 }}
 pnlVenueRefresh();
@@ -2991,23 +2892,55 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
 
     @app.get("/api/pnl")
     async def api_pnl() -> JSONResponse:
-        # 2026-05-22: PnL 카드를 거래내역(reconstruct_trades)과 동일 source
-        # 로 통일. PnLAggregator 의 cross-run cost-basis 누적이 broker 실현
-        # 손익과 크게 어긋났다 (aggregator daily +127 vs Binance UI +54,
-        # 거래내역 round-trip 합 +48). round-trip 재구성으로 계산하면 PnL
-        # 카드와 거래내역이 항상 일치. log_dir 부재 시 _pnl_view fallback.
+        # 2026-05-23: venue 별 일간/월간 실현손익.
+        #   Binance — 거래소 income 원장(/fapi/v1/income)의 NET (REALIZED_PNL
+        #     + COMMISSION + FUNDING_FEE). 거래소 화면 실현손익과 정확히 일치.
+        #     WAL 재구성은 체결 누락·round-trip 페어링·수수료 정의 차이로
+        #     절대 거래소 원장과 못 맞춤 → PnL 카드 source 에서 폐기.
+        #   KIS — round-trip 재구성(추정치). KIS income TR 연동은 후속 PR.
+        # 어떤 경로도 500 내지 않음 — 실패 venue 는 null (프론트가 "—" 표시).
         import asyncio as _asyncio
+
+        # ── Binance: 거래소 income 원장 (실제 실현손익) ──────────────────
+        bn_daily = bn_monthly = None
+        provider = state.account_info_provider
+        if provider is not None and hasattr(provider, "fetch_binance_pnl"):
+            try:
+                bn = await _asyncio.to_thread(provider.fetch_binance_pnl)
+                if bn.get("ok"):
+                    bn_daily = bn.get("daily")
+                    bn_monthly = bn.get("monthly")
+            except Exception:  # noqa: BLE001 — never 500 the dashboard
+                pass
+
+        # ── KIS: round-trip 재구성 (추정치 — income TR 연동은 후속) ──────
+        kis_daily = kis_monthly = None
+        by_strategy: dict = {}
         log_dir = _resolve_log_dir()
-        if log_dir is None:
-            return JSONResponse(_pnl_view(state))
-        try:
-            wal_paths = await _asyncio.to_thread(discover_wal_files, log_dir)
-            if not wal_paths:
-                return JSONResponse(_pnl_view(state))
-            trades = await _asyncio.to_thread(reconstruct_trades, wal_paths)
-            return JSONResponse(_pnl_from_trades(trades))
-        except Exception:  # noqa: BLE001 — never 500 the dashboard
-            return JSONResponse(_pnl_view(state))
+        if log_dir is not None:
+            try:
+                wal_paths = await _asyncio.to_thread(discover_wal_files, log_dir)
+                if wal_paths:
+                    trades = await _asyncio.to_thread(reconstruct_trades, wal_paths)
+                    recon = _pnl_from_trades(trades)
+                    kis_daily = recon["daily_by_venue"].get("kis")
+                    kis_monthly = recon["monthly_by_venue"].get("kis")
+                    by_strategy = recon["by_strategy"]
+            except Exception:  # noqa: BLE001 — never 500 the dashboard
+                pass
+
+        return JSONResponse({
+            # top-level 스칼라 = Binance(주 운영 venue) 값. telegram /today 등
+            # "한 숫자" 요약용 — KRW·USDT cross-sum 이 아니라 USDT 단일 venue.
+            # 대시보드 카드는 daily_by_venue/monthly_by_venue 만 쓴다.
+            "daily": bn_daily if bn_daily is not None else 0.0,
+            "monthly": bn_monthly if bn_monthly is not None else 0.0,
+            "daily_by_venue": {"binance": bn_daily, "kis": kis_daily},
+            "monthly_by_venue": {"binance": bn_monthly, "kis": kis_monthly},
+            "by_strategy": by_strategy,
+            "binance_source": "exchange_income",
+            "kis_source": "reconstructed",
+        })
 
     @app.get("/api/ops")
     async def api_ops() -> JSONResponse:

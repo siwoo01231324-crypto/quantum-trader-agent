@@ -95,6 +95,45 @@ class BalanceItem(BaseModel):
         return Decimal(str(v))
 
 
+class IncomeItem(BaseModel):
+    """`/fapi/v1/income` 레코드 1건 — 자금 변동 원장 (실현손익·수수료·펀딩 등).
+
+    ``incomeType`` ∈ {REALIZED_PNL, COMMISSION, FUNDING_FEE, TRANSFER,
+    WELCOME_BONUS, INSURANCE_CLEAR, ...}. ``income`` 은 부호 있는 금액 —
+    COMMISSION 은 음수, FUNDING_FEE / REALIZED_PNL 은 ±. ``symbol`` 은
+    TRANSFER 등 일부 타입에서 빈 문자열일 수 있다.
+
+    대시보드 실현손익(NET) = Σ REALIZED_PNL + Σ COMMISSION + Σ FUNDING_FEE —
+    거래소 화면의 실현손익과 정확히 일치하는 권위 출처.
+    """
+
+    symbol: str = ""
+    incomeType: str
+    income: Decimal
+    asset: str = ""
+    time: int
+    tranId: int = 0
+    tradeId: str = ""
+
+    @field_validator("income", mode="before")
+    @classmethod
+    def _coerce_income(cls, v: Any) -> Decimal:
+        return Decimal(str(v))
+
+    @field_validator("tradeId", mode="before")
+    @classmethod
+    def _coerce_trade_id(cls, v: Any) -> str:
+        return "" if v is None else str(v)
+
+    @field_validator("tranId", mode="before")
+    @classmethod
+    def _coerce_tran_id(cls, v: Any) -> int:
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            return 0
+
+
 class ExchangeInfoFilter(BaseModel):
     filterType: str
     tickSize: Decimal | None = None

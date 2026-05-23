@@ -13,9 +13,6 @@ from src.dashboard.app import create_app, DashboardState
 @pytest.fixture()
 def state() -> DashboardState:
     s = DashboardState()
-    # 손익 데이터
-    s.pnl_daily = 45000.0
-    s.pnl_monthly = 180000.0
     # 한도 사용률 6종 (0.0~1.0)
     s.limit_per_trade = 0.45
     s.limit_per_day = 0.62
@@ -79,9 +76,13 @@ class TestDashboardRoot:
         assert "timeline" in body.lower() or "타임라인" in body
         assert "kill" in body.lower() or "비상정지" in body
 
-    def test_root_shows_pnl_values(self, client: TestClient) -> None:
+    def test_root_shows_pnl_section(self, client: TestClient) -> None:
+        """2026-05-23: PnL 카드는 JS(pnlVenueRefresh)가 /api/pnl 로 채운다.
+        서버 렌더 HTML 엔 venue 카드 컨테이너가 존재해야 한다."""
         body = client.get("/").text
-        assert "45,000" in body or "180,000" in body
+        assert "손익 (PnL)" in body
+        assert 'id="pnl-venue-binance"' in body
+        assert 'id="pnl-venue-kis"' in body
 
     def test_root_shows_limit_gauges(self, client: TestClient) -> None:
         body = client.get("/").text
@@ -128,14 +129,19 @@ class TestKillSwitchAPI:
 
 class TestPnLAPI:
     def test_pnl_endpoint(self, client: TestClient, monkeypatch) -> None:
+        """2026-05-23: /api/pnl 은 venue 별 — Binance 는 거래소 income 원장.
+
+        provider/WAL 미연결 → venue 값 null, top-level 스칼라 0.0.
+        """
         monkeypatch.setattr("src.dashboard.app.discover_wal_files", lambda _d: [])
         resp = client.get("/api/pnl")
         assert resp.status_code == 200
         data = resp.json()
-        assert "daily" in data
-        assert "monthly" in data
-        assert data["daily"] == pytest.approx(45000.0)
-        assert data["monthly"] == pytest.approx(180000.0)
+        assert "daily_by_venue" in data and "monthly_by_venue" in data
+        # account_info_provider 미연결 → Binance venue null.
+        assert data["daily_by_venue"]["binance"] is None
+        assert data["daily"] == pytest.approx(0.0)
+        assert data["binance_source"] == "exchange_income"
 
 
 class TestLimitsAPI:
