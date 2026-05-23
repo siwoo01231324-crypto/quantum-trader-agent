@@ -16,6 +16,7 @@ from src.brokers.binance.schemas import (
     BalanceItem,
     CancelOrderResponse,
     GetOrderResponse,
+    IncomeItem,
     PlaceOrderResponse,
     PositionRisk,
 )
@@ -25,6 +26,10 @@ from src.brokers.rate_limiter import RateLimiter
 log = logging.getLogger(__name__)
 
 _TIME_SYNC_TTL_S = 900  # 15 minutes
+
+# `/fapi/v1/income` 제약: startTime~endTime 윈도우는 최대 7일, 한 응답 1000건.
+_INCOME_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
+_INCOME_MAX_PAGES = 80  # 무한 루프 안전 상한 (≈80k 레코드 — 대시보드엔 충분)
 
 
 class BinanceFuturesClient:
@@ -202,6 +207,54 @@ class BinanceFuturesClient:
     def get_balance(self) -> list[BalanceItem]:
         raw = self._get("/fapi/v2/balance")
         return [BalanceItem.model_validate(b) for b in raw]
+
+    def get_income(
+        self,
+        *,
+        start_time: int,
+        end_time: int | None = None,
+        income_type: str | None = None,
+    ) -> list[IncomeItem]:
+        """GET /fapi/v1/income — 자금 변동 원장 (실현손익·수수료·펀딩 등).
+
+        거래소가 직접 기록하는 권위 출처. WAL 재구성과 달리 누락·페어링
+        오차가 없다. Binance 제약 두 가지를 모두 처리한다:
+
+          - startTime~endTime 윈도우는 최대 7일 → 7일 단위로 분할 조회.
+          - 한 응답 최대 1000건 → startTime 을 마지막 레코드 +1ms 로 밀며 페이징.
+
+        경계 중복 방지: 다음 7일 윈도우는 직전 endTime+1ms 에서 시작
+        (startTime/endTime 은 inclusive). 같은 ms 에 1000건이 몰려 페이지
+        경계에 걸리는 극단 케이스는 +1ms 로 건너뛴다 (실현손익 원장에선
+        사실상 발생 불가).
+        """
+        if end_time is None:
+            end_time = self._now_ms()
+        out: list[IncomeItem] = []
+        pages = 0
+        win_start = start_time
+        while win_start <= end_time and pages < _INCOME_MAX_PAGES:
+            win_end = min(win_start + _INCOME_WINDOW_MS, end_time)
+            cursor = win_start
+            while pages < _INCOME_MAX_PAGES:
+                pages += 1
+                params: dict[str, Any] = {
+                    "startTime": cursor,
+                    "endTime": win_end,
+                    "limit": 1000,
+                }
+                if income_type is not None:
+                    params["incomeType"] = income_type
+                raw = self._get("/fapi/v1/income", params)
+                page = [IncomeItem.model_validate(r) for r in raw]
+                out.extend(page)
+                if len(page) < 1000:
+                    break
+                cursor = page[-1].time + 1
+                if cursor > win_end:
+                    break
+            win_start = win_end + 1
+        return out
 
     def set_leverage(self, symbol: str, leverage: int) -> None:
         self._post("/fapi/v1/leverage", {"symbol": symbol, "leverage": leverage})

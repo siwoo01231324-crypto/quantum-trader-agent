@@ -9,12 +9,37 @@ import logging
 import os
 import threading
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_BINANCE_BASE_URL_TESTNET = "https://testnet.binancefuture.com"
 DEFAULT_BINANCE_BASE_URL_LIVE = "https://fapi.binance.com"
+
+# 거래소 실현손익 NET 을 구성하는 income 타입. REALIZED_PNL(타점 손익) +
+# COMMISSION(수수료, 음수) + FUNDING_FEE(펀딩, ±). 사용자 확정 정의(2026-05-23):
+# "순손익 — 수수료·펀딩 포함" = Binance 화면 실현손익과 일치하는 값.
+_PNL_INCOME_TYPES = ("REALIZED_PNL", "COMMISSION", "FUNDING_FEE")
+
+
+def aggregate_income_pnl(incomes: list, today_start_ms: int) -> tuple[float, float]:
+    """`/fapi/v1/income` 레코드 → (일간 NET, 월간 NET).
+
+    NET = Σ REALIZED_PNL + Σ COMMISSION + Σ FUNDING_FEE. ``incomes`` 는
+    이달 1일 0시(KST)~현재 범위로 조회된 것으로 가정 → 월간 = 전체 합,
+    일간 = ``time >= today_start_ms`` 인 레코드 합. Decimal 누적 후 float 반환
+    (부동소수점 오염 방지).
+    """
+    daily = Decimal("0")
+    monthly = Decimal("0")
+    for it in incomes:
+        if it.incomeType not in _PNL_INCOME_TYPES:
+            continue
+        monthly += it.income
+        if it.time >= today_start_ms:
+            daily += it.income
+    return float(daily), float(monthly)
 
 
 class AccountInfoProvider:
@@ -62,6 +87,14 @@ class AccountInfoProvider:
         self._bn_ttl = 8.0  # < 10s client poll → each poll is fresh
         self._bn_state_lock = threading.Lock()
         self._bn_refresh_lock = threading.Lock()
+        # Binance 실현손익(income 원장) 캐시 — `/api/pnl` 전용. income 은 거래
+        # 청산 시에만 변하므로 30s TTL 로 충분 (대시보드 5s 폴링 → 6회 중 1회만
+        # 실 REST). 자체 single-flight — KIS / 잔고 경로와 분리.
+        self._pnl_cache: dict[str, Any] | None = None
+        self._pnl_cache_at: datetime | None = None
+        self._pnl_ttl = 30.0
+        self._pnl_state_lock = threading.Lock()
+        self._pnl_refresh_lock = threading.Lock()
 
     def _read_fresh_cache(self) -> dict[str, Any] | None:
         """Return the cached dict iff still within TTL, else None (atomic)."""
@@ -231,8 +264,13 @@ class AccountInfoProvider:
 
     # ── Binance USDS-M Futures ───────────────────────────────────────────────
 
-    def _fetch_binance(self) -> dict[str, Any]:
-        # default testnet=true (paper 운영 안전). BINANCE_TESTNET=false 시 mainnet.
+    def _resolve_binance_creds(self) -> tuple[str, str, str, bool] | None:
+        """Binance 자격증명·base_url 해석 → (api_key, api_secret, base_url, testnet).
+
+        자격증명 누락 시 ``None``. ``_fetch_binance`` 와 ``_fetch_binance_pnl``
+        이 공유 — testnet 키 fallback 체인 + base_url 결정을 한 곳에서. default
+        testnet=true (paper 운영 안전), ``BINANCE_TESTNET=false`` 시 mainnet.
+        """
         testnet = (os.environ.get("BINANCE_TESTNET", "true").lower() == "true")
 
         def _strip(v: str | None) -> str:
@@ -260,15 +298,22 @@ class AccountInfoProvider:
             )
 
         if not api_key or not api_secret:
-            return {
-                "ok": False,
-                "error": "Binance 자격증명 누락 (testnet=true 시 BINANCE_DEMO_API_KEY 등 / mainnet 시 BINANCE_API_KEY)",
-            }
+            return None
 
         base_url = (
             os.environ.get("BINANCE_BASE_URL")
             or (DEFAULT_BINANCE_BASE_URL_TESTNET if testnet else DEFAULT_BINANCE_BASE_URL_LIVE)
         )
+        return api_key, api_secret, base_url, testnet
+
+    def _fetch_binance(self) -> dict[str, Any]:
+        creds = self._resolve_binance_creds()
+        if creds is None:
+            return {
+                "ok": False,
+                "error": "Binance 자격증명 누락 (testnet=true 시 BINANCE_DEMO_API_KEY 등 / mainnet 시 BINANCE_API_KEY)",
+            }
+        api_key, api_secret, base_url, testnet = creds
 
         from src.brokers.binance.rest import BinanceFuturesClient  # noqa: PLC0415
         from src.brokers.rate_limiter import RateLimiter  # noqa: PLC0415
@@ -319,6 +364,79 @@ class AccountInfoProvider:
             "total_unrealized_pnl": round(total_unrealized, 4),
             "positions": positions,
             "n_positions": len(positions),
+        }
+
+    # ── Binance 실현손익 (income 원장) ───────────────────────────────────────
+
+    def fetch_binance_pnl(self) -> dict[str, Any]:
+        """Binance 일간/월간 NET 실현손익 — 거래소 income 원장 기준 (30s 캐시).
+
+        ``/api/pnl`` 전용. WAL 재구성이 아니라 거래소가 직접 기록한 원장
+        (``/fapi/v1/income``) 을 읽으므로 Binance 화면 실현손익과 정확히
+        일치한다. fetch()/잔고 경로와 분리된 자체 single-flight 캐시.
+        ``_safe`` 로 감싸 어떤 예외도 ``{ok:False}`` 로 흡수 — 절대 raise 안 함.
+        """
+        with self._pnl_state_lock:
+            if (
+                self._pnl_cache is not None
+                and self._pnl_cache_at is not None
+                and (datetime.now(timezone.utc) - self._pnl_cache_at).total_seconds()
+                < self._pnl_ttl
+            ):
+                return self._pnl_cache
+        with self._pnl_refresh_lock:
+            with self._pnl_state_lock:
+                if (
+                    self._pnl_cache is not None
+                    and self._pnl_cache_at is not None
+                    and (
+                        datetime.now(timezone.utc) - self._pnl_cache_at
+                    ).total_seconds()
+                    < self._pnl_ttl
+                ):
+                    return self._pnl_cache  # winner refreshed → reuse in-flight
+            data = self._safe(self._fetch_binance_pnl, "Binance PnL")
+            now = datetime.now(timezone.utc)
+            with self._pnl_state_lock:
+                self._pnl_cache = data
+                self._pnl_cache_at = now
+                return data
+
+    def _fetch_binance_pnl(self) -> dict[str, Any]:
+        creds = self._resolve_binance_creds()
+        if creds is None:
+            return {"ok": False, "error": "Binance 자격증명 누락"}
+        api_key, api_secret, base_url, _testnet = creds
+
+        from zoneinfo import ZoneInfo  # noqa: PLC0415
+
+        from src.brokers.binance.rest import BinanceFuturesClient  # noqa: PLC0415
+        from src.brokers.rate_limiter import RateLimiter  # noqa: PLC0415
+
+        client = BinanceFuturesClient(
+            api_key=api_key,
+            secret=api_secret,
+            base_url=base_url,
+            rate_limiter=RateLimiter(),
+        )
+
+        # 일/월 경계는 KST 자정 기준 (암호화폐 24/7 — "오늘" = KST 0시 이후).
+        kst = ZoneInfo("Asia/Seoul")
+        now_kst = datetime.now(kst)
+        today_start = now_kst.replace(hour=0, minute=0, second=0, microsecond=0)
+        month_start = today_start.replace(day=1)
+        today_start_ms = int(today_start.timestamp() * 1000)
+        month_start_ms = int(month_start.timestamp() * 1000)
+
+        # 이달 1일~현재 income 1콜 → 월간 = 전체 합, 일간 = 오늘 0시 이후 합.
+        incomes = client.get_income(start_time=month_start_ms)
+        daily, monthly = aggregate_income_pnl(incomes, today_start_ms)
+        return {
+            "ok": True,
+            "daily": daily,
+            "monthly": monthly,
+            "asset": "USDT",
+            "n_records": len(incomes),
         }
 
 

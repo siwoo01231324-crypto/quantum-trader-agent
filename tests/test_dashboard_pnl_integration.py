@@ -27,6 +27,21 @@ class _StubStrategy:
         return None
 
 
+class _FakeBinancePnLProvider:
+    """``fetch_binance_pnl`` 만 구현한 account_info_provider 테스트 더블.
+
+    ``result`` 가 Exception 이면 호출 시 raise — `/api/pnl` 의 예외 흡수 검증용.
+    """
+
+    def __init__(self, result):
+        self._result = result
+
+    def fetch_binance_pnl(self):
+        if isinstance(self._result, Exception):
+            raise self._result
+        return self._result
+
+
 @pytest.fixture
 def specs_dir(tmp_path: Path) -> Path:
     d = tmp_path / "docs" / "specs" / "strategies"
@@ -84,32 +99,22 @@ def client(state: DashboardState) -> TestClient:
     return TestClient(create_app(state))
 
 
-def test_api_pnl_reflects_aggregator(
-    client: TestClient, aggregator: PnLAggregator, monkeypatch,
-):
-    """alpha realises +10, beta loses -5 → /api/pnl daily = 5.
-
-    log_dir 격리 — endpoint 의 reconstruct 경로 대신 _pnl_view(aggregator)
-    fallback 을 검증 (이 테스트는 aggregator 반영 확인용).
+def test_api_pnl_binance_from_exchange_income(specs_dir, monkeypatch):
+    """2026-05-23: Binance venue = account_info_provider.fetch_binance_pnl
+    (거래소 income 원장). top-level 스칼라 = Binance venue 값.
     """
     monkeypatch.setattr("src.dashboard.app.discover_wal_files", lambda _d: [])
-    aggregator.record_fill(
-        strategy_id="alpha", symbol="BTCUSDT", side="buy",
-        qty=Decimal("1"), price=Decimal("100"), fee=Decimal("0"), ts=NOW,
+    s = DashboardState()
+    s.specs_dir = specs_dir
+    s.account_info_provider = _FakeBinancePnLProvider(
+        {"ok": True, "daily": 9.3, "monthly": 14.3, "asset": "USDT"}
     )
-    aggregator.record_fill(
-        strategy_id="alpha", symbol="BTCUSDT", side="sell",
-        qty=Decimal("1"), price=Decimal("110"), fee=Decimal("0"), ts=NOW,
-    )
-    aggregator.record_fill(
-        strategy_id="beta", symbol="005930", side="buy",
-        qty=Decimal("1"), price=Decimal("100"), fee=Decimal("5"), ts=NOW,
-    )
-
-    body = client.get("/api/pnl").json()
-    assert body["daily"] == 5.0
-    assert body["monthly"] == 5.0
-    assert body["by_strategy"] == {"alpha": 10.0, "beta": -5.0}
+    body = TestClient(create_app(s)).get("/api/pnl").json()
+    assert body["daily_by_venue"]["binance"] == pytest.approx(9.3)
+    assert body["monthly_by_venue"]["binance"] == pytest.approx(14.3)
+    assert body["daily"] == pytest.approx(9.3)
+    assert body["monthly"] == pytest.approx(14.3)
+    assert body["binance_source"] == "exchange_income"
 
 
 def test_per_strategy_card_shows_pnl_today(
@@ -132,28 +137,28 @@ def test_per_strategy_card_shows_pnl_today(
     assert beta["pnl_today"] == 0.0
 
 
-def test_empty_aggregator_returns_zeros(client: TestClient, monkeypatch):
-    monkeypatch.setattr("src.dashboard.app.discover_wal_files", lambda _d: [])
-    body = client.get("/api/pnl").json()
-    assert body["daily"] == 0.0
-    assert body["monthly"] == 0.0
-    assert body["by_strategy"] == {}
-
-
-def test_no_aggregator_falls_back_to_state_defaults(specs_dir: Path, monkeypatch):
-    """Without `pnl_aggregator`, /api/pnl reads state.pnl_* via _pnl_view
-    fallback (log_dir 격리 시). Backwards-compat path."""
+def test_api_pnl_binance_null_without_provider(specs_dir: Path, monkeypatch):
+    """account_info_provider 미연결 → Binance venue null, 스칼라 0.0 (no 500)."""
     monkeypatch.setattr("src.dashboard.app.discover_wal_files", lambda _d: [])
     s = DashboardState()
     s.specs_dir = specs_dir
-    s.pnl_daily = 50.0
-    s.pnl_monthly = 200.0
-    c = TestClient(create_app(s))
+    body = TestClient(create_app(s)).get("/api/pnl").json()
+    assert body["daily_by_venue"]["binance"] is None
+    assert body["monthly_by_venue"]["binance"] is None
+    assert body["daily"] == 0.0
+    assert body["monthly"] == 0.0
 
-    body = c.get("/api/pnl").json()
-    assert body["daily"] == 50.0
-    assert body["monthly"] == 200.0
-    assert body["by_strategy"] == {}
+
+def test_api_pnl_survives_provider_error(specs_dir: Path, monkeypatch):
+    """fetch_binance_pnl 가 raise 하거나 ok=False → Binance null, 절대 500 아님."""
+    monkeypatch.setattr("src.dashboard.app.discover_wal_files", lambda _d: [])
+    for result in ({"ok": False, "error": "creds 누락"}, RuntimeError("boom")):
+        s = DashboardState()
+        s.specs_dir = specs_dir
+        s.account_info_provider = _FakeBinancePnLProvider(result)
+        resp = TestClient(create_app(s)).get("/api/pnl")
+        assert resp.status_code == 200
+        assert resp.json()["daily_by_venue"]["binance"] is None
 
 
 def test_pnl_from_trades_aggregates_closed_by_exit_date():
@@ -199,3 +204,49 @@ def test_api_strategies_pnl_today_zero_when_aggregator_missing(
     items = c.get("/api/strategies").json()
     for it in items:
         assert it["pnl_today"] == 0.0
+
+
+# ── 거래소 income 원장 집계 (aggregate_income_pnl) ──────────────────────────
+
+def test_aggregate_income_pnl_net_includes_fees_and_funding():
+    """NET = REALIZED_PNL + COMMISSION + FUNDING_FEE. TRANSFER 등은 제외."""
+    from src.brokers.binance.schemas import IncomeItem
+    from src.dashboard.account_info import aggregate_income_pnl
+
+    def _inc(itype, income, time):
+        return IncomeItem(
+            symbol="BTCUSDT", incomeType=itype, income=income,
+            asset="USDT", time=time,
+        )
+
+    incomes = [
+        _inc("REALIZED_PNL", "10.0", 2500),   # 오늘
+        _inc("COMMISSION", "-0.5", 2500),     # 오늘
+        _inc("FUNDING_FEE", "-0.2", 2500),    # 오늘
+        _inc("REALIZED_PNL", "5.0", 1000),    # 이전 (월간만)
+        _inc("TRANSFER", "100.0", 2500),      # PnL 아님 — 제외돼야 함
+    ]
+    daily, monthly = aggregate_income_pnl(incomes, today_start_ms=2000)
+    assert daily == pytest.approx(9.3)     # 10 - 0.5 - 0.2
+    assert monthly == pytest.approx(14.3)  # 9.3 + 5.0
+
+
+def test_aggregate_income_pnl_empty():
+    from src.dashboard.account_info import aggregate_income_pnl
+
+    assert aggregate_income_pnl([], today_start_ms=0) == (0.0, 0.0)
+
+
+def test_aggregate_income_pnl_daily_boundary():
+    """today_start_ms 정각 레코드는 '오늘' 에 포함 (>= 경계)."""
+    from src.brokers.binance.schemas import IncomeItem
+    from src.dashboard.account_info import aggregate_income_pnl
+
+    incomes = [
+        IncomeItem(incomeType="REALIZED_PNL", income="1.0", time=999),
+        IncomeItem(incomeType="REALIZED_PNL", income="2.0", time=1000),
+        IncomeItem(incomeType="REALIZED_PNL", income="3.0", time=1001),
+    ]
+    daily, monthly = aggregate_income_pnl(incomes, today_start_ms=1000)
+    assert daily == pytest.approx(5.0)    # 2 + 3 (999 는 어제)
+    assert monthly == pytest.approx(6.0)  # 1 + 2 + 3
