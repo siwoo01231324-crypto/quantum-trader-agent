@@ -73,3 +73,15 @@ infra/graphdb/logs/
 # WAL JSONL / 일일 리포트 / 토큰 캐시 / 프로세스 락 등 절대 커밋 금지.
 data/
 logs/
+
+# PyInstaller 빌드 산출물 (qta.spec 은 tracked, *.exe 는 ignore)
+*.exe
+
+# 레포 루트 Obsidian 캐시 (docs/.obsidian/ 와 별개 — 사용자 개인 워크스페이스)
+/.obsidian/
+
+# Obsidian Canvas 작업 파일 (커밋 안 함)
+*.canvas
+
+# docs/.obsidian/ 추가 캐시
+docs/.obsidian/appearance.json
