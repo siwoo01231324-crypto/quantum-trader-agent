@@ -1,0 +1,54 @@
+{
+  "universe": "krx",
+  "bar": "1d",
+  "period": "5y",
+  "cost_bps": 55.0,
+  "n_symbols": 345,
+  "per_strategy": {
+    "live_bb_lower_bounce": {
+      "trades": 1511,
+      "n_days": 1808,
+      "sr_ann": 1.1274919132102637,
+      "skew": 0.8042947470019405,
+      "kurt_excess": 6.400489999042364,
+      "mdd": -0.8138994121076343,
+      "final_equity": 22.400102619290443,
+      "psr": 1.0,
+      "dsr": 1.0
+    },
+    "live_rsi_oversold_volume_spike": {
+      "trades": 412,
+      "n_days": 1808,
+      "sr_ann": 0.44504611230032576,
+      "skew": 1.8858566922554276,
+      "kurt_excess": 26.525753051694462,
+      "mdd": -0.45202724814079376,
+      "final_equity": 2.010076132290483,
+      "psr": 1.0,
+      "dsr": 0.9997868023914107
+    },
+    "live_oversold_with_divergence": {
+      "trades": 2225,
+      "n_days": 1808,
+      "sr_ann": 1.1171411251409222,
+      "skew": 1.067972180518721,
+      "kurt_excess": 6.399120095235132,
+      "mdd": -0.8206464473808904,
+      "final_equity": 24.38760363639293,
+      "psr": 1.0,
+      "dsr": 1.0
+    },
+    "live_breakout_with_atr_stop": {
+      "trades": 6968,
+      "n_days": 1808,
+      "sr_ann": 0.7522012056973041,
+      "skew": 2.4591237735526654,
+      "kurt_excess": 15.781495672412007,
+      "mdd": -0.9990087207181041,
+      "final_equity": 8.670730055544894,
+      "psr": 1.0,
+      "dsr": 1.0
+    }
+  },
+  "pbo": 0.9485625485625485
+}

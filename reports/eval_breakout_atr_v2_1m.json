@@ -1,0 +1,20 @@
+{
+  "trades": 49964,
+  "win_rate": 0.3425066047554239,
+  "avg_win": 0.04644982214494476,
+  "avg_loss": -0.027969598295548112,
+  "payoff": 1.660725393840859,
+  "profit_factor": 0.8651180683936142,
+  "expectancy": -0.002480455272608507,
+  "sharpe_bench": 3.2155490132333537,
+  "mdd_bench": -0.35123397447731497,
+  "ann_bench": 2.6604839727806944,
+  "strategy_id": "live_breakout_with_atr_stop",
+  "stop_loss_pct": 0.05,
+  "take_profit_pct": 0.2,
+  "trailing_stop_pct": 0.04,
+  "max_bar_jump_pct": 0.02,
+  "approach_pct": 0.02,
+  "vol_mult": 1.0,
+  "elapsed_sec": 1850.2
+}
