@@ -18,7 +18,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Callable
+from typing import Callable, ClassVar
 
 from src.live.pnl_aggregator import PnLAggregator
 from src.live.strategy_position_store import StrategyPositionStore
@@ -59,6 +59,15 @@ class LivePositionRiskManager:
 
     EVENT_TYPE = "position_stop_triggered"
 
+    # 2026-05-24 — in-flight exit guard 의 self-heal timeout. SELL intent 가
+    # broker 로 발사된 후 이 시간 안에 fill 이 도착해 store 가 0 (또는 dust)
+    # 으로 갱신되지 않으면 _pending_exit 를 자동 해제 → 다음 tick 에 재평가.
+    # broker rejection / partial fill 누락 등으로 영구 stuck 되던 버그 fix.
+    # 실측: 2026-05-23 16:00:17 BTCUSDT trailing_stop SELL 0.024 발사 후
+    # order_filled 가 WAL 에 없어 (broker fill 실패) _pending_exit 에 갇혀
+    # 17h+ 동안 추가 평가 0건 → ROI +18% 도달했어도 TP fire 못 함.
+    PENDING_EXIT_TIMEOUT_SEC: ClassVar[float] = 30.0
+
     def __init__(
         self,
         *,
@@ -66,6 +75,7 @@ class LivePositionRiskManager:
         pnl_aggregator: PnLAggregator,
         wal_observer: Callable[[WALEvent], None] | None = None,
         on_exit: Callable[[str, str], None] | None = None,
+        pending_exit_timeout_sec: float | None = None,
     ) -> None:
         self._position_store = position_store
         self._pnl = pnl_aggregator
@@ -90,7 +100,16 @@ class LivePositionRiskManager:
         # 이미 청산된 포지션에 또 SELL 받음 → 예상치 못한 SHORT 진입 (실측
         # 2026-05-21 19:52:34 NEARUSDT -135 short). held=0 (= fill 반영됨)
         # 감지 시 자동 cleanup.
-        self._pending_exit: set[tuple[str, str]] = set()
+        #
+        # 2026-05-24 — set → dict (key → emit_ts). broker fill 이
+        # PENDING_EXIT_TIMEOUT_SEC 안에 안 도착하면 자동 해제 → 다음 tick 에
+        # 재평가. broker rejection 으로 영구 stuck 되던 BTC/NEAR dust 사고 fix.
+        self._pending_exit: dict[tuple[str, str], datetime] = {}
+        self._pending_exit_timeout_sec: float = (
+            pending_exit_timeout_sec
+            if pending_exit_timeout_sec is not None
+            else self.PENDING_EXIT_TIMEOUT_SEC
+        )
 
     def register_strategy_policy(
         self,
@@ -183,7 +202,7 @@ class LivePositionRiskManager:
                 # 되었다는 건 sell fill 이 도착해서 store 가 갱신된 것 → pending
                 # 마크 해제. 다음 진입은 처음부터 가드 없이 정상 평가.
                 self._high_water.pop((strategy_id, symbol), None)
-                self._pending_exit.discard((strategy_id, symbol))
+                self._pending_exit.pop((strategy_id, symbol), None)
                 continue
 
             # 2026-05-21 in-flight exit guard — 이전 evaluate 에서 stop/TP
@@ -192,8 +211,21 @@ class LivePositionRiskManager:
             # 평가 skip. 미가드 시: mark-price tick (1초 간격) 마다 evaluate
             # 가 돌면서 같은 (이미 발사된) stop 을 또 fire → broker 에
             # redundant SELL → 이미 청산된 포지션 위에 SHORT 진입.
-            if (strategy_id, symbol) in self._pending_exit:
-                continue
+            #
+            # 2026-05-24 self-heal — fill 이 _pending_exit_timeout_sec 안에
+            # 안 도착하면 guard 자동 해제. broker rejection / silent drop /
+            # partial fill 누락으로 영구 stuck 되던 사고 (BTC dust 17h 방치) fix.
+            pending_ts = self._pending_exit.get((strategy_id, symbol))
+            if pending_ts is not None:
+                elapsed = (ts - pending_ts).total_seconds()
+                if elapsed < self._pending_exit_timeout_sec:
+                    continue
+                logger.warning(
+                    "live_position_risk.pending_exit_timeout sid=%s sym=%s "
+                    "elapsed=%.1fs — guard 해제, 재평가",
+                    strategy_id, symbol, elapsed,
+                )
+                self._pending_exit.pop((strategy_id, symbol), None)
 
             # 2026-05-21 — dynamic override 가 등록되어 있으면 그것을, 없으면
             # strategy 의 정적 policy 사용 (기존 동작). ATR 기반 동적 stop 활용.
@@ -257,7 +289,8 @@ class LivePositionRiskManager:
             # 2026-05-21 — in-flight exit guard. broker fill 이 도착해 store
             # 가 held=0 으로 갱신되기 전까지 같은 (sid, symbol) 추가 stop
             # 평가 차단. held=0 진입 시 위쪽 분기에서 자동 cleanup.
-            self._pending_exit.add((strategy_id, symbol))
+            # 2026-05-24 — emit_ts 기록 → fill 안 오면 timeout 으로 self-heal.
+            self._pending_exit[(strategy_id, symbol)] = ts
 
         return intents
 
