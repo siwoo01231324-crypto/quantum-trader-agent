@@ -1,0 +1,54 @@
+{
+  "universe": "binance",
+  "bar": "1d",
+  "period": "5y",
+  "cost_bps": 10.0,
+  "n_symbols": 28,
+  "per_strategy": {
+    "live_bb_lower_bounce": {
+      "trades": 668,
+      "n_days": 327,
+      "sr_ann": 0.6029115558182955,
+      "skew": -0.42880482037121576,
+      "kurt_excess": 2.094495480935655,
+      "mdd": -0.7128988380194099,
+      "final_equity": 0.868130471985866,
+      "psr": 1.0,
+      "dsr": 3.275559895743576e-149
+    },
+    "live_rsi_oversold_volume_spike": {
+      "trades": 285,
+      "n_days": 131,
+      "sr_ann": 5.2761844527512824,
+      "skew": 0.14795800766196004,
+      "kurt_excess": 0.1409516070759409,
+      "mdd": -0.43275826093270064,
+      "final_equity": 29.434842900760408,
+      "psr": 1.0,
+      "dsr": 1.0
+    },
+    "live_oversold_with_divergence": {
+      "trades": 1167,
+      "n_days": 536,
+      "sr_ann": 1.6941511882387432,
+      "skew": 0.3415861286791124,
+      "kurt_excess": -0.06752391074619979,
+      "mdd": -0.7532677003629307,
+      "final_equity": 18.1272864945299,
+      "psr": 1.0,
+      "dsr": 1.1094600473010666e-130
+    },
+    "live_breakout_with_atr_stop": {
+      "trades": 1803,
+      "n_days": 806,
+      "sr_ann": 4.466570440956277,
+      "skew": 1.1972675122127086,
+      "kurt_excess": 1.5430791382594533,
+      "mdd": -0.8892207492415924,
+      "final_equity": 28108178810.481415,
+      "psr": 1.0,
+      "dsr": 1.0
+    }
+  },
+  "pbo": 0.0
+}
