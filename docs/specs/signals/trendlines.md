@@ -69,5 +69,5 @@ breakout = compute_trendline_breakout(df["close"], df["high"], df["low"])
 ## 관련 노트
 
 - [[13-feature-alpha-catalog]] — §3 Price Structure 카테고리
-- [[donchian]] — rolling max/min 기반 (단순 breakout)
-- [[airborne-bb-reversal]] — 다른 reversal/breakout 패턴
+- `donchian` (코드: `src/backtest/strategies/breakout_donchian.py`) — rolling max/min 기반 (단순 breakout). 스펙 노트 미작성.
+- [[airborne-family-overview]] — airborne BB-reversal family (v1/v1.1/v2/v3) 의 reversal/breakout 패턴
