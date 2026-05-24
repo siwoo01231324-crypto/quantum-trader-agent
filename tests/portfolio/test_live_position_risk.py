@@ -373,3 +373,83 @@ class TestLongPathRegression:
         assert intents[0].qty == 100.0
         assert "live_stop_loss" in intents[0].reason
         assert events[0].payload["trigger"] == "stop_loss"
+
+
+class TestPendingExitTimeoutSelfHeal:
+    """Regression: broker fill 누락으로 _pending_exit 가 영구 stuck 되면 같은
+    (sid, symbol) 은 자동 청산 불가 → 17h+ 동안 +ROI 도달해도 TP fire 안 됨
+    (2026-05-23 BTCUSDT 실측). guard 가 PENDING_EXIT_TIMEOUT_SEC 이후 자동
+    해제되어 재평가하는지 검증.
+    """
+
+    def test_first_evaluate_emits_then_pending_exit_blocks_within_timeout(self):
+        """SELL 발사 후 timeout 안에는 동일 (sid, symbol) 추가 SELL 차단."""
+        mgr, _ = _setup()
+        # 1st evaluate: stop_loss 가격 → SELL intent + _pending_exit 등록.
+        t0 = _now()
+        intents1 = mgr.evaluate("005930", Decimal("76400"), t0)
+        assert len(intents1) == 1
+        assert ("live_rsi", "005930") in mgr._pending_exit
+        # store 갱신 안 됨 (broker fill 누락 시뮬). timeout 미경과 → block.
+        from datetime import timedelta
+        intents2 = mgr.evaluate("005930", Decimal("76400"), t0 + timedelta(seconds=10))
+        assert intents2 == []
+
+    def test_pending_exit_self_heals_after_timeout_and_re_emits(self):
+        """broker fill 누락 + timeout 경과 → guard 해제, 다음 tick 에 SELL 재발사.
+
+        실측 시나리오 (BTCUSDT 2026-05-23 16:00:17): trailing_stop 발사 후
+        broker fill 도착 안 함 → 17h 동안 추가 평가 0건 → ROI +18% 도달해도
+        TP fire 못 함. timeout self-heal 로 다음 tick 에 다시 SELL 발사 가능.
+        """
+        # 명시적 짧은 timeout 으로 테스트 결정성 확보.
+        store = StrategyPositionStore()
+        pnl = PnLAggregator()
+        pnl.record_fill(
+            strategy_id="cand-c-live-breakout", symbol="BTCUSDT",
+            side="buy", qty=Decimal("0.05"), price=Decimal("75500"),
+        )
+        store.record_fill(
+            strategy_id="cand-c-live-breakout", symbol="BTCUSDT",
+            side="buy", qty=Decimal("0.05"),
+        )
+        mgr = LivePositionRiskManager(
+            position_store=store, pnl_aggregator=pnl,
+            pending_exit_timeout_sec=5.0,
+        )
+        mgr.register_strategy_policy(
+            "cand-c-live-breakout",
+            stop_loss_pct=0.008, take_profit_pct=0.012,  # 10x leverage, ROI 8%/12%
+            trailing_stop_pct=0.005,
+        )
+        # 1st: TP 가격 도달 → SELL intent 발사 + guard 등록.
+        from datetime import timedelta
+        t0 = _now()
+        intents1 = mgr.evaluate("BTCUSDT", Decimal("76800"), t0)  # +1.72% > +1.2% TP
+        assert len(intents1) == 1
+        assert intents1[0].side == "sell"
+        assert ("cand-c-live-breakout", "BTCUSDT") in mgr._pending_exit
+        # 2nd (3s 후): broker fill 안 옴 (store unchanged). 미경과 → block.
+        intents2 = mgr.evaluate("BTCUSDT", Decimal("76900"), t0 + timedelta(seconds=3))
+        assert intents2 == []
+        # 3rd (10s 후): timeout 초과 → guard 자동 해제, SELL 재발사.
+        intents3 = mgr.evaluate("BTCUSDT", Decimal("76900"), t0 + timedelta(seconds=10))
+        assert len(intents3) == 1
+        assert intents3[0].side == "sell"
+        assert "live_take_profit" in intents3[0].reason
+
+    def test_pending_exit_cleared_on_held_zero_keeps_existing_behavior(self):
+        """held=0 (정상 fill) 시 즉시 cleanup — 기존 동작 회귀 방지."""
+        mgr, _ = _setup()
+        intents1 = mgr.evaluate("005930", Decimal("76400"), _now())
+        assert len(intents1) == 1
+        assert ("live_rsi", "005930") in mgr._pending_exit
+        # broker fill 정상 도착 → store 0 으로 갱신.
+        store: StrategyPositionStore = mgr._position_store
+        store.record_fill(
+            strategy_id="live_rsi", symbol="005930",
+            side="sell", qty=Decimal("100"),
+        )
+        intents2 = mgr.evaluate("005930", Decimal("76400"), _now())
+        assert intents2 == []
+        assert ("live_rsi", "005930") not in mgr._pending_exit
