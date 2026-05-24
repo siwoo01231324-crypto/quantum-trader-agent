@@ -3817,6 +3817,26 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
             )
             return p.returncode, (p.stdout + p.stderr).strip()
 
+        # 2026-05-24: master 외 브랜치에선 stop — routines 가 origin/master 만
+        # 보므로 publish 의미 없음 + 작업 브랜치는 upstream 없어 git push 실패
+        # (사용자 보고: chore/untracked-orphan-cleanup-2026-05-24 에서 export
+        # → "no upstream branch" 로 실패). branch check 를 add 전에 두어 작업
+        # 브랜치에 의도 안 한 journal commit 이 남지 않게 함.
+        code, branch = _run(["git", "rev-parse", "--abbrev-ref", "HEAD"])
+        branch = branch.strip()
+        if code != 0 or branch != "master":
+            return JSONResponse(
+                {"ok": False, "stage": "branch_check",
+                 "reason": (
+                    f"현재 브랜치='{branch}' — journal export 는 master 에서만 "
+                    f"가능합니다. (작업 중이면 git stash 후 git checkout master, "
+                    f"다시 실행하세요. journal 파일은 docs/journal_data/ 에 이미 "
+                    f"저장됐습니다.)"
+                 ),
+                 "path": rel_path},
+                status_code=400,
+            )
+
         code, out = _run(["git", "add", rel_path])
         if code != 0:
             return JSONResponse(
