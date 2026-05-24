@@ -1,10 +1,10 @@
 {
   "date_kst": "2026-05-24",
   "kst_window_start": "2026-05-24T00:00:00+09:00",
-  "now_kst": "2026-05-24T21:55:02.683418+09:00",
+  "now_kst": "2026-05-24T22:37:59.329250+09:00",
   "counts": {
-    "auto_fills": 187,
-    "auto_signals": 140,
+    "auto_fills": 193,
+    "auto_signals": 144,
     "manual_trades": 0
   },
   "auto_fills": [
@@ -2812,6 +2812,96 @@
       "trade_id": "79197799",
       "server_ts": null,
       "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-24T13:00:00.732000+00:00",
+      "client_order_id": "f2447e4f5e34db44fccc8e2a63e575686f31",
+      "broker_order_id": "13187693283",
+      "symbol": "BTCUSDT",
+      "side": "BUY",
+      "qty": "0.025",
+      "fill_qty": "0.025",
+      "fill_price": "77074.6",
+      "fees": "0.770746",
+      "fee_asset": "USDT",
+      "trade_id": "494253985",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-24T13:00:02.300000+00:00",
+      "client_order_id": "a4c32f7a202071daa4688915728d2896cdb8",
+      "broker_order_id": "13187693418",
+      "symbol": "BTCUSDT",
+      "side": "SELL",
+      "qty": "0.025",
+      "fill_qty": "0.025",
+      "fill_price": "77073.9",
+      "fees": "0.770739",
+      "fee_asset": "USDT",
+      "trade_id": "494253995",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-24T13:22:01.156000+00:00",
+      "client_order_id": "21896cf0a28542afdecfd95d190afe7a22df",
+      "broker_order_id": "13187778560",
+      "symbol": "BTCUSDT",
+      "side": "BUY",
+      "qty": "0.025",
+      "fill_qty": "0.025",
+      "fill_price": "77080",
+      "fees": "0.7708",
+      "fee_asset": "USDT",
+      "trade_id": "494261138",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-24T13:22:02.826000+00:00",
+      "client_order_id": "706ec12ecb3af04273eac3d88358f7718942",
+      "broker_order_id": "13187778661",
+      "symbol": "BTCUSDT",
+      "side": "SELL",
+      "qty": "0.003",
+      "fill_qty": "0.003",
+      "fill_price": "77051.7",
+      "fees": "0.09246204",
+      "fee_asset": "USDT",
+      "trade_id": "494261152",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-24T13:22:02.826000+00:00",
+      "client_order_id": "706ec12ecb3af04273eac3d88358f7718942",
+      "broker_order_id": "13187778661",
+      "symbol": "BTCUSDT",
+      "side": "SELL",
+      "qty": "0.002",
+      "fill_qty": "0.002",
+      "fill_price": "77051.7",
+      "fees": "0.06164136",
+      "fee_asset": "USDT",
+      "trade_id": "494261153",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-24T13:22:02.826000+00:00",
+      "client_order_id": "706ec12ecb3af04273eac3d88358f7718942",
+      "broker_order_id": "13187778661",
+      "symbol": "BTCUSDT",
+      "side": "SELL",
+      "qty": "0.02",
+      "fill_qty": "0.02",
+      "fill_price": "77038.8",
+      "fees": "0.6163104",
+      "fee_asset": "USDT",
+      "trade_id": "494261154",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
     }
   ],
   "auto_signals": [
@@ -3934,24 +4024,68 @@
       "side": "buy",
       "qty": "5363.31",
       "reason": "atr_breakout:last=0,max20=0,trailing_pct=0.50%"
+    },
+    {
+      "ts": "2026-05-24T13:00:00.688309+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "BTCUSDT",
+      "side": "buy",
+      "qty": "0.025",
+      "reason": "atr_breakout:last=77075,max20=77070,trailing_pct=0.50%"
+    },
+    {
+      "ts": "2026-05-24T13:00:02.271907+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "BTCUSDT",
+      "side": "sell",
+      "qty": "0.025",
+      "reason": "live_trailing_stop:entry=77074.60000000000000000000,last=77074.60,pct=+0.0000"
+    },
+    {
+      "ts": "2026-05-24T13:22:01.029407+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "BTCUSDT",
+      "side": "buy",
+      "qty": "0.025",
+      "reason": "atr_breakout:last=77080,max20=77077,trailing_pct=0.50%"
+    },
+    {
+      "ts": "2026-05-24T13:22:02.794683+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "BTCUSDT",
+      "side": "sell",
+      "qty": "0.025",
+      "reason": "live_trailing_stop:entry=77080.00000000000000000000,last=77051.70,pct=-0.0004"
     }
   ],
   "manual_trades": [],
   "cs_tsmom_top10": {
-    "fetched_at": "2026-05-22T15:54:45.856210+00:00",
+    "fetched_at": "2026-05-24T13:37:59.388406+00:00",
     "pin_date": "2026-05-21",
     "available": true,
     "top10": [
       {
         "symbol": "ZECUSDT",
         "last_close": null,
-        "last_ts": "2026-05-22T00:00:00",
-        "score": 2.0461549455691777,
+        "last_ts": "2026-05-24T00:00:00",
+        "score": 2.1025526368933125,
         "rank": 1,
         "in_top_today": true,
         "in_top_yday": true,
         "liquid": true,
         "signal": "HOLD",
+        "reason": "no_data"
+      },
+      {
+        "symbol": "EURUSDT",
+        "last_close": null,
+        "last_ts": "2026-05-24T00:00:00",
+        "score": 0.0008526603517955347,
+        "rank": 2,
+        "in_top_today": true,
+        "in_top_yday": false,
+        "liquid": true,
+        "signal": "ENTER",
         "reason": "no_data"
       }
     ]
