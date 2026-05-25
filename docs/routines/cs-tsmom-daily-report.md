@@ -170,7 +170,7 @@ JSON 파일이 없거나 비어있으면 PR 만들지 말고 종료.
 
 ---
 type: trading-journal
-id: journal-{date_kst}
+id: {date_kst}
 date: {date_kst}
 auto_trades: <auto_fills 의 *실제 거래* count, 더미 아닌 것>
 manual_trades: <manual_trades 의 *실 거래* count, 더미 아닌 것>
