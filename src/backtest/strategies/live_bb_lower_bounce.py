@@ -25,6 +25,9 @@ class LiveBbLowerBounce(LiveScannerMixin):
     stop_loss_pct: ClassVar[float] = 0.03
     take_profit_pct: ClassVar[float] = 0.06
 
+    # 2026-05-26 — bb_lower_bounce 는 평균회귀/횡보 시장 전용 (regime gate 켜질 때만).
+    regime_preference: ClassVar[str] = "meanrev"
+
     def __init__(
         self, *,
         default_size: float = 0.05,
@@ -35,6 +38,14 @@ class LiveBbLowerBounce(LiveScannerMixin):
         stop_loss_roi: float | None = None,
         leverage: float | None = None,
         cooldown_after_stop_sec: float | None = None,
+        anomaly_guard_enabled: bool | None = None,
+        trend_filter_enabled: bool | None = None,
+        regime_filter_enabled: bool | None = None,
+        regime_preference: str | None = None,
+        adx_threshold: float | None = None,
+        ema_slow_period: int | None = None,
+        hurst_lookback: int | None = None,
+        chop_period: int | None = None,
     ) -> None:
         if not 0 < default_size <= 1.0:
             raise ValueError(f"default_size must be in (0, 1], got {default_size}")
@@ -59,12 +70,27 @@ class LiveBbLowerBounce(LiveScannerMixin):
                     f"cooldown_after_stop_sec must be >= 0, got {cooldown_after_stop_sec}"
                 )
             self.cooldown_after_stop_sec = cooldown_after_stop_sec
+        # 2026-05-26 — A+B+C 진입 필터 (default OFF; production.yaml 에서 켠다)
+        self._apply_filter_kwargs(
+            anomaly_guard_enabled=anomaly_guard_enabled,
+            trend_filter_enabled=trend_filter_enabled,
+            regime_filter_enabled=regime_filter_enabled,
+            regime_preference=regime_preference,
+            adx_threshold=adx_threshold,
+            ema_slow_period=ema_slow_period,
+            hurst_lookback=hurst_lookback,
+            chop_period=chop_period,
+        )
 
     async def on_bar(self, ctx: object) -> Signal | None:
         snap = ctx["market_snapshot"]  # type: ignore[index]
         history: pd.DataFrame | None = snap.get("history")
         if history is None or len(history) < self.MIN_HISTORY:
             return Signal(action="hold", size=0.0, reason="warmup")
+
+        filter_reason = self._check_entry_filters(history)
+        if filter_reason is not None:
+            return Signal(action="hold", size=0.0, reason=filter_reason)
 
         close = history["close"]
         bb_df = signals.compute(

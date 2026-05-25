@@ -1,0 +1,51 @@
+# QTA Patch Notes — newest first.
+#
+# Schema (per entry):
+#   version: "vX.Y.Z"
+#   date: "YYYY-MM-DD"             # KST release date
+#   title: short headline
+#   tags: [feature|fix|perf|chore|docs|safety]
+#   summary: one-line elevator pitch
+#   items:                          # bullet list shown on the page
+#     - "..."
+#   refs:                           # optional related docs/PRs/journals
+#     - "docs/journal/2026-05-25.md"
+#
+# Dashboard route /patch-notes renders this file. Newest entry on top.
+# Add entries by APPENDING to the front of `versions`, not the end.
+
+versions:
+  - version: "v0.6.0"
+    date: "2026-05-26"
+    title: "Live-scanner 진입 필터 A+B+C (트렌드/anomaly/레짐)"
+    tags: [feature, safety]
+    summary: >
+      4일 누적 -312 USDT (5/22~25) BTC false-breakout/INJ over-trade 패턴 차단을
+      위한 진입 게이트 3종. 4 live-scanner 전략 (cand-c-*) 에 일괄 적용.
+    items:
+      - "A — 트렌드 필터: ADX(14) >= 20 AND 종가 >= EMA(50) 둘 다 통과해야 진입. 횡보 BTC 무지성 breakout 차단."
+      - "B — 데이터 anomaly 가드: last_close 또는 ATR proxy == 0 이면 hold. 5/24 TRX last=0,max20=0 같은 사고 차단."
+      - "C — 레짐 게이트: Hurst exponent + Choppiness Index 로 시장 추세성 판정. 각 전략의 regime_preference(trend|meanrev)와 맞을 때만 발사."
+      - "신호 hysteresis: cooldown_after_stop_sec 300→900s (5분→15분), orchestrator.min_order_interval_sec 60→300s. 1신호→2.4 fill churn 완화."
+      - "지표 모듈 src/backtest/strategies/_indicators.py 신설 — ema/adx/hurst_exponent/choppiness_index 4 함수, 외부 의존성 zero (numpy+pandas)."
+      - "단위 테스트 31건 추가 (test_indicators.py 14 + test_live_scanner_filters.py 17). 회귀 0 — 기존 36건 그대로 통과."
+      - "전략별 regime_preference ClassVar: breakout=trend, bb_lower_bounce=meanrev, rsi_oversold=meanrev, oversold_divergence=meanrev."
+      - "production.yaml v0.6.0 활성화. paper 운영으로 효과 측정 — 다음 패치노트는 1주 후 일별 손익 비교."
+    refs:
+      - "docs/journal/2026-05-23.md"
+      - "docs/journal/2026-05-24.md"
+      - "docs/journal/2026-05-25.md"
+      - "src/backtest/strategies/_indicators.py"
+      - "src/backtest/strategies/_live_scanner_helpers.py"
+
+  - version: "v0.5.x"
+    date: "2026-05-22"
+    title: "ROI 기반 익절/손절 + 5분 cooldown (Cand-C 운영 진입)"
+    tags: [feature]
+    summary: >
+      Cand-C 4-parallel deployment 활성화 + 레버리지 트레이딩용 ROI 직관 익절/손절.
+    items:
+      - "take_profit_roi/stop_loss_roi/leverage 3 kwargs 추가 — 가격 pct = ROI / leverage 자동 환산."
+      - "cooldown_after_stop_sec 도입 (default 300s) — stop 청산 직후 churn 차단."
+      - "live-scanner-mixin._apply_roi_targets 헬퍼로 4 전략 공통화."
+      - "ATR 동적 trailing (trailing_stop_atr_mult=1.5) 만 유지 — breakout 가격 +18% TP 폐기."
