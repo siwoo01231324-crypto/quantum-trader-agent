@@ -68,6 +68,148 @@ def _parse_airborne_fire_line(line: str) -> dict | None:
     }
 
 
+# ── airborne 알림 적중 시뮬레이션 (TP/SL/timeout) ────────────────────────────
+# routine spec (docs/routines/cs-tsmom-daily-report.md 규칙 6) 과 동일 룰.
+# dashboard 메인 카드의 실시간 메트릭이 routine 결과와 일관되도록 한 곳에서만 정의.
+AIRBORNE_TP_PCT = 0.010   # +1.0%
+AIRBORNE_SL_PCT = 0.005   # -0.5% (1:2 손익비)
+AIRBORNE_HOLD_BARS = 4    # 다음 15분봉 4개 = 1h
+AIRBORNE_FEE_PCT = 0.08   # 양방향 합산 (taker 0.04% × 2)
+
+
+def _simulate_airborne_fire(
+    fire: dict, bars: list[dict],
+) -> dict | None:
+    """단일 fire 의 4봉 시뮬 결과. bars 가 비어있으면 None.
+
+    Args:
+        fire: {ts, symbol, side, fire_close, ...}
+        bars: list of {open, high, low, close, open_time, close_time}
+
+    Returns:
+        {outcome: "TP"|"SL"|"SL_first"|"timeout", pct: float, bar_idx: int}
+        - pct: 손익비 (TP=+1.0, SL=-0.5, timeout=실제 close 변화율 부호조정)
+        - bar_idx: 1-based 닿은 봉 번호
+    """
+    if not bars:
+        return None
+    entry = float(fire["fire_close"])
+    is_long = fire["side"] == "long"
+    tp_px = entry * (1 + AIRBORNE_TP_PCT) if is_long else entry * (1 - AIRBORNE_TP_PCT)
+    sl_px = entry * (1 - AIRBORNE_SL_PCT) if is_long else entry * (1 + AIRBORNE_SL_PCT)
+    for idx, bar in enumerate(bars, start=1):
+        hi, lo = float(bar["high"]), float(bar["low"])
+        if is_long:
+            hit_tp = hi >= tp_px
+            hit_sl = lo <= sl_px
+        else:
+            hit_tp = lo <= tp_px
+            hit_sl = hi >= sl_px
+        if hit_tp and hit_sl:
+            return {"outcome": "SL_first", "pct": -AIRBORNE_SL_PCT * 100, "bar_idx": idx}
+        if hit_sl:
+            return {"outcome": "SL", "pct": -AIRBORNE_SL_PCT * 100, "bar_idx": idx}
+        if hit_tp:
+            return {"outcome": "TP", "pct": +AIRBORNE_TP_PCT * 100, "bar_idx": idx}
+    final_close = float(bars[-1]["close"])
+    if is_long:
+        pct = (final_close - entry) / entry * 100
+    else:
+        pct = (entry - final_close) / entry * 100
+    return {"outcome": "timeout", "pct": pct, "bar_idx": len(bars)}
+
+
+def _aggregate_airborne_sims(sims: list[dict]) -> dict:
+    """시뮬 결과 list → 집계 통계 dict. 비어있으면 0/None 값 반환.
+
+    Returns:
+        {
+            n, tp, sl, sl_first, timeout, win_rate (0-1),
+            sum_pct (gross), net_pct (after fee), pf (float|None),
+            mean_pct, by_side: {long: {...}, short: {...}},
+            by_kst_bucket: [{bucket, n, tp, sl, win_rate, sum_pct, pf}, ...]
+        }
+    """
+    n = len(sims)
+    if n == 0:
+        return {
+            "n": 0, "tp": 0, "sl": 0, "sl_first": 0, "timeout": 0,
+            "win_rate": None, "sum_pct": 0.0, "net_pct": 0.0,
+            "pf": None, "mean_pct": None,
+            "by_side": {}, "by_kst_bucket": [],
+        }
+    tp = sum(1 for s in sims if s["outcome"] == "TP")
+    sl = sum(1 for s in sims if s["outcome"] == "SL")
+    sl_first = sum(1 for s in sims if s["outcome"] == "SL_first")
+    timeout = sum(1 for s in sims if s["outcome"] == "timeout")
+    pcts = [s["pct"] for s in sims]
+    wins = [p for p in pcts if p > 0]
+    losses = [p for p in pcts if p < 0]
+    sum_pct = sum(pcts)
+    net_pct = sum_pct - AIRBORNE_FEE_PCT * n
+    pf = (sum(wins) / abs(sum(losses))) if losses else None
+
+    def _bucket(h: int) -> str:
+        if   0 <= h < 6:  return "00-06 새벽"
+        elif 6 <= h < 12: return "06-12 오전"
+        elif 12 <= h < 18:return "12-18 오후"
+        else:             return "18-24 저녁"
+
+    # side별
+    by_side: dict = {}
+    for sd in ("long", "short"):
+        rs = [s for s in sims if s.get("side") == sd]
+        if not rs:
+            continue
+        sd_pcts = [r["pct"] for r in rs]
+        sd_wins = [p for p in sd_pcts if p > 0]
+        sd_losses = [p for p in sd_pcts if p < 0]
+        by_side[sd] = {
+            "n": len(rs),
+            "tp": sum(1 for r in rs if r["outcome"] == "TP"),
+            "sl": sum(1 for r in rs if r["outcome"] in ("SL", "SL_first")),
+            "win_rate": len(sd_wins) / len(rs),
+            "sum_pct": sum(sd_pcts),
+            "pf": (sum(sd_wins) / abs(sum(sd_losses))) if sd_losses else None,
+        }
+
+    # KST 시간대별 (입력 sims 의 ts 필드는 ISO 8601 UTC 가정)
+    from collections import defaultdict
+    by_b: dict = defaultdict(list)
+    for s in sims:
+        try:
+            ts = datetime.fromisoformat(str(s["ts"]).replace("Z", "+00:00"))
+            kst_h = ts.astimezone(_KST).hour
+            by_b[_bucket(kst_h)].append(s)
+        except (KeyError, ValueError, TypeError):
+            continue
+    by_kst_bucket = []
+    for bk in ("00-06 새벽", "06-12 오전", "12-18 오후", "18-24 저녁"):
+        rs = by_b.get(bk, [])
+        if not rs:
+            continue
+        rs_pcts = [r["pct"] for r in rs]
+        rs_wins = [p for p in rs_pcts if p > 0]
+        rs_losses = [p for p in rs_pcts if p < 0]
+        by_kst_bucket.append({
+            "bucket": bk,
+            "n": len(rs),
+            "tp": sum(1 for r in rs if r["outcome"] == "TP"),
+            "sl": sum(1 for r in rs if r["outcome"] in ("SL", "SL_first")),
+            "win_rate": len(rs_wins) / len(rs),
+            "sum_pct": sum(rs_pcts),
+            "pf": (sum(rs_wins) / abs(sum(rs_losses))) if rs_losses else None,
+        })
+
+    return {
+        "n": n, "tp": tp, "sl": sl, "sl_first": sl_first, "timeout": timeout,
+        "win_rate": len(wins) / n,
+        "sum_pct": sum_pct, "net_pct": net_pct,
+        "pf": pf, "mean_pct": sum_pct / n,
+        "by_side": by_side, "by_kst_bucket": by_kst_bucket,
+    }
+
+
 def _parse_airborne_fires_from_docker_logs(
     since_iso: str, *, container_name: str = "qta-airborne-daemon",
 ) -> list[dict]:
@@ -1035,6 +1177,29 @@ body{{
         </div>
       </div>
 
+      <!-- airborne 알림 (오늘) — TP +1.0% / SL -0.5% / 4봉 hold 실시간 시뮬레이션 -->
+      <div>
+        <div class="section-hdr"><h2>airborne 알림 (오늘)</h2><div class="section-hdr-line"></div></div>
+        <div class="card card-sm" id="airborne-card">
+          <div id="airborne-summary" class="status-chip status-idle" style="margin-bottom:10px"><span class="dot"></span>조회 중</div>
+          <div class="ops-grid">
+            <div class="ops-stat"><div class="ops-stat-label">FIRE</div><div class="ops-stat-val" id="airborne-fires">—</div></div>
+            <div class="ops-stat"><div class="ops-stat-label">TP</div><div class="ops-stat-val" id="airborne-tp">—</div></div>
+            <div class="ops-stat"><div class="ops-stat-label">SL</div><div class="ops-stat-val" id="airborne-sl">—</div></div>
+            <div class="ops-stat"><div class="ops-stat-label">win%</div><div class="ops-stat-val" id="airborne-win">—</div></div>
+            <div class="ops-stat"><div class="ops-stat-label">PF</div><div class="ops-stat-val" id="airborne-pf">—</div></div>
+            <div class="ops-stat"><div class="ops-stat-label">net%</div><div class="ops-stat-val" id="airborne-net">—</div></div>
+          </div>
+          <div style="margin-top:8px">
+            <table class="kv-table" id="airborne-bucket-tbl" style="font-size:11px;width:100%">
+              <thead><tr><th style="text-align:left">KST 구간</th><th class="num">n</th><th class="num">win%</th><th class="num">sum%</th><th class="num">PF</th></tr></thead>
+              <tbody id="airborne-bucket-tbody"><tr><td colspan="5" style="text-align:center;color:var(--text3)">—</td></tr></tbody>
+            </table>
+          </div>
+          <div class="last-ts" style="margin-top:6px">룰: TP +1.0% / SL -0.5% / 4봉 hold · <span id="airborne-cached" style="color:var(--text3)"></span></div>
+        </div>
+      </div>
+
     </div>
   </div>
 
@@ -1528,6 +1693,56 @@ async function opsRefresh() {{
 }}
 opsRefresh();
 setInterval(opsRefresh, 3000);
+
+// ── airborne 알림 (오늘) 메트릭 카드 ─────────────────────────
+async function airborneRefresh() {{
+  try {{
+    const r = await fetch('/api/airborne_metrics');
+    const d = await r.json();
+    document.getElementById('airborne-fires').textContent = d.fires_total ?? '—';
+    document.getElementById('airborne-tp').textContent = d.tp ?? '—';
+    document.getElementById('airborne-sl').textContent = d.sl ?? '—';
+    document.getElementById('airborne-win').textContent =
+      (d.win_rate != null) ? (d.win_rate * 100).toFixed(1) + '%' : '—';
+    document.getElementById('airborne-pf').textContent =
+      (d.pf != null) ? d.pf.toFixed(2) : '—';
+    const net = d.net_pct;
+    const netEl = document.getElementById('airborne-net');
+    netEl.textContent = (net != null)
+      ? (net >= 0 ? '+' : '') + net.toFixed(2) + '%' : '—';
+    netEl.style.color = (net != null)
+      ? (net >= 0 ? '#5fc77a' : '#ff6b6b') : 'inherit';
+    // 시간대별 표
+    const tbody = document.getElementById('airborne-bucket-tbody');
+    if (tbody) {{
+      const buckets = d.by_kst_bucket || [];
+      if (buckets.length === 0) {{
+        tbody.innerHTML =
+          '<tr><td colspan="5" style="text-align:center;color:var(--text3)">데이터 없음</td></tr>';
+      }} else {{
+        tbody.innerHTML = buckets.map(b =>
+          '<tr><td style="text-align:left">' + b.bucket + '</td>' +
+          '<td class="num">' + b.n + '</td>' +
+          '<td class="num">' + (b.win_rate * 100).toFixed(0) + '%</td>' +
+          '<td class="num">' + (b.sum_pct >= 0 ? '+' : '') + b.sum_pct.toFixed(2) + '%</td>' +
+          '<td class="num">' + (b.pf != null ? b.pf.toFixed(2) : '—') + '</td></tr>'
+        ).join('');
+      }}
+    }}
+    const sum = document.getElementById('airborne-summary');
+    if ((d.fires_total ?? 0) === 0) {{
+      sum.innerHTML = '<span class="dot"></span>오늘 FIRE 없음';
+      sum.className = 'status-chip status-idle';
+    }} else {{
+      sum.innerHTML = '<span class="dot"></span>FIRE ' + d.fires_total + '건 시뮬 완료';
+      sum.className = 'status-chip status-ok';
+    }}
+    const cachedEl = document.getElementById('airborne-cached');
+    if (cachedEl) cachedEl.textContent = d.cached ? '(5분 캐시)' : '(방금 갱신)';
+  }} catch (err) {{ console.warn('airborne', err); }}
+}}
+airborneRefresh();
+setInterval(airborneRefresh, 60000);  // 1분마다 (서버 5분 캐시)
 
 // ── 거래 이력 ──────────────────────────────────────────────────
 async function tradesRefresh() {{
@@ -3836,6 +4051,90 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
             "airborne_fires": airborne_fires,
             "cs_tsmom_top10": cs_tsmom_top10,
         }
+
+    # ── airborne 적중 메트릭 (오늘 KST 자정~지금, 실시간 시뮬레이션) ──────────
+    _airborne_metrics_cache: dict[str, Any] = {"ts": 0.0, "data": None}
+    AIRBORNE_METRICS_CACHE_TTL = 300.0  # 5분
+
+    async def _fetch_15m_bars(
+        client: Any, symbol: str, fire_ts_iso: str, limit: int = 4,
+    ) -> list[dict]:
+        """Binance fapi `/fapi/v1/klines?interval=15m` — fire 시점 이후 4봉."""
+        try:
+            ts = datetime.fromisoformat(fire_ts_iso.replace("Z", "+00:00"))
+            start_ms = int(ts.timestamp() * 1000)
+        except (ValueError, TypeError):
+            return []
+        try:
+            r = await client.get(
+                "https://fapi.binance.com/fapi/v1/klines",
+                params={"symbol": symbol, "interval": "15m",
+                        "startTime": start_ms, "limit": limit},
+                timeout=10.0,
+            )
+            r.raise_for_status()
+            data = r.json()
+        except Exception:
+            return []
+        return [
+            {"open_time": int(b[0]), "open": float(b[1]), "high": float(b[2]),
+             "low": float(b[3]), "close": float(b[4]), "close_time": int(b[6])}
+            for b in data
+        ]
+
+    @app.get("/api/airborne_metrics")
+    async def api_airborne_metrics() -> JSONResponse:
+        """오늘 KST 자정~지금 사이 airborne FIRE 의 TP/SL 시뮬레이션 메트릭.
+
+        룰: TP +1.0% / SL -0.5% / 4봉 hold / SL_first 보수적 (routine spec 규칙 6
+        과 동일). 호출 시 docker logs 파싱 + Binance fapi 15분봉 4개씩 fetch →
+        시뮬 → 집계. 5분 캐시.
+        """
+        import time as _time
+        import httpx as _httpx
+
+        now = _time.time()
+        if (now - _airborne_metrics_cache["ts"] < AIRBORNE_METRICS_CACHE_TTL
+                and _airborne_metrics_cache["data"] is not None):
+            return JSONResponse({**_airborne_metrics_cache["data"], "cached": True})
+
+        # 오늘 KST 자정 ~ 지금
+        kst_now = datetime.now(_KST)
+        kst_midnight = kst_now.replace(hour=0, minute=0, second=0, microsecond=0)
+        utc_cutoff = kst_midnight.astimezone(timezone.utc)
+        since_iso = utc_cutoff.strftime("%Y-%m-%dT%H:%M:%S")
+
+        fires = await asyncio.to_thread(
+            _parse_airborne_fires_from_docker_logs, since_iso,
+        )
+        fires = [f for f in fires if f["ts"] >= utc_cutoff.isoformat()]
+
+        sims: list[dict] = []
+        if fires:
+            async with _httpx.AsyncClient() as client:
+                for f in fires:
+                    bars = await _fetch_15m_bars(client, f["symbol"], f["ts"])
+                    sim = _simulate_airborne_fire(f, bars)
+                    if sim is not None:
+                        sims.append({**f, **sim})
+
+        agg = _aggregate_airborne_sims(sims)
+        payload = {
+            "date_kst": kst_now.strftime("%Y-%m-%d"),
+            "kst_window_start": kst_midnight.isoformat(),
+            "now_kst": kst_now.isoformat(),
+            "fires_total": len(fires),
+            "sims_total": len(sims),
+            **agg,
+            "rule": {
+                "tp_pct": AIRBORNE_TP_PCT, "sl_pct": AIRBORNE_SL_PCT,
+                "hold_bars": AIRBORNE_HOLD_BARS, "fee_pct": AIRBORNE_FEE_PCT,
+            },
+            "cached": False,
+        }
+        _airborne_metrics_cache["ts"] = now
+        _airborne_metrics_cache["data"] = payload
+        return JSONResponse(payload)
 
     @app.get("/api/journal/today")
     async def api_journal_today() -> JSONResponse:

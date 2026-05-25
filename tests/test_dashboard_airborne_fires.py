@@ -11,9 +11,25 @@ from unittest.mock import patch
 import pytest
 
 from src.dashboard.app import (
+    _aggregate_airborne_sims,
     _parse_airborne_fire_line,
     _parse_airborne_fires_from_docker_logs,
+    _simulate_airborne_fire,
+    AIRBORNE_FEE_PCT,
+    AIRBORNE_SL_PCT,
+    AIRBORNE_TP_PCT,
 )
+
+
+def _bar(open_=100, high=100, low=100, close=100):
+    return {"open": open_, "high": high, "low": low, "close": close,
+            "open_time": 0, "close_time": 0}
+
+
+def _fire(side="long", price=100.0, ts="2026-05-26T02:00:33+00:00",
+          symbol="BTCUSDT"):
+    return {"ts": ts, "symbol": symbol, "side": side, "fire_close": price,
+            "trigger": price}
 
 
 class TestParseAirborneFireLine:
@@ -105,3 +121,105 @@ class TestParseAirborneFiresFromDockerLogs:
         )
         with patch("subprocess.run", return_value=mock_result):
             assert _parse_airborne_fires_from_docker_logs("2026-05-26T00:00:00") == []
+
+
+class TestSimulateAirborneFire:
+    """TP +1.0% / SL -0.5% / 4봉 hold / SL_first 보수적 규칙 검증."""
+
+    def test_long_tp_hits_first_bar(self):
+        # entry 100 → high 101.5 (>= TP 101.0) → TP fire bar1
+        out = _simulate_airborne_fire(_fire("long", 100.0), [_bar(high=101.5, low=100, close=101.2)])
+        assert out["outcome"] == "TP"
+        assert out["pct"] == AIRBORNE_TP_PCT * 100
+        assert out["bar_idx"] == 1
+
+    def test_long_sl_hits_first_bar(self):
+        out = _simulate_airborne_fire(_fire("long", 100.0), [_bar(high=100, low=99.4, close=99.8)])
+        assert out["outcome"] == "SL"
+        assert out["pct"] == -AIRBORNE_SL_PCT * 100
+
+    def test_long_sl_first_when_same_bar_both_hit(self):
+        # high 101.5 (TP) + low 99.4 (SL) 동시 → 보수적 SL 우선
+        out = _simulate_airborne_fire(_fire("long", 100.0), [_bar(high=101.5, low=99.4, close=100)])
+        assert out["outcome"] == "SL_first"
+        assert out["pct"] == -AIRBORNE_SL_PCT * 100
+
+    def test_short_inverts_direction(self):
+        # short entry 100 → low 99.0 (<= TP 99.0) → TP
+        out = _simulate_airborne_fire(_fire("short", 100.0), [_bar(high=100.4, low=99.0, close=99.3)])
+        assert out["outcome"] == "TP"
+
+    def test_timeout_uses_last_close(self):
+        # 4봉 모두 TP/SL 미도달 — 마지막 close 로 청산
+        bars = [_bar(high=100.5, low=99.7, close=100.3),
+                _bar(high=100.6, low=99.8, close=100.2),
+                _bar(high=100.7, low=99.9, close=100.4),
+                _bar(high=100.8, low=99.8, close=100.4)]
+        out = _simulate_airborne_fire(_fire("long", 100.0), bars)
+        assert out["outcome"] == "timeout"
+        assert out["bar_idx"] == 4
+        # +0.4% gross (TP threshold 1% 미달)
+        assert out["pct"] == pytest.approx(0.4, abs=0.01)
+
+    def test_empty_bars_returns_none(self):
+        assert _simulate_airborne_fire(_fire(), []) is None
+
+
+class TestAggregateAirborneSims:
+    def test_empty_returns_zero_stats(self):
+        agg = _aggregate_airborne_sims([])
+        assert agg["n"] == 0
+        assert agg["win_rate"] is None
+        assert agg["pf"] is None
+        assert agg["by_side"] == {}
+        assert agg["by_kst_bucket"] == []
+
+    def test_mixed_outcomes_aggregate_correctly(self):
+        sims = [
+            {"ts": "2026-05-26T02:00:33+00:00", "symbol": "X", "side": "long",
+             "outcome": "TP", "pct": AIRBORNE_TP_PCT * 100},  # KST 11 = 06-12 오전
+            {"ts": "2026-05-26T03:00:33+00:00", "symbol": "X", "side": "short",
+             "outcome": "SL", "pct": -AIRBORNE_SL_PCT * 100},  # KST 12 = 12-18 오후
+            {"ts": "2026-05-25T18:00:33+00:00", "symbol": "X", "side": "long",
+             "outcome": "TP", "pct": AIRBORNE_TP_PCT * 100},  # KST 03 = 00-06 새벽
+        ]
+        agg = _aggregate_airborne_sims(sims)
+        assert agg["n"] == 3
+        assert agg["tp"] == 2
+        assert agg["sl"] == 1
+        assert agg["win_rate"] == pytest.approx(2/3, abs=0.01)
+        # sum = 1.0 + 1.0 - 0.5 = 1.5
+        assert agg["sum_pct"] == pytest.approx(1.5, abs=0.001)
+        # net = sum - fee × n = 1.5 - 0.08 × 3 = 1.26
+        assert agg["net_pct"] == pytest.approx(1.5 - AIRBORNE_FEE_PCT * 3, abs=0.001)
+        # PF = 2.0 / 0.5 = 4.0
+        assert agg["pf"] == pytest.approx(4.0, abs=0.01)
+
+    def test_by_kst_bucket_groups_correctly(self):
+        sims = [
+            {"ts": "2026-05-25T18:00:33+00:00", "symbol": "X", "side": "long",
+             "outcome": "TP", "pct": 1.0},  # KST 03
+            {"ts": "2026-05-25T19:00:33+00:00", "symbol": "X", "side": "long",
+             "outcome": "SL", "pct": -0.5},  # KST 04
+        ]
+        agg = _aggregate_airborne_sims(sims)
+        assert len(agg["by_kst_bucket"]) == 1
+        b = agg["by_kst_bucket"][0]
+        assert b["bucket"] == "00-06 새벽"
+        assert b["n"] == 2
+        assert b["tp"] == 1
+        assert b["sl"] == 1
+
+    def test_by_side_groups_correctly(self):
+        sims = [
+            {"ts": "2026-05-26T02:00:33+00:00", "symbol": "X", "side": "long",
+             "outcome": "TP", "pct": 1.0},
+            {"ts": "2026-05-26T02:00:33+00:00", "symbol": "X", "side": "short",
+             "outcome": "SL", "pct": -0.5},
+        ]
+        agg = _aggregate_airborne_sims(sims)
+        assert "long" in agg["by_side"]
+        assert "short" in agg["by_side"]
+        assert agg["by_side"]["long"]["n"] == 1
+        assert agg["by_side"]["long"]["tp"] == 1
+        assert agg["by_side"]["short"]["sl"] == 1
