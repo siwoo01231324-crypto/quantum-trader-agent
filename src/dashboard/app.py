@@ -23,6 +23,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 from prometheus_client import CONTENT_TYPE_LATEST, CollectorRegistry, generate_latest
 
 from src.dashboard.ops_counters import OpsCounters
+from src.dashboard.patch_notes import render_patch_notes_page
 from src.dashboard.shadow_runs import discover_shadow_runs, load_run_detail
 from src.dashboard.strategy_catalog import load_production_status, load_strategy_catalog
 from src.dashboard.timeline_broker import TimelineBroker
@@ -704,6 +705,7 @@ body{{
     <a href="/cs-tsmom" class="nav-pill">cs-tsmom (90%)</a>
     <a href="/manual" class="nav-pill">수동 거래</a>
     <a href="/shadow_runs" class="nav-pill">Shadow Runs</a>
+    <a href="/patch-notes" class="nav-pill">패치노트</a>
   </div>
   <span class="topbar-ts">{datetime.now(_KST).strftime('%Y-%m-%d %H:%M:%S KST')}</span>
 </div>
@@ -2176,6 +2178,7 @@ tbody tr:hover{background:#1c2229}
   <a href="/">← 대시보드</a>
   <a href="/strategies">전략 카탈로그</a>
   <a href="/shadow_runs">Shadow Runs</a>
+  <a href="/patch-notes">패치노트</a>
 </div>
 <div class="meta" id="meta">로딩 중…</div>
 <div id="content"><div class="empty">신호 데이터를 불러오는 중입니다.</div></div>
@@ -4294,6 +4297,10 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
     async def shadow_runs_page() -> HTMLResponse:
         runs = discover_shadow_runs(_resolve_shadow_log_dir())
         return HTMLResponse(content=_render_shadow_runs(runs))
+
+    @app.get("/patch-notes", response_class=HTMLResponse)
+    async def patch_notes_page() -> HTMLResponse:
+        return HTMLResponse(content=render_patch_notes_page())
 
     return app
 

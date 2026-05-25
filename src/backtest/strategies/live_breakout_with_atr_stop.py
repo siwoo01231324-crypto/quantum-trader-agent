@@ -59,6 +59,9 @@ class LiveBreakoutWithAtrStop(LiveScannerMixin):
     take_profit_pct: ClassVar[float] = 0.20
     trailing_stop_pct: ClassVar[float] = 0.04
 
+    # 2026-05-26 — breakout 은 추세 시장 전용 (regime gate 켜질 때만 유효).
+    regime_preference: ClassVar[str] = "trend"
+
     # ATR 동적 stop default — None 이면 ClassVar/kwargs 의 정적 % 사용.
     stop_atr_mult: ClassVar[float | None] = None
     take_profit_atr_mult: ClassVar[float | None] = None
@@ -79,6 +82,14 @@ class LiveBreakoutWithAtrStop(LiveScannerMixin):
         take_profit_atr_mult: float | None = None,
         trailing_stop_atr_mult: float | None = None,
         atr_period: int | None = None,
+        anomaly_guard_enabled: bool | None = None,
+        trend_filter_enabled: bool | None = None,
+        regime_filter_enabled: bool | None = None,
+        regime_preference: str | None = None,
+        adx_threshold: float | None = None,
+        ema_slow_period: int | None = None,
+        hurst_lookback: int | None = None,
+        chop_period: int | None = None,
     ) -> None:
         if not 0 < default_size <= 1.0:
             raise ValueError(f"default_size must be in (0, 1], got {default_size}")
@@ -116,12 +127,27 @@ class LiveBreakoutWithAtrStop(LiveScannerMixin):
             stop_loss_roi=stop_loss_roi,
             leverage=leverage,
         )
+        # 2026-05-26 — A+B+C 진입 필터 (default OFF; production.yaml 에서 켠다)
+        self._apply_filter_kwargs(
+            anomaly_guard_enabled=anomaly_guard_enabled,
+            trend_filter_enabled=trend_filter_enabled,
+            regime_filter_enabled=regime_filter_enabled,
+            regime_preference=regime_preference,
+            adx_threshold=adx_threshold,
+            ema_slow_period=ema_slow_period,
+            hurst_lookback=hurst_lookback,
+            chop_period=chop_period,
+        )
 
     async def on_bar(self, ctx: object) -> Signal | None:
         snap = ctx["market_snapshot"]  # type: ignore[index]
         history: pd.DataFrame | None = snap.get("history")
         if history is None or len(history) < self.MIN_HISTORY:
             return Signal(action="hold", size=0.0, reason="warmup")
+
+        filter_reason = self._check_entry_filters(history)
+        if filter_reason is not None:
+            return Signal(action="hold", size=0.0, reason=filter_reason)
 
         close = history["close"]
         baseline = close.iloc[-(self.BREAKOUT_LOOKBACK + 1):-1]

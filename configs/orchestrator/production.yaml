@@ -15,8 +15,12 @@
 # identical (sid, symbol, side) every WS tick. 60s: kills a tick-flood while
 # never suppressing legitimate ≥15m signals. live-scanner is excluded (its
 # own _live_entered lifecycle governs re-entry). Absent → 0.0 = disabled.
+#
+# 2026-05-26 v0.6.0 — 60→300s 상향. 5/24-25 저널의 1신호→2.4 fill churn (수수료
+# 일 105 USDT) 완화. live-scanner 4종은 여전히 자체 cooldown_after_stop_sec
+# (각 900s) 로 churn 차단 — 본 게이트는 single-ticker 만 대상.
 orchestrator:
-  min_order_interval_sec: 60
+  min_order_interval_sec: 300
 
 # 5 baseline strategies + 메타라벨러 (#85) opt-in entry (commented).
 strategies:
@@ -283,53 +287,65 @@ strategies:
   # UI 에서 leverage 10x 수동 설정 + stop=0.5%/tp=1.0% 코인 가격 (= 포지션
   # ±5%/+10% at 10x) 로 보수적 옵션 채택. 옛 5y bench 결과는 invalid —
   # paper 운영 모니터링 + 후속 5y bench 재실시 후 미세조정.
+  # 2026-05-26 v0.6.0 — A+B+C entry filters ON. 4일 누적 -312 USDT (5/22-25) 의
+  # BTC false-breakout/INJ over-trade 패턴 직격. 각 전략 regime_preference 는
+  # ClassVar 로 코드에 박혀있어 yaml 에서 override 불필요. cooldown 300→900s.
+  # 참조: docs/patch-notes/index.yaml, src/backtest/strategies/_indicators.py
   - id: cand-c-2026-05-20-live-rsi-oversold-volume-spike
     class: backtest.strategies.live_rsi_oversold_volume_spike.LiveRsiOversoldVolumeSpike
     kwargs:
       # default_size 는 *노셔널* 비율. 노셔널 = 0.5 × equity, 10x 레버리지
       # → 마진 = 5% × equity. 전제: Binance UI 종목별 leverage = 10x.
       default_size: 0.500
-      # 2026-05-22 ROI 기반 익절/손절 — 레버리지 트레이딩 직관 기준.
-      # 가격 pct = ROI / leverage → TP 1.2%, SL 0.8% @ 10x.
-      take_profit_roi: 0.12   # ROI +12% 익절
-      stop_loss_roi: 0.08     # ROI -8% 손절
+      take_profit_roi: 0.12
+      stop_loss_roi: 0.08
       leverage: 10
-      cooldown_after_stop_sec: 300   # stop 후 5분 재진입 차단 (churn·수수료 방지)
+      cooldown_after_stop_sec: 900   # v0.6.0 — 5분→15분 churn 차단 강화
+      # v0.6.0 A+B+C filters — meanrev preference (oversold pattern).
+      anomaly_guard_enabled: true
+      trend_filter_enabled: false    # meanrev 전략은 trend filter 부적합
+      regime_filter_enabled: true
   - id: cand-c-2026-05-20-live-breakout-with-atr-stop
     class: backtest.strategies.live_breakout_with_atr_stop.LiveBreakoutWithAtrStop
     kwargs:
-      default_size: 0.500  # 2026-05-22 사이즈 x10 — 노셔널 50% (마진 5% at 10x)
-      # 2026-05-22 ROI 기반 익절/손절 — 레버리지 트레이딩 직관 기준.
-      # 가격 pct = ROI / leverage → TP 1.2%, SL 0.8% @ 10x.
-      # ATR 동적 stop/TP override 폐기 — 가격 +18% TP 가 ROI 기준과 안 맞음
-      # (사용자: 레버리지 쓰니 ROI 로 익절해야). trailing 만 ATR 유지.
-      take_profit_roi: 0.12   # ROI +12% 익절
-      stop_loss_roi: 0.08     # ROI -8% 손절
+      default_size: 0.500
+      take_profit_roi: 0.12
+      stop_loss_roi: 0.08
       leverage: 10
       trailing_stop_pct: 0.005
-      # stop 직후 같은 (sid, symbol) 5분간 재진입 차단.
-      cooldown_after_stop_sec: 300
-      # trailing 만 ATR 동적 유지 — 1.5×ATR pullback (peak 추적 청산).
+      cooldown_after_stop_sec: 900   # v0.6.0 — 5분→15분 churn 차단 강화
       trailing_stop_atr_mult: 1.5
       atr_period: 14
+      # v0.6.0 A+B+C filters — trend preference. BTC 5/25 79/80 손절 직격 차단.
+      anomaly_guard_enabled: true
+      trend_filter_enabled: true     # ADX>=20 AND close>=EMA(50) 통과해야 진입
+      regime_filter_enabled: true
+      adx_threshold: 20.0
+      ema_slow_period: 50
   - id: cand-c-2026-05-20-live-bb-lower-bounce
     class: backtest.strategies.live_bb_lower_bounce.LiveBbLowerBounce
     kwargs:
-      default_size: 0.330  # 2026-05-22 x10 — 노셔널 33% (마진 3.3% at 10x), 상대 비중 유지
-      # 2026-05-22 ROI 기반 익절/손절. 가격 pct = ROI / leverage @ 10x.
-      take_profit_roi: 0.12   # ROI +12% 익절
-      stop_loss_roi: 0.08     # ROI -8% 손절
+      default_size: 0.330
+      take_profit_roi: 0.12
+      stop_loss_roi: 0.08
       leverage: 10
-      cooldown_after_stop_sec: 300   # stop 후 5분 재진입 차단 (churn·수수료 방지)
+      cooldown_after_stop_sec: 900   # v0.6.0 — 5분→15분 churn 차단 강화
+      # v0.6.0 A+B+C filters — meanrev preference (BB 하단 회귀).
+      anomaly_guard_enabled: true
+      trend_filter_enabled: false
+      regime_filter_enabled: true
   - id: cand-c-2026-05-20-live-oversold-with-divergence
     class: backtest.strategies.live_oversold_with_divergence.LiveOversoldWithDivergence
     kwargs:
-      default_size: 0.330  # 2026-05-22 x10 — 노셔널 33% (마진 3.3% at 10x), 상대 비중 유지
-      # 2026-05-22 ROI 기반 익절/손절. 가격 pct = ROI / leverage @ 10x.
-      take_profit_roi: 0.12   # ROI +12% 익절
-      stop_loss_roi: 0.08     # ROI -8% 손절
+      default_size: 0.330
+      take_profit_roi: 0.12
+      stop_loss_roi: 0.08
       leverage: 10
-      cooldown_after_stop_sec: 300   # stop 후 5분 재진입 차단 (churn·수수료 방지)
+      cooldown_after_stop_sec: 900   # v0.6.0 — 5분→15분 churn 차단 강화
+      # v0.6.0 A+B+C filters — meanrev preference (downtrend reversal).
+      anomaly_guard_enabled: true
+      trend_filter_enabled: false
+      regime_filter_enabled: true
   #
   # ─── live_scanner_ensemble_bn1d (1-instance wrapper) — REJECTED ──────────
   # OR-게이트 1-position 디자인이 4-parallel 분산 효과(MDD -23%)를 파괴 → 5y
