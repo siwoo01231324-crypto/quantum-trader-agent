@@ -914,6 +914,7 @@ body{{
     <a href="/strategies" class="nav-pill">전략 카탈로그</a>
     <a href="/signals" class="nav-pill">신호 목록</a>
     <a href="/cs-tsmom" class="nav-pill">cs-tsmom (90%)</a>
+    <a href="/airborne" class="nav-pill">airborne 적중</a>
     <a href="/manual" class="nav-pill">수동 거래</a>
     <a href="/shadow_runs" class="nav-pill">Shadow Runs</a>
     <a href="/patch-notes" class="nav-pill">패치노트</a>
@@ -938,6 +939,14 @@ body{{
       <span class="quick-link-body">
         <span class="quick-link-title">cs-tsmom 신호 (90% 전략)</span>
         <span class="quick-link-sub">12-1m 모멘텀 · 30종목 top-10 랭킹 · Pine Script 동일 식</span>
+      </span>
+      <span class="quick-link-arrow">→</span>
+    </a>
+    <a href="/airborne" class="quick-link-card quick-link-signals">
+      <span class="quick-link-icon">🔥</span>
+      <span class="quick-link-body">
+        <span class="quick-link-title">airborne 알림 적중</span>
+        <span class="quick-link-sub">오늘 FIRE · TP/SL 시뮬 · 시간대·방향별 분석</span>
       </span>
       <span class="quick-link-arrow">→</span>
     </a>
@@ -1174,29 +1183,6 @@ body{{
           </div>
           <div class="last-ts" style="margin-top:4px">마지막 bar: <span id="ops-last-bar" style="color:var(--text2)">—</span></div>
           <div class="last-ts">마지막 fill: <span id="ops-last-fill" style="color:var(--text2)">—</span></div>
-        </div>
-      </div>
-
-      <!-- airborne 알림 (오늘) — TP +1.0% / SL -0.5% / 4봉 hold 실시간 시뮬레이션 -->
-      <div>
-        <div class="section-hdr"><h2>airborne 알림 (오늘)</h2><div class="section-hdr-line"></div></div>
-        <div class="card card-sm" id="airborne-card">
-          <div id="airborne-summary" class="status-chip status-idle" style="margin-bottom:10px"><span class="dot"></span>조회 중</div>
-          <div class="ops-grid">
-            <div class="ops-stat"><div class="ops-stat-label">FIRE</div><div class="ops-stat-val" id="airborne-fires">—</div></div>
-            <div class="ops-stat"><div class="ops-stat-label">TP</div><div class="ops-stat-val" id="airborne-tp">—</div></div>
-            <div class="ops-stat"><div class="ops-stat-label">SL</div><div class="ops-stat-val" id="airborne-sl">—</div></div>
-            <div class="ops-stat"><div class="ops-stat-label">win%</div><div class="ops-stat-val" id="airborne-win">—</div></div>
-            <div class="ops-stat"><div class="ops-stat-label">PF</div><div class="ops-stat-val" id="airborne-pf">—</div></div>
-            <div class="ops-stat"><div class="ops-stat-label">net%</div><div class="ops-stat-val" id="airborne-net">—</div></div>
-          </div>
-          <div style="margin-top:8px">
-            <table class="kv-table" id="airborne-bucket-tbl" style="font-size:11px;width:100%">
-              <thead><tr><th style="text-align:left">KST 구간</th><th class="num">n</th><th class="num">win%</th><th class="num">sum%</th><th class="num">PF</th></tr></thead>
-              <tbody id="airborne-bucket-tbody"><tr><td colspan="5" style="text-align:center;color:var(--text3)">—</td></tr></tbody>
-            </table>
-          </div>
-          <div class="last-ts" style="margin-top:6px">룰: TP +1.0% / SL -0.5% / 4봉 hold · <span id="airborne-cached" style="color:var(--text3)"></span></div>
         </div>
       </div>
 
@@ -1693,56 +1679,6 @@ async function opsRefresh() {{
 }}
 opsRefresh();
 setInterval(opsRefresh, 3000);
-
-// ── airborne 알림 (오늘) 메트릭 카드 ─────────────────────────
-async function airborneRefresh() {{
-  try {{
-    const r = await fetch('/api/airborne_metrics');
-    const d = await r.json();
-    document.getElementById('airborne-fires').textContent = d.fires_total ?? '—';
-    document.getElementById('airborne-tp').textContent = d.tp ?? '—';
-    document.getElementById('airborne-sl').textContent = d.sl ?? '—';
-    document.getElementById('airborne-win').textContent =
-      (d.win_rate != null) ? (d.win_rate * 100).toFixed(1) + '%' : '—';
-    document.getElementById('airborne-pf').textContent =
-      (d.pf != null) ? d.pf.toFixed(2) : '—';
-    const net = d.net_pct;
-    const netEl = document.getElementById('airborne-net');
-    netEl.textContent = (net != null)
-      ? (net >= 0 ? '+' : '') + net.toFixed(2) + '%' : '—';
-    netEl.style.color = (net != null)
-      ? (net >= 0 ? '#5fc77a' : '#ff6b6b') : 'inherit';
-    // 시간대별 표
-    const tbody = document.getElementById('airborne-bucket-tbody');
-    if (tbody) {{
-      const buckets = d.by_kst_bucket || [];
-      if (buckets.length === 0) {{
-        tbody.innerHTML =
-          '<tr><td colspan="5" style="text-align:center;color:var(--text3)">데이터 없음</td></tr>';
-      }} else {{
-        tbody.innerHTML = buckets.map(b =>
-          '<tr><td style="text-align:left">' + b.bucket + '</td>' +
-          '<td class="num">' + b.n + '</td>' +
-          '<td class="num">' + (b.win_rate * 100).toFixed(0) + '%</td>' +
-          '<td class="num">' + (b.sum_pct >= 0 ? '+' : '') + b.sum_pct.toFixed(2) + '%</td>' +
-          '<td class="num">' + (b.pf != null ? b.pf.toFixed(2) : '—') + '</td></tr>'
-        ).join('');
-      }}
-    }}
-    const sum = document.getElementById('airborne-summary');
-    if ((d.fires_total ?? 0) === 0) {{
-      sum.innerHTML = '<span class="dot"></span>오늘 FIRE 없음';
-      sum.className = 'status-chip status-idle';
-    }} else {{
-      sum.innerHTML = '<span class="dot"></span>FIRE ' + d.fires_total + '건 시뮬 완료';
-      sum.className = 'status-chip status-ok';
-    }}
-    const cachedEl = document.getElementById('airborne-cached');
-    if (cachedEl) cachedEl.textContent = d.cached ? '(5분 캐시)' : '(방금 갱신)';
-  }} catch (err) {{ console.warn('airborne', err); }}
-}}
-airborneRefresh();
-setInterval(airborneRefresh, 60000);  // 1분마다 (서버 5분 캐시)
 
 // ── 거래 이력 ──────────────────────────────────────────────────
 async function tradesRefresh() {{
@@ -3129,6 +3065,339 @@ setInterval(refresh, 60000);  // 1분마다 (서버는 1h 캐시이므로 보통
 </html>"""
 
 
+def _render_airborne_page() -> str:
+    """airborne 알림 적중 페이지 — 오늘 FIRE 의 TP/SL 시뮬레이션 상세.
+
+    cs-tsmom 페이지와 동일한 톤·구조: 상단 stat 타일 + side/bucket 카드 + 전체
+    FIRE 테이블. /api/airborne_metrics 한 endpoint 만 폴링 (서버 5분 캐시).
+    """
+    return """<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>QTA — airborne 알림 적중 (오늘)</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#0b0e11;--surface:#161a1e;--surface2:#1e2329;--border:#2b3139;
+  --text:#eaecef;--text2:#b7bdc6;--text3:#848e9c;--green:#0ecb81;--red:#f6465d;--yellow:#f0a500;
+  --mono:'IBM Plex Mono','Consolas',monospace;--sans:'IBM Plex Sans KR','Segoe UI',sans-serif}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);padding:14px;font-size:13px}
+h1{font-size:1.05rem;color:var(--text);margin-bottom:6px;font-weight:600}
+.subtitle{font-size:.75rem;color:var(--text3);margin-bottom:10px}
+.nav{margin-bottom:14px}
+.nav a{color:var(--text2);text-decoration:none;margin-right:12px;font-size:.8rem;
+  background:var(--surface);padding:6px 12px;border-radius:4px;border:1px solid var(--border)}
+.nav a:hover{color:var(--text);background:var(--surface2)}
+.meta{font-size:.75rem;color:var(--text3);margin-bottom:8px;font-family:var(--mono)}
+.empty,.error{padding:30px;text-align:center;color:var(--text3);
+  background:var(--surface);border-radius:6px;border:1px solid var(--border)}
+.error{color:var(--red);border-color:rgba(246,70,93,.35)}
+.header-row{display:flex;align-items:center;gap:14px;margin-bottom:8px;flex-wrap:wrap}
+.rule-badge{background:var(--surface2);border:1px solid var(--border);color:var(--text2);
+  padding:3px 8px;border-radius:4px;font-size:.7rem;font-family:var(--mono)}
+.refresh-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text);
+  padding:6px 14px;border-radius:4px;font-size:.78rem;cursor:pointer;font-family:var(--sans);
+  margin-left:auto;transition:border-color .15s,color .15s}
+.refresh-btn:hover{border-color:var(--green);color:var(--green)}
+.refresh-btn:disabled{opacity:.4;cursor:wait}
+.section-h2{font-size:.85rem;color:var(--text);font-weight:600;margin:18px 0 10px 0;
+  display:flex;align-items:center;gap:10px}
+.section-h2 .count{font-size:.7rem;color:var(--text3);font-family:var(--mono);font-weight:400}
+
+/* ── 상단 큰 stat 타일 ── */
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:8px}
+.stat-tile{background:var(--surface);border:1px solid var(--border);border-radius:6px;
+  padding:14px 14px;display:flex;flex-direction:column;gap:6px}
+.stat-tile.is-hero{background:linear-gradient(180deg,rgba(14,203,129,.04),transparent);
+  border-color:rgba(14,203,129,.25)}
+.stat-tile.is-hero-bad{background:linear-gradient(180deg,rgba(246,70,93,.05),transparent);
+  border-color:rgba(246,70,93,.25)}
+.stat-label{font-size:.7rem;color:var(--text3);font-weight:600;letter-spacing:.4px;text-transform:uppercase}
+.stat-val{font-size:1.5rem;font-weight:700;font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--text)}
+.stat-val.dim{color:var(--text3);font-size:1.1rem}
+.stat-val.green{color:var(--green)}
+.stat-val.red{color:var(--red)}
+.stat-sub{font-size:.7rem;color:var(--text3);font-family:var(--mono)}
+
+/* ── side breakdown (long/short 2칸) ── */
+.side-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px;margin-bottom:16px}
+.side-card{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:14px}
+.side-card.is-long{border-color:rgba(14,203,129,.3)}
+.side-card.is-short{border-color:rgba(246,70,93,.3)}
+.side-card-hdr{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+.side-card-title{font-size:.85rem;font-weight:700;font-family:var(--mono);letter-spacing:.5px}
+.side-long{color:var(--green)}
+.side-short{color:var(--red)}
+.side-row{display:flex;justify-content:space-between;font-size:.78rem;padding:3px 0;color:var(--text2);font-family:var(--mono)}
+.side-row b{color:var(--text);font-variant-numeric:tabular-nums}
+
+/* ── KST bucket + 전체 FIRE 테이블 공용 ── */
+table{width:100%;border-collapse:separate;border-spacing:0;
+  background:var(--surface);border-radius:6px;overflow:hidden;border:1px solid var(--border)}
+thead th{position:sticky;top:0;background:var(--surface2);color:var(--text2);font-weight:600;
+  text-align:left;padding:8px 10px;font-size:.72rem;text-transform:uppercase;letter-spacing:.4px;
+  border-bottom:1px solid var(--border);z-index:5}
+tbody td{padding:7px 10px;font-size:.78rem;border-bottom:1px solid #20262d;
+  font-family:var(--mono);color:var(--text)}
+tbody tr:hover{background:#1c2229}
+.td-num{text-align:right;font-variant-numeric:tabular-nums}
+.sym-cell{color:#f0b90b;font-weight:600}
+.outcome-badge{display:inline-block;padding:2px 7px;border-radius:3px;font-size:.68rem;
+  font-weight:700;letter-spacing:.4px;font-family:var(--mono)}
+.outcome-TP       {background:rgba(14,203,129,.2);color:#11dd8c}
+.outcome-SL       {background:rgba(246,70,93,.16);color:var(--red)}
+.outcome-SL_first {background:rgba(246,70,93,.16);color:var(--red)}
+.outcome-timeout  {background:rgba(240,165,0,.16);color:var(--yellow)}
+.outcome-no_bars  {background:rgba(132,142,156,.16);color:var(--text3)}
+.side-badge{display:inline-block;padding:2px 6px;border-radius:3px;font-size:.66rem;
+  font-weight:700;font-family:var(--mono);letter-spacing:.4px}
+.side-badge.is-long{background:rgba(14,203,129,.16);color:var(--green)}
+.side-badge.is-short{background:rgba(246,70,93,.16);color:var(--red)}
+.pct-pos{color:var(--green)}
+.pct-neg{color:var(--red)}
+.note{color:var(--text3);font-size:.72rem;margin-top:10px;font-family:var(--mono);line-height:1.55}
+</style>
+</head>
+<body>
+<h1>QTA — airborne 알림 적중 (오늘 KST 자정~지금)</h1>
+<div class="subtitle">qta-airborne-daemon 의 FIRE 라인을 docker logs 에서 파싱 → Binance fapi 15m 봉 4개 시뮬 → 적중률·PF·net% 집계. routine 일일 리포트 (자정 fix) 와 같은 룰을 같은 코드로 즉시 산출.</div>
+<div class="nav">
+  <a href="/">← 대시보드</a>
+  <a href="/cs-tsmom">cs-tsmom</a>
+  <a href="/signals">신호 목록</a>
+  <a href="/strategies">전략 카탈로그</a>
+  <a href="/patch-notes">패치노트</a>
+</div>
+<div class="header-row">
+  <div class="meta" id="meta">로딩 중…</div>
+  <span class="rule-badge" id="rule-badge">룰: TP +1.0% / SL -0.5% / 4봉(=1h) hold · 양방향 수수료 0.08%</span>
+  <button class="refresh-btn" id="refresh-btn" onclick="forceRefresh()">↻ 캐시 무효화 + 재계산</button>
+</div>
+<div id="content"><div class="empty">데이터를 불러오는 중입니다…</div></div>
+<script>
+const KST = 'Asia/Seoul';
+function fmtKstFull(iso){
+  if(!iso) return '—';
+  try{
+    return new Intl.DateTimeFormat('ko-KR',{timeZone:KST,year:'2-digit',month:'2-digit',
+      day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date(iso));
+  }catch(e){ return iso; }
+}
+function fmtKstHm(iso){
+  if(!iso) return '—';
+  try{
+    return new Intl.DateTimeFormat('ko-KR',{timeZone:KST,hour:'2-digit',minute:'2-digit',
+      second:'2-digit',hour12:false}).format(new Date(iso));
+  }catch(e){ return iso; }
+}
+function esc(s){
+  return String(s==null?'':s).replace(/[&<>"']/g,c=>(
+    {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function pctColor(v){
+  if(v==null||isNaN(v)) return '';
+  return v > 0 ? 'pct-pos' : (v < 0 ? 'pct-neg' : '');
+}
+function fmtPct(v, dec){
+  if(v==null||isNaN(v)) return '—';
+  const n = Number(v);
+  const cls = pctColor(n);
+  const sign = n>0?'+':'';
+  return `<span class="${cls}">${sign}${n.toFixed(dec==null?2:dec)}%</span>`;
+}
+function fmtPctRaw(v, dec){
+  if(v==null||isNaN(v)) return '—';
+  const n = Number(v);
+  const sign = n>0?'+':'';
+  return sign + n.toFixed(dec==null?2:dec) + '%';
+}
+function fmtPrice(v){
+  if(v==null||isNaN(v)) return '—';
+  const n = Number(v);
+  return n.toLocaleString('ko-KR',{maximumFractionDigits:6});
+}
+
+function renderStats(d){
+  const fires = d.fires_total ?? 0;
+  const tp = d.tp ?? 0, sl = (d.sl ?? 0) + (d.sl_first ?? 0);
+  const winPctTxt = d.win_rate != null ? (d.win_rate * 100).toFixed(1) + '%' : '—';
+  const pfTxt = d.pf != null ? Number(d.pf).toFixed(2) : '—';
+  const net = d.net_pct;
+  const netTxt = (net != null) ? (net >= 0 ? '+' : '') + Number(net).toFixed(2) + '%' : '—';
+  const netCls = net == null ? 'dim' : (net >= 0 ? 'green' : 'red');
+  const pfCls = (d.pf != null && d.pf >= 1.0) ? 'green' : (d.pf != null ? 'red' : 'dim');
+  const winCls = (d.win_rate != null && d.win_rate >= 0.5) ? 'green' :
+                 (d.win_rate != null ? 'red' : 'dim');
+  const heroCls = net == null ? '' : (net >= 0 ? 'is-hero' : 'is-hero-bad');
+  return `<div class="stat-grid">
+    <div class="stat-tile ${heroCls}">
+      <div class="stat-label">net (수수료 후)</div>
+      <div class="stat-val ${netCls}">${esc(netTxt)}</div>
+      <div class="stat-sub">gross ${fmtPctRaw(d.sum_pct, 2)} − fee ${(0.08 * fires).toFixed(2)}%</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-label">FIRE</div>
+      <div class="stat-val">${esc(fires)}</div>
+      <div class="stat-sub">sim ${d.sims_total ?? 0} / 봉 미수신 ${(fires - (d.sims_total ?? 0))}</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-label">승률</div>
+      <div class="stat-val ${winCls}">${esc(winPctTxt)}</div>
+      <div class="stat-sub">TP ${tp} · SL ${sl} · timeout ${d.timeout ?? 0}</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-label">Profit Factor</div>
+      <div class="stat-val ${pfCls}">${esc(pfTxt)}</div>
+      <div class="stat-sub">손익비 1:2 (TP 1.0% / SL 0.5%)</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-label">평균 거래</div>
+      <div class="stat-val ${pctColor(d.mean_pct) || 'dim'}">${fmtPctRaw(d.mean_pct, 2)}</div>
+      <div class="stat-sub">trade 당 기대값</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-label">SL_first (보수)</div>
+      <div class="stat-val dim">${esc(d.sl_first ?? 0)}</div>
+      <div class="stat-sub">같은 봉에 TP·SL 동시 → SL 우선</div>
+    </div>
+  </div>`;
+}
+
+function renderSideCards(by_side){
+  function card(side, s){
+    const cls = side === 'long' ? 'is-long' : 'is-short';
+    const titleCls = side === 'long' ? 'side-long' : 'side-short';
+    const pfTxt = s.pf != null ? Number(s.pf).toFixed(2) : '—';
+    const winTxt = s.win_rate != null ? (s.win_rate * 100).toFixed(1) + '%' : '—';
+    return `<div class="side-card ${cls}">
+      <div class="side-card-hdr">
+        <div class="side-card-title ${titleCls}">${side.toUpperCase()}</div>
+        <div class="side-row" style="margin:0"><b>${esc(s.n)}</b> 건</div>
+      </div>
+      <div class="side-row"><span>TP / SL</span><b>${esc(s.tp)} / ${esc(s.sl)}</b></div>
+      <div class="side-row"><span>승률</span><b>${esc(winTxt)}</b></div>
+      <div class="side-row"><span>합산 gross%</span><b class="${pctColor(s.sum_pct)}">${fmtPctRaw(s.sum_pct, 2)}</b></div>
+      <div class="side-row"><span>Profit Factor</span><b>${esc(pfTxt)}</b></div>
+    </div>`;
+  }
+  const long = by_side?.long, short = by_side?.short;
+  if (!long && !short) return '';
+  const html = ['<div class="section-h2">⚖️ 방향별 (long / short) <span class="count">· 한쪽 편향 진단</span></div>',
+    '<div class="side-grid">'];
+  if (long)  html.push(card('long',  long));
+  if (short) html.push(card('short', short));
+  html.push('</div>');
+  return html.join('');
+}
+
+function renderBucketTable(buckets){
+  if (!buckets || buckets.length === 0) {
+    return `<div class="section-h2">🕒 KST 시간대별 <span class="count">· 데이터 없음</span></div>
+      <div class="empty">시간대 분포를 보여줄 FIRE 가 없습니다.</div>`;
+  }
+  const trs = buckets.map(b => {
+    const winPct = (b.win_rate * 100).toFixed(0) + '%';
+    const pfTxt = b.pf != null ? Number(b.pf).toFixed(2) : '—';
+    return `<tr>
+      <td>${esc(b.bucket)}</td>
+      <td class="td-num">${esc(b.n)}</td>
+      <td class="td-num">${esc(b.tp)}</td>
+      <td class="td-num">${esc(b.sl)}</td>
+      <td class="td-num">${esc(winPct)}</td>
+      <td class="td-num">${fmtPct(b.sum_pct, 2)}</td>
+      <td class="td-num">${esc(pfTxt)}</td>
+    </tr>`;
+  }).join('');
+  return `<div class="section-h2">🕒 KST 시간대별 <span class="count">· 04구간 분포</span></div>
+    <table><thead><tr>
+      <th>KST 구간</th><th class="td-num">n</th><th class="td-num">TP</th><th class="td-num">SL</th>
+      <th class="td-num">승률</th><th class="td-num">합산</th><th class="td-num">PF</th>
+    </tr></thead><tbody>${trs}</tbody></table>`;
+}
+
+function renderFiresTable(sims){
+  if (!sims || sims.length === 0) {
+    return `<div class="section-h2">🔥 개별 FIRE 상세 <span class="count">· 0건</span></div>
+      <div class="empty">오늘 FIRE 가 아직 없습니다 — daemon 미가동 또는 모든 종목이 trigger 미달.</div>`;
+  }
+  // 최신 ts 먼저
+  const rows = [...sims].sort((a,b) => String(b.ts || '').localeCompare(String(a.ts || '')));
+  const trs = rows.map(r => {
+    const sideCls = r.side === 'short' ? 'is-short' : 'is-long';
+    const outcome = r.outcome || '—';
+    const barTxt = r.bar_idx != null ? `봉${r.bar_idx}` : '—';
+    return `<tr>
+      <td>${esc(fmtKstHm(r.ts))}</td>
+      <td class="sym-cell">${esc((r.symbol||'').replace(/USDT$/,''))}</td>
+      <td><span class="side-badge ${sideCls}">${esc((r.side||'').toUpperCase())}</span></td>
+      <td class="td-num">${esc(fmtPrice(r.fire_close))}</td>
+      <td><span class="outcome-badge outcome-${esc(outcome)}">${esc(outcome)}</span></td>
+      <td class="td-num">${r.pct != null ? fmtPct(r.pct, 2) : '<span style="color:var(--text3)">—</span>'}</td>
+      <td class="td-num" style="color:var(--text3)">${esc(barTxt)}</td>
+    </tr>`;
+  }).join('');
+  return `<div class="section-h2">🔥 개별 FIRE 상세 <span class="count">· ${rows.length}건 (최신순)</span></div>
+    <table><thead><tr>
+      <th>시각 (KST)</th><th>Symbol</th><th>방향</th>
+      <th class="td-num">진입가</th><th>결과</th><th class="td-num">pct</th><th class="td-num">도달봉</th>
+    </tr></thead><tbody>${trs}</tbody></table>
+    <div class="note">
+      결과 — <b>TP</b>: 시뮬 +1.0% 익절. <b>SL</b>: 시뮬 −0.5% 손절. <b>SL_first</b>: 같은 15m 봉에서 high·low 가 둘 다 닿음 → 보수적으로 SL 부터 체결됐다고 가정. <b>timeout</b>: 4봉(=1h) 동안 TP/SL 둘 다 미도달 → 마지막 close 로 청산. <b>no_bars</b>: Binance fapi 봉 fetch 실패 / 너무 최근 fire 라 봉이 아직 안 닫힘.<br>
+      pct 는 gross (수수료 미반영) — 상단 net 카드는 fee 0.08% × FIRE n 차감.
+    </div>`;
+}
+
+function render(d){
+  const out = [renderStats(d)];
+  out.push(renderSideCards(d.by_side || {}));
+  out.push(renderBucketTable(d.by_kst_bucket || []));
+  out.push(renderFiresTable(d.sims || []));
+  return out.join('');
+}
+
+async function refresh(){
+  try{
+    const r = await fetch('/api/airborne_metrics');
+    const j = await r.json();
+    const meta = document.getElementById('meta');
+    const content = document.getElementById('content');
+    const fires = j.fires_total ?? 0;
+    const cachedTxt = j.cached ? '(5분 캐시)' : '(방금 갱신)';
+    meta.textContent = `KST ${j.date_kst || '—'} · 자정 ~ ${fmtKstFull(j.now_kst)} · FIRE ${fires} 건 · ${cachedTxt}`;
+    content.innerHTML = render(j);
+  }catch(e){
+    document.getElementById('content').innerHTML =
+      `<div class="error">로딩 실패: ${esc(String(e))} — 잠시 후 자동 재시도</div>`;
+  }
+}
+async function forceRefresh(){
+  const btn = document.getElementById('refresh-btn');
+  btn.disabled = true;
+  btn.textContent = '재계산 중…';
+  try{
+    // 서버 캐시는 5분 — 강제 무효화 endpoint 가 없으므로 cache-busting query 로 우회.
+    // (5분 안에는 같은 결과지만, 사용자 의도 = "최신 시각 표기 갱신")
+    const r = await fetch('/api/airborne_metrics?_=' + Date.now());
+    const j = await r.json();
+    const content = document.getElementById('content');
+    const meta = document.getElementById('meta');
+    const fires = j.fires_total ?? 0;
+    meta.textContent = `KST ${j.date_kst || '—'} · 자정 ~ ${fmtKstFull(j.now_kst)} · FIRE ${fires} 건 · (서버 캐시 ${j.cached ? '유효' : '갱신됨'})`;
+    content.innerHTML = render(j);
+  }catch(e){
+    alert('재계산 실패: ' + e);
+  }finally{
+    btn.disabled = false;
+    btn.textContent = '↻ 캐시 무효화 + 재계산';
+  }
+}
+refresh();
+setInterval(refresh, 60000);  // 1분마다 (서버는 5분 캐시이므로 보통 캐시 반환)
+</script>
+</body>
+</html>"""
+
+
 def _render_strategies(items: list[dict]) -> str:
     cards_html = "".join(_strategy_card(it) for it in items)
     return f"""<!DOCTYPE html>
@@ -3751,6 +4020,11 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
     async def cs_tsmom_page() -> HTMLResponse:
         return HTMLResponse(content=_render_cs_tsmom_page())
 
+    @app.get("/airborne", response_class=HTMLResponse)
+    async def airborne_page() -> HTMLResponse:
+        """airborne 알림 적중 페이지 — /api/airborne_metrics 폴링."""
+        return HTMLResponse(content=_render_airborne_page())
+
     # ── 수동 거래 입력 (2026-05-21 — Claude Routines 일일 리포트 준비) ────
     def _manual_trade_log_path() -> Path:
         """수동 거래 JSONL 위치 — `_resolve_log_dir()` 하위 `manual_trade.jsonl`.
@@ -4119,6 +4393,14 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
                         sims.append({**f, **sim})
 
         agg = _aggregate_airborne_sims(sims)
+        # 2026-05-26 — /airborne 페이지가 per-fire 상세 행을 렌더하도록 `sims`
+        # 리스트를 응답에 포함. 페이지가 별도 endpoint 를 추가로 호출하지 않게
+        # 메인 카드용 집계 + 페이지용 raw 를 한 응답으로 합친다.
+        sim_keys = {(s["ts"], s["symbol"]) for s in sims}
+        no_bar_fires = [
+            {**f, "outcome": "no_bars", "pct": None, "bar_idx": None}
+            for f in fires if (f["ts"], f["symbol"]) not in sim_keys
+        ]
         payload = {
             "date_kst": kst_now.strftime("%Y-%m-%d"),
             "kst_window_start": kst_midnight.isoformat(),
@@ -4126,6 +4408,7 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
             "fires_total": len(fires),
             "sims_total": len(sims),
             **agg,
+            "sims": sims + no_bar_fires,  # per-fire 상세 (ts/symbol/side/outcome/pct/bar_idx)
             "rule": {
                 "tp_pct": AIRBORNE_TP_PCT, "sl_pct": AIRBORNE_SL_PCT,
                 "hold_bars": AIRBORNE_HOLD_BARS, "fee_pct": AIRBORNE_FEE_PCT,
