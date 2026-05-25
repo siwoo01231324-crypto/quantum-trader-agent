@@ -114,6 +114,13 @@ CLI:
   포지션" 이 아니다. HOLD/ENTER/EXIT signal 컬럼도 **모델 권고**일 뿐
   실제 발주·체결 여부는 `auto_fills` 가 결정한다. 절대 cs_tsmom_top10
   의 종목을 "보유 중" 이라고 단정하지 말 것.
+- `airborne_fires` — **airborne v1.1 텔레그램 알림** (BB 40% 되돌림 시그널)
+  전수 (list). 각 item: `ts` (UTC ISO), `symbol`, `side` (long|short),
+  `fire_close` (알림 발사 시점 1h close 가격), `trigger`. 이 알림은 BB-reversal
+  시그널의 시각화 reproduction 일 뿐 **자동매매와는 분리** (qta-airborne-daemon
+  컨테이너) — 사용자 의사결정 보조용 채널. 매일 적중률을 분석해 신호 품질을
+  모니터링한다. `cand-c-2026-05-20-live-breakout-with-atr-stop` 같은 자동 전략
+  fill 과 혼동하지 말 것.
 
 JSON 파일이 없거나 비어있으면 PR 만들지 말고 종료.
 
@@ -162,6 +169,35 @@ JSON 파일이 없거나 비어있으면 PR 만들지 말고 종료.
   - 손절: 같은 note 의 지표로 들어간 다른 성공 케이스가 있나? 무엇이 달랐나
     (시간대·거래량·추세 등). 가설.
 
+### 규칙 6 — airborne 알림 적중 분석 (2026-05-26 추가)
+`airborne_fires` 가 비어있지 않으면 매일 적중률을 다음 룰로 시뮬레이션해 분석
+섹션에 포함한다.
+
+**검증 룰** (2026-05-23~25 3일치 전수 검증으로 정한 default. PF 2.04 / win 51%):
+- 진입가 = `fire_close` (알림 시점 1h close)
+- TP = +1.0% / SL = -0.5% (LONG 기준; SHORT 는 부호 반전)
+- hold 기간 = 다음 15분봉 4개 (총 1h). 각 봉 high/low 가 TP/SL 닿는지 평가.
+- 한 봉 안에서 둘 다 닿으면 보수적으로 SL 우선 (SL_first)
+- 4봉 안에 둘 다 안 닿으면 4번째 봉 close 로 청산 (timeout)
+- 봉 데이터: Binance USDM Futures `/fapi/v1/klines?interval=15m`
+
+**시간대 컨텍스트** (3일 검증 결과 — 표본 짧으나 강한 패턴):
+- 00–06 KST 새벽: win 70%, PF 4.61 (최고)
+- 06–18 KST 오전·오후: win 54%, PF 2.0~2.4
+- **18–24 KST 저녁: win 23%, PF 0.56 (손실)** — 이 시간대 신호는 신뢰도 낮다는 가설
+- 첫 15분봉 안에서 96% 결판 (hold 30분으로 단축 가능)
+
+**분석 항목**:
+- 오늘 fire 개수 / TP / SL / timeout 분포
+- KST 시간대별 (4구간) win% + sum%
+- side 별 (long vs short) 통계
+- 종목별 top/bottom 3 (n≥2)
+- 어제·그제 누적과 비교 (가능하면)
+- 패턴 한 줄: "오늘 18-24 시간대 fire 3건 모두 SL — 가설 부합" 등
+
+분석은 정성적으로 짧게, 수치 표는 markdown table 로. 매일 누적되면 일주일치
+는 routine 이 직접 비교 가능.
+
 ## 출력 형식
 
 파일 경로: `docs/journal/{date_kst}.md` (날짜는 입력의 `date_kst` 그대로).
@@ -178,12 +214,17 @@ win_count: <outcome=win 또는 realized_pnl>0 count>
 loss_count: <outcome=loss 또는 realized_pnl<0 count>
 total_pnl_usdt: <Binance 통화 합산>
 total_pnl_krw: <KIS 통화 합산>
+airborne_fires: <airborne_fires 개수>
+airborne_tp: <시뮬레이션 TP 도달 건수>
+airborne_sl: <시뮬레이션 SL 도달 건수>
+airborne_net_pct: <시뮬레이션 누적 수익률 (수수료 0.08% 차감)>
 created: {date_kst}
 tags:
 - trading-journal
 - daily-report
 - auto-account
 - manual-account
+- airborne-alerts
 ---
 
 # {date_kst} 거래 리포트
@@ -191,6 +232,7 @@ tags:
 ## 한눈에
 - 자동: 체결 N건 → 익절 N / 손절 N (총 X USDT)
 - 수동: 체결 N건 → 익절 N / 손절 N (총 Y KRW + Z USDT)
+- 알림: airborne FIRE N건 → 시뮬 TP N / SL N (net X%)
 - 오늘의 핵심 패턴: (잘한 거래 1, 못한 거래 1 의 공통점 1-2줄)
 
 ## 자동 계좌
@@ -232,11 +274,44 @@ cs_tsmom_top10 1줄 참조. 끝.)
 
 (거래 N건 반복)
 
+## airborne 알림 적중 분석 (BB 40% 되돌림 시그널)
+
+(airborne_fires 가 비어있으면 한 줄: "오늘 airborne 알림 없음." 끝.)
+
+(있으면 규칙 6 의 시뮬레이션 룰로 분석:)
+
+### 시뮬레이션 요약 (TP +1.0% / SL -0.5% / 4봉 hold)
+
+| 항목 | 값 |
+|---|---|
+| FIRE 총 건수 | N |
+| TP 도달 | N (X%) |
+| SL 도달 | N (Y%) |
+| timeout | N (Z%) |
+| net 누적 (수수료 0.08% 차감) | +X.XX% |
+| PF | X.XX |
+
+### KST 시간대별
+
+| 구간 | n | win% | sum% | PF | 비고 |
+|---|---:|---:|---:|---:|---|
+| 00-06 새벽 | N | X% | +X% | X | 3일치 기준선 70% / PF 4.6 |
+| 06-12 오전 | N | X% | +X% | X | |
+| 12-18 오후 | N | X% | +X% | X | |
+| 18-24 저녁 | N | X% | +X% | X | **기준선 23% / PF 0.56 — 신호 회피 권고** |
+
+### side · 종목별 핵심
+- long N / short N (mean +X% vs +X%)
+- TOP 3 종목: [...]
+- BOTTOM 3 종목: [...]
+- 패턴 한 줄: (예 "18-24 KST fire 3건 모두 SL — 시간대 기각 가설 부합")
+
 ## 내일을 위한 한 줄
 - 자동: (오늘 결과 기반 1줄 — auto_fills 없으면 "내일은 qta.exe 가동 +
   cs_tsmom 자동 발주 점검")
 - 수동: (오늘 결과 기반 1줄 — 실 거래 없으면 "내일은 note 에 지표·조건
   명시한 실 거래 기록")
+- 알림: (오늘 airborne 적중률 기반 1줄 — 시간대·종목 패턴 다음날 확인 포인트)
 
 ## 작업 절차
 1. `docs/journal_data/{date_kst}.json` 읽기 (없으면 즉시 종료)

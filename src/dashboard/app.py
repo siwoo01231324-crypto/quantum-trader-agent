@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import html
+import re
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -30,6 +31,74 @@ from src.dashboard.timeline_broker import TimelineBroker
 from src.live.trade_history import discover_wal_files, reconstruct_trades
 from src.live.wal import replay as wal_replay
 from src.observability.metrics import Metrics
+
+
+# ── airborne FIRE 알림 파싱 (docker logs 소스) ──────────────────────────────
+# 2026-05-26: airborne 데몬은 별도 컨테이너로 도는 알림 전용 프로세스라
+# 데이터를 dashboard WAL 에 안 남긴다. 매일 자정에 routine 이 알림 적중
+# 분석 (다음 15분봉 4개 검증) 하려면 raw FIRE 라인이 journal_today 에
+# 같이 export 되어야 한다. 가장 단순한 경로 — docker logs 파싱.
+_AIRBORNE_FIRE_RE = re.compile(
+    r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}),\d+ .*FIRE (\S+) (long|short) "
+    r"@ close=([\d.]+) trigger=([\d.]+)"
+)
+
+
+def _parse_airborne_fire_line(line: str) -> dict | None:
+    """단일 로그 라인에서 FIRE 한 건 추출 — 매칭 실패 시 None.
+
+    포맷: ``2026-05-23 02:00:33,327 INFO airborne_alert_daemon — FIRE CBRSUSDT
+    long @ close=264.52 trigger=263.156``
+    """
+    m = _AIRBORNE_FIRE_RE.match(line)
+    if not m:
+        return None
+    try:
+        ts = datetime.strptime(m.group(1), "%Y-%m-%d %H:%M:%S").replace(
+            tzinfo=timezone.utc
+        )
+    except ValueError:
+        return None
+    return {
+        "ts": ts.isoformat(),
+        "symbol": m.group(2),
+        "side": m.group(3),
+        "fire_close": float(m.group(4)),
+        "trigger": float(m.group(5)),
+    }
+
+
+def _parse_airborne_fires_from_docker_logs(
+    since_iso: str, *, container_name: str = "qta-airborne-daemon",
+) -> list[dict]:
+    """``docker logs <container> --since <iso>`` 에서 FIRE 라인 추출.
+
+    docker CLI 미설치 / 컨테이너 미가동 / 실행 권한 실패 등은 빈 리스트
+    리턴 (graceful). dashboard 가 docker 안에서 돌 때도 안전.
+
+    Returns:
+        list of {ts (UTC ISO), symbol, side, fire_close, trigger}.
+    """
+    import subprocess
+    try:
+        # Windows cp949 console 에서도 안전하게 — encoding utf-8 강제 + replace
+        # (airborne 로그의 em dash "—" 같은 비-cp949 문자가 디코딩 실패해
+        # stdout=None 되는 경로 차단).
+        p = subprocess.run(
+            ["docker", "logs", container_name, "--since", since_iso],
+            capture_output=True, text=True, timeout=15,
+            encoding="utf-8", errors="replace",
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return []
+    if p.returncode != 0:
+        return []
+    fires: list[dict] = []
+    for line in ((p.stdout or "") + (p.stderr or "")).splitlines():
+        rec = _parse_airborne_fire_line(line)
+        if rec is not None:
+            fires.append(rec)
+    return fires
 
 
 @dataclass
@@ -2078,6 +2147,7 @@ h1{{font-size:1.1rem;color:#7ecef4;margin-bottom:14px}}
   <a href="/">← 대시보드</a>
   <a href="/strategies">전략 카탈로그</a>
   <a href="/signals">신호 목록</a>
+  <a href="/patch-notes">패치노트</a>
 </div>
 {body}
 </body>
@@ -2681,6 +2751,7 @@ tbody tr:hover{background:#1c2229}
   <a href="/">← 대시보드</a>
   <a href="/strategies">전략 카탈로그</a>
   <a href="/signals">신호 목록</a>
+  <a href="/patch-notes">패치노트</a>
 </div>
 <div class="header-row">
   <div class="meta" id="meta">로딩 중…</div>
@@ -3716,6 +3787,18 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
                 pl = rec.get("payload") or {}
                 manual.append({"ts": rec.get("ts"), **pl})
 
+        # ── airborne FIRE 알림 (qta-airborne-daemon docker logs) ──
+        # 매일 자정 routine 이 알림 적중 분석 (다음 15분봉 4개 TP/SL 시뮬레이션)
+        # 하려면 raw FIRE 라인 필요. docker 미가동 환경에서는 빈 리스트.
+        import asyncio as _asyncio2
+        since_iso = utc_cutoff.strftime("%Y-%m-%dT%H:%M:%S")
+        airborne_fires_raw = await _asyncio2.to_thread(
+            _parse_airborne_fires_from_docker_logs, since_iso,
+        )
+        # docker --since 는 컨테이너 시작 시각 기준이라 KST cutoff 보다 더 옛
+        # 라인이 섞일 수 있음. 명시적 ts 필터로 한 번 더 거름.
+        airborne_fires = [f for f in airborne_fires_raw if _ts_after_cutoff(f["ts"])]
+
         # ── cs-tsmom 오늘 TOP-10 (computer 가 wired 면) ──
         cs_tsmom_top10: dict | None = None
         comp = state.cs_tsmom_computer
@@ -3745,10 +3828,12 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
                 "auto_fills": len(auto_fills),
                 "auto_signals": len(auto_signals),
                 "manual_trades": len(manual),
+                "airborne_fires": len(airborne_fires),
             },
             "auto_fills": auto_fills,
             "auto_signals": auto_signals,
             "manual_trades": manual,
+            "airborne_fires": airborne_fires,
             "cs_tsmom_top10": cs_tsmom_top10,
         }
 
