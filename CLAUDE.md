@@ -20,6 +20,10 @@
 5. .draft.md 는 정식 노트 검증 대상에서 제외 (#53, 머지 전 승격 필요)
 6. 주문 실행·리스크 결정을 LLM 에 위임 금지 — LLM 은 문서·설계 보조만
 7. 새 전략·신호·리스크·종목 노트는 docs/schemas/note-schemas.md 의 스키마 준수
+8. 새 전략·시그널·리스크 정책 또는 production.yaml 활성화 변경 시
+   docs/patch-notes/index.yaml 의 versions 리스트 맨 앞에 entry 추가 필수
+   (`scripts/check_patch_notes.py` + `.github/workflows/patch-notes-check.yml`,
+   v0.6.0 부터, 현재 warn 모드 — 1주 후 strict 승격)
 ```
 
 ## 레포 규칙

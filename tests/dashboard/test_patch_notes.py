@@ -13,16 +13,18 @@ from src.dashboard.patch_notes import (
 
 class TestLoadPatchNotes:
     def test_default_path_loads_repo_index(self):
-        # Repo docs/patch-notes/index.yaml must parse and contain at least
-        # the v0.6.0 release that ships with this change.
+        # Repo docs/patch-notes/index.yaml must parse, and v0.6.0 (the seed
+        # entry) must still be present even as newer versions accumulate.
         versions, error = load_patch_notes()
         assert error is None
         assert len(versions) >= 1
         first = versions[0]
-        assert first["version"] == "v0.6.0"
-        assert first["date"] == "2026-05-26"
+        assert first["version"].startswith("v0.")
         assert "items" in first and len(first["items"]) > 0
         assert "tags" in first and len(first["tags"]) > 0
+        # Seed entry must remain (don't break the chain when adding new ones).
+        seed_versions = {v["version"] for v in versions}
+        assert "v0.6.0" in seed_versions
 
     def test_missing_file_yields_empty(self, tmp_path: Path):
         versions, error = load_patch_notes(tmp_path / "nope.yaml")

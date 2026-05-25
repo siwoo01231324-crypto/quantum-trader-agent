@@ -15,6 +15,25 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.1"
+    date: "2026-05-26"
+    title: "불변식 #8 — 전략/리스크/production.yaml 변경 시 patch-notes 동반 갱신 강제"
+    tags: [chore, safety]
+    summary: >
+      v0.6.0 으로 추가한 패치노트 시스템을 항상 최신 상태로 유지하기 위한 자동
+      검증. CLAUDE.md 불변식 #8 + CI 워크플로우 + 검사 스크립트로 강제.
+    items:
+      - "CLAUDE.md 불변식 #8 신설 — 전략 코드 / 리스크 정책 / production.yaml 활성화 변경 시 docs/patch-notes/index.yaml 의 versions 리스트 맨 앞에 entry 추가 필수."
+      - "scripts/check_patch_notes.py — PR base ref 대비 변경 파일 검사. 감시 대상(src/backtest/strategies, src/risk, src/portfolio, src/live, configs/orchestrator/production.yaml)이 바뀌었는데 index.yaml 갱신 없으면 위반."
+      - "면제 — tests/**/test_*.py / .ai.md / __init__.py only 변경은 통과."
+      - ".github/workflows/patch-notes-check.yml — PR 마다 자동 실행. 현재 warn 모드(exit 0), 1주 운영 후 --strict 승격 예정."
+      - "Windows cp949 console UTF-8 강제 reconfigure — ✓/❌ 한자 출력 안전."
+    refs:
+      - "CLAUDE.md"
+      - "scripts/check_patch_notes.py"
+      - ".github/workflows/patch-notes-check.yml"
+      - "docs/patch-notes/.ai.md"
+
   - version: "v0.6.0"
     date: "2026-05-26"
     title: "Live-scanner 진입 필터 A+B+C (트렌드/anomaly/레짐)"

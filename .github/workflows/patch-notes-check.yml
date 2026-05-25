@@ -1,0 +1,50 @@
+name: Patch Notes Check
+
+# 불변식 #8 (2026-05-26 v0.6.0): 새 전략·시그널·리스크 정책·production.yaml
+# 활성화 변경 시 docs/patch-notes/index.yaml 의 versions 리스트 맨 앞에 entry
+# 가 함께 appended 되어야 한다.
+#
+# Rollout:
+#   v1 (현재) — warn 모드. exit 0 보장. 기존 PR 흐름 깨뜨리지 않고 가시화부터.
+#   v2 (예정) — 1주 운영 후 `--strict` 승격 → 위반 PR 차단.
+
+on:
+  pull_request:
+    paths:
+      - "src/backtest/strategies/**"
+      - "src/risk/**"
+      - "src/portfolio/**"
+      - "src/live/**"
+      - "configs/orchestrator/production.yaml"
+      - "docs/patch-notes/index.yaml"
+      - "scripts/check_patch_notes.py"
+      - ".github/workflows/patch-notes-check.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Patch notes invariant
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history for git diff vs base
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Resolve base ref
+        run: |
+          echo "BASE_REF=origin/${{ github.event.pull_request.base.ref }}" >> "$GITHUB_ENV"
+
+      - name: Run patch-notes check (warn mode — exit 0)
+        env:
+          BASE_REF: ${{ env.BASE_REF }}
+        run: python scripts/check_patch_notes.py
