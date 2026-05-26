@@ -81,18 +81,18 @@ def test_production_yaml_registers_all_strategies():
         # disabled per 9553e87 + #248 Scenario B)
         "breakout-donchian",
         "momo-kis-v1",
-        # Universe-scan (#218, 6 active; cs-bb-macd-kr inactive)
+        # Universe-scan (#218, 4 active; cs-bb-macd-kr inactive)
         "cs-tsmom-kr-daily",
         "cs-rsi-div-kr",
         "cs-adx-ma-kr",
         "cs-tsmom-crypto-daily",
-        "cs-rsi-div-crypto",
-        "cs-macd-vol-crypto",
         # Smoke 통로 검증 (#236, env-gated — hold only without SMOKE_TEST_ENABLED)
         "smoke-1m-roundtrip-kis",
         "smoke-1m-roundtrip-binance",
         # Live-scanner 원본 5종 — DISABLED (#240 / 5y eval): 9553e87 참조.
         # Candidate-C 4종 — DISABLED (v0.6.3): 5/22~26 458 trade net -498 USDT.
+        # cs-rsi-div-crypto / cs-macd-vol-crypto — DISABLED (v0.6.4): CRYPTO_TOP30
+        # basket 에서 cs-tsmom 과 경합 (default capital_fraction 1.0).
     }
 
 

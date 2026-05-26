@@ -15,6 +15,23 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.4"
+    date: "2026-05-27"
+    title: "cs-rsi-div-crypto / cs-macd-vol-crypto DISABLED — cs-tsmom 진짜 단독 운영"
+    tags: [chore, safety]
+    summary: >
+      v0.6.3 에서 cand-c 4종 disable 후 crypto 자동 운영은 cs-tsmom 단독 의도였으나
+      cs-rsi-div-crypto / cs-macd-vol-crypto 가 capital_fraction 미명시 (default 1.0)
+      로 같은 CRYPTO_TOP30_BASKET 에서 잠재 노셔널 250% 경합 가능 → 명시적 주석 처리.
+    items:
+      - "cs-rsi-div-crypto — DISABLED. 같은 CRYPTO_TOP30 basket 이라 cs-tsmom (capital_fraction 0.5) 과 같은 종목 동시 진입 시도 가능."
+      - "cs-macd-vol-crypto — DISABLED. 동일 경합 + vol_ceiling 2.0 진입 조건이라 별 신호 못 내던 inert 상태였으나 안전상 명시 주석."
+      - "cs-tsmom-crypto-daily 만 active — capital_fraction 0.5 × top_n 10 = 종목당 5%, 합계 50% of equity. 5y bench Sharpe 1.328 / Ann 90.85% / MDD -52.42%."
+      - "재활성화 조건: (a) capital_fraction cap 명시 (예 cs-tsmom 0.5 + 다른 2종 각 0.25 = 합 100%) + (b) 같은 basket 경합 시 신호 우선순위 룰 정의 + (c) 5y bench 통과."
+    refs:
+      - "configs/orchestrator/production.yaml"
+      - "docs/specs/strategies/cs-tsmom-crypto-daily.md"
+
   - version: "v0.6.3"
     date: "2026-05-27"
     title: "cand-c 4종 전부 DISABLED + cs-tsmom-crypto-daily 단독 운영"

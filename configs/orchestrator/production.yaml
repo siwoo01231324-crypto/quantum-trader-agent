@@ -145,32 +145,37 @@ strategies:
         top_n: 10
         min_quote_vol: 10000000
 
-  - id: cs-rsi-div-crypto
-    class: backtest.strategies.cs_async_wrapper.CrossSectionalAsyncStrategy
-    kwargs:
-      strategy_id: cs_rsi_div_crypto
-      module: backtest.strategies.cs_rsi_div_crypto
-      symbol: CRYPTO_TOP30_BASKET
-      rebal_freq: 5
-      warmup_bars: 40
-      weights_kind: crypto
-      params:
-        top_n: 10
-        min_quote_vol: 10000000
-
-  - id: cs-macd-vol-crypto
-    class: backtest.strategies.cs_async_wrapper.CrossSectionalAsyncStrategy
-    kwargs:
-      strategy_id: cs_macd_vol_crypto
-      module: backtest.strategies.cs_macd_vol_crypto
-      symbol: CRYPTO_TOP30_BASKET
-      rebal_freq: 5
-      warmup_bars: 40
-      weights_kind: crypto
-      params:
-        top_n: 10
-        min_quote_vol: 10000000
-        vol_ceiling: 2.0
+  # 2026-05-27 v0.6.4 — cs-rsi-div-crypto + cs-macd-vol-crypto 둘 다 DISABLED.
+  # capital_fraction 미명시라 default 1.0 (100%) 이었고 cs-tsmom-crypto-daily
+  # (0.5) 와 같은 CRYPTO_TOP30_BASKET 에서 경합 → 같은 종목 동시 진입 시도 +
+  # 잠재 노셔널 250% 의 신호 충돌. 사용자 의도 "cs-tsmom 단독 운영" 확정을 위해
+  # 명시적 주석 처리. 재활성화는 capital_fraction cap 명시 + 5y bench 통과 후.
+  # - id: cs-rsi-div-crypto
+  #   class: backtest.strategies.cs_async_wrapper.CrossSectionalAsyncStrategy
+  #   kwargs:
+  #     strategy_id: cs_rsi_div_crypto
+  #     module: backtest.strategies.cs_rsi_div_crypto
+  #     symbol: CRYPTO_TOP30_BASKET
+  #     rebal_freq: 5
+  #     warmup_bars: 40
+  #     weights_kind: crypto
+  #     params:
+  #       top_n: 10
+  #       min_quote_vol: 10000000
+  #
+  # - id: cs-macd-vol-crypto
+  #   class: backtest.strategies.cs_async_wrapper.CrossSectionalAsyncStrategy
+  #   kwargs:
+  #     strategy_id: cs_macd_vol_crypto
+  #     module: backtest.strategies.cs_macd_vol_crypto
+  #     symbol: CRYPTO_TOP30_BASKET
+  #     rebal_freq: 5
+  #     warmup_bars: 40
+  #     weights_kind: crypto
+  #     params:
+  #       top_n: 10
+  #       min_quote_vol: 10000000
+  #       vol_ceiling: 2.0
 
   # cs-bb-macd-kr 는 5y bench Sharpe -0.32 → status: inactive, production 미등록.
   # 코드는 src/backtest/strategies/cs_bb_macd_kr.py 유지 — score 정의 재설계 후 활성화 검토.
