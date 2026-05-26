@@ -57,12 +57,16 @@ def _build_history(n_bars: int = 60) -> pd.DataFrame:
 
 
 def test_production_yaml_registers_all_strategies():
-    """Single-ticker (4) + universe-scan (6, #218) + smoke (2, #236) = 12 등록.
+    """Single-ticker (2) + universe-scan (6, #218) + smoke (2, #236) = 10 등록.
 
     2026-05-20 — momo-btc-v2 + live-scanner 5종 비활성화 (9553e87): 5y 검증
     결과 전부 PF<1·음의 기대값으로 확정되어 production.yaml 에서 주석처리.
     cs-bb-macd-kr 은 이전부터 inactive (Sharpe -0.32). 재활성화는 진입 신호
     재설계 + PF>1 게이트 통과 후에만.
+
+    2026-05-27 v0.6.3 — cand-c 4종 (cand-c-2026-05-20-*) 전부 비활성화.
+    5/22~26 5일치 458 round-trip net -498 USDT 검증 결과 v0.6.0 A+B+C 필터
+    추가 후에도 알파 없음 확정. cs-tsmom-crypto-daily 단독 운영 전환.
 
     Smoke entries 는 SMOKE_TEST_ENABLED env 없으면 hold. 검증된 universe-scan
     + momo-kis-v1 만 실제 동작.
@@ -87,13 +91,8 @@ def test_production_yaml_registers_all_strategies():
         # Smoke 통로 검증 (#236, env-gated — hold only without SMOKE_TEST_ENABLED)
         "smoke-1m-roundtrip-kis",
         "smoke-1m-roundtrip-binance",
-        # Candidate-C 4-parallel live-scanner 실험 (#247) — production wiring
-        # 검증 단계, env-gated.
-        "cand-c-2026-05-20-live-rsi-oversold-volume-spike",
-        "cand-c-2026-05-20-live-breakout-with-atr-stop",
-        "cand-c-2026-05-20-live-bb-lower-bounce",
-        "cand-c-2026-05-20-live-oversold-with-divergence",
         # Live-scanner 원본 5종 — DISABLED (#240 / 5y eval): 9553e87 참조.
+        # Candidate-C 4종 — DISABLED (v0.6.3): 5/22~26 458 trade net -498 USDT.
     }
 
 
@@ -102,13 +101,16 @@ def test_production_yaml_arms_orchestrator_dup_backstop():
     duplicate-order backstop into the live orchestrator (config_loader path
     that qta.exe uses). Locks the wiring so it can't silently regress to the
     dormant 0.0 default the review flagged.
+
+    v0.6.0 (#318): 60→300s 상향. 5/24-25 저널의 1신호→2.4 fill churn (수수료
+    일 105 USDT) 완화. live-scanner 4종은 자체 cooldown_after_stop_sec (각 900s).
     """
     orch = load_orchestrator_from_yaml(
         _PRODUCTION_YAML,
         _make_policy(),
         on_metalabeler_missing="skip",
     )
-    assert orch._min_order_interval_sec == 60.0
+    assert orch._min_order_interval_sec == 300.0
 
 
 @pytest.mark.asyncio

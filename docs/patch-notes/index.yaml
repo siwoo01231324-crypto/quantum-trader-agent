@@ -15,6 +15,28 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.3"
+    date: "2026-05-27"
+    title: "cand-c 4종 전부 DISABLED + cs-tsmom-crypto-daily 단독 운영"
+    tags: [chore, safety]
+    summary: >
+      5/22~26 5일치 458 round-trip net -498 USDT 검증 결과 cand-c live-scanner
+      4종이 v0.6.0 A+B+C 필터 + v0.6.2 floor/buffer 추가에도 알파 없음 확인 →
+      production.yaml 에서 4종 일괄 주석 처리. cs-tsmom-crypto-daily 단독 운영 전환.
+    items:
+      - "cand-c-2026-05-20-live-rsi-oversold-volume-spike — DISABLED"
+      - "cand-c-2026-05-20-live-breakout-with-atr-stop — DISABLED (5/26 BTC 3건 -11 사고 strategy)"
+      - "cand-c-2026-05-20-live-bb-lower-bounce — DISABLED"
+      - "cand-c-2026-05-20-live-oversold-with-divergence — DISABLED"
+      - "검증 데이터: WR 14.2% 전 시간대 음수 (00-06 -122, 06-12 -112, 12-18 -97, 18-24 -167 USDT). 시간대 필터로도 net positive 불가."
+      - "5y bench PF 0.868 (spec status: rejected) 와 일치. 4일치 (#318 v0.6.0) + 5일치 (본 검증) 모두 같은 패턴 — strategy 자체 음의 엣지."
+      - "cs-tsmom-crypto-daily 단독 운영 — capital_fraction 0.5 (잔고 50%). PR #325 (cs-basket-dispatcher dict fix) 본 PR 에 cherry-pick 됐으므로 자동 발주 도달 가능."
+      - "재활성화 조건: (a) 진입 신호 재설계 + (b) 5y bench PF>1 AND expectancy>0 통과 + (c) production.yaml 주석 해제. 현재 코드 + spec 보존."
+    refs:
+      - "configs/orchestrator/production.yaml"
+      - "docs/journal/2026-05-26.md"
+      - "docs/specs/strategies/cs-tsmom-crypto-daily.md"
+
   - version: "v0.6.2"
     date: "2026-05-27"
     title: "live-breakout: ATR-trail 0.3% floor + breakout buffer 0.1% — 저변동성 churn 차단"

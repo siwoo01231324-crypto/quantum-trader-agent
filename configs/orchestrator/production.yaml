@@ -291,61 +291,62 @@ strategies:
   # BTC false-breakout/INJ over-trade 패턴 직격. 각 전략 regime_preference 는
   # ClassVar 로 코드에 박혀있어 yaml 에서 override 불필요. cooldown 300→900s.
   # 참조: docs/patch-notes/index.yaml, src/backtest/strategies/_indicators.py
-  - id: cand-c-2026-05-20-live-rsi-oversold-volume-spike
-    class: backtest.strategies.live_rsi_oversold_volume_spike.LiveRsiOversoldVolumeSpike
-    kwargs:
-      # default_size 는 *노셔널* 비율. 노셔널 = 0.5 × equity, 10x 레버리지
-      # → 마진 = 5% × equity. 전제: Binance UI 종목별 leverage = 10x.
-      default_size: 0.500
-      take_profit_roi: 0.12
-      stop_loss_roi: 0.08
-      leverage: 10
-      cooldown_after_stop_sec: 900   # v0.6.0 — 5분→15분 churn 차단 강화
-      # v0.6.0 A+B+C filters — meanrev preference (oversold pattern).
-      anomaly_guard_enabled: true
-      trend_filter_enabled: false    # meanrev 전략은 trend filter 부적합
-      regime_filter_enabled: true
-  - id: cand-c-2026-05-20-live-breakout-with-atr-stop
-    class: backtest.strategies.live_breakout_with_atr_stop.LiveBreakoutWithAtrStop
-    kwargs:
-      default_size: 0.500
-      take_profit_roi: 0.12
-      stop_loss_roi: 0.08
-      leverage: 10
-      trailing_stop_pct: 0.005
-      cooldown_after_stop_sec: 900   # v0.6.0 — 5분→15분 churn 차단 강화
-      trailing_stop_atr_mult: 1.5
-      atr_period: 14
-      # v0.6.0 A+B+C filters — trend preference. BTC 5/25 79/80 손절 직격 차단.
-      anomaly_guard_enabled: true
-      trend_filter_enabled: true     # ADX>=20 AND close>=EMA(50) 통과해야 진입
-      regime_filter_enabled: true
-      adx_threshold: 20.0
-      ema_slow_period: 50
-  - id: cand-c-2026-05-20-live-bb-lower-bounce
-    class: backtest.strategies.live_bb_lower_bounce.LiveBbLowerBounce
-    kwargs:
-      default_size: 0.330
-      take_profit_roi: 0.12
-      stop_loss_roi: 0.08
-      leverage: 10
-      cooldown_after_stop_sec: 900   # v0.6.0 — 5분→15분 churn 차단 강화
-      # v0.6.0 A+B+C filters — meanrev preference (BB 하단 회귀).
-      anomaly_guard_enabled: true
-      trend_filter_enabled: false
-      regime_filter_enabled: true
-  - id: cand-c-2026-05-20-live-oversold-with-divergence
-    class: backtest.strategies.live_oversold_with_divergence.LiveOversoldWithDivergence
-    kwargs:
-      default_size: 0.330
-      take_profit_roi: 0.12
-      stop_loss_roi: 0.08
-      leverage: 10
-      cooldown_after_stop_sec: 900   # v0.6.0 — 5분→15분 churn 차단 강화
-      # v0.6.0 A+B+C filters — meanrev preference (downtrend reversal).
-      anomaly_guard_enabled: true
-      trend_filter_enabled: false
-      regime_filter_enabled: true
+  #
+  # 2026-05-27 v0.6.3 — **cand-c 4종 전부 DISABLED**. 5/22~26 5일치 458 round-trip
+  # 운영 결과 net -498 USDT (WR 14.2%, 전 시간대 음수 — `docs/journal/2026-05-26.md`
+  # 의 시간대별 분석 참조). v0.6.0 A+B+C 필터 추가 후에도 5/26 단일 -85 USDT
+  # 손실로 알파 부재 재확인. 5y bench 도 PF 0.868 (`status: rejected` in spec).
+  # 자본 회수 후 cs-tsmom-crypto-daily (단일) 운영으로 집중. 재활성화는 (a) 진입
+  # 신호 재설계 + (b) 5y bench PF>1·exp>0 통과 후에만 — production.yaml unrcomment.
+  # - id: cand-c-2026-05-20-live-rsi-oversold-volume-spike
+  #   class: backtest.strategies.live_rsi_oversold_volume_spike.LiveRsiOversoldVolumeSpike
+  #   kwargs:
+  #     default_size: 0.500
+  #     take_profit_roi: 0.12
+  #     stop_loss_roi: 0.08
+  #     leverage: 10
+  #     cooldown_after_stop_sec: 900
+  #     anomaly_guard_enabled: true
+  #     trend_filter_enabled: false
+  #     regime_filter_enabled: true
+  # - id: cand-c-2026-05-20-live-breakout-with-atr-stop
+  #   class: backtest.strategies.live_breakout_with_atr_stop.LiveBreakoutWithAtrStop
+  #   kwargs:
+  #     default_size: 0.500
+  #     take_profit_roi: 0.12
+  #     stop_loss_roi: 0.08
+  #     leverage: 10
+  #     trailing_stop_pct: 0.005
+  #     cooldown_after_stop_sec: 900
+  #     trailing_stop_atr_mult: 1.5
+  #     atr_period: 14
+  #     anomaly_guard_enabled: true
+  #     trend_filter_enabled: true
+  #     regime_filter_enabled: true
+  #     adx_threshold: 20.0
+  #     ema_slow_period: 50
+  # - id: cand-c-2026-05-20-live-bb-lower-bounce
+  #   class: backtest.strategies.live_bb_lower_bounce.LiveBbLowerBounce
+  #   kwargs:
+  #     default_size: 0.330
+  #     take_profit_roi: 0.12
+  #     stop_loss_roi: 0.08
+  #     leverage: 10
+  #     cooldown_after_stop_sec: 900
+  #     anomaly_guard_enabled: true
+  #     trend_filter_enabled: false
+  #     regime_filter_enabled: true
+  # - id: cand-c-2026-05-20-live-oversold-with-divergence
+  #   class: backtest.strategies.live_oversold_with_divergence.LiveOversoldWithDivergence
+  #   kwargs:
+  #     default_size: 0.330
+  #     take_profit_roi: 0.12
+  #     stop_loss_roi: 0.08
+  #     leverage: 10
+  #     cooldown_after_stop_sec: 900
+  #     anomaly_guard_enabled: true
+  #     trend_filter_enabled: false
+  #     regime_filter_enabled: true
   #
   # ─── live_scanner_ensemble_bn1d (1-instance wrapper) — REJECTED ──────────
   # OR-게이트 1-position 디자인이 4-parallel 분산 효과(MDD -23%)를 파괴 → 5y
