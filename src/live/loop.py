@@ -600,8 +600,15 @@ async def run_shadow_loop(
                 # via CS_BASKET_DISPATCH=1.
                 if basket_dispatcher is not None:
                     try:
-                        ms_dict = getattr(snapshot, "market_snapshot", None) or {}
-                        ohlcv = ms_dict.get("ohlcv_history") if isinstance(ms_dict, dict) else None
+                        # #324 — `snapshot` 자체가 market_snapshot dict
+                        # (`SnapshotBuilder.build_snapshot` 반환). 이전 코드는
+                        # `getattr(snapshot, "market_snapshot", ...)` 로 dict 에
+                        # 없는 속성을 찾아 항상 None → 매 tick `no_prices` skip
+                        # 으로 cs-tsmom-crypto-daily 발주가 silent drop 됐다.
+                        if isinstance(snapshot, dict):
+                            ohlcv = snapshot.get("ohlcv_history")
+                        else:
+                            ohlcv = getattr(snapshot, "ohlcv_history", None)
                         await basket_dispatcher.dispatch(
                             orchestrator=orchestrator,
                             snapshot=snapshot,

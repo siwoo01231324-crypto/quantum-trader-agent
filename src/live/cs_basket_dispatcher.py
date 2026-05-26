@@ -62,17 +62,33 @@ def _resolve_lot_spec(strategy_id: str, symbols: list[str]) -> LotSpec:
     return KRX_LOT
 
 
+def _snapshot_field(snapshot: Any, key: str, default: float = 0.0) -> float:
+    """Read a numeric field from snapshot regardless of shape (#324).
+
+    Live runtime: ``SnapshotBuilder.build_snapshot()`` returns a **dict**.
+    Legacy tests: ``SimpleNamespace`` 객체.  이전 코드는 dict 에 ``getattr``
+    을 호출해 항상 default 를 받았고, 그 결과 ``capital=0`` → 매 tick
+    ``reason=zero_equity`` silent skip → cs-tsmom-crypto-daily 발주가 한 건도
+    안 나가던 사고가 발생했다. 두 shape 모두 받게 한다.
+    """
+    if isinstance(snapshot, dict):
+        val = snapshot.get(key, default)
+    else:
+        val = getattr(snapshot, key, default)
+    return float(val or 0.0)
+
+
 def _equity_for_strategy(snapshot: Any, strategy_id: str,
                           symbols: list[str]) -> float:
     """전략 venue 에 맞는 equity 추출.
 
-    Binance basket (symbols 가 *USDT) → snapshot.equity_usdt.
-    KRX basket → snapshot.equity_krw.
-    Snapshot 객체 없거나 attribute 부재 시 0 → caller 가 skip.
+    Binance basket (symbols 가 *USDT) → equity_usdt.
+    KRX basket → equity_krw.
+    Snapshot 없거나 필드 부재 시 0 → caller 가 skip.
     """
     if any(s.endswith("USDT") for s in symbols):
-        return float(getattr(snapshot, "equity_usdt", 0.0) or 0.0)
-    return float(getattr(snapshot, "equity_krw", 0.0) or 0.0)
+        return _snapshot_field(snapshot, "equity_usdt", 0.0)
+    return _snapshot_field(snapshot, "equity_krw", 0.0)
 
 
 def _prices_from_ohlcv(symbols: list[str],

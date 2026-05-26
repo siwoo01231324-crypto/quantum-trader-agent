@@ -52,6 +52,15 @@ def _snapshot(*, equity_usdt: float = 0.0, equity_krw: float = 0.0) -> SimpleNam
     return SimpleNamespace(equity_usdt=equity_usdt, equity_krw=equity_krw)
 
 
+def _snapshot_dict(*, equity_usdt: float = 0.0, equity_krw: float = 0.0) -> dict:
+    """Live runtime shape — `SnapshotBuilder.build_snapshot()` returns dict.
+
+    회귀 박제 (#324): cs_basket_dispatcher 가 `getattr(snapshot, ...)` 로 dict
+    에서 키를 못 꺼내 silent zero_equity skip 됐던 사고.
+    """
+    return {"equity_usdt": equity_usdt, "equity_krw": equity_krw}
+
+
 # ── Tests ────────────────────────────────────────────────────────────────────
 
 class TestBasketDispatcher:
@@ -181,6 +190,65 @@ class TestBasketDispatcher:
         reports = await bd.dispatch(
             orchestrator=orch,
             snapshot=_snapshot(equity_usdt=10000, equity_krw=10_000_000),
+            broker=broker,
+            ohlcv_history=_ohlcv(["005930", "035720"], last_close=70000.0),
+        )
+        assert len(reports) == 1
+        assert len(broker.calls) > 0
+
+
+class TestDictSnapshotRuntimeShape:
+    """#324 회귀 — `SnapshotBuilder.build_snapshot()` 는 dict 를 반환한다.
+
+    이전 코드는 `getattr(snapshot, "equity_usdt", 0.0)` 으로 dict 에서 키를
+    못 꺼내 매 tick `reason=zero_equity` 로 silent skip → cs-tsmom-crypto-daily
+    가 신호 포착해도 발주 한 건도 안 나가던 사고. SimpleNamespace 만 받던
+    기존 테스트가 그 mismatch 를 놓쳤다 — 본 클래스가 dict 케이스를 박제.
+    """
+
+    @pytest.mark.asyncio
+    async def test_first_dispatch_places_orders_with_dict_snapshot(self):
+        weights = pd.Series({"BTCUSDT": 0.5, "ETHUSDT": 0.5})
+        bd = BasketDispatcher()
+        broker = _StubBroker()
+        orch = _StubOrch({"cs_tsmom_crypto_daily": _StubStrategy(weights)})
+        reports = await bd.dispatch(
+            orchestrator=orch,
+            snapshot=_snapshot_dict(equity_usdt=100000),
+            broker=broker,
+            ohlcv_history=_ohlcv(["BTCUSDT", "ETHUSDT"], last_close=100.0),
+        )
+        assert len(reports) == 1, "dict snapshot 으로도 발주 도달해야 한다"
+        assert len(broker.calls) == 2
+        symbols = sorted(c.symbol for c in broker.calls)
+        assert symbols == ["BTCUSDT", "ETHUSDT"]
+
+    @pytest.mark.asyncio
+    async def test_zero_equity_dict_snapshot_still_skips(self):
+        """dict snapshot 이어도 equity 0 이면 정상 skip — fallback 이 fabricate
+        하면 안 됨."""
+        weights = pd.Series({"BTCUSDT": 1.0})
+        bd = BasketDispatcher()
+        broker = _StubBroker()
+        orch = _StubOrch({"cs_tsmom_crypto_daily": _StubStrategy(weights)})
+        reports = await bd.dispatch(
+            orchestrator=orch,
+            snapshot=_snapshot_dict(equity_usdt=0),
+            broker=broker,
+            ohlcv_history=_ohlcv(["BTCUSDT"], last_close=100.0),
+        )
+        assert reports == []
+        assert broker.calls == []
+
+    @pytest.mark.asyncio
+    async def test_krx_basket_dict_snapshot_uses_krw_equity(self):
+        weights = pd.Series({"005930": 0.5, "035720": 0.5})
+        bd = BasketDispatcher()
+        broker = _StubBroker()
+        orch = _StubOrch({"cs_tsmom_kr_daily": _StubStrategy(weights)})
+        reports = await bd.dispatch(
+            orchestrator=orch,
+            snapshot=_snapshot_dict(equity_usdt=10000, equity_krw=10_000_000),
             broker=broker,
             ohlcv_history=_ohlcv(["005930", "035720"], last_close=70000.0),
         )
