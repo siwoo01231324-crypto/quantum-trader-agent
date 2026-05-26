@@ -44,9 +44,11 @@ verdict_5y: "rejected: PF=0.868<1, expectancy=-0.243%/trade<0 (5y/30 syms/10bp)"
 
 ## 진입
 
-- `close[-1] >= max(close[-21:-1])` — 20봉 신고가 돌파
+- `close[-1] >= max(close[-21:-1]) × 1.001` — 20봉 신고가 대비 **최소 0.1% 마진 돌파** (#326)
 
 다른 검색식과 다르게 RSI / 거래량 조건을 추가하지 않음. 이유: trailing-stop 이 false-positive 의 손실을 4% 로 묶음 → 진입 hurdle 을 낮춰 trade 수를 늘릴 가치가 있음 (5y backtest 가 가설 검증).
+
+**#326 (2026-05-26)**: 5/26 BTC 3건 churn (-11 USDT) 분석 결과 `last == max20` (동률) 과 +0.004% 미세 돌파가 통과돼 노이즈 entry 가 발생했다. `last >= max × 1.001` 로 강화해 실질 돌파만 entry.
 
 ## 청산
 
@@ -54,6 +56,10 @@ verdict_5y: "rejected: PF=0.868<1, expectancy=-0.243%/trade<0 (5y/30 syms/10bp)"
 - `stop_loss_pct = 0.05` — 매수가 -5% 안전망
 - `take_profit_pct = 0.20` — 매수가 +20% 안전망 (드물게 발동)
 - **`trailing_stop_pct = 0.04`** — 주된 청산 룰. 매수 후 갱신된 최고가 대비 -4% 후퇴 시 매도
+
+### ATR 동적 override + 0.3% floor (#326)
+
+`*_atr_mult` kwargs (예: production.yaml 의 `trailing_stop_atr_mult: 1.5`) 가 설정되면 진입 시점 ATR 로 stop/TP/trail pct 를 *현재가 대비 비율* 로 환산해 risk manager 에 전달, 그 값으로 청산 평가. 단 ATR 이 매우 작은 저변동성 시간대 (예: 00 KST BTC ATR≈30) 에선 환산 pct 가 0.05% 까지 좁아져 진입 직후 노이즈로 즉시 trailing 발사 → churn 손실. 이를 막기 위해 **`_to_pct` 가 0.3% floor 적용** — ATR 아무리 작아도 절대 그 이하로 좁아지지 않는다.
 
 ## 리스크 연동
 

@@ -15,6 +15,25 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.2"
+    date: "2026-05-27"
+    title: "live-breakout: ATR-trail 0.3% floor + breakout buffer 0.1% — 저변동성 churn 차단"
+    tags: [fix, safety]
+    summary: >
+      5/26 BTC 3건 LONG churn (-11 USDT, 1~37초 손절) 의 root cause 2건 fix.
+      live-scanner cand-c-* 4종 중 live_breakout_with_atr_stop 대상.
+    items:
+      - "Fix #1 — ATR-trail floor 0.3%: `_atr_overrides._to_pct()` 에 `max(0.003, ...)` 추가. 저변동성 시간대 (00 KST BTC ATR≈30) 에 trail/stop/TP 가 0.05% 까지 좁아져 진입 직후 노이즈로 즉시 청산되던 churn 차단. 정상 변동성에선 byte-identical."
+      - "Fix #2 — breakout buffer 0.1%: `last < prior_max * 1.001` 로 강화. `last == max20` 동률 (5/26 trade 1) + 0.004% 미세 돌파 (trade 3) 같은 marginal entry 차단. 실질 돌파만 진입."
+      - "회귀 박제 6건 추가 (`TestAtrFloorAndBreakoutBuffer`) — 저변동성 floor / stop·TP floor / 정상 변동성 회귀 X / 동률 hold / 마진 미만 hold / 마진 초과 buy."
+      - "5/26 사후 검증: v0.6.0 cooldown 300→900s 상향 이전 시각 (00:00-00:42 KST, v0.6.0 commit 01:20 KST 보다 일찍) 의 사고였음 — cooldown 만 적용됐어도 trade 2/3 차단됐을 케이스. 본 PR 은 trade 1 (root cause) 까지 차단."
+      - "별도 후속 (Fix #3): 시간대별 진입 차단 (예 22-05 KST) — 1주 운영 데이터로 PF 분포 본 후 결정."
+    refs:
+      - "docs/journal/2026-05-26.md"
+      - "src/backtest/strategies/live_breakout_with_atr_stop.py"
+      - "tests/backtest/test_live_breakout_with_atr_stop.py"
+      - "docs/specs/strategies/live-breakout-with-atr-stop.md"
+
   - version: "v0.6.1"
     date: "2026-05-26"
     title: "불변식 #8 — 전략/리스크/production.yaml 변경 시 patch-notes 동반 갱신 강제"

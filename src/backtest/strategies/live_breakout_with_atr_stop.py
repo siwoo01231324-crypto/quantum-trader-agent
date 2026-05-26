@@ -155,7 +155,10 @@ class LiveBreakoutWithAtrStop(LiveScannerMixin):
             return Signal(action="hold", size=0.0, reason="baseline_short")
         prior_max = float(baseline.max())
         last_close = float(close.iloc[-1])
-        if last_close < prior_max:
+        # #326 — `last < prior_max` 는 동률 (last==max20) 과 미세 돌파 (예 +0.004%)
+        # 도 통과시켜 marginal entry churn 의 원인이었다 (5/26 BTC 3건 0~0.013%
+        # "돌파" → 노이즈로 즉시 trailing 청산). 0.1% 명확한 돌파만 진입.
+        if last_close < prior_max * 1.001:
             return Signal(
                 action="hold", size=0.0,
                 reason=f"no_breakout:last={last_close:.0f},max={prior_max:.0f}",
@@ -196,11 +199,17 @@ class LiveBreakoutWithAtrStop(LiveScannerMixin):
         if atr is None or atr <= 0:
             return out
 
+        # #326 — 저변동성 시간대 (예: 00 KST BTC) ATR 이 매우 작아져 trail/stop/TP
+        # 가 0.05% 미만으로 좁아지던 churn 차단. ATR override 가 활성화돼도 절대
+        # 0.3% 미만 거리로는 stop/TP 를 설정하지 않는다 (5/26 BTC 1초 trail
+        # 청산 사례 재발 방지).
+        _ATR_OVERRIDE_FLOOR = 0.003
+
         def _to_pct(mult: float | None) -> float | None:
             if mult is None or mult <= 0:
                 return None
             # pct of entry price; risk manager 가 `entry * (1 - pct)` 로 stop 계산.
-            return min(0.999, atr * float(mult) / last_close)
+            return max(_ATR_OVERRIDE_FLOOR, min(0.999, atr * float(mult) / last_close))
         out["stop"] = _to_pct(self.stop_atr_mult)
         out["tp"] = _to_pct(self.take_profit_atr_mult)
         out["trail"] = _to_pct(self.trailing_stop_atr_mult)
