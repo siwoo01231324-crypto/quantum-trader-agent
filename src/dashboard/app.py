@@ -49,18 +49,26 @@ def _parse_airborne_fire_line(line: str) -> dict | None:
 
     포맷: ``2026-05-23 02:00:33,327 INFO airborne_alert_daemon — FIRE CBRSUSDT
     long @ close=264.52 trigger=263.156``
+
+    daemon 컨테이너는 Dockerfile 에서 ``TZ=Asia/Seoul`` 이 설정돼 있어
+    ``%(asctime)s`` 가 **KST 로컬 시각** 으로 찍힌다 (2026-05-26 검증 — 컨테이너
+    안에서 ``date`` 는 KST, ``date -u`` 는 UTC). 그래서 파서는 KST tz 를 붙여
+    aware datetime 으로 만든 뒤 downstream 일관성을 위해 UTC 로 변환한 ISO
+    문자열을 반환한다. PR #321 이 ``tzinfo=timezone.utc`` 로 잘못 붙여 JS
+    Intl.DateTimeFormat 변환에서 9 시간이 더 가산되던 버그 수정 (#322).
     """
     m = _AIRBORNE_FIRE_RE.match(line)
     if not m:
         return None
     try:
-        ts = datetime.strptime(m.group(1), "%Y-%m-%d %H:%M:%S").replace(
-            tzinfo=timezone.utc
+        ts_kst = datetime.strptime(m.group(1), "%Y-%m-%d %H:%M:%S").replace(
+            tzinfo=_KST,
         )
     except ValueError:
         return None
+    ts_utc = ts_kst.astimezone(timezone.utc)
     return {
-        "ts": ts.isoformat(),
+        "ts": ts_utc.isoformat(),
         "symbol": m.group(2),
         "side": m.group(3),
         "fire_close": float(m.group(4)),
@@ -4280,7 +4288,8 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
         # 매일 자정 routine 이 알림 적중 분석 (다음 15분봉 4개 TP/SL 시뮬레이션)
         # 하려면 raw FIRE 라인 필요. docker 미가동 환경에서는 빈 리스트.
         import asyncio as _asyncio2
-        since_iso = utc_cutoff.strftime("%Y-%m-%dT%H:%M:%S")
+        # ``Z`` 로 명시 UTC — docker --since 가 daemon-local TZ 로 해석하지 않게.
+        since_iso = utc_cutoff.strftime("%Y-%m-%dT%H:%M:%SZ")
         airborne_fires_raw = await _asyncio2.to_thread(
             _parse_airborne_fires_from_docker_logs, since_iso,
         )
@@ -4376,12 +4385,23 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
         kst_now = datetime.now(_KST)
         kst_midnight = kst_now.replace(hour=0, minute=0, second=0, microsecond=0)
         utc_cutoff = kst_midnight.astimezone(timezone.utc)
-        since_iso = utc_cutoff.strftime("%Y-%m-%dT%H:%M:%S")
+        # docker `--since` 는 TZ 가 빠지면 daemon 로컬 TZ 로 해석된다 → 한국
+        # 호스트에서 KST cutoff 보다 9 시간 이른 라인까지 끌어옴. ``Z`` 로 명시 UTC.
+        since_iso = utc_cutoff.strftime("%Y-%m-%dT%H:%M:%SZ")
 
         fires = await asyncio.to_thread(
             _parse_airborne_fires_from_docker_logs, since_iso,
         )
-        fires = [f for f in fires if f["ts"] >= utc_cutoff.isoformat()]
+        # offset 이 다른 iso 문자열은 사전식 비교가 무의미 (예: "+09:00" > "+00:00").
+        # aware datetime 으로 풀어 정확히 비교.
+        def _fire_after_cutoff(ts_iso: str) -> bool:
+            try:
+                return datetime.fromisoformat(
+                    str(ts_iso).replace("Z", "+00:00"),
+                ) >= utc_cutoff
+            except (ValueError, TypeError):
+                return False
+        fires = [f for f in fires if _fire_after_cutoff(f["ts"])]
 
         sims: list[dict] = []
         if fires:
