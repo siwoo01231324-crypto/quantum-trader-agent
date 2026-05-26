@@ -1,0 +1,3991 @@
+{
+  "date_kst": "2026-05-26",
+  "kst_window_start": "2026-05-26T00:00:00+09:00",
+  "now_kst": "2026-05-27T02:40:52.971261+09:00",
+  "counts": {
+    "auto_fills": 98,
+    "auto_signals": 220,
+    "manual_trades": 0,
+    "airborne_fires": 100
+  },
+  "auto_fills": [
+    {
+      "ts": "2026-05-25T15:00:44.672000+00:00",
+      "client_order_id": "e929433bba2631981a78a87927d68dc0e6e7",
+      "broker_order_id": "13193431440",
+      "symbol": "BTCUSDT",
+      "side": "BUY",
+      "qty": "0.02",
+      "fill_qty": "0.02",
+      "fill_price": "77694.3",
+      "fees": "0.62155439",
+      "fee_asset": "USDT",
+      "trade_id": "494843711",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T15:01:21.854000+00:00",
+      "client_order_id": "d41aee979dc83a07b3b3f019f4a16aa33a87",
+      "broker_order_id": "13193433003",
+      "symbol": "BTCUSDT",
+      "side": "SELL",
+      "qty": "0.02",
+      "fill_qty": "0.02",
+      "fill_price": "77687.2",
+      "fees": "0.6214976",
+      "fee_asset": "USDT",
+      "trade_id": "494843976",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T15:11:00.352000+00:00",
+      "client_order_id": "8a0a29de708bcd0bc26103902eb722843315",
+      "broker_order_id": "13193455102",
+      "symbol": "BTCUSDT",
+      "side": "BUY",
+      "qty": "0.02",
+      "fill_qty": "0.02",
+      "fill_price": "77703.6",
+      "fees": "0.6216288",
+      "fee_asset": "USDT",
+      "trade_id": "494847394",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T15:11:01.648000+00:00",
+      "client_order_id": "291d3cbda115a6bfe9ca8204a42a929038aa",
+      "broker_order_id": "13193455233",
+      "symbol": "BTCUSDT",
+      "side": "SELL",
+      "qty": "0.02",
+      "fill_qty": "0.02",
+      "fill_price": "77656.7",
+      "fees": "0.62125359",
+      "fee_asset": "USDT",
+      "trade_id": "494847527",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T15:15:28.162000+00:00",
+      "client_order_id": "7676942777b3d8599f57da75da8d18c5ed60",
+      "broker_order_id": "258179076",
+      "symbol": "NEARUSDT",
+      "side": "SELL",
+      "qty": "622",
+      "fill_qty": "622",
+      "fill_price": "2.654",
+      "fees": "0.6603152",
+      "fee_asset": "USDT",
+      "trade_id": "40777772",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T15:20:28.198000+00:00",
+      "client_order_id": "18ec18f4fed3a04efdedc909858d2539a627",
+      "broker_order_id": "258182214",
+      "symbol": "NEARUSDT",
+      "side": "BUY",
+      "qty": "622",
+      "fill_qty": "622",
+      "fill_price": "2.644",
+      "fees": "0.65782719",
+      "fee_asset": "USDT",
+      "trade_id": "40779135",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T15:33:05.203000+00:00",
+      "client_order_id": "8204c74387bde28afcedb0d82d947a4b1d61",
+      "broker_order_id": "258189619",
+      "symbol": "NEARUSDT",
+      "side": "SELL",
+      "qty": "622",
+      "fill_qty": "622",
+      "fill_price": "2.667",
+      "fees": "0.66354959",
+      "fee_asset": "USDT",
+      "trade_id": "40782742",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T15:33:52.218000+00:00",
+      "client_order_id": "ff6267225e004974a520c875a73d73e74d4d",
+      "broker_order_id": "129124897",
+      "symbol": "INJUSDT",
+      "side": "SELL",
+      "qty": "277.8",
+      "fill_qty": "277.8",
+      "fill_price": "5.698",
+      "fees": "0.63316176",
+      "fee_asset": "USDT",
+      "trade_id": "39040700",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T15:38:07.253000+00:00",
+      "client_order_id": "491fa8a7c781baba07c9020a53a178f815d0",
+      "broker_order_id": "258192636",
+      "symbol": "NEARUSDT",
+      "side": "BUY",
+      "qty": "1",
+      "fill_qty": "1",
+      "fill_price": "2.674",
+      "fees": "0.0010696",
+      "fee_asset": "USDT",
+      "trade_id": "40784076",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T15:38:07.253000+00:00",
+      "client_order_id": "491fa8a7c781baba07c9020a53a178f815d0",
+      "broker_order_id": "258192636",
+      "symbol": "NEARUSDT",
+      "side": "BUY",
+      "qty": "646",
+      "fill_qty": "646",
+      "fill_price": "2.677",
+      "fees": "0.6917368",
+      "fee_asset": "USDT",
+      "trade_id": "40784077",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T15:38:52.330000+00:00",
+      "client_order_id": "bad87c66bd96b40349b85e6c76bdab7dfd06",
+      "broker_order_id": "129127640",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "0.9",
+      "fill_qty": "0.9",
+      "fill_price": "5.734",
+      "fees": "0.00206424",
+      "fee_asset": "USDT",
+      "trade_id": "39042268",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T15:38:52.330000+00:00",
+      "client_order_id": "bad87c66bd96b40349b85e6c76bdab7dfd06",
+      "broker_order_id": "129127640",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "1",
+      "fill_qty": "1",
+      "fill_price": "5.734",
+      "fees": "0.00229359",
+      "fee_asset": "USDT",
+      "trade_id": "39042269",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T15:38:52.330000+00:00",
+      "client_order_id": "bad87c66bd96b40349b85e6c76bdab7dfd06",
+      "broker_order_id": "129127640",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "0.9",
+      "fill_qty": "0.9",
+      "fill_price": "5.734",
+      "fees": "0.00206424",
+      "fee_asset": "USDT",
+      "trade_id": "39042270",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T15:38:52.330000+00:00",
+      "client_order_id": "bad87c66bd96b40349b85e6c76bdab7dfd06",
+      "broker_order_id": "129127640",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "1.2",
+      "fill_qty": "1.2",
+      "fill_price": "5.734",
+      "fees": "0.00275232",
+      "fee_asset": "USDT",
+      "trade_id": "39042271",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T15:38:52.330000+00:00",
+      "client_order_id": "bad87c66bd96b40349b85e6c76bdab7dfd06",
+      "broker_order_id": "129127640",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "1",
+      "fill_qty": "1",
+      "fill_price": "5.734",
+      "fees": "0.00229359",
+      "fee_asset": "USDT",
+      "trade_id": "39042272",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T15:38:52.330000+00:00",
+      "client_order_id": "bad87c66bd96b40349b85e6c76bdab7dfd06",
+      "broker_order_id": "129127640",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "281.2",
+      "fill_qty": "281.2",
+      "fill_price": "5.735",
+      "fees": "0.6450728",
+      "fee_asset": "USDT",
+      "trade_id": "39042273",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T15:41:00.252000+00:00",
+      "client_order_id": "4a66b0c85557b635340e8d13c707ba49eedf",
+      "broker_order_id": "13193547778",
+      "symbol": "BTCUSDT",
+      "side": "BUY",
+      "qty": "0.02",
+      "fill_qty": "0.02",
+      "fill_price": "77633",
+      "fees": "0.62106399",
+      "fee_asset": "USDT",
+      "trade_id": "494858767",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T15:41:30.272000+00:00",
+      "client_order_id": "16adff1d4e13f2daed6be9381ab8fe2184a8",
+      "broker_order_id": "13193548920",
+      "symbol": "BTCUSDT",
+      "side": "SELL",
+      "qty": "0.02",
+      "fill_qty": "0.02",
+      "fill_price": "77635.9",
+      "fees": "0.62108719",
+      "fee_asset": "USDT",
+      "trade_id": "494858965",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T15:51:24.260000+00:00",
+      "client_order_id": "531d5aa4288b1a0bc08db55f6e8fb5b439bd",
+      "broker_order_id": "129134757",
+      "symbol": "INJUSDT",
+      "side": "SELL",
+      "qty": "286.2",
+      "fill_qty": "286.2",
+      "fill_price": "5.691",
+      "fees": "0.65150568",
+      "fee_asset": "USDT",
+      "trade_id": "39045233",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T15:53:28.250000+00:00",
+      "client_order_id": "3a12fcb14f4593bc3feb10571efc15cb8064",
+      "broker_order_id": "258202059",
+      "symbol": "NEARUSDT",
+      "side": "SELL",
+      "qty": "30",
+      "fill_qty": "30",
+      "fill_price": "2.693",
+      "fees": "0.03231599",
+      "fee_asset": "USDT",
+      "trade_id": "40788661",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T15:53:28.250000+00:00",
+      "client_order_id": "3a12fcb14f4593bc3feb10571efc15cb8064",
+      "broker_order_id": "258202059",
+      "symbol": "NEARUSDT",
+      "side": "SELL",
+      "qty": "617",
+      "fill_qty": "617",
+      "fill_price": "2.692",
+      "fees": "0.6643856",
+      "fee_asset": "USDT",
+      "trade_id": "40788662",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T15:56:26.319000+00:00",
+      "client_order_id": "5df94e0f723479c84e870d1432cf52c38367",
+      "broker_order_id": "129137452",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "303",
+      "fill_qty": "303",
+      "fill_price": "5.698",
+      "fees": "0.6905976",
+      "fee_asset": "USDT",
+      "trade_id": "39046369",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T15:58:28.394000+00:00",
+      "client_order_id": "42357b896c1a6ec8eba42219e780d94eb6e5",
+      "broker_order_id": "258204614",
+      "symbol": "NEARUSDT",
+      "side": "BUY",
+      "qty": "604",
+      "fill_qty": "604",
+      "fill_price": "2.708",
+      "fees": "0.6542528",
+      "fee_asset": "USDT",
+      "trade_id": "40789763",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T16:00:43.229000+00:00",
+      "client_order_id": "97c4f9f3826f57146d7259e7d76725d4ffbe",
+      "broker_order_id": "129139661",
+      "symbol": "INJUSDT",
+      "side": "SELL",
+      "qty": "303",
+      "fill_qty": "303",
+      "fill_price": "5.695",
+      "fees": "0.690234",
+      "fee_asset": "USDT",
+      "trade_id": "39047025",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T16:05:43.205000+00:00",
+      "client_order_id": "58c28660a8e339333d6bc3e2393f847016bc",
+      "broker_order_id": "129142404",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "288",
+      "fill_qty": "288",
+      "fill_price": "5.698",
+      "fees": "0.6564096",
+      "fee_asset": "USDT",
+      "trade_id": "39047904",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T16:06:22.154000+00:00",
+      "client_order_id": "493432a88babe2fc6999ac5b2a31ad215d3e",
+      "broker_order_id": "129142753",
+      "symbol": "INJUSDT",
+      "side": "SELL",
+      "qty": "288",
+      "fill_qty": "288",
+      "fill_price": "5.695",
+      "fees": "0.656064",
+      "fee_asset": "USDT",
+      "trade_id": "39048019",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T16:11:22.264000+00:00",
+      "client_order_id": "6ea3ae5f1c63108920bb17e8c378b359e39b",
+      "broker_order_id": "129145075",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "17.7",
+      "fill_qty": "17.7",
+      "fill_price": "5.655",
+      "fees": "0.0400374",
+      "fee_asset": "USDT",
+      "trade_id": "39049143",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T16:11:22.264000+00:00",
+      "client_order_id": "6ea3ae5f1c63108920bb17e8c378b359e39b",
+      "broker_order_id": "129145075",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "270.8",
+      "fill_qty": "270.8",
+      "fill_price": "5.698",
+      "fees": "0.61720736",
+      "fee_asset": "USDT",
+      "trade_id": "39049144",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T16:11:23.134000+00:00",
+      "client_order_id": "2f33e64882b39fd231adb9bc757472b54edf",
+      "broker_order_id": "129145084",
+      "symbol": "INJUSDT",
+      "side": "SELL",
+      "qty": "288.5",
+      "fill_qty": "288.5",
+      "fill_price": "5.65",
+      "fees": "0.65201",
+      "fee_asset": "USDT",
+      "trade_id": "39049148",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T16:14:31.148000+00:00",
+      "client_order_id": "9268fc7143017116764e5ebf902fd827451d",
+      "broker_order_id": "1249098475",
+      "symbol": "ZECUSDT",
+      "side": "SELL",
+      "qty": "0.992",
+      "fill_qty": "0.992",
+      "fill_price": "670.75",
+      "fees": "0.2661536",
+      "fee_asset": "USDT",
+      "trade_id": "70824786",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T16:14:31.148000+00:00",
+      "client_order_id": "9268fc7143017116764e5ebf902fd827451d",
+      "broker_order_id": "1249098475",
+      "symbol": "ZECUSDT",
+      "side": "SELL",
+      "qty": "0.012",
+      "fill_qty": "0.012",
+      "fill_price": "670.75",
+      "fees": "0.0032196",
+      "fee_asset": "USDT",
+      "trade_id": "70824787",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T16:14:31.148000+00:00",
+      "client_order_id": "9268fc7143017116764e5ebf902fd827451d",
+      "broker_order_id": "1249098475",
+      "symbol": "ZECUSDT",
+      "side": "SELL",
+      "qty": "0.009",
+      "fill_qty": "0.009",
+      "fill_price": "670.75",
+      "fees": "0.0024147",
+      "fee_asset": "USDT",
+      "trade_id": "70824788",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T16:14:31.148000+00:00",
+      "client_order_id": "9268fc7143017116764e5ebf902fd827451d",
+      "broker_order_id": "1249098475",
+      "symbol": "ZECUSDT",
+      "side": "SELL",
+      "qty": "0.008",
+      "fill_qty": "0.008",
+      "fill_price": "670.75",
+      "fees": "0.0021464",
+      "fee_asset": "USDT",
+      "trade_id": "70824789",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T16:14:31.148000+00:00",
+      "client_order_id": "9268fc7143017116764e5ebf902fd827451d",
+      "broker_order_id": "1249098475",
+      "symbol": "ZECUSDT",
+      "side": "SELL",
+      "qty": "1.412",
+      "fill_qty": "1.412",
+      "fill_price": "670.74",
+      "fees": "0.37883395",
+      "fee_asset": "USDT",
+      "trade_id": "70824790",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T16:16:23.421000+00:00",
+      "client_order_id": "29c7e5a4bb4ab1a5a29f1cedcc27b9f041e4",
+      "broker_order_id": "129147724",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "17.7",
+      "fill_qty": "17.7",
+      "fill_price": "5.628",
+      "fees": "0.03984624",
+      "fee_asset": "USDT",
+      "trade_id": "39050360",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T16:16:23.421000+00:00",
+      "client_order_id": "29c7e5a4bb4ab1a5a29f1cedcc27b9f041e4",
+      "broker_order_id": "129147724",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "145.9",
+      "fill_qty": "145.9",
+      "fill_price": "5.651",
+      "fees": "0.32979236",
+      "fee_asset": "USDT",
+      "trade_id": "39050361",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T16:16:23.421000+00:00",
+      "client_order_id": "29c7e5a4bb4ab1a5a29f1cedcc27b9f041e4",
+      "broker_order_id": "129147724",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "138.5",
+      "fill_qty": "138.5",
+      "fill_price": "5.654",
+      "fees": "0.3132316",
+      "fee_asset": "USDT",
+      "trade_id": "39050362",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T16:17:30.186000+00:00",
+      "client_order_id": "54463253a75da0922358101c69f8ddabf693",
+      "broker_order_id": "258214402",
+      "symbol": "NEARUSDT",
+      "side": "SELL",
+      "qty": "604",
+      "fill_qty": "604",
+      "fill_price": "2.687",
+      "fees": "0.64917919",
+      "fee_asset": "USDT",
+      "trade_id": "40793930",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T16:17:44.161000+00:00",
+      "client_order_id": "1220519eb7f382e24e302e349ce4134ce8ab",
+      "broker_order_id": "129148476",
+      "symbol": "INJUSDT",
+      "side": "SELL",
+      "qty": "302.1",
+      "fill_qty": "302.1",
+      "fill_price": "5.617",
+      "fees": "0.67875828",
+      "fee_asset": "USDT",
+      "trade_id": "39050703",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T16:22:30.682000+00:00",
+      "client_order_id": "a3f2ba493a7c25f96c7f49d7dd385c98b4f0",
+      "broker_order_id": "258217616",
+      "symbol": "NEARUSDT",
+      "side": "BUY",
+      "qty": "662",
+      "fill_qty": "662",
+      "fill_price": "2.686",
+      "fees": "0.7112528",
+      "fee_asset": "USDT",
+      "trade_id": "40795542",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T16:22:44.245000+00:00",
+      "client_order_id": "a2d2e46b6f400f1b4d5aecfdc7248c3c02f7",
+      "broker_order_id": "129151184",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "78.9",
+      "fill_qty": "78.9",
+      "fill_price": "5.627",
+      "fees": "0.17758812",
+      "fee_asset": "USDT",
+      "trade_id": "39051976",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T16:22:44.245000+00:00",
+      "client_order_id": "a2d2e46b6f400f1b4d5aecfdc7248c3c02f7",
+      "broker_order_id": "129151184",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "223.1",
+      "fill_qty": "223.1",
+      "fill_price": "5.627",
+      "fees": "0.50215348",
+      "fee_asset": "USDT",
+      "trade_id": "39051977",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T16:36:22.592000+00:00",
+      "client_order_id": "ed8e85facff7c7e8128aab283e2f29dbcd56",
+      "broker_order_id": "258225127",
+      "symbol": "NEARUSDT",
+      "side": "SELL",
+      "qty": "662",
+      "fill_qty": "662",
+      "fill_price": "2.714",
+      "fees": "0.7186672",
+      "fee_asset": "USDT",
+      "trade_id": "40799038",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T16:39:53.296000+00:00",
+      "client_order_id": "3bbfaa531f8f5e5514e90893dfdf22ce7481",
+      "broker_order_id": "129159332",
+      "symbol": "INJUSDT",
+      "side": "SELL",
+      "qty": "0.3",
+      "fill_qty": "0.3",
+      "fill_price": "5.654",
+      "fees": "0.00067848",
+      "fee_asset": "USDT",
+      "trade_id": "39055660",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T16:39:53.296000+00:00",
+      "client_order_id": "3bbfaa531f8f5e5514e90893dfdf22ce7481",
+      "broker_order_id": "129159332",
+      "symbol": "INJUSDT",
+      "side": "SELL",
+      "qty": "1",
+      "fill_qty": "1",
+      "fill_price": "5.654",
+      "fees": "0.0022616",
+      "fee_asset": "USDT",
+      "trade_id": "39055661",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T16:39:53.296000+00:00",
+      "client_order_id": "3bbfaa531f8f5e5514e90893dfdf22ce7481",
+      "broker_order_id": "129159332",
+      "symbol": "INJUSDT",
+      "side": "SELL",
+      "qty": "1.7",
+      "fill_qty": "1.7",
+      "fill_price": "5.654",
+      "fees": "0.00384472",
+      "fee_asset": "USDT",
+      "trade_id": "39055662",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T16:39:53.296000+00:00",
+      "client_order_id": "3bbfaa531f8f5e5514e90893dfdf22ce7481",
+      "broker_order_id": "129159332",
+      "symbol": "INJUSDT",
+      "side": "SELL",
+      "qty": "1.4",
+      "fill_qty": "1.4",
+      "fill_price": "5.654",
+      "fees": "0.00316624",
+      "fee_asset": "USDT",
+      "trade_id": "39055663",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T16:39:53.296000+00:00",
+      "client_order_id": "3bbfaa531f8f5e5514e90893dfdf22ce7481",
+      "broker_order_id": "129159332",
+      "symbol": "INJUSDT",
+      "side": "SELL",
+      "qty": "297.6",
+      "fill_qty": "297.6",
+      "fill_price": "5.653",
+      "fees": "0.67293312",
+      "fee_asset": "USDT",
+      "trade_id": "39055664",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T16:54:03.621000+00:00",
+      "client_order_id": "fa209021f746f8550049ef7ca90e2a99fd7c",
+      "broker_order_id": "129166632",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "0.7",
+      "fill_qty": "0.7",
+      "fill_price": "5.716",
+      "fees": "0.00160048",
+      "fee_asset": "USDT",
+      "trade_id": "39058545",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T16:54:03.621000+00:00",
+      "client_order_id": "fa209021f746f8550049ef7ca90e2a99fd7c",
+      "broker_order_id": "129166632",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "1",
+      "fill_qty": "1",
+      "fill_price": "5.716",
+      "fees": "0.0022864",
+      "fee_asset": "USDT",
+      "trade_id": "39058546",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T16:54:03.621000+00:00",
+      "client_order_id": "fa209021f746f8550049ef7ca90e2a99fd7c",
+      "broker_order_id": "129166632",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "1",
+      "fill_qty": "1",
+      "fill_price": "5.716",
+      "fees": "0.0022864",
+      "fee_asset": "USDT",
+      "trade_id": "39058547",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T16:54:03.621000+00:00",
+      "client_order_id": "fa209021f746f8550049ef7ca90e2a99fd7c",
+      "broker_order_id": "129166632",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "311.6",
+      "fill_qty": "311.6",
+      "fill_price": "5.716",
+      "fees": "0.71244224",
+      "fee_asset": "USDT",
+      "trade_id": "39058548",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T17:27:17.201000+00:00",
+      "client_order_id": "45189dbbb9757a8e94eff2843b6c500bd32f",
+      "broker_order_id": "129184257",
+      "symbol": "INJUSDT",
+      "side": "SELL",
+      "qty": "314.3",
+      "fill_qty": "314.3",
+      "fill_price": "5.757",
+      "fees": "0.72377004",
+      "fee_asset": "USDT",
+      "trade_id": "39065554",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-25T17:42:17.508000+00:00",
+      "client_order_id": "ff35870e8d75f632fbcfab6aeda1165db93a",
+      "broker_order_id": "129192368",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "295.3",
+      "fill_qty": "295.3",
+      "fill_price": "5.729",
+      "fees": "0.67670948",
+      "fee_asset": "USDT",
+      "trade_id": "39069429",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T03:34:19.547000+00:00",
+      "client_order_id": "4b2cfb41dd9a7054015e1ea67de4985152da",
+      "broker_order_id": "258505154",
+      "symbol": "NEARUSDT",
+      "side": "SELL",
+      "qty": "646",
+      "fill_qty": "646",
+      "fill_price": "2.742",
+      "fees": "0.7085328",
+      "fee_asset": "USDT",
+      "trade_id": "40899499",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T03:34:19.649000+00:00",
+      "client_order_id": "8d8a767408e693d1d279bc3dd9b989487da6",
+      "broker_order_id": "129411631",
+      "symbol": "INJUSDT",
+      "side": "SELL",
+      "qty": "295.3",
+      "fill_qty": "295.3",
+      "fill_price": "5.561",
+      "fees": "0.65686532",
+      "fee_asset": "USDT",
+      "trade_id": "39142084",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T03:38:18.175000+00:00",
+      "client_order_id": "75785408543bbb8b73e049de97ee6203383e",
+      "broker_order_id": "720109220",
+      "symbol": "TRXUSDT",
+      "side": "SELL",
+      "qty": "4801",
+      "fill_qty": "4801",
+      "fill_price": "0.37422",
+      "fees": "0.71865208",
+      "fee_asset": "USDT",
+      "trade_id": "79592228",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T04:04:27.699000+00:00",
+      "client_order_id": "73a0169fd96149096024a47c3eafc90940c2",
+      "broker_order_id": "13198021713",
+      "symbol": "BTCUSDT",
+      "side": "SELL",
+      "qty": "0.014",
+      "fill_qty": "0.014",
+      "fill_price": "76637.9",
+      "fees": "0.42917224",
+      "fee_asset": "USDT",
+      "trade_id": "495028004",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-bb-lower-bounce"
+    },
+    {
+      "ts": "2026-05-26T04:24:34.687000+00:00",
+      "client_order_id": "49650434b3c3dcc13485257a5d86a5ae3af6",
+      "broker_order_id": "258544538",
+      "symbol": "NEARUSDT",
+      "side": "BUY",
+      "qty": "669",
+      "fill_qty": "669",
+      "fill_price": "2.764",
+      "fees": "0.7396464",
+      "fee_asset": "USDT",
+      "trade_id": "40906203",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T04:24:34.791000+00:00",
+      "client_order_id": "5a6d7ff3378fb988328f4f06045dfe9770de",
+      "broker_order_id": "129443716",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "327.7",
+      "fill_qty": "327.7",
+      "fill_price": "5.645",
+      "fees": "0.7399466",
+      "fee_asset": "USDT",
+      "trade_id": "39148768",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T04:29:31.268000+00:00",
+      "client_order_id": "b7f85a5fc1e4d75b03d56209bf7e994831b7",
+      "broker_order_id": "129447250",
+      "symbol": "INJUSDT",
+      "side": "SELL",
+      "qty": "327.7",
+      "fill_qty": "327.7",
+      "fill_price": "5.668",
+      "fees": "0.74296144",
+      "fee_asset": "USDT",
+      "trade_id": "39149543",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T04:37:01.871000+00:00",
+      "client_order_id": "e31b89f4b62da36edc250697d9858a6838f3",
+      "broker_order_id": "258554577",
+      "symbol": "NEARUSDT",
+      "side": "SELL",
+      "qty": "669",
+      "fill_qty": "669",
+      "fill_price": "2.785",
+      "fees": "0.745266",
+      "fee_asset": "USDT",
+      "trade_id": "40908345",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T04:44:31.595000+00:00",
+      "client_order_id": "2ef4d5f70dfec5297734c441f78ce905b947",
+      "broker_order_id": "129457088",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "326.9",
+      "fill_qty": "326.9",
+      "fill_price": "5.723",
+      "fees": "0.74833948",
+      "fee_asset": "USDT",
+      "trade_id": "39151342",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T04:47:24.231000+00:00",
+      "client_order_id": "94dcccd2632aa5c3156887052d9a9f375a43",
+      "broker_order_id": "129458822",
+      "symbol": "INJUSDT",
+      "side": "SELL",
+      "qty": "326.9",
+      "fill_qty": "326.9",
+      "fill_price": "5.691",
+      "fees": "0.74415516",
+      "fee_asset": "USDT",
+      "trade_id": "39151606",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T04:54:40.487000+00:00",
+      "client_order_id": "d27ae552d578c7cd52b83b14eb03f3ccd42d",
+      "broker_order_id": "258568621",
+      "symbol": "NEARUSDT",
+      "side": "BUY",
+      "qty": "671",
+      "fill_qty": "671",
+      "fill_price": "2.762",
+      "fees": "0.7413208",
+      "fee_asset": "USDT",
+      "trade_id": "40911228",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T05:58:05.351000+00:00",
+      "client_order_id": "7dd676331ae6cc6a4a674d602c6479583219",
+      "broker_order_id": "258614989",
+      "symbol": "NEARUSDT",
+      "side": "SELL",
+      "qty": "671",
+      "fill_qty": "671",
+      "fill_price": "2.747",
+      "fees": "0.7372948",
+      "fee_asset": "USDT",
+      "trade_id": "40919966",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T06:50:03.687000+00:00",
+      "client_order_id": "0ffdc58d38010cc9a394a4812cd7e1e64678",
+      "broker_order_id": "258654006",
+      "symbol": "NEARUSDT",
+      "side": "BUY",
+      "qty": "6",
+      "fill_qty": "6",
+      "fill_price": "2.769",
+      "fees": "0.0066456",
+      "fee_asset": "USDT",
+      "trade_id": "40927900",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T06:50:03.687000+00:00",
+      "client_order_id": "0ffdc58d38010cc9a394a4812cd7e1e64678",
+      "broker_order_id": "258654006",
+      "symbol": "NEARUSDT",
+      "side": "BUY",
+      "qty": "663",
+      "fill_qty": "663",
+      "fill_price": "2.773",
+      "fees": "0.7353996",
+      "fee_asset": "USDT",
+      "trade_id": "40927901",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T06:56:11.187000+00:00",
+      "client_order_id": "86b9b35893937893ebd53751fba3d0d399af",
+      "broker_order_id": "258658176",
+      "symbol": "NEARUSDT",
+      "side": "SELL",
+      "qty": "669",
+      "fill_qty": "669",
+      "fill_price": "2.754",
+      "fees": "0.7369704",
+      "fee_asset": "USDT",
+      "trade_id": "40928503",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T07:08:08.239000+00:00",
+      "client_order_id": "web_coin_x7db4gju0bw74e99hq3tsih",
+      "broker_order_id": "13201164633",
+      "symbol": "",
+      "side": "",
+      "qty": "0.1527",
+      "fill_qty": "0.1527",
+      "fill_price": "76840.6",
+      "fees": "4.69342384",
+      "fee_asset": "USDT",
+      "trade_id": "495069617",
+      "server_ts": null
+    },
+    {
+      "ts": "2026-05-26T07:08:35.367000+00:00",
+      "client_order_id": "web_coin_k53glcxi6x39fzafdfu00ew",
+      "broker_order_id": "13201172193",
+      "symbol": "",
+      "side": "",
+      "qty": "0.1683",
+      "fill_qty": "0.1683",
+      "fill_price": "76840.6",
+      "fees": "5.17290919",
+      "fee_asset": "USDT",
+      "trade_id": "495069693",
+      "server_ts": null
+    },
+    {
+      "ts": "2026-05-26T07:28:07.883000+00:00",
+      "client_order_id": "web_tqAD6VMfTDknEklxyVrs",
+      "broker_order_id": "13201517750",
+      "symbol": "",
+      "side": "",
+      "qty": "0.321",
+      "fill_qty": "0.321",
+      "fill_price": "76611.3",
+      "fees": "9.83689092",
+      "fee_asset": "USDT",
+      "trade_id": "495077331",
+      "server_ts": null
+    },
+    {
+      "ts": "2026-05-26T10:25:36.643000+00:00",
+      "client_order_id": "9c9b050e460b16005d0e4d9447685aab045f",
+      "broker_order_id": "258820187",
+      "symbol": "NEARUSDT",
+      "side": "BUY",
+      "qty": "648",
+      "fill_qty": "648",
+      "fill_price": "2.776",
+      "fees": "0.7195392",
+      "fee_asset": "USDT",
+      "trade_id": "40957606",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T10:30:16.486000+00:00",
+      "client_order_id": "f67a793dbdff8169ecfc2a82ed130e7ed24e",
+      "broker_order_id": "258824202",
+      "symbol": "NEARUSDT",
+      "side": "SELL",
+      "qty": "648",
+      "fill_qty": "648",
+      "fill_price": "2.8",
+      "fees": "0.72576",
+      "fee_asset": "USDT",
+      "trade_id": "40958684",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T10:45:16.227000+00:00",
+      "client_order_id": "57a06019a775ddf43ffe0ca7332057c54b15",
+      "broker_order_id": "258836560",
+      "symbol": "NEARUSDT",
+      "side": "BUY",
+      "qty": "633",
+      "fill_qty": "633",
+      "fill_price": "2.863",
+      "fees": "0.7249116",
+      "fee_asset": "USDT",
+      "trade_id": "40962127",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T10:55:41.199000+00:00",
+      "client_order_id": "cf2b1055e2acbb0832905dbc30d23c92c3b4",
+      "broker_order_id": "258844863",
+      "symbol": "NEARUSDT",
+      "side": "SELL",
+      "qty": "633",
+      "fill_qty": "633",
+      "fill_price": "2.893",
+      "fees": "0.7325076",
+      "fee_asset": "USDT",
+      "trade_id": "40964311",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T11:00:39.008000+00:00",
+      "client_order_id": "9b1139c617b6fffc8becaaf132544e4a4123",
+      "broker_order_id": "129677107",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "319.8",
+      "fill_qty": "319.8",
+      "fill_price": "5.671",
+      "fees": "0.72543432",
+      "fee_asset": "USDT",
+      "trade_id": "39193810",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T11:10:41.671000+00:00",
+      "client_order_id": "daea5022abafdc356e23577c30510c699993",
+      "broker_order_id": "258856487",
+      "symbol": "NEARUSDT",
+      "side": "BUY",
+      "qty": "592",
+      "fill_qty": "592",
+      "fill_price": "2.913",
+      "fees": "0.6897984",
+      "fee_asset": "USDT",
+      "trade_id": "40966251",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T11:11:20.187000+00:00",
+      "client_order_id": "df60c9d38fbff21eca1e6fc4e228bffc300a",
+      "broker_order_id": "129684345",
+      "symbol": "INJUSDT",
+      "side": "SELL",
+      "qty": "319.8",
+      "fill_qty": "319.8",
+      "fill_price": "5.699",
+      "fees": "0.72901608",
+      "fee_asset": "USDT",
+      "trade_id": "39195259",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T11:26:21.043000+00:00",
+      "client_order_id": "be94b450a90bdcfae32c602b1516962f8148",
+      "broker_order_id": "129695729",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "301.9",
+      "fill_qty": "301.9",
+      "fill_price": "5.757",
+      "fees": "0.69521532",
+      "fee_asset": "USDT",
+      "trade_id": "39197231",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T11:30:29.281000+00:00",
+      "client_order_id": "2bd499610d8b762d90483647335159069f9b",
+      "broker_order_id": "258872059",
+      "symbol": "NEARUSDT",
+      "side": "SELL",
+      "qty": "592",
+      "fill_qty": "592",
+      "fill_price": "2.939",
+      "fees": "0.6959552",
+      "fee_asset": "USDT",
+      "trade_id": "40969928",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T11:33:09.175000+00:00",
+      "client_order_id": "741ae91810c927f8a0a23d9cd4fc6ebcc559",
+      "broker_order_id": "129700851",
+      "symbol": "INJUSDT",
+      "side": "SELL",
+      "qty": "301.9",
+      "fill_qty": "301.9",
+      "fill_price": "5.791",
+      "fees": "0.69932116",
+      "fee_asset": "USDT",
+      "trade_id": "39198360",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T11:45:30.019000+00:00",
+      "client_order_id": "d67652b11fc348b58c05181d2e9ef462ca39",
+      "broker_order_id": "258884976",
+      "symbol": "NEARUSDT",
+      "side": "BUY",
+      "qty": "618",
+      "fill_qty": "618",
+      "fill_price": "2.965",
+      "fees": "0.732948",
+      "fee_asset": "USDT",
+      "trade_id": "40972465",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T11:48:09.849000+00:00",
+      "client_order_id": "ae65801e33d5f7344c74d73b48ae4f9f331f",
+      "broker_order_id": "129711748",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "300.5",
+      "fill_qty": "300.5",
+      "fill_price": "5.81",
+      "fees": "0.698362",
+      "fee_asset": "USDT",
+      "trade_id": "39200681",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T12:52:54.451000+00:00",
+      "client_order_id": "f3f3c8ebeedce77551285111e447820cd5ec",
+      "broker_order_id": "129713881",
+      "symbol": "INJUSDT",
+      "side": "SELL",
+      "qty": "300.5",
+      "fill_qty": "300.5",
+      "fill_price": "5.873",
+      "fees": "0.7059346",
+      "fee_asset": "USDT",
+      "trade_id": "39201226",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T12:53:00.285000+00:00",
+      "client_order_id": "2054980f71d08af338fa421f5f187e3fb943",
+      "broker_order_id": "258889985",
+      "symbol": "NEARUSDT",
+      "side": "SELL",
+      "qty": "618",
+      "fill_qty": "618",
+      "fill_price": "2.781",
+      "fees": "0.6874632",
+      "fee_asset": "USDT",
+      "trade_id": "40973942",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T13:07:54.287000+00:00",
+      "client_order_id": "b36643bb4363b2e7c874c5a042effd98e1bd",
+      "broker_order_id": "129722277",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "304.7",
+      "fill_qty": "304.7",
+      "fill_price": "5.852",
+      "fees": "0.71324176",
+      "fee_asset": "USDT",
+      "trade_id": "39202874",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T13:32:52.911000+00:00",
+      "client_order_id": "b065e844c10026b1d88f6632b274bc968b69",
+      "broker_order_id": "129739463",
+      "symbol": "INJUSDT",
+      "side": "SELL",
+      "qty": "304.7",
+      "fill_qty": "304.7",
+      "fill_price": "5.902",
+      "fees": "0.71933576",
+      "fee_asset": "USDT",
+      "trade_id": "39206327",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T13:37:18.303000+00:00",
+      "client_order_id": "106ddf206d4c4745010c99feefb78af20d29",
+      "broker_order_id": "258922575",
+      "symbol": "NEARUSDT",
+      "side": "BUY",
+      "qty": "645",
+      "fill_qty": "645",
+      "fill_price": "2.768",
+      "fees": "0.714144",
+      "fee_asset": "USDT",
+      "trade_id": "40980851",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T13:41:27.331000+00:00",
+      "client_order_id": "be1543aa89dcba95b0e064f098208af856bc",
+      "broker_order_id": "258925859",
+      "symbol": "NEARUSDT",
+      "side": "SELL",
+      "qty": "12",
+      "fill_qty": "12",
+      "fill_price": "2.786",
+      "fees": "0.0133728",
+      "fee_asset": "USDT",
+      "trade_id": "40981675",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T13:41:27.331000+00:00",
+      "client_order_id": "be1543aa89dcba95b0e064f098208af856bc",
+      "broker_order_id": "258925859",
+      "symbol": "NEARUSDT",
+      "side": "SELL",
+      "qty": "359",
+      "fill_qty": "359",
+      "fill_price": "2.786",
+      "fees": "0.4000696",
+      "fee_asset": "USDT",
+      "trade_id": "40981676",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T13:41:27.331000+00:00",
+      "client_order_id": "be1543aa89dcba95b0e064f098208af856bc",
+      "broker_order_id": "258925859",
+      "symbol": "NEARUSDT",
+      "side": "SELL",
+      "qty": "274",
+      "fill_qty": "274",
+      "fill_price": "2.785",
+      "fees": "0.305236",
+      "fee_asset": "USDT",
+      "trade_id": "40981677",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T13:47:52.707000+00:00",
+      "client_order_id": "8fa1a93125260b901e926ec871dca5c8473f",
+      "broker_order_id": "129749240",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "300.7",
+      "fill_qty": "300.7",
+      "fill_price": "5.981",
+      "fees": "0.71939468",
+      "fee_asset": "USDT",
+      "trade_id": "39208278",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T13:56:27.495000+00:00",
+      "client_order_id": "250b8c1946ee9c67e0689a20705dae956e5f",
+      "broker_order_id": "258939043",
+      "symbol": "NEARUSDT",
+      "side": "BUY",
+      "qty": "600",
+      "fill_qty": "600",
+      "fill_price": "2.876",
+      "fees": "0.69024",
+      "fee_asset": "USDT",
+      "trade_id": "40985791",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T13:57:16.206000+00:00",
+      "client_order_id": "efe6c911b262f5e08699e4e5978289fa2e74",
+      "broker_order_id": "258939553",
+      "symbol": "NEARUSDT",
+      "side": "SELL",
+      "qty": "600",
+      "fill_qty": "600",
+      "fill_price": "2.859",
+      "fees": "0.68616",
+      "fee_asset": "USDT",
+      "trade_id": "40985894",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T14:12:16.331000+00:00",
+      "client_order_id": "6d0a55198b474070e01149b4496f2b28e4b7",
+      "broker_order_id": "258950829",
+      "symbol": "NEARUSDT",
+      "side": "BUY",
+      "qty": "602",
+      "fill_qty": "602",
+      "fill_price": "2.845",
+      "fees": "0.685076",
+      "fee_asset": "USDT",
+      "trade_id": "40988433",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T14:13:46.175000+00:00",
+      "client_order_id": "35bdc778edbe6c11d663b4040bf547d880d5",
+      "broker_order_id": "129765999",
+      "symbol": "INJUSDT",
+      "side": "SELL",
+      "qty": "300.7",
+      "fill_qty": "300.7",
+      "fill_price": "6.042",
+      "fees": "0.72673176",
+      "fee_asset": "USDT",
+      "trade_id": "39211329",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T14:23:34.188000+00:00",
+      "client_order_id": "1b7ca6f951db223ee2f6e22c6982ce606fcf",
+      "broker_order_id": "258959869",
+      "symbol": "NEARUSDT",
+      "side": "SELL",
+      "qty": "602",
+      "fill_qty": "602",
+      "fill_price": "2.87",
+      "fees": "0.691096",
+      "fee_asset": "USDT",
+      "trade_id": "40990224",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    }
+  ],
+  "auto_signals": [
+    {
+      "ts": "2026-05-25T15:00:44.617664+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "BTCUSDT",
+      "side": "buy",
+      "qty": "0.02",
+      "reason": "atr_breakout:last=77694,max20=77694,trailing_pct=0.50%"
+    },
+    {
+      "ts": "2026-05-25T15:01:21.774400+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "BTCUSDT",
+      "side": "sell",
+      "qty": "0.02",
+      "reason": "live_trailing_stop:entry=77694.30000000000000000000,last=77687.20,pct=-0.0001"
+    },
+    {
+      "ts": "2026-05-25T15:11:00.274096+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "BTCUSDT",
+      "side": "buy",
+      "qty": "0.02",
+      "reason": "atr_breakout:last=77704,max20=77694,trailing_pct=0.50%"
+    },
+    {
+      "ts": "2026-05-25T15:11:01.613792+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "BTCUSDT",
+      "side": "sell",
+      "qty": "0.02",
+      "reason": "live_trailing_stop:entry=77703.60000000000000000000,last=77657.00,pct=-0.0006"
+    },
+    {
+      "ts": "2026-05-25T15:15:28.102796+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "622.0",
+      "reason": "live_stop_loss:entry=2.659479838208549826477411065,last=2.63731306,pct=-0.0083"
+    },
+    {
+      "ts": "2026-05-25T15:20:28.122563+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "buy",
+      "qty": "622.953",
+      "reason": "atr_breakout:last=3,max20=2,trailing_pct=0.50%"
+    },
+    {
+      "ts": "2026-05-25T15:33:05.114890+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "622.0",
+      "reason": "live_take_profit:entry=2.646760605228737419517107654,last=2.67898465,pct=+0.0122"
+    },
+    {
+      "ts": "2026-05-25T15:33:52.115588+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "277.8",
+      "reason": "live_take_profit:entry=5.63600000000000000000000,last=5.70400000,pct=+0.0121"
+    },
+    {
+      "ts": "2026-05-25T15:38:06.009442+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "buy",
+      "qty": "647.992",
+      "reason": "atr_breakout:last=3,max20=2,trailing_pct=0.50%"
+    },
+    {
+      "ts": "2026-05-25T15:38:52.281326+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "buy",
+      "qty": "286.242",
+      "reason": "atr_breakout:last=6,max20=5,trailing_pct=0.50%"
+    },
+    {
+      "ts": "2026-05-25T15:41:00.185847+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "BTCUSDT",
+      "side": "buy",
+      "qty": "0.02",
+      "reason": "atr_breakout:last=77633,max20=77630,trailing_pct=0.50%"
+    },
+    {
+      "ts": "2026-05-25T15:41:30.183481+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "BTCUSDT",
+      "side": "sell",
+      "qty": "0.02",
+      "reason": "live_trailing_stop:entry=77633.00000000000000000000,last=77604.32520833,pct=-0.0004"
+    },
+    {
+      "ts": "2026-05-25T15:51:24.123707+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "286.2",
+      "reason": "live_stop_loss:entry=5.734982529699510831586303284,last=5.68904008,pct=-0.0080"
+    },
+    {
+      "ts": "2026-05-25T15:53:28.203810+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "647.0",
+      "reason": "live_take_profit:entry=2.671775807808030117180063341,last=2.70433943,pct=+0.0122"
+    },
+    {
+      "ts": "2026-05-25T15:56:26.169272+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "buy",
+      "qty": "303.043",
+      "reason": "atr_breakout:last=6,max20=5,trailing_pct=0.50%"
+    },
+    {
+      "ts": "2026-05-25T15:58:28.353865+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "buy",
+      "qty": "604.992",
+      "reason": "atr_breakout:last=3,max20=2,trailing_pct=0.50%"
+    },
+    {
+      "ts": "2026-05-25T16:00:43.098121+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "303.0",
+      "reason": "live_stop_loss:entry=5.69800000000000000000000,last=5.65239342,pct=-0.0080"
+    },
+    {
+      "ts": "2026-05-25T16:05:43.123637+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "buy",
+      "qty": "288.016",
+      "reason": "atr_breakout:last=6,max20=5,trailing_pct=0.50%"
+    },
+    {
+      "ts": "2026-05-25T16:06:22.103451+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "288.0",
+      "reason": "live_stop_loss:entry=5.69800000000000000000000,last=5.65195713,pct=-0.0081"
+    },
+    {
+      "ts": "2026-05-25T16:11:22.121754+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "buy",
+      "qty": "288.599",
+      "reason": "atr_breakout:last=6,max20=5,trailing_pct=0.50%"
+    },
+    {
+      "ts": "2026-05-25T16:11:23.102643+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "288.5",
+      "reason": "live_stop_loss:entry=5.695361871750433275563258232,last=5.64800000,pct=-0.0083"
+    },
+    {
+      "ts": "2026-05-25T16:14:31.104485+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "ZECUSDT",
+      "side": "sell",
+      "qty": "2.433",
+      "reason": "live_stop_loss:entry=675.3027996288607945949519269,last=669.55889751,pct=-0.0085"
+    },
+    {
+      "ts": "2026-05-25T16:16:23.302147+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "buy",
+      "qty": "302.159",
+      "reason": "atr_breakout:last=6,max20=5,trailing_pct=0.50%"
+    },
+    {
+      "ts": "2026-05-25T16:17:30.127201+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "604.0",
+      "reason": "live_stop_loss:entry=2.701382590059653674992298445,last=2.67955541,pct=-0.0081"
+    },
+    {
+      "ts": "2026-05-25T16:17:44.112781+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "302.1",
+      "reason": "live_stop_loss:entry=5.651027805362462760675273088,last=5.60500000,pct=-0.0081"
+    },
+    {
+      "ts": "2026-05-25T16:22:30.563500+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "buy",
+      "qty": "662.823",
+      "reason": "atr_breakout:last=3,max20=2,trailing_pct=0.50%"
+    },
+    {
+      "ts": "2026-05-25T16:22:44.175579+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "buy",
+      "qty": "302.06",
+      "reason": "atr_breakout:last=6,max20=5,trailing_pct=0.50%"
+    },
+    {
+      "ts": "2026-05-25T16:36:22.104580+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "662.0",
+      "reason": "live_take_profit:entry=2.688605583008849744195684178,last=2.72347703,pct=+0.0130"
+    },
+    {
+      "ts": "2026-05-25T16:39:53.195185+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "302.0",
+      "reason": "live_trailing_stop:entry=5.62700000000000000000000,last=5.64652771,pct=+0.0035"
+    },
+    {
+      "ts": "2026-05-25T16:54:02.583948+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "buy",
+      "qty": "646.376",
+      "reason": "atr_breakout:last=3,max20=2,trailing_pct=0.50%"
+    },
+    {
+      "ts": "2026-05-25T16:54:02.589790+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "buy",
+      "qty": "314.377",
+      "reason": "atr_breakout:last=6,max20=5,trailing_pct=0.50%"
+    },
+    {
+      "ts": "2026-05-25T17:27:16.749763+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "314.3",
+      "reason": "live_take_profit:entry=5.71600000000000000000000,last=5.78600000,pct=+0.0122"
+    },
+    {
+      "ts": "2026-05-25T17:42:17.083048+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "buy",
+      "qty": "295.348",
+      "reason": "atr_breakout:last=6,max20=5,trailing_pct=0.50%"
+    },
+    {
+      "ts": "2026-05-26T03:34:19.114340+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "646.0",
+      "reason": "live_take_profit:entry=2.688605583008849744195684178,last=2.75023851,pct=+0.0229"
+    },
+    {
+      "ts": "2026-05-26T03:34:19.605576+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "295.3",
+      "reason": "live_stop_loss:entry=5.72900000000000000000000,last=5.55988319,pct=-0.0295"
+    },
+    {
+      "ts": "2026-05-26T03:38:18.090869+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "TRXUSDT",
+      "side": "sell",
+      "qty": "4801.0",
+      "reason": "live_take_profit:entry=0.3699791448493665280175003097,last=0.37443039,pct=+0.0120"
+    },
+    {
+      "ts": "2026-05-26T04:04:27.517035+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-bb-lower-bounce",
+      "symbol": "BTCUSDT",
+      "side": "sell",
+      "qty": "0.014",
+      "reason": "live_stop_loss:entry=77207.41721138178262994948671,last=76588.66034420,pct=-0.0080"
+    },
+    {
+      "ts": "2026-05-26T04:24:34.604605+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "buy",
+      "qty": "669.948",
+      "reason": "atr_breakout:last=3,max20=3,trailing_pct=0.50%"
+    },
+    {
+      "ts": "2026-05-26T04:24:34.609414+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "buy",
+      "qty": "327.769",
+      "reason": "atr_breakout:last=6,max20=6,trailing_pct=0.50%"
+    },
+    {
+      "ts": "2026-05-26T04:29:31.164674+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "327.7",
+      "reason": "live_take_profit:entry=5.64500000000000000000000,last=5.71386310,pct=+0.0122"
+    },
+    {
+      "ts": "2026-05-26T04:37:00.372951+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "669.0",
+      "reason": "live_take_profit:entry=2.764,last=2.79800000,pct=+0.0123"
+    },
+    {
+      "ts": "2026-05-26T04:44:31.490242+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "buy",
+      "qty": "326.99",
+      "reason": "atr_breakout:last=6,max20=6,trailing_pct=0.50%"
+    },
+    {
+      "ts": "2026-05-26T04:47:24.122822+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "326.9",
+      "reason": "live_stop_loss:entry=5.72300000000000000000000,last=5.67622705,pct=-0.0082"
+    },
+    {
+      "ts": "2026-05-26T04:54:40.392799+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "buy",
+      "qty": "671.634",
+      "reason": "atr_breakout:last=3,max20=3,trailing_pct=0.50%"
+    },
+    {
+      "ts": "2026-05-26T05:58:04.299728+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "671.0",
+      "reason": "live_stop_loss:entry=2.762,last=2.73963219,pct=-0.0081"
+    },
+    {
+      "ts": "2026-05-26T06:50:03.562065+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "buy",
+      "qty": "669.791",
+      "reason": "atr_breakout:last=3,max20=3,trailing_pct=0.50%"
+    },
+    {
+      "ts": "2026-05-26T06:56:11.099523+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "669.0",
+      "reason": "live_stop_loss:entry=2.773,last=2.75013423,pct=-0.0082"
+    },
+    {
+      "ts": "2026-05-26T10:25:36.143317+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "buy",
+      "qty": "648.317",
+      "reason": "atr_breakout:last=3,max20=3,trailing_pct=0.50%"
+    },
+    {
+      "ts": "2026-05-26T10:30:16.080148+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "648.0",
+      "reason": "live_take_profit:entry=2.776,last=2.80939715,pct=+0.0120"
+    },
+    {
+      "ts": "2026-05-26T10:45:16.098454+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "buy",
+      "qty": "633.326",
+      "reason": "atr_breakout:last=3,max20=3,trailing_pct=0.50%"
+    },
+    {
+      "ts": "2026-05-26T10:55:41.072041+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "633.0",
+      "reason": "live_take_profit:entry=2.863,last=2.89865528,pct=+0.0125"
+    },
+    {
+      "ts": "2026-05-26T11:00:38.959387+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "buy",
+      "qty": "319.819",
+      "reason": "atr_breakout:last=6,max20=6,trailing_pct=0.50%"
+    },
+    {
+      "ts": "2026-05-26T11:10:41.590354+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "buy",
+      "qty": "592.875",
+      "reason": "atr_breakout:last=3,max20=3,trailing_pct=0.50%"
+    },
+    {
+      "ts": "2026-05-26T11:11:20.087030+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "319.8",
+      "reason": "live_take_profit:entry=5.67100000000000000000000,last=5.74085318,pct=+0.0123"
+    },
+    {
+      "ts": "2026-05-26T11:26:20.595777+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "buy",
+      "qty": "301.941",
+      "reason": "atr_breakout:last=6,max20=6,trailing_pct=0.50%"
+    },
+    {
+      "ts": "2026-05-26T11:30:29.181459+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "592.0",
+      "reason": "live_take_profit:entry=2.913,last=2.95100000,pct=+0.0130"
+    },
+    {
+      "ts": "2026-05-26T11:33:09.087620+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "301.9",
+      "reason": "live_take_profit:entry=5.75700000000000000000000,last=5.82839967,pct=+0.0124"
+    },
+    {
+      "ts": "2026-05-26T11:45:29.895973+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "buy",
+      "qty": "618.547",
+      "reason": "atr_breakout:last=3,max20=3,trailing_pct=0.50%"
+    },
+    {
+      "ts": "2026-05-26T11:48:09.757717+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "buy",
+      "qty": "300.549",
+      "reason": "atr_breakout:last=6,max20=6,trailing_pct=0.50%"
+    },
+    {
+      "ts": "2026-05-26T11:51:52.069745+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.93226622,pct=-0.0110"
+    },
+    {
+      "ts": "2026-05-26T11:51:55.085179+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "300.5",
+      "reason": "live_stop_loss:entry=5.81000000000000000000000,last=5.76343595,pct=-0.0080"
+    },
+    {
+      "ts": "2026-05-26T11:52:23.063678+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.90612860,pct=-0.0199"
+    },
+    {
+      "ts": "2026-05-26T11:52:53.064810+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.90200000,pct=-0.0212"
+    },
+    {
+      "ts": "2026-05-26T11:53:23.061977+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.90400000,pct=-0.0206"
+    },
+    {
+      "ts": "2026-05-26T11:53:53.069796+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.90200000,pct=-0.0212"
+    },
+    {
+      "ts": "2026-05-26T11:54:23.077382+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.90229572,pct=-0.0211"
+    },
+    {
+      "ts": "2026-05-26T11:54:53.082218+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.90428559,pct=-0.0205"
+    },
+    {
+      "ts": "2026-05-26T11:55:24.088302+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.89529505,pct=-0.0235"
+    },
+    {
+      "ts": "2026-05-26T11:55:54.114495+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.89134167,pct=-0.0248"
+    },
+    {
+      "ts": "2026-05-26T11:56:24.086370+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.89100000,pct=-0.0250"
+    },
+    {
+      "ts": "2026-05-26T11:56:55.068175+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.89200000,pct=-0.0246"
+    },
+    {
+      "ts": "2026-05-26T11:57:25.065024+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.88600000,pct=-0.0266"
+    },
+    {
+      "ts": "2026-05-26T11:57:55.069838+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.88400000,pct=-0.0273"
+    },
+    {
+      "ts": "2026-05-26T11:58:25.070062+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.88700000,pct=-0.0263"
+    },
+    {
+      "ts": "2026-05-26T11:58:55.076243+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.88348333,pct=-0.0275"
+    },
+    {
+      "ts": "2026-05-26T11:59:25.087395+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.88500000,pct=-0.0270"
+    },
+    {
+      "ts": "2026-05-26T11:59:55.060623+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.85483851,pct=-0.0372"
+    },
+    {
+      "ts": "2026-05-26T12:00:25.071164+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.84575788,pct=-0.0402"
+    },
+    {
+      "ts": "2026-05-26T12:00:55.074489+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.85300000,pct=-0.0378"
+    },
+    {
+      "ts": "2026-05-26T12:01:25.066211+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.85800000,pct=-0.0361"
+    },
+    {
+      "ts": "2026-05-26T12:01:55.068215+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.85671667,pct=-0.0365"
+    },
+    {
+      "ts": "2026-05-26T12:02:25.084907+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.86300000,pct=-0.0344"
+    },
+    {
+      "ts": "2026-05-26T12:02:55.080713+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.86300000,pct=-0.0344"
+    },
+    {
+      "ts": "2026-05-26T12:03:25.069426+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.83374550,pct=-0.0443"
+    },
+    {
+      "ts": "2026-05-26T12:03:55.072644+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.82015270,pct=-0.0489"
+    },
+    {
+      "ts": "2026-05-26T12:04:01.071590+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "300.5",
+      "reason": "live_trailing_stop:entry=5.81000000000000000000000,last=5.81759177,pct=+0.0013"
+    },
+    {
+      "ts": "2026-05-26T12:04:25.065810+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.83200000,pct=-0.0449"
+    },
+    {
+      "ts": "2026-05-26T12:04:55.064781+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.82700000,pct=-0.0465"
+    },
+    {
+      "ts": "2026-05-26T12:05:25.070605+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.83272072,pct=-0.0446"
+    },
+    {
+      "ts": "2026-05-26T12:05:55.079528+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.83700000,pct=-0.0432"
+    },
+    {
+      "ts": "2026-05-26T12:06:25.065924+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.83800000,pct=-0.0428"
+    },
+    {
+      "ts": "2026-05-26T12:06:55.087526+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.83892185,pct=-0.0425"
+    },
+    {
+      "ts": "2026-05-26T12:07:25.075840+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.84167748,pct=-0.0416"
+    },
+    {
+      "ts": "2026-05-26T12:07:56.069278+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.84086294,pct=-0.0419"
+    },
+    {
+      "ts": "2026-05-26T12:08:04.081470+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "300.5",
+      "reason": "live_trailing_stop:entry=5.81000000000000000000000,last=5.79167446,pct=-0.0032"
+    },
+    {
+      "ts": "2026-05-26T12:08:26.067200+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.84747252,pct=-0.0396"
+    },
+    {
+      "ts": "2026-05-26T12:08:56.067883+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.82900000,pct=-0.0459"
+    },
+    {
+      "ts": "2026-05-26T12:09:26.069284+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.79557072,pct=-0.0571"
+    },
+    {
+      "ts": "2026-05-26T12:09:56.067818+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.79000000,pct=-0.0590"
+    },
+    {
+      "ts": "2026-05-26T12:10:26.090690+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.79600000,pct=-0.0570"
+    },
+    {
+      "ts": "2026-05-26T12:10:56.075819+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.79900000,pct=-0.0560"
+    },
+    {
+      "ts": "2026-05-26T12:11:26.069130+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.80500000,pct=-0.0540"
+    },
+    {
+      "ts": "2026-05-26T12:11:56.074823+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.80568559,pct=-0.0537"
+    },
+    {
+      "ts": "2026-05-26T12:12:26.067752+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.80400000,pct=-0.0543"
+    },
+    {
+      "ts": "2026-05-26T12:12:56.085309+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.80139302,pct=-0.0552"
+    },
+    {
+      "ts": "2026-05-26T12:13:26.068436+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.80500000,pct=-0.0540"
+    },
+    {
+      "ts": "2026-05-26T12:13:56.062550+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.80400000,pct=-0.0543"
+    },
+    {
+      "ts": "2026-05-26T12:14:26.070999+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.79943243,pct=-0.0558"
+    },
+    {
+      "ts": "2026-05-26T12:14:56.069638+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.79300000,pct=-0.0580"
+    },
+    {
+      "ts": "2026-05-26T12:15:26.063694+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.80300000,pct=-0.0546"
+    },
+    {
+      "ts": "2026-05-26T12:15:56.067152+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.81000000,pct=-0.0523"
+    },
+    {
+      "ts": "2026-05-26T12:16:26.076171+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.80819932,pct=-0.0529"
+    },
+    {
+      "ts": "2026-05-26T12:16:56.065428+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.79990045,pct=-0.0557"
+    },
+    {
+      "ts": "2026-05-26T12:17:26.062236+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.80500000,pct=-0.0540"
+    },
+    {
+      "ts": "2026-05-26T12:17:28.140357+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "300.5",
+      "reason": "live_take_profit:entry=5.81000000000000000000000,last=5.88100000,pct=+0.0122"
+    },
+    {
+      "ts": "2026-05-26T12:17:56.068186+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.79900000,pct=-0.0560"
+    },
+    {
+      "ts": "2026-05-26T12:17:58.165589+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "300.5",
+      "reason": "live_take_profit:entry=5.81000000000000000000000,last=5.88700000,pct=+0.0133"
+    },
+    {
+      "ts": "2026-05-26T12:18:26.064487+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.79700000,pct=-0.0567"
+    },
+    {
+      "ts": "2026-05-26T12:18:28.195096+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "300.5",
+      "reason": "live_take_profit:entry=5.81000000000000000000000,last=5.89300000,pct=+0.0143"
+    },
+    {
+      "ts": "2026-05-26T12:18:56.069251+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.78509752,pct=-0.0607"
+    },
+    {
+      "ts": "2026-05-26T12:18:58.176486+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "300.5",
+      "reason": "live_take_profit:entry=5.81000000000000000000000,last=5.88600000,pct=+0.0131"
+    },
+    {
+      "ts": "2026-05-26T12:19:26.069519+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.79238851,pct=-0.0582"
+    },
+    {
+      "ts": "2026-05-26T12:19:28.162504+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "300.5",
+      "reason": "live_take_profit:entry=5.81000000000000000000000,last=5.89734229,pct=+0.0150"
+    },
+    {
+      "ts": "2026-05-26T12:19:56.068214+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.79800000,pct=-0.0563"
+    },
+    {
+      "ts": "2026-05-26T12:19:58.148014+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "300.5",
+      "reason": "live_take_profit:entry=5.81000000000000000000000,last=5.89900000,pct=+0.0153"
+    },
+    {
+      "ts": "2026-05-26T12:20:26.075846+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.80000000,pct=-0.0556"
+    },
+    {
+      "ts": "2026-05-26T12:20:28.190151+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "300.5",
+      "reason": "live_take_profit:entry=5.81000000000000000000000,last=5.89767062,pct=+0.0151"
+    },
+    {
+      "ts": "2026-05-26T12:20:56.078342+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.80240383,pct=-0.0548"
+    },
+    {
+      "ts": "2026-05-26T12:20:58.161943+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "300.5",
+      "reason": "live_take_profit:entry=5.81000000000000000000000,last=5.88400000,pct=+0.0127"
+    },
+    {
+      "ts": "2026-05-26T12:21:26.129940+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.80332748,pct=-0.0545"
+    },
+    {
+      "ts": "2026-05-26T12:21:28.226646+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "300.5",
+      "reason": "live_take_profit:entry=5.81000000000000000000000,last=5.89411263,pct=+0.0145"
+    },
+    {
+      "ts": "2026-05-26T12:21:56.062273+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.78250946,pct=-0.0615"
+    },
+    {
+      "ts": "2026-05-26T12:21:59.062313+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "300.5",
+      "reason": "live_take_profit:entry=5.81000000000000000000000,last=5.88100000,pct=+0.0122"
+    },
+    {
+      "ts": "2026-05-26T12:22:26.066685+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.77953243,pct=-0.0626"
+    },
+    {
+      "ts": "2026-05-26T12:22:29.064305+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "300.5",
+      "reason": "live_take_profit:entry=5.81000000000000000000000,last=5.88288397,pct=+0.0125"
+    },
+    {
+      "ts": "2026-05-26T12:22:56.069594+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.77400000,pct=-0.0644"
+    },
+    {
+      "ts": "2026-05-26T12:22:59.071300+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "300.5",
+      "reason": "live_take_profit:entry=5.81000000000000000000000,last=5.89000000,pct=+0.0138"
+    },
+    {
+      "ts": "2026-05-26T12:23:26.069272+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.77600000,pct=-0.0637"
+    },
+    {
+      "ts": "2026-05-26T12:23:56.062247+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.77600000,pct=-0.0637"
+    },
+    {
+      "ts": "2026-05-26T12:23:58.163994+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "300.5",
+      "reason": "live_trailing_stop:entry=5.81000000000000000000000,last=5.84753981,pct=+0.0065"
+    },
+    {
+      "ts": "2026-05-26T12:24:26.076317+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.76800000,pct=-0.0664"
+    },
+    {
+      "ts": "2026-05-26T12:24:56.085621+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.76701014,pct=-0.0668"
+    },
+    {
+      "ts": "2026-05-26T12:25:26.070027+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.76900000,pct=-0.0661"
+    },
+    {
+      "ts": "2026-05-26T12:25:56.068321+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.77388074,pct=-0.0645"
+    },
+    {
+      "ts": "2026-05-26T12:26:00.098959+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "300.5",
+      "reason": "live_trailing_stop:entry=5.81000000000000000000000,last=5.81534090,pct=+0.0009"
+    },
+    {
+      "ts": "2026-05-26T12:26:26.072638+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.77300000,pct=-0.0648"
+    },
+    {
+      "ts": "2026-05-26T12:26:56.068658+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.78400000,pct=-0.0610"
+    },
+    {
+      "ts": "2026-05-26T12:27:26.070769+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.78450901,pct=-0.0609"
+    },
+    {
+      "ts": "2026-05-26T12:27:56.074593+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.79474144,pct=-0.0574"
+    },
+    {
+      "ts": "2026-05-26T12:28:26.067877+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.78546126,pct=-0.0606"
+    },
+    {
+      "ts": "2026-05-26T12:28:56.059654+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.78400000,pct=-0.0610"
+    },
+    {
+      "ts": "2026-05-26T12:29:26.067735+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.78400000,pct=-0.0610"
+    },
+    {
+      "ts": "2026-05-26T12:29:57.097971+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.77761374,pct=-0.0632"
+    },
+    {
+      "ts": "2026-05-26T12:30:27.094558+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.78800000,pct=-0.0597"
+    },
+    {
+      "ts": "2026-05-26T12:30:57.088236+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.78100000,pct=-0.0621"
+    },
+    {
+      "ts": "2026-05-26T12:31:28.065284+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.78500000,pct=-0.0607"
+    },
+    {
+      "ts": "2026-05-26T12:31:58.064984+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.78500000,pct=-0.0607"
+    },
+    {
+      "ts": "2026-05-26T12:32:14.066493+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "300.5",
+      "reason": "live_trailing_stop:entry=5.81000000000000000000000,last=5.84054716,pct=+0.0053"
+    },
+    {
+      "ts": "2026-05-26T12:32:28.076028+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.78627500,pct=-0.0603"
+    },
+    {
+      "ts": "2026-05-26T12:32:58.068967+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.78401622,pct=-0.0610"
+    },
+    {
+      "ts": "2026-05-26T12:33:28.068830+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.78300000,pct=-0.0614"
+    },
+    {
+      "ts": "2026-05-26T12:33:53.075700+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "300.5",
+      "reason": "live_take_profit:entry=5.81000000000000000000000,last=5.88151825,pct=+0.0123"
+    },
+    {
+      "ts": "2026-05-26T12:33:58.069090+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.79200000,pct=-0.0583"
+    },
+    {
+      "ts": "2026-05-26T12:34:28.067139+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.79700000,pct=-0.0567"
+    },
+    {
+      "ts": "2026-05-26T12:34:53.074162+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "300.5",
+      "reason": "live_take_profit:entry=5.81000000000000000000000,last=5.88200000,pct=+0.0124"
+    },
+    {
+      "ts": "2026-05-26T12:34:58.063482+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.79267342,pct=-0.0581"
+    },
+    {
+      "ts": "2026-05-26T12:35:26.084592+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "300.5",
+      "reason": "live_take_profit:entry=5.81000000000000000000000,last=5.88200000,pct=+0.0124"
+    },
+    {
+      "ts": "2026-05-26T12:35:28.201115+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.78900000,pct=-0.0594"
+    },
+    {
+      "ts": "2026-05-26T12:35:58.074908+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.79400000,pct=-0.0577"
+    },
+    {
+      "ts": "2026-05-26T12:36:11.064107+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "300.5",
+      "reason": "live_take_profit:entry=5.81000000000000000000000,last=5.88300000,pct=+0.0126"
+    },
+    {
+      "ts": "2026-05-26T12:36:28.078380+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.80128356,pct=-0.0552"
+    },
+    {
+      "ts": "2026-05-26T12:36:58.068264+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.79500000,pct=-0.0573"
+    },
+    {
+      "ts": "2026-05-26T12:37:28.084513+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.79930766,pct=-0.0559"
+    },
+    {
+      "ts": "2026-05-26T12:37:58.067932+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.78337545,pct=-0.0613"
+    },
+    {
+      "ts": "2026-05-26T12:38:28.069686+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.78400000,pct=-0.0610"
+    },
+    {
+      "ts": "2026-05-26T12:38:58.061146+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.77900000,pct=-0.0627"
+    },
+    {
+      "ts": "2026-05-26T12:39:28.069522+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.77900000,pct=-0.0627"
+    },
+    {
+      "ts": "2026-05-26T12:39:40.070404+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "300.5",
+      "reason": "live_trailing_stop:entry=5.81000000000000000000000,last=5.84101978,pct=+0.0053"
+    },
+    {
+      "ts": "2026-05-26T12:39:58.076863+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.77600000,pct=-0.0637"
+    },
+    {
+      "ts": "2026-05-26T12:40:28.067027+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.77737322,pct=-0.0633"
+    },
+    {
+      "ts": "2026-05-26T12:40:58.074604+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.77200000,pct=-0.0651"
+    },
+    {
+      "ts": "2026-05-26T12:41:28.094810+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.77990563,pct=-0.0624"
+    },
+    {
+      "ts": "2026-05-26T12:41:38.083617+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "300.5",
+      "reason": "live_trailing_stop:entry=5.81000000000000000000000,last=5.79612806,pct=-0.0024"
+    },
+    {
+      "ts": "2026-05-26T12:41:58.066617+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.77368941,pct=-0.0645"
+    },
+    {
+      "ts": "2026-05-26T12:42:28.075656+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.76038266,pct=-0.0690"
+    },
+    {
+      "ts": "2026-05-26T12:42:58.068103+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.76800000,pct=-0.0664"
+    },
+    {
+      "ts": "2026-05-26T12:43:28.068368+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.77600000,pct=-0.0637"
+    },
+    {
+      "ts": "2026-05-26T12:43:58.071884+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.77502883,pct=-0.0641"
+    },
+    {
+      "ts": "2026-05-26T12:44:28.069826+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.77917995,pct=-0.0627"
+    },
+    {
+      "ts": "2026-05-26T12:44:58.074697+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.77536374,pct=-0.0640"
+    },
+    {
+      "ts": "2026-05-26T12:45:28.101397+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.76724730,pct=-0.0667"
+    },
+    {
+      "ts": "2026-05-26T12:45:58.080052+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.76600000,pct=-0.0671"
+    },
+    {
+      "ts": "2026-05-26T12:46:28.064604+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.76575979,pct=-0.0672"
+    },
+    {
+      "ts": "2026-05-26T12:46:58.063898+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.75800000,pct=-0.0698"
+    },
+    {
+      "ts": "2026-05-26T12:47:28.098922+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.76200000,pct=-0.0685"
+    },
+    {
+      "ts": "2026-05-26T12:47:58.077489+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.75908559,pct=-0.0694"
+    },
+    {
+      "ts": "2026-05-26T12:48:28.073047+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.76062365,pct=-0.0689"
+    },
+    {
+      "ts": "2026-05-26T12:48:38.064394+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "300.5",
+      "reason": "live_trailing_stop:entry=5.81000000000000000000000,last=5.84157398,pct=+0.0054"
+    },
+    {
+      "ts": "2026-05-26T12:48:58.067590+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.76499144,pct=-0.0675"
+    },
+    {
+      "ts": "2026-05-26T12:49:28.095236+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.76334437,pct=-0.0680"
+    },
+    {
+      "ts": "2026-05-26T12:49:59.066562+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.77500000,pct=-0.0641"
+    },
+    {
+      "ts": "2026-05-26T12:50:29.072504+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.77153716,pct=-0.0652"
+    },
+    {
+      "ts": "2026-05-26T12:50:59.073169+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.77224887,pct=-0.0650"
+    },
+    {
+      "ts": "2026-05-26T12:51:22.070498+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "300.5",
+      "reason": "live_trailing_stop:entry=5.81000000000000000000000,last=5.81104630,pct=+0.0002"
+    },
+    {
+      "ts": "2026-05-26T12:51:29.067861+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.77305811,pct=-0.0647"
+    },
+    {
+      "ts": "2026-05-26T12:51:59.069736+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.76796622,pct=-0.0665"
+    },
+    {
+      "ts": "2026-05-26T12:52:09.161393+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "TRXUSDT",
+      "side": "buy",
+      "qty": "4254.779",
+      "reason": "atr_breakout:last=0,max20=0,trailing_pct=0.50%"
+    },
+    {
+      "ts": "2026-05-26T12:52:29.067679+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.78100000,pct=-0.0621"
+    },
+    {
+      "ts": "2026-05-26T12:52:54.094313+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "300.5",
+      "reason": "live_take_profit:entry=5.81000000000000000000000,last=5.88100000,pct=+0.0122"
+    },
+    {
+      "ts": "2026-05-26T12:53:00.095090+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "618.0",
+      "reason": "live_stop_loss:entry=2.965,last=2.78436622,pct=-0.0609"
+    },
+    {
+      "ts": "2026-05-26T13:07:54.191298+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "buy",
+      "qty": "304.747",
+      "reason": "atr_breakout:last=6,max20=6,trailing_pct=0.50%"
+    },
+    {
+      "ts": "2026-05-26T13:32:52.090932+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.7",
+      "reason": "live_take_profit:entry=5.85200000000000000000000,last=5.92227272,pct=+0.0120"
+    },
+    {
+      "ts": "2026-05-26T13:37:18.231663+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "buy",
+      "qty": "645.333",
+      "reason": "atr_breakout:last=3,max20=3,trailing_pct=0.50%"
+    },
+    {
+      "ts": "2026-05-26T13:41:27.114905+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "645.0",
+      "reason": "live_take_profit:entry=2.768,last=2.80148757,pct=+0.0121"
+    },
+    {
+      "ts": "2026-05-26T13:47:52.641273+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "buy",
+      "qty": "300.713",
+      "reason": "atr_breakout:last=6,max20=6,trailing_pct=0.50%"
+    },
+    {
+      "ts": "2026-05-26T13:56:27.381410+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "buy",
+      "qty": "600.001",
+      "reason": "atr_breakout:last=3,max20=3,trailing_pct=0.50%"
+    },
+    {
+      "ts": "2026-05-26T13:57:16.092022+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "600.0",
+      "reason": "live_stop_loss:entry=2.876,last=2.85167432,pct=-0.0085"
+    },
+    {
+      "ts": "2026-05-26T14:12:16.239482+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "buy",
+      "qty": "602.274",
+      "reason": "atr_breakout:last=3,max20=3,trailing_pct=0.50%"
+    },
+    {
+      "ts": "2026-05-26T14:13:46.085320+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "300.7",
+      "reason": "live_take_profit:entry=5.98100000000000000000000,last=6.05300000,pct=+0.0120"
+    },
+    {
+      "ts": "2026-05-26T14:23:34.086509+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "NEARUSDT",
+      "side": "sell",
+      "qty": "602.0",
+      "reason": "live_take_profit:entry=2.845,last=2.88000000,pct=+0.0123"
+    }
+  ],
+  "manual_trades": [],
+  "airborne_fires": [
+    {
+      "ts": "2026-05-25T15:00:33+00:00",
+      "symbol": "BSBUSDT",
+      "side": "short",
+      "fire_close": 1.10548,
+      "trigger": 1.12197
+    },
+    {
+      "ts": "2026-05-25T15:00:34+00:00",
+      "symbol": "BILLUSDT",
+      "side": "long",
+      "fire_close": 0.10591,
+      "trigger": 0.104352
+    },
+    {
+      "ts": "2026-05-25T15:00:35+00:00",
+      "symbol": "TONUSDT",
+      "side": "short",
+      "fire_close": 1.8855,
+      "trigger": 1.88672
+    },
+    {
+      "ts": "2026-05-25T15:00:36+00:00",
+      "symbol": "PUMPUSDT",
+      "side": "short",
+      "fire_close": 0.001813,
+      "trigger": 0.0018142
+    },
+    {
+      "ts": "2026-05-25T16:00:33+00:00",
+      "symbol": "EDENUSDT",
+      "side": "long",
+      "fire_close": 0.08208,
+      "trigger": 0.080826
+    },
+    {
+      "ts": "2026-05-25T16:00:34+00:00",
+      "symbol": "FILUSDT",
+      "side": "short",
+      "fire_close": 0.992,
+      "trigger": 0.9936
+    },
+    {
+      "ts": "2026-05-25T16:00:35+00:00",
+      "symbol": "GUAUSDT",
+      "side": "short",
+      "fire_close": 1.5462,
+      "trigger": 1.59084
+    },
+    {
+      "ts": "2026-05-25T16:00:36+00:00",
+      "symbol": "CHIPUSDT",
+      "side": "long",
+      "fire_close": 0.04719,
+      "trigger": 0.046902
+    },
+    {
+      "ts": "2026-05-25T16:00:37+00:00",
+      "symbol": "B2USDT",
+      "side": "long",
+      "fire_close": 0.4798,
+      "trigger": 0.47318
+    },
+    {
+      "ts": "2026-05-25T17:00:35+00:00",
+      "symbol": "TRXUSDT",
+      "side": "short",
+      "fire_close": 0.3736,
+      "trigger": 0.373638
+    },
+    {
+      "ts": "2026-05-25T17:00:36+00:00",
+      "symbol": "ICPUSDT",
+      "side": "short",
+      "fire_close": 2.729,
+      "trigger": 2.7584
+    },
+    {
+      "ts": "2026-05-25T18:00:56+00:00",
+      "symbol": "BSBUSDT",
+      "side": "long",
+      "fire_close": 0.68645,
+      "trigger": 0.660284
+    },
+    {
+      "ts": "2026-05-25T18:00:57+00:00",
+      "symbol": "NILUSDT",
+      "side": "short",
+      "fire_close": 0.09151,
+      "trigger": 0.092546
+    },
+    {
+      "ts": "2026-05-25T18:00:58+00:00",
+      "symbol": "WLDUSDT",
+      "side": "short",
+      "fire_close": 0.3132,
+      "trigger": 0.31804
+    },
+    {
+      "ts": "2026-05-25T18:00:59+00:00",
+      "symbol": "GENIUSUSDT",
+      "side": "long",
+      "fire_close": 0.6163,
+      "trigger": 0.61168
+    },
+    {
+      "ts": "2026-05-25T18:01:00+00:00",
+      "symbol": "PHAUSDT",
+      "side": "short",
+      "fire_close": 0.05411,
+      "trigger": 0.054294
+    },
+    {
+      "ts": "2026-05-25T18:01:01+00:00",
+      "symbol": "LITUSDT",
+      "side": "short",
+      "fire_close": 1.3432,
+      "trigger": 1.34498
+    },
+    {
+      "ts": "2026-05-25T19:00:54+00:00",
+      "symbol": "GRASSUSDT",
+      "side": "short",
+      "fire_close": 0.5743,
+      "trigger": 0.58216
+    },
+    {
+      "ts": "2026-05-25T19:00:55+00:00",
+      "symbol": "HMSTRUSDT",
+      "side": "short",
+      "fire_close": 0.0001707,
+      "trigger": 0.00017558
+    },
+    {
+      "ts": "2026-05-25T20:00:51+00:00",
+      "symbol": "TAOUSDT",
+      "side": "short",
+      "fire_close": 282.87,
+      "trigger": 284.7
+    },
+    {
+      "ts": "2026-05-25T20:00:53+00:00",
+      "symbol": "ASTERUSDT",
+      "side": "long",
+      "fire_close": 0.69,
+      "trigger": 0.68792
+    },
+    {
+      "ts": "2026-05-25T20:00:54+00:00",
+      "symbol": "CHIPUSDT",
+      "side": "long",
+      "fire_close": 0.04661,
+      "trigger": 0.046584
+    },
+    {
+      "ts": "2026-05-25T21:00:39+00:00",
+      "symbol": "UNIUSDT",
+      "side": "long",
+      "fire_close": 3.333,
+      "trigger": 3.323
+    },
+    {
+      "ts": "2026-05-25T21:00:40+00:00",
+      "symbol": "GMTUSDT",
+      "side": "long",
+      "fire_close": 0.0113,
+      "trigger": 0.011278
+    },
+    {
+      "ts": "2026-05-25T22:00:34+00:00",
+      "symbol": "WLDUSDT",
+      "side": "short",
+      "fire_close": 0.3353,
+      "trigger": 0.3367
+    },
+    {
+      "ts": "2026-05-25T23:00:33+00:00",
+      "symbol": "SOLUSDT",
+      "side": "long",
+      "fire_close": 84.76,
+      "trigger": 84.688
+    },
+    {
+      "ts": "2026-05-25T23:00:34+00:00",
+      "symbol": "DOGEUSDT",
+      "side": "long",
+      "fire_close": 0.10171,
+      "trigger": 0.101628
+    },
+    {
+      "ts": "2026-05-25T23:00:35+00:00",
+      "symbol": "DASHUSDT",
+      "side": "long",
+      "fire_close": 44.44,
+      "trigger": 44.348
+    },
+    {
+      "ts": "2026-05-25T23:00:36+00:00",
+      "symbol": "PENGUUSDT",
+      "side": "long",
+      "fire_close": 0.008802,
+      "trigger": 0.008784
+    },
+    {
+      "ts": "2026-05-25T23:00:37+00:00",
+      "symbol": "1000SHIBUSDT",
+      "side": "long",
+      "fire_close": 0.00554,
+      "trigger": 0.0055342
+    },
+    {
+      "ts": "2026-05-25T23:00:38+00:00",
+      "symbol": "RAVEUSDT",
+      "side": "long",
+      "fire_close": 0.5488,
+      "trigger": 0.54694
+    },
+    {
+      "ts": "2026-05-25T23:00:39+00:00",
+      "symbol": "HBARUSDT",
+      "side": "long",
+      "fire_close": 0.08796,
+      "trigger": 0.08789
+    },
+    {
+      "ts": "2026-05-26T00:00:32+00:00",
+      "symbol": "ONDOUSDT",
+      "side": "long",
+      "fire_close": 0.4267,
+      "trigger": 0.4249
+    },
+    {
+      "ts": "2026-05-26T00:00:33+00:00",
+      "symbol": "LITUSDT",
+      "side": "short",
+      "fire_close": 1.3794,
+      "trigger": 1.39278
+    },
+    {
+      "ts": "2026-05-26T01:00:32+00:00",
+      "symbol": "BTCUSDT",
+      "side": "long",
+      "fire_close": 76655.7,
+      "trigger": 76619.3
+    },
+    {
+      "ts": "2026-05-26T01:00:34+00:00",
+      "symbol": "ZECUSDT",
+      "side": "long",
+      "fire_close": 636.43,
+      "trigger": 632.602
+    },
+    {
+      "ts": "2026-05-26T01:00:35+00:00",
+      "symbol": "HYPEUSDT",
+      "side": "long",
+      "fire_close": 60.133,
+      "trigger": 59.7952
+    },
+    {
+      "ts": "2026-05-26T01:00:36+00:00",
+      "symbol": "XRPUSDT",
+      "side": "long",
+      "fire_close": 1.3407,
+      "trigger": 1.33688
+    },
+    {
+      "ts": "2026-05-26T01:00:37+00:00",
+      "symbol": "1000PEPEUSDT",
+      "side": "long",
+      "fire_close": 0.0035547,
+      "trigger": 0.0035431
+    },
+    {
+      "ts": "2026-05-26T01:00:38+00:00",
+      "symbol": "ADAUSDT",
+      "side": "long",
+      "fire_close": 0.2415,
+      "trigger": 0.24106
+    },
+    {
+      "ts": "2026-05-26T01:00:39+00:00",
+      "symbol": "UNIUSDT",
+      "side": "long",
+      "fire_close": 3.282,
+      "trigger": 3.2736
+    },
+    {
+      "ts": "2026-05-26T01:00:40+00:00",
+      "symbol": "ENAUSDT",
+      "side": "long",
+      "fire_close": 0.09866,
+      "trigger": 0.098198
+    },
+    {
+      "ts": "2026-05-26T01:00:41+00:00",
+      "symbol": "AAVEUSDT",
+      "side": "long",
+      "fire_close": 85.76,
+      "trigger": 85.48
+    },
+    {
+      "ts": "2026-05-26T01:00:42+00:00",
+      "symbol": "TRUMPUSDT",
+      "side": "long",
+      "fire_close": 2.057,
+      "trigger": 2.052
+    },
+    {
+      "ts": "2026-05-26T01:00:43+00:00",
+      "symbol": "SNDKUSDT",
+      "side": "long",
+      "fire_close": 1523.35,
+      "trigger": 1519.24
+    },
+    {
+      "ts": "2026-05-26T01:00:44+00:00",
+      "symbol": "CHZUSDT",
+      "side": "long",
+      "fire_close": 0.03591,
+      "trigger": 0.035636
+    },
+    {
+      "ts": "2026-05-26T01:00:45+00:00",
+      "symbol": "CHIPUSDT",
+      "side": "long",
+      "fire_close": 0.04428,
+      "trigger": 0.04421
+    },
+    {
+      "ts": "2026-05-26T01:00:46+00:00",
+      "symbol": "SAHARAUSDT",
+      "side": "long",
+      "fire_close": 0.03409,
+      "trigger": 0.033952
+    },
+    {
+      "ts": "2026-05-26T01:00:47+00:00",
+      "symbol": "FARTCOINUSDT",
+      "side": "long",
+      "fire_close": 0.1781,
+      "trigger": 0.17706
+    },
+    {
+      "ts": "2026-05-26T01:00:48+00:00",
+      "symbol": "CRCLUSDT",
+      "side": "long",
+      "fire_close": 114.12,
+      "trigger": 113.84
+    },
+    {
+      "ts": "2026-05-26T01:00:49+00:00",
+      "symbol": "MORPHOUSDT",
+      "side": "long",
+      "fire_close": 2.1746,
+      "trigger": 2.16596
+    },
+    {
+      "ts": "2026-05-26T02:00:32+00:00",
+      "symbol": "NEARUSDT",
+      "side": "short",
+      "fire_close": 2.683,
+      "trigger": 2.6844
+    },
+    {
+      "ts": "2026-05-26T02:00:33+00:00",
+      "symbol": "XAGUSDT",
+      "side": "long",
+      "fire_close": 76.42,
+      "trigger": 76.062
+    },
+    {
+      "ts": "2026-05-26T02:00:34+00:00",
+      "symbol": "XAUUSDT",
+      "side": "long",
+      "fire_close": 4539.31,
+      "trigger": 4534.97
+    },
+    {
+      "ts": "2026-05-26T02:00:35+00:00",
+      "symbol": "SUIUSDT",
+      "side": "long",
+      "fire_close": 1.0231,
+      "trigger": 1.02042
+    },
+    {
+      "ts": "2026-05-26T02:00:36+00:00",
+      "symbol": "AVAXUSDT",
+      "side": "long",
+      "fire_close": 9.202,
+      "trigger": 9.1832
+    },
+    {
+      "ts": "2026-05-26T02:00:38+00:00",
+      "symbol": "DOTUSDT",
+      "side": "long",
+      "fire_close": 1.239,
+      "trigger": 1.236
+    },
+    {
+      "ts": "2026-05-26T02:00:39+00:00",
+      "symbol": "BCHUSDT",
+      "side": "long",
+      "fire_close": 345.93,
+      "trigger": 345.596
+    },
+    {
+      "ts": "2026-05-26T02:00:40+00:00",
+      "symbol": "LTCUSDT",
+      "side": "long",
+      "fire_close": 52.24,
+      "trigger": 52.144
+    },
+    {
+      "ts": "2026-05-26T02:00:41+00:00",
+      "symbol": "XMRUSDT",
+      "side": "long",
+      "fire_close": 380.4,
+      "trigger": 379.728
+    },
+    {
+      "ts": "2026-05-26T02:00:42+00:00",
+      "symbol": "OPGUSDT",
+      "side": "long",
+      "fire_close": 0.2,
+      "trigger": 0.19754
+    },
+    {
+      "ts": "2026-05-26T04:00:33+00:00",
+      "symbol": "SPCXUSDT",
+      "side": "long",
+      "fire_close": 206.64,
+      "trigger": 206.584
+    },
+    {
+      "ts": "2026-05-26T05:00:33+00:00",
+      "symbol": "TAOUSDT",
+      "side": "short",
+      "fire_close": 286.2,
+      "trigger": 287.246
+    },
+    {
+      "ts": "2026-05-26T06:00:33+00:00",
+      "symbol": "RENDERUSDT",
+      "side": "short",
+      "fire_close": 2.302,
+      "trigger": 2.311
+    },
+    {
+      "ts": "2026-05-26T06:00:34+00:00",
+      "symbol": "SKYAIUSDT",
+      "side": "long",
+      "fire_close": 0.2552,
+      "trigger": 0.25517
+    },
+    {
+      "ts": "2026-05-26T06:00:35+00:00",
+      "symbol": "USELESSUSDT",
+      "side": "long",
+      "fire_close": 0.07751,
+      "trigger": 0.077004
+    },
+    {
+      "ts": "2026-05-26T07:00:33+00:00",
+      "symbol": "WLDUSDT",
+      "side": "short",
+      "fire_close": 0.3625,
+      "trigger": 0.36308
+    },
+    {
+      "ts": "2026-05-26T07:00:34+00:00",
+      "symbol": "DRIFTUSDT",
+      "side": "short",
+      "fire_close": 0.03785,
+      "trigger": 0.03804
+    },
+    {
+      "ts": "2026-05-26T08:00:34+00:00",
+      "symbol": "FIDAUSDT",
+      "side": "long",
+      "fire_close": 0.03333,
+      "trigger": 0.03316
+    },
+    {
+      "ts": "2026-05-26T08:00:35+00:00",
+      "symbol": "NATGASUSDT",
+      "side": "short",
+      "fire_close": 3.094,
+      "trigger": 3.0978
+    },
+    {
+      "ts": "2026-05-26T09:00:32+00:00",
+      "symbol": "CLUSDT",
+      "side": "short",
+      "fire_close": 93.21,
+      "trigger": 93.404
+    },
+    {
+      "ts": "2026-05-26T09:00:33+00:00",
+      "symbol": "BZUSDT",
+      "side": "short",
+      "fire_close": 96.76,
+      "trigger": 96.958
+    },
+    {
+      "ts": "2026-05-26T09:00:34+00:00",
+      "symbol": "UBUSDT",
+      "side": "short",
+      "fire_close": 0.20433,
+      "trigger": 0.205406
+    },
+    {
+      "ts": "2026-05-26T09:00:36+00:00",
+      "symbol": "FETUSDT",
+      "side": "short",
+      "fire_close": 0.244,
+      "trigger": 0.24594
+    },
+    {
+      "ts": "2026-05-26T09:00:37+00:00",
+      "symbol": "PHAROSUSDT",
+      "side": "long",
+      "fire_close": 0.5956,
+      "trigger": 0.5944
+    },
+    {
+      "ts": "2026-05-26T10:00:33+00:00",
+      "symbol": "EWYUSDT",
+      "side": "short",
+      "fire_close": 193.85,
+      "trigger": 193.924
+    },
+    {
+      "ts": "2026-05-26T10:00:34+00:00",
+      "symbol": "SKYAIUSDT",
+      "side": "long",
+      "fire_close": 0.2466,
+      "trigger": 0.243692
+    },
+    {
+      "ts": "2026-05-26T11:00:33+00:00",
+      "symbol": "TAOUSDT",
+      "side": "short",
+      "fire_close": 289.4,
+      "trigger": 289.94
+    },
+    {
+      "ts": "2026-05-26T11:00:34+00:00",
+      "symbol": "RENDERUSDT",
+      "side": "short",
+      "fire_close": 2.405,
+      "trigger": 2.4146
+    },
+    {
+      "ts": "2026-05-26T11:00:35+00:00",
+      "symbol": "INUSDT",
+      "side": "short",
+      "fire_close": 0.10171,
+      "trigger": 0.10329
+    },
+    {
+      "ts": "2026-05-26T11:00:36+00:00",
+      "symbol": "FILUSDT",
+      "side": "short",
+      "fire_close": 1.013,
+      "trigger": 1.0138
+    },
+    {
+      "ts": "2026-05-26T11:00:37+00:00",
+      "symbol": "DEXEUSDT",
+      "side": "long",
+      "fire_close": 16.717,
+      "trigger": 16.5576
+    },
+    {
+      "ts": "2026-05-26T11:00:38+00:00",
+      "symbol": "BCHUSDT",
+      "side": "short",
+      "fire_close": 353.87,
+      "trigger": 354.524
+    },
+    {
+      "ts": "2026-05-26T11:00:39+00:00",
+      "symbol": "AAVEUSDT",
+      "side": "short",
+      "fire_close": 87.83,
+      "trigger": 88.178
+    },
+    {
+      "ts": "2026-05-26T11:00:40+00:00",
+      "symbol": "ARBUSDT",
+      "side": "short",
+      "fire_close": 0.1124,
+      "trigger": 0.1127
+    },
+    {
+      "ts": "2026-05-26T12:00:33+00:00",
+      "symbol": "INJUSDT",
+      "side": "short",
+      "fire_close": 5.84,
+      "trigger": 5.8486
+    },
+    {
+      "ts": "2026-05-26T12:00:34+00:00",
+      "symbol": "MUUSDT",
+      "side": "short",
+      "fire_close": 804.7,
+      "trigger": 805.436
+    },
+    {
+      "ts": "2026-05-26T13:00:33+00:00",
+      "symbol": "HANAUSDT",
+      "side": "long",
+      "fire_close": 0.03303,
+      "trigger": 0.032842
+    },
+    {
+      "ts": "2026-05-26T13:00:34+00:00",
+      "symbol": "XPLUSDT",
+      "side": "short",
+      "fire_close": 0.0902,
+      "trigger": 0.09032
+    },
+    {
+      "ts": "2026-05-26T13:00:35+00:00",
+      "symbol": "JTOUSDT",
+      "side": "short",
+      "fire_close": 0.5416,
+      "trigger": 0.54286
+    },
+    {
+      "ts": "2026-05-26T14:00:33+00:00",
+      "symbol": "HYPEUSDT",
+      "side": "short",
+      "fire_close": 63.747,
+      "trigger": 63.8502
+    },
+    {
+      "ts": "2026-05-26T14:00:34+00:00",
+      "symbol": "CLUSDT",
+      "side": "short",
+      "fire_close": 94.21,
+      "trigger": 94.314
+    },
+    {
+      "ts": "2026-05-26T14:00:35+00:00",
+      "symbol": "PLAYUSDT",
+      "side": "short",
+      "fire_close": 0.11144,
+      "trigger": 0.113174
+    },
+    {
+      "ts": "2026-05-26T14:00:36+00:00",
+      "symbol": "BZUSDT",
+      "side": "short",
+      "fire_close": 97.54,
+      "trigger": 97.702
+    },
+    {
+      "ts": "2026-05-26T14:00:37+00:00",
+      "symbol": "SNDKUSDT",
+      "side": "short",
+      "fire_close": 1581.37,
+      "trigger": 1590.79
+    },
+    {
+      "ts": "2026-05-26T14:00:38+00:00",
+      "symbol": "EWYUSDT",
+      "side": "short",
+      "fire_close": 198.44,
+      "trigger": 198.858
+    },
+    {
+      "ts": "2026-05-26T14:00:39+00:00",
+      "symbol": "ATOMUSDT",
+      "side": "short",
+      "fire_close": 2.258,
+      "trigger": 2.2608
+    },
+    {
+      "ts": "2026-05-26T14:00:40+00:00",
+      "symbol": "CRCLUSDT",
+      "side": "long",
+      "fire_close": 109.63,
+      "trigger": 108.38
+    },
+    {
+      "ts": "2026-05-26T14:00:41+00:00",
+      "symbol": "INTCUSDT",
+      "side": "short",
+      "fire_close": 125.02,
+      "trigger": 125.318
+    },
+    {
+      "ts": "2026-05-26T14:00:42+00:00",
+      "symbol": "OPGUSDT",
+      "side": "short",
+      "fire_close": 0.2213,
+      "trigger": 0.22362
+    }
+  ],
+  "cs_tsmom_top10": {
+    "available": false,
+    "fetched_at": null,
+    "pin_date": "",
+    "top10": [],
+    "note": "Backfill at 2026-05-27T02:40:52.971208+09:00 — historical snapshot for 2026-05-26 23:50 KST was not captured. Routine 가 'today TOP10' 으로 쓰면 부정확할 수 있음. auto_fills + auto_signals 를 primary source 로 활용."
+  },
+  "_backfill_meta": {
+    "generated_by": "scripts/export_journal_for_date.py",
+    "generated_at_kst": "2026-05-27T02:40:52.971264+09:00",
+    "utc_window": [
+      "2026-05-25T15:00:00+00:00",
+      "2026-05-26T15:00:00+00:00"
+    ],
+    "wal_files_scanned": [
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T053027Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T053140Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T060929Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T061046Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T093227Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T101328Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T102433Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T104643Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T104813Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T104943Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T111836Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T115043Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T151213Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T160723Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T163902Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T170440Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T173552Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260522T050551Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260522T054610Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260522T060335Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260522T065545Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260522T132418Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260522T180859Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260524T133741Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260525T163022Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260525T165359Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260526T033417Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260526T154834Z\\wal.jsonl"
+    ],
+    "docker_error": null
+  }
+}
