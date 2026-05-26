@@ -34,6 +34,8 @@ def _fire(side="long", price=100.0, ts="2026-05-26T02:00:33+00:00",
 
 class TestParseAirborneFireLine:
     def test_long_fire_parsed(self):
+        # daemon 컨테이너는 TZ=Asia/Seoul 이라 "02:00:33" 은 KST 로컬.
+        # 파서는 KST 로 인식 후 UTC ISO 로 정규화 → KST 02:00 = UTC 전날 17:00.
         line = (
             "2026-05-23 02:00:33,327 INFO airborne_alert_daemon — "
             "FIRE CBRSUSDT long @ close=264.52 trigger=263.156"
@@ -44,7 +46,8 @@ class TestParseAirborneFireLine:
         assert rec["side"] == "long"
         assert rec["fire_close"] == 264.52
         assert rec["trigger"] == 263.156
-        assert rec["ts"].startswith("2026-05-23T02:00:33")
+        # KST 2026-05-23 02:00:33 → UTC 2026-05-22 17:00:33
+        assert rec["ts"].startswith("2026-05-22T17:00:33")
         assert rec["ts"].endswith("+00:00")
 
     def test_short_fire_parsed(self):
@@ -57,6 +60,9 @@ class TestParseAirborneFireLine:
         assert rec["symbol"] == "SKYAIUSDT"
         assert rec["side"] == "short"
         assert rec["fire_close"] == 0.3029
+        # KST 2026-05-23 11:00:33 → UTC 2026-05-23 02:00:33
+        assert rec["ts"].startswith("2026-05-23T02:00:33")
+        assert rec["ts"].endswith("+00:00")
 
     def test_non_fire_line_returns_none(self):
         assert _parse_airborne_fire_line(
