@@ -294,3 +294,87 @@ async def test_consumer_stops_on_stop_event() -> None:
         ),
         timeout=2.0,
     )
+
+
+@pytest.mark.asyncio
+async def test_consumer_puts_synthetic_tick_to_tick_queue(monkeypatch) -> None:
+    """#328: tick_queue 제공 시 batch 마다 BTC mark price 의 synthetic Tick 을
+    queue 에 put. testnet aggTrade tick 부재로 cs-tsmom 미트리거되던 사고 fix
+    회귀 박제. BTC 우선 — batch 에 없으면 첫 종목 fallback.
+    """
+    batches = [
+        [
+            ("ETHUSDT", Decimal("1800"), datetime(2026,5,27,0,0,0,tzinfo=timezone.utc)),
+            ("BTCUSDT", Decimal("30000"), datetime(2026,5,27,0,0,0,tzinfo=timezone.utc)),
+        ],
+        [
+            ("NEARUSDT", Decimal("5"), datetime(2026,5,27,0,0,1,tzinfo=timezone.utc)),
+            ("ETHUSDT", Decimal("1850"), datetime(2026,5,27,0,0,1,tzinfo=timezone.utc)),
+        ],
+    ]
+    fake_feed = _FakeMarkPriceFeed(batches)
+    risk_mgr = _FakeRiskManager(trigger_for=set())
+
+    async def _noop_execute(intents, **kwargs):
+        pass
+    monkeypatch.setattr("src.live.loop.execute_intents", _noop_execute)
+
+    # 무제한 queue — 모든 put 캡쳐 (drop-oldest 는 producer() 와 동일 패턴)
+    tick_queue: asyncio.Queue = asyncio.Queue()
+    received: list = []
+
+    async def _drain():
+        while True:
+            try:
+                tick = await asyncio.wait_for(tick_queue.get(), timeout=0.5)
+                received.append(tick)
+            except asyncio.TimeoutError:
+                return
+
+    stop_event = asyncio.Event()
+    drain_task = asyncio.create_task(_drain())
+    await _run_mark_price_consumer(
+        position_risk_manager=risk_mgr,
+        router=object(),
+        kill_switch=KillSwitch(),
+        wal=_RecordingWAL(events=[]),
+        metrics=Metrics(),
+        position_store=None,
+        stop_event=stop_event,
+        feed_factory=lambda: fake_feed,
+        tick_queue=tick_queue,
+    )
+    await drain_task
+
+    assert len(received) >= 1, (
+        f"tick_queue 에 synthetic tick 들어가야 함 — orchestrator 평가 트리거 "
+        f"wire 실패. received={received}"
+    )
+    symbols = [t.symbol for t in received]
+    assert "BTCUSDT" in symbols, (
+        f"BTC 우선 선택 실패 (batch 1 에 BTC 있음). symbols={symbols}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_consumer_works_without_tick_queue(monkeypatch) -> None:
+    """tick_queue 미지정 시 기존 동작 byte-identical — 기존 6개 테스트 회귀 0."""
+    batches = [
+        [("BTCUSDT", Decimal("30000"), datetime.now(timezone.utc))],
+    ]
+    fake_feed = _FakeMarkPriceFeed(batches)
+    risk_mgr = _FakeRiskManager(trigger_for=set())
+    monkeypatch.setattr("src.live.loop.execute_intents", lambda *a, **k: None)
+
+    stop_event = asyncio.Event()
+    await _run_mark_price_consumer(
+        position_risk_manager=risk_mgr,
+        router=object(),
+        kill_switch=KillSwitch(),
+        wal=_RecordingWAL(events=[]),
+        metrics=Metrics(),
+        position_store=None,
+        stop_event=stop_event,
+        feed_factory=lambda: fake_feed,
+    )
+    assert risk_mgr.evaluated == [("BTCUSDT", Decimal("30000"))]

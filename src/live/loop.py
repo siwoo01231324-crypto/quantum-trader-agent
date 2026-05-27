@@ -718,6 +718,7 @@ async def run_shadow_loop(
                     position_store=config.position_store,
                     stop_event=stop_event,
                     live_price_cache=config.live_price_cache,
+                    tick_queue=tick_queue,  # #328 — universe-scan wakeup
                 ),
                 name="binance-mark-price-consumer",
             )
@@ -770,6 +771,7 @@ async def _run_mark_price_consumer(
     stop_event: asyncio.Event,
     feed_factory: Callable[[], "BinanceMarkPriceFeed"] | None = None,
     live_price_cache=None,
+    tick_queue: "asyncio.Queue[Tick] | None" = None,
 ) -> None:
     """Run the Binance ``!markPrice@arr@1s`` consumer until ``stop_event`` fires.
 
@@ -869,6 +871,36 @@ async def _run_mark_price_consumer(
                         wal=wal, metrics=metrics, market_state=ms,
                         position_store=position_store,
                     )
+                # #328 — testnet BTCUSDT aggTrade tick 부재로 cs-tsmom
+                # (universe-scan) 발주 미트리거되던 사고 fix. mark-price batch
+                # 마다 representative tick (BTC 우선, 없으면 첫 종목) 을 메인
+                # consumer 의 tick_queue 에 drop-oldest put → consumer() 가 그
+                # tick 으로 snapshot 빌드 + orchestrator.run_bar 호출 →
+                # cs-tsmom.on_bar 가 매초 깨움 → 252s warmup 후 5s 마다 rebal
+                # cycle. tick_queue=None (테스트/레거시) 면 byte-identical.
+                if tick_queue is not None and batch:
+                    rep = next(
+                        (e for e in batch if e[0].upper() == "BTCUSDT"),
+                        batch[0],
+                    )
+                    rep_sym, rep_price, rep_ts = rep
+                    synthetic_tick = Tick(
+                        symbol=rep_sym,
+                        price=rep_price,
+                        qty=Decimal("0"),
+                        ts=rep_ts.isoformat() if hasattr(rep_ts, "isoformat") else str(rep_ts),
+                        server_ts=None,
+                    )
+                    # producer() 와 동일한 drop-oldest 패턴
+                    if tick_queue.full():
+                        try:
+                            tick_queue.get_nowait()
+                        except asyncio.QueueEmpty:
+                            pass
+                    try:
+                        tick_queue.put_nowait(synthetic_tick)
+                    except asyncio.QueueFull:
+                        pass  # 다음 batch 에서 재시도
                 attempt = 0
             break  # feed closed cleanly
         except (asyncio.CancelledError, KeyboardInterrupt):
