@@ -1,0 +1,414 @@
+// © siwoo 2026-05-26  Airborne Confluence Scorecard v1
+// =============================================================================
+// 에어본 BB-reversal 시그널이 발화한 봉에 "수동 진입 점수표" 를 표시.
+// 7 가지 컨플루언스를 가중 점수 (+1 / +2 / +3) 로 합산해 0~13 점.
+//
+// 점수 등급
+//   10+ : 🟢 강한 진입 (FULL SIZE)
+//   6-9 : 🟡 보통 (사이즈 50%)
+//   <=5 : ⚪ 스킵 권장
+//
+// 가중치 근거
+//   추세 EMA       +3  (GATE — 다운트렌드 에어본 롱은 데드캣 바운스 반복)
+//   거래량 클라이맥스 +3  (GATE — 거래량 없는 이탈 = 추가 하락 신호)
+//   FVG            +2  (ICT — 기관 미체결 갭, 자석 역할)
+//   오더블럭        +2  (ICT — 임펄스 직전 양봉, 기관 매수대)
+//   꼬리 거부 ≥0.5 +1  (5y 백테스트 PF 1.18 alpha source)
+//   Williams 프랙탈 +1  (5봉 구조 전환점)
+//   4h EMA21 동의   +1  (MTF 컨플루언스)
+// =============================================================================
+
+//@version=5
+indicator(
+     title="Airborne Confluence Scorecard",
+     shorttitle="Airborne Score",
+     overlay=true,
+     max_lines_count=50,
+     max_labels_count=200,
+     max_bars_back=500)
+
+// ============== Inputs ==============
+group_bb = "Bollinger Bands"
+bb_length = input.int(20, "BB Length", minval=2, group=group_bb)
+bb_std = input.float(2.0, "BB StdDev", minval=0.1, step=0.1, group=group_bb)
+
+group_air = "Airborne v1.2 게이트"
+retrace = input.float(0.4, "Retrace Ratio (역공학 확정 0.4)",
+     minval=0.05, maxval=0.95, step=0.05, group=group_air)
+min_margin = input.float(0.001, "Min close margin (% of price)",
+     minval=0.0, step=0.0001, group=group_air)
+atr_period = input.int(14, "ATR period (body gate)", minval=1, group=group_air)
+atr_body_mult = input.float(0.6, "Min body x ATR", minval=0.0, step=0.1, group=group_air)
+
+group_score = "컨플루언스 필터"
+ema_period = input.int(21, "Trend EMA period", minval=2, group=group_score,
+     tooltip="GATE — close 가 EMA 위면 long ok / 아래면 short ok")
+vol_ma_period = input.int(20, "Volume MA period", minval=2, group=group_score)
+vol_climax_mult = input.float(1.5, "Volume climax x MA", minval=1.0, step=0.1, group=group_score,
+     tooltip="GATE — 이탈 봉 거래량 / 평균 비율")
+wick_thresh = input.float(0.5, "Wick rejection ratio threshold",
+     minval=0.1, maxval=0.95, step=0.05, group=group_score,
+     tooltip="long: lower_wick/range / short: upper_wick/range")
+fvg_lookback = input.int(20, "FVG search lookback bars", minval=1, group=group_score)
+ob_lookback = input.int(20, "OB search lookback bars", minval=1, group=group_score)
+mtf_4h_check = input.bool(true, "4h EMA21 동의 체크", group=group_score)
+
+group_rr = "Risk/Reward 제안"
+sl_buffer_pct = input.float(0.003, "SL 버퍼 (% of price)", minval=0.0, step=0.001, group=group_rr,
+     tooltip="long SL = recent low * (1-buffer)")
+min_rr = input.float(2.0, "Min RR (TP2 기준)", minval=1.0, step=0.1, group=group_rr,
+     tooltip="2.0 미만이면 신호 스킵 권장")
+
+group_disp = "표시 설정"
+show_table = input.bool(true, "점수표 표시", group=group_disp)
+table_pos = input.string("top_right", "테이블 위치",
+     options=["top_left","top_right","bottom_left","bottom_right"], group=group_disp)
+show_sltp_lines = input.bool(true, "SL/TP 가로선 표시", group=group_disp)
+min_score_to_mark = input.int(3, "표시할 최소 점수", minval=0, maxval=13, group=group_disp)
+
+// ============== HTF BB + ATR + EMA + Vol MA ==============
+bb_basis = ta.sma(close, bb_length)
+bb_dev = ta.stdev(close, bb_length) * bb_std
+bb_upper = bb_basis + bb_dev
+bb_lower = bb_basis - bb_dev
+atr_v = ta.atr(atr_period)
+ema_v = ta.ema(close, ema_period)
+vol_ma = ta.sma(volume, vol_ma_period)
+
+// 4h MTF EMA21 (request.security)
+ema21_4h = request.security(syminfo.tickerid, "240", ta.ema(close, 21),
+     lookahead=barmerge.lookahead_off)
+
+// ============== Airborne v1.2 state machine ==============
+upper_thr = bb_upper * (1 + min_margin)
+lower_thr = bb_lower * (1 - min_margin)
+body_abs = math.abs(close - open)
+min_body_abs = atr_body_mult * atr_v
+
+upper_break = close > upper_thr and close[1] <= upper_thr[1] and body_abs >= min_body_abs
+lower_break = close < lower_thr and close[1] >= lower_thr[1] and body_abs >= min_body_abs
+
+var int state = 0   // 0=none, 1=long_setup, 2=short_setup
+var float base_v = na
+var float ext_v = na
+
+if state == 0
+    if upper_break
+        state := 2
+        base_v := close
+        ext_v := high
+    else if lower_break
+        state := 1
+        base_v := close
+        ext_v := low
+
+if state == 1 and not na(ext_v)
+    ext_v := math.min(ext_v, low)
+if state == 2 and not na(ext_v)
+    ext_v := math.max(ext_v, high)
+
+trigger = state == 1 ? ext_v + retrace * (base_v - ext_v) :
+          state == 2 ? ext_v - retrace * (ext_v - base_v) : float(na)
+
+long_fire = false
+short_fire = false
+
+if barstate.isconfirmed
+    if state == 1 and close >= trigger
+        long_fire := true
+        state := 0
+        base_v := na
+        ext_v := na
+    else if state == 2 and close <= trigger
+        short_fire := true
+        state := 0
+        base_v := na
+        ext_v := na
+
+// ============== Confluence factors ==============
+// 1. Trend EMA (+3)
+trend_long_ok = close > ema_v or (ema_v > ema_v[1] and ema_v[1] > ema_v[2])
+trend_short_ok = close < ema_v or (ema_v < ema_v[1] and ema_v[1] < ema_v[2])
+
+// 2. Volume climax (+3)
+vol_climax = volume >= vol_climax_mult * vol_ma
+
+// 3. FVG within recent bars (+2) — bullish FVG: low[i] > high[i+2]
+fvg_long_ok = false
+for i = 1 to fvg_lookback
+    if low[i] > high[i + 2]
+        fvg_long_ok := true
+        break
+fvg_short_ok = false
+for i = 1 to fvg_lookback
+    if high[i] < low[i + 2]
+        fvg_short_ok := true
+        break
+
+// 4. Engulfing OB within recent bars (+2)
+ob_long_ok = false
+ob_short_ok = false
+for i = 1 to ob_lookback
+    bull_engulf = close[i] > open[i] and close[i+1] < open[i+1] and close[i] >= open[i+1] and open[i] <= close[i+1]
+    bear_engulf = close[i] < open[i] and close[i+1] > open[i+1] and open[i] >= close[i+1] and close[i] <= open[i+1]
+    if bull_engulf
+        ob_long_ok := true
+    if bear_engulf
+        ob_short_ok := true
+
+// 5. Wick rejection (+1)
+rng = math.max(high - low, syminfo.mintick)
+wick_lo_ratio = (math.min(open, close) - low) / rng
+wick_up_ratio = (high - math.max(open, close)) / rng
+wick_long_ok = wick_lo_ratio >= wick_thresh
+wick_short_ok = wick_up_ratio >= wick_thresh
+
+// 6. Williams Fractal — 2-bar pivot (5-candle window) (+1)
+// long fire 는 저점 프랙탈, short 는 고점 프랙탈 동의 필요
+// (i-2 가 직전 5봉 안의 lowest = pivot low)
+fractal_low = bar_index >= 4 ? low[2] < low[1] and low[2] < low[0] and low[2] < low[3] and low[2] < low[4] : false
+fractal_high = bar_index >= 4 ? high[2] > high[1] and high[2] > high[0] and high[2] > high[3] and high[2] > high[4] : false
+
+// 7. 4h EMA21 동의 (+1)
+mtf_long_ok = mtf_4h_check ? (not na(ema21_4h) and (ema21_4h > ema21_4h[1] or close > ema21_4h)) : true
+mtf_short_ok = mtf_4h_check ? (not na(ema21_4h) and (ema21_4h < ema21_4h[1] or close < ema21_4h)) : true
+
+// ============== Weighted score ==============
+long_score = (trend_long_ok ? 3 : 0) + (vol_climax ? 3 : 0) +
+     (fvg_long_ok ? 2 : 0) + (ob_long_ok ? 2 : 0) +
+     (wick_long_ok ? 1 : 0) + (fractal_low ? 1 : 0) + (mtf_long_ok ? 1 : 0)
+short_score = (trend_short_ok ? 3 : 0) + (vol_climax ? 3 : 0) +
+     (fvg_short_ok ? 2 : 0) + (ob_short_ok ? 2 : 0) +
+     (wick_short_ok ? 1 : 0) + (fractal_high ? 1 : 0) + (mtf_short_ok ? 1 : 0)
+
+// ============== SL/TP suggestions on fire ==============
+recent_low_5 = ta.lowest(low, 5)
+recent_high_5 = ta.highest(high, 5)
+long_sl = recent_low_5 * (1 - sl_buffer_pct)
+short_sl = recent_high_5 * (1 + sl_buffer_pct)
+long_tp1 = bb_basis                                  // BB 중심선
+long_tp2 = close + (close - long_sl) * min_rr        // RR ≥ min_rr
+short_tp1 = bb_basis
+short_tp2 = close - (short_sl - close) * min_rr
+long_rr = (long_tp1 - close) / math.max(close - long_sl, syminfo.mintick)
+short_rr = (close - short_tp1) / math.max(short_sl - close, syminfo.mintick)
+
+// ============== Plots ==============
+plot(bb_upper, "BB Upper", color=color.new(color.blue, 60))
+plot(bb_basis, "BB Mid", color=color.new(color.orange, 50))
+plot(bb_lower, "BB Lower", color=color.new(color.blue, 60))
+plot(ema_v, "EMA Trend", color=color.new(color.purple, 50))
+
+// Fire marker — color graded by score
+long_color = long_score >= 10 ? color.lime : long_score >= 6 ? color.orange : color.gray
+short_color = short_score >= 10 ? color.red : short_score >= 6 ? color.orange : color.gray
+
+show_long = long_fire and long_score >= min_score_to_mark
+show_short = short_fire and short_score >= min_score_to_mark
+
+plotshape(show_long, title="롱 발화", style=shape.triangleup,
+     location=location.belowbar, color=long_color, size=size.normal,
+     text="L", textcolor=color.white)
+plotshape(show_short, title="숏 발화", style=shape.triangledown,
+     location=location.abovebar, color=short_color, size=size.normal,
+     text="S", textcolor=color.white)
+
+// 각 fire 별 상세 tooltip — 라벨에 마우스 올리면 그 봉의 항목별 ✓/✗ + SL/TP 전체 표시
+long_tt = "═══ 에어본 롱 발화 ═══\n" +
+     "[추세 EMA +3]        " + (trend_long_ok ? "✓ 통과" : "✗ 실패") + "\n" +
+     "[거래량 클라이맥스 +3] " + (vol_climax ? "✓ 통과" : "✗ 실패") + "\n" +
+     "[FVG +2]             " + (fvg_long_ok ? "✓ 통과" : "✗ 실패") + "\n" +
+     "[오더블럭 +2]         " + (ob_long_ok ? "✓ 통과" : "✗ 실패") + "\n" +
+     "[꼬리 ≥" + str.tostring(wick_thresh, "#.##") + " +1]     " + (wick_long_ok ? "✓ 통과" : "✗ 실패") + "\n" +
+     "[프랙탈 +1]           " + (fractal_low ? "✓ 통과" : "✗ 실패") + "\n" +
+     "[4h EMA21 +1]        " + (mtf_long_ok ? "✓ 통과" : "✗ 실패") + "\n" +
+     "─────────────────────\n" +
+     "총점: " + str.tostring(long_score) + " / 13\n" +
+     "등급: " + (long_score >= 10 ? "🟢 강한 (FULL)" : long_score >= 6 ? "🟡 보통 (50%)" : "⚪ 스킵") + "\n" +
+     "─────────────────────\n" +
+     "진입가: " + str.tostring(close, format.mintick) + "\n" +
+     "SL:    " + str.tostring(long_sl, format.mintick) + "\n" +
+     "TP1:   " + str.tostring(long_tp1, format.mintick) + " (BB 중심)\n" +
+     "TP2:   " + str.tostring(long_tp2, format.mintick) + " (RR " + str.tostring(min_rr, "#.##") + ")\n" +
+     "RR(TP1): " + str.tostring(long_rr, "#.##") + (long_rr >= min_rr ? " ✓" : " ✗")
+
+short_tt = "═══ 에어본 숏 발화 ═══\n" +
+     "[추세 EMA +3]        " + (trend_short_ok ? "✓ 통과" : "✗ 실패") + "\n" +
+     "[거래량 클라이맥스 +3] " + (vol_climax ? "✓ 통과" : "✗ 실패") + "\n" +
+     "[FVG +2]             " + (fvg_short_ok ? "✓ 통과" : "✗ 실패") + "\n" +
+     "[오더블럭 +2]         " + (ob_short_ok ? "✓ 통과" : "✗ 실패") + "\n" +
+     "[꼬리 ≥" + str.tostring(wick_thresh, "#.##") + " +1]     " + (wick_short_ok ? "✓ 통과" : "✗ 실패") + "\n" +
+     "[프랙탈 +1]           " + (fractal_high ? "✓ 통과" : "✗ 실패") + "\n" +
+     "[4h EMA21 +1]        " + (mtf_short_ok ? "✓ 통과" : "✗ 실패") + "\n" +
+     "─────────────────────\n" +
+     "총점: " + str.tostring(short_score) + " / 13\n" +
+     "등급: " + (short_score >= 10 ? "🟢 강한 (FULL)" : short_score >= 6 ? "🟡 보통 (50%)" : "⚪ 스킵") + "\n" +
+     "─────────────────────\n" +
+     "진입가: " + str.tostring(close, format.mintick) + "\n" +
+     "SL:    " + str.tostring(short_sl, format.mintick) + "\n" +
+     "TP1:   " + str.tostring(short_tp1, format.mintick) + " (BB 중심)\n" +
+     "TP2:   " + str.tostring(short_tp2, format.mintick) + " (RR " + str.tostring(min_rr, "#.##") + ")\n" +
+     "RR(TP1): " + str.tostring(short_rr, "#.##") + (short_rr >= min_rr ? " ✓" : " ✗")
+
+// Score label (hover → 상세 breakdown tooltip)
+if show_long
+    label.new(bar_index, low, "롱 " + str.tostring(long_score) + "/13\nRR " + str.tostring(long_rr, "#.##"),
+         yloc=yloc.belowbar, color=long_color, textcolor=color.white,
+         style=label.style_label_up, size=size.small, tooltip=long_tt)
+if show_short
+    label.new(bar_index, high, "숏 " + str.tostring(short_score) + "/13\nRR " + str.tostring(short_rr, "#.##"),
+         yloc=yloc.abovebar, color=short_color, textcolor=color.white,
+         style=label.style_label_down, size=size.small, tooltip=short_tt)
+
+// SL/TP lines (only most recent fire)
+var line sl_line = na
+var line tp1_line = na
+var line tp2_line = na
+if show_sltp_lines and (long_fire or short_fire)
+    line.delete(sl_line)
+    line.delete(tp1_line)
+    line.delete(tp2_line)
+    sl_px = long_fire ? long_sl : short_sl
+    tp1_px = long_fire ? long_tp1 : short_tp1
+    tp2_px = long_fire ? long_tp2 : short_tp2
+    sl_line := line.new(bar_index, sl_px, bar_index + 40, sl_px,
+         color=color.red, width=1, style=line.style_dashed)
+    tp1_line := line.new(bar_index, tp1_px, bar_index + 40, tp1_px,
+         color=color.yellow, width=1, style=line.style_dashed)
+    tp2_line := line.new(bar_index, tp2_px, bar_index + 40, tp2_px,
+         color=color.green, width=1, style=line.style_dashed)
+
+// ============== Score Table ==============
+table_position(p) =>
+    switch p
+        "top_left"     => position.top_left
+        "top_right"    => position.top_right
+        "bottom_left"  => position.bottom_left
+        "bottom_right" => position.bottom_right
+        =>                position.top_right
+
+// 표 셀 헬퍼 — Pine v5 는 if-block 안에 함수 선언 금지라 상단에 둔다.
+chk(b) => b ? "✓" : "✗"
+col(b) => b ? color.lime : color.red
+
+// 최근 fire 정보 저장
+var int last_fire_bar = na
+var string last_side = ""
+var int last_score = 0
+var float last_rr = na
+var bool last_trend = false
+var bool last_vol = false
+var bool last_fvg = false
+var bool last_ob = false
+var bool last_wick = false
+var bool last_frac = false
+var bool last_mtf = false
+
+if long_fire
+    last_fire_bar := bar_index
+    last_side := "롱"
+    last_score := long_score
+    last_rr := long_rr
+    last_trend := trend_long_ok
+    last_vol := vol_climax
+    last_fvg := fvg_long_ok
+    last_ob := ob_long_ok
+    last_wick := wick_long_ok
+    last_frac := fractal_low
+    last_mtf := mtf_long_ok
+if short_fire
+    last_fire_bar := bar_index
+    last_side := "숏"
+    last_score := short_score
+    last_rr := short_rr
+    last_trend := trend_short_ok
+    last_vol := vol_climax
+    last_fvg := fvg_short_ok
+    last_ob := ob_short_ok
+    last_wick := wick_short_ok
+    last_frac := fractal_high
+    last_mtf := mtf_short_ok
+
+var table tbl = na
+if show_table and barstate.islast
+    if na(tbl)
+        tbl := table.new(table_position(table_pos), 3, 11,
+             frame_color=color.gray, frame_width=1,
+             border_color=color.gray, border_width=1)
+    bg_hdr = color.new(color.black, 30)
+    bg_row = color.new(color.black, 75)
+    tc = color.white
+    grade_color = last_score >= 10 ? color.lime :
+                  last_score >= 6 ? color.orange : color.gray
+    grade_text = last_score >= 10 ? "🟢 강한" :
+                 last_score >= 6 ? "🟡 보통" : "⚪ 스킵"
+    bars_ago = na(last_fire_bar) ? -1 : bar_index - last_fire_bar
+
+    // 헤더
+    table.cell(tbl, 0, 0, "최근 발화", bgcolor=bg_hdr, text_color=tc, text_size=size.small)
+    table.cell(tbl, 1, 0, last_side == "" ? "-" : last_side, bgcolor=bg_hdr, text_color=tc, text_size=size.small)
+    table.cell(tbl, 2, 0, bars_ago < 0 ? "-" : str.tostring(bars_ago) + "봉전",
+         bgcolor=bg_hdr, text_color=tc, text_size=size.small)
+
+    // 총점
+    table.cell(tbl, 0, 1, "점수", bgcolor=bg_hdr, text_color=tc, text_size=size.small)
+    table.cell(tbl, 1, 1, str.tostring(last_score) + "/13",
+         bgcolor=bg_hdr, text_color=grade_color, text_size=size.normal)
+    table.cell(tbl, 2, 1, grade_text, bgcolor=bg_hdr, text_color=grade_color, text_size=size.small)
+
+    // 항목별 (+점수 / 통과 여부)
+    table.cell(tbl, 0, 2, "추세 EMA", bgcolor=bg_row, text_color=tc, text_size=size.tiny)
+    table.cell(tbl, 1, 2, "+3", bgcolor=bg_row, text_color=tc, text_size=size.tiny)
+    table.cell(tbl, 2, 2, chk(last_trend), bgcolor=bg_row, text_color=col(last_trend), text_size=size.tiny)
+
+    table.cell(tbl, 0, 3, "거래량 클라이맥스", bgcolor=bg_row, text_color=tc, text_size=size.tiny)
+    table.cell(tbl, 1, 3, "+3", bgcolor=bg_row, text_color=tc, text_size=size.tiny)
+    table.cell(tbl, 2, 3, chk(last_vol), bgcolor=bg_row, text_color=col(last_vol), text_size=size.tiny)
+
+    table.cell(tbl, 0, 4, "FVG", bgcolor=bg_row, text_color=tc, text_size=size.tiny)
+    table.cell(tbl, 1, 4, "+2", bgcolor=bg_row, text_color=tc, text_size=size.tiny)
+    table.cell(tbl, 2, 4, chk(last_fvg), bgcolor=bg_row, text_color=col(last_fvg), text_size=size.tiny)
+
+    table.cell(tbl, 0, 5, "오더블럭", bgcolor=bg_row, text_color=tc, text_size=size.tiny)
+    table.cell(tbl, 1, 5, "+2", bgcolor=bg_row, text_color=tc, text_size=size.tiny)
+    table.cell(tbl, 2, 5, chk(last_ob), bgcolor=bg_row, text_color=col(last_ob), text_size=size.tiny)
+
+    table.cell(tbl, 0, 6, "꼬리 ≥" + str.tostring(wick_thresh, "#.##"),
+         bgcolor=bg_row, text_color=tc, text_size=size.tiny)
+    table.cell(tbl, 1, 6, "+1", bgcolor=bg_row, text_color=tc, text_size=size.tiny)
+    table.cell(tbl, 2, 6, chk(last_wick), bgcolor=bg_row, text_color=col(last_wick), text_size=size.tiny)
+
+    table.cell(tbl, 0, 7, "프랙탈", bgcolor=bg_row, text_color=tc, text_size=size.tiny)
+    table.cell(tbl, 1, 7, "+1", bgcolor=bg_row, text_color=tc, text_size=size.tiny)
+    table.cell(tbl, 2, 7, chk(last_frac), bgcolor=bg_row, text_color=col(last_frac), text_size=size.tiny)
+
+    table.cell(tbl, 0, 8, "4h EMA21 동의", bgcolor=bg_row, text_color=tc, text_size=size.tiny)
+    table.cell(tbl, 1, 8, "+1", bgcolor=bg_row, text_color=tc, text_size=size.tiny)
+    table.cell(tbl, 2, 8, chk(last_mtf), bgcolor=bg_row, text_color=col(last_mtf), text_size=size.tiny)
+
+    // RR
+    rr_color = na(last_rr) ? color.gray : last_rr >= min_rr ? color.lime : color.red
+    rr_str = na(last_rr) ? "-" : str.tostring(last_rr, "#.##")
+    table.cell(tbl, 0, 9, "RR (TP1)", bgcolor=bg_hdr, text_color=tc, text_size=size.small)
+    table.cell(tbl, 1, 9, rr_str, bgcolor=bg_hdr, text_color=rr_color, text_size=size.small)
+    table.cell(tbl, 2, 9, last_rr >= min_rr ? "✓" : "✗",
+         bgcolor=bg_hdr, text_color=rr_color, text_size=size.small)
+
+    // 등급 안내
+    table.cell(tbl, 0, 10, "10+/6-9/<5", bgcolor=bg_row, text_color=tc, text_size=size.tiny)
+    table.cell(tbl, 1, 10, "강/보/스킵", bgcolor=bg_row, text_color=tc, text_size=size.tiny)
+    table.cell(tbl, 2, 10, "FULL/50%/X", bgcolor=bg_row, text_color=tc, text_size=size.tiny)
+
+// ============== Alerts ==============
+alertcondition(long_fire and long_score >= 10,
+     title="에어본 롱 (강한 진입 10+)",
+     message="Airborne LONG score >= 10 @ {{ticker}} {{interval}} close={{close}}")
+alertcondition(long_fire and long_score >= 6 and long_score < 10,
+     title="에어본 롱 (보통 6-9)",
+     message="Airborne LONG score 6-9 @ {{ticker}} {{interval}} close={{close}}")
+alertcondition(short_fire and short_score >= 10,
+     title="에어본 숏 (강한 진입 10+)",
+     message="Airborne SHORT score >= 10 @ {{ticker}} {{interval}} close={{close}}")
+alertcondition(short_fire and short_score >= 6 and short_score < 10,
+     title="에어본 숏 (보통 6-9)",
+     message="Airborne SHORT score 6-9 @ {{ticker}} {{interval}} close={{close}}")
