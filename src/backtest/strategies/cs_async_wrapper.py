@@ -55,6 +55,7 @@ class CrossSectionalAsyncStrategy:
         params: Optional[dict] = None,
         module: Optional[str] = None,
         capital_fraction: float = 1.0,
+        min_picks: int = 0,
     ) -> None:
         """
         Two construction modes:
@@ -86,6 +87,12 @@ class CrossSectionalAsyncStrategy:
         if not 0 < capital_fraction <= 1.0:
             raise ValueError(
                 f"capital_fraction must be in (0, 1], got {capital_fraction}")
+        # min_picks (2026-05-27 v0.6.7, #328 follow-up): 양수 score 종목 수가
+        # min_picks 미만이면 dispatch hold — 단일 종목 집중 risk 차단 (예: 양수
+        # 1종 → ZEC capital_fraction 50% 단독 매수 회피). 0 (default) = 가드
+        # 비활성 (기존 동작 보존).
+        if min_picks < 0:
+            raise ValueError(f"min_picks must be >= 0, got {min_picks}")
         self.strategy_id = strategy_id
         self.compute_weights_fn = compute_weights_fn
         self.SYMBOL = symbol
@@ -94,6 +101,7 @@ class CrossSectionalAsyncStrategy:
         self.weights_kind = weights_kind
         self.params = params or {}
         self.capital_fraction = float(capital_fraction)
+        self.min_picks = int(min_picks)
         self._bar_count = 0
         self._last_weights: Optional[pd.Series] = None
 
@@ -145,7 +153,20 @@ class CrossSectionalAsyncStrategy:
             # capital_fraction 스케일: weights 와 exposure 둘 다 곱해 — downstream
             # broker 가 latest_weights 와 size 둘 다 참조하므로 일관성 유지.
             last_row = weights_df.iloc[-1] * self.capital_fraction
-            self._last_weights = last_row[last_row > 0]
+            picks = last_row[last_row > 0]
+            # v0.6.7 분산 가드 (#328 follow-up). 양수 종목 < min_picks 면
+            # hold. capital_fraction 50% 가 단일 종목에 집중되는 risk 회피.
+            # _last_weights 도 비워야 basket_dispatcher 가 stale 로 dispatch 안 함.
+            if self.min_picks > 0 and len(picks) < self.min_picks:
+                self._last_weights = None
+                return Signal(
+                    action="hold", size=0.0,
+                    reason=(
+                        f"{self.strategy_id}_low_diversity:"
+                        f"n={len(picks)}<min_picks={self.min_picks}"
+                    ),
+                )
+            self._last_weights = picks
             exposure = float(last_row.sum())
         except Exception as e:
             return Signal(action="hold", size=0.0,

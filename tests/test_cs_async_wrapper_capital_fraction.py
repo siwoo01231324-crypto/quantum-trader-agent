@@ -103,3 +103,90 @@ def test_invalid_capital_fraction_raises():
                 weights_kind="crypto",
                 capital_fraction=bad,
             )
+
+
+# ── #328 follow-up: min_picks 분산 가드 (v0.6.8) ──────────────────────────────
+
+
+def _compute_weights_only_one_pick(closes: pd.DataFrame, qv: pd.DataFrame,
+                                    **_kw) -> pd.DataFrame:
+    """모든 시점에 1 종목만 weight 1.0 — single-pick (ZEC 단독 50%) 시뮬."""
+    w = pd.DataFrame(0.0, index=closes.index, columns=closes.columns)
+    if len(closes) < 5:
+        return w
+    w.iloc[-1, 0] = 1.0
+    return w
+
+
+@pytest.mark.asyncio
+async def test_min_picks_default_zero_no_regression():
+    """min_picks default 0 = 가드 비활성. single-pick 도 dispatch — 회귀 X."""
+    strat = CrossSectionalAsyncStrategy(
+        strategy_id="t",
+        compute_weights_fn=_compute_weights_only_one_pick,
+        weights_kind="crypto",
+        rebal_freq=1,
+        warmup_bars=5,
+        capital_fraction=0.5,
+    )
+    assert strat.min_picks == 0
+    ctx = _make_ctx(n_bars=10, n_symbols=5)
+    for _ in range(5):
+        await strat.on_bar(ctx)
+    sig = await strat.on_bar(ctx)
+    assert sig.action == "buy"
+    assert sig.size == pytest.approx(0.5, abs=1e-9)
+    assert len(strat.latest_weights) == 1
+
+
+@pytest.mark.asyncio
+async def test_min_picks_three_blocks_single_pick():
+    """#328: 양수 1종 (< min_picks=3) → hold (ZEC 단독 50% 사고 차단)."""
+    strat = CrossSectionalAsyncStrategy(
+        strategy_id="t",
+        compute_weights_fn=_compute_weights_only_one_pick,
+        weights_kind="crypto",
+        rebal_freq=1,
+        warmup_bars=5,
+        capital_fraction=0.5,
+        min_picks=3,
+    )
+    ctx = _make_ctx(n_bars=10, n_symbols=5)
+    for _ in range(5):
+        await strat.on_bar(ctx)
+    sig = await strat.on_bar(ctx)
+    assert sig.action == "hold", f"가드 미작동: {sig}"
+    assert "low_diversity" in sig.reason
+    assert "n=1" in sig.reason
+    assert strat.latest_weights is None
+
+
+@pytest.mark.asyncio
+async def test_min_picks_three_allows_three_picks():
+    """양수 3종 (= min_picks=3) → buy (경계값 통과)."""
+    strat = CrossSectionalAsyncStrategy(
+        strategy_id="t",
+        compute_weights_fn=_fake_compute_weights,
+        weights_kind="crypto",
+        rebal_freq=1,
+        warmup_bars=5,
+        capital_fraction=0.5,
+        min_picks=3,
+    )
+    ctx = _make_ctx(n_bars=10, n_symbols=5)
+    for _ in range(5):
+        await strat.on_bar(ctx)
+    sig = await strat.on_bar(ctx)
+    assert sig.action == "buy", f"가드 너무 엄격: {sig}"
+    assert sig.size == pytest.approx(0.5, abs=1e-9)
+    assert len(strat.latest_weights) == 3
+
+
+def test_invalid_min_picks_raises():
+    with pytest.raises(ValueError, match="min_picks"):
+        CrossSectionalAsyncStrategy(
+            strategy_id="t",
+            compute_weights_fn=_fake_compute_weights,
+            weights_kind="crypto",
+            min_picks=-1,
+        )

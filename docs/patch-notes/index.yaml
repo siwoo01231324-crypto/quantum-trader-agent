@@ -15,6 +15,45 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.8"
+    date: "2026-05-27"
+    title: "cs-tsmom 분산 정책: top_n 10→30 + min_picks 3 가드"
+    tags: [feature, safety]
+    summary: >
+      사용자 의도 "시드 capital_fraction (50%) 안에서 양수 score 종목 자유롭게
+      비중 분배" 명확화. universe 전체 (top_n=30) 동일 가중 + 양수 < 3 이면 hold
+      가드. ZEC 단독 50% 같은 단일 종목 집중 사고 차단.
+    items:
+      - "cs_async_wrapper.__init__ 에 min_picks 인자 추가 (default 0 = 가드 비활성, 기존 동작 byte-identical)."
+      - "on_bar 가 양수 weight 종목 < min_picks 면 hold + latest_weights=None. basket_dispatcher 가 stale weights 로 dispatch 안 함."
+      - "production.yaml cs-tsmom-crypto-daily: top_n 10→30 + min_picks 3."
+      - "효과: 양수 10종 → 각 5%; 5종 → 각 10%; 3종 → 각 16.7%; 1~2종 → hold."
+      - "회귀 박제 4건 (default_zero_no_regression / three_blocks_single_pick / three_allows_three_picks / invalid_min_picks_raises)."
+      - "⚠️ 5y bench (top_n=10 기준 PF 1.32 / Sharpe 1.33) 보장 깨질 수 있음. paper 1~2주 모니터링 후 top_n=30 기준 재검증 필요."
+    refs:
+      - "src/backtest/strategies/cs_async_wrapper.py"
+      - "configs/orchestrator/production.yaml"
+      - "tests/test_cs_async_wrapper_capital_fraction.py"
+
+  - version: "v0.6.7"
+    date: "2026-05-27"
+    title: "mark-price feed 가 orchestrator.run_bar 도 깨움 — cs-tsmom 발주 트리거 fix (#328)"
+    tags: [fix, safety]
+    summary: >
+      testnet BTCUSDT aggTrade 거래량 극소로 17분+ tick 0건 → cs-tsmom
+      (universe-scan) 평가 trigger 부재 → 발주 0건 사고 fix. `!markPrice@arr@1s`
+      consumer 가 매 batch 마다 representative tick (BTC 우선) 을 메인 tick_queue
+      에 drop-oldest put → 기존 consumer() 가 같은 경로로 처리.
+    items:
+      - "_run_mark_price_consumer 에 tick_queue 인자 추가 (optional, default None — 기존 6개 테스트 byte-identical)."
+      - "매 mark-price batch 마다 BTC 우선 (없으면 batch[0]) representative tick 을 producer() 와 동일한 drop-oldest 패턴으로 put_nowait."
+      - "run_shadow_loop 의 _run_mark_price_consumer 호출 시 tick_queue 전달 — broker_mode=binance-testnet-shadow + enable_mark_price_feed=True + position_risk_manager set 일 때만 활성."
+      - "효과: cs-tsmom.on_bar 가 매초 1회 호출 → bar_count 252s warmup 후 5s rebal cycle → 첫 dispatch 까지 부팅 후 약 4분 25초."
+      - "회귀 박제 2건 (puts_synthetic_tick / works_without_tick_queue)."
+    refs:
+      - "src/live/loop.py"
+      - "tests/live/test_mark_price_consumer.py"
+
   - version: "v0.6.6"
     date: "2026-05-27"
     title: "airborne-trader-daemon skeleton — standalone trader (qta-airborne-daemon FIRE listener → 자체 broker, top-100 universe 지원)"

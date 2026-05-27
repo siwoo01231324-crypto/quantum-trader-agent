@@ -138,11 +138,17 @@ strategies:
       rebal_freq: 5
       warmup_bars: 252
       weights_kind: crypto
-      # 사용자 요청 (2026-05-21): 잔고의 50% 배정. 종목당 0.5 × (1/10) = 5%.
-      # 5y MDD -52% → 최악의 경우 총 자본 ~26% 일시 손실 가능 — 모니터링.
+      # 사용자 요청 (2026-05-21): 잔고의 50% 배정.
+      # 2026-05-27 v0.6.7: top_n 10→30 (universe 전체 양수 score 종목 다 매수)
+      # + min_picks 3 (양수 종목 < 3 이면 hold). "시드 50% 안에서 N종 자유롭게
+      # 비중 분배" 의도. 예: 양수 10종 → 각 5%; 5종 → 각 10%; 3종 → 각 16.7%;
+      # 1~2종 → hold (집중 회피 — ZEC 단독 50% 같은 사고 차단).
+      # ⚠️ 5y bench (top_n=10 기준) PF 1.32 / Sharpe 1.33 보장 깨질 수 있음.
+      # paper 1~2주 모니터링 후 top_n=30 기준 재검증.
       capital_fraction: 0.5
+      min_picks: 3
       params:
-        top_n: 10
+        top_n: 30
         min_quote_vol: 10000000
 
   # 2026-05-27 v0.6.4 — cs-rsi-div-crypto + cs-macd-vol-crypto 둘 다 DISABLED.
