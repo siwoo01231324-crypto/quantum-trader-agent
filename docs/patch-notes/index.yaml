@@ -15,6 +15,24 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.10"
+    date: "2026-05-28"
+    title: "/airborne 페이지 누적 윈도우 — 어제·7d·30d·all 표시 (영속 JSONL store)"
+    tags: [feature]
+    summary: >
+      사용자 보고: /airborne 페이지에서 어제 데이터 안 나옴. docker logs rotation
+      (~4d) 이후 옛 fire 손실도 문제. 해결: dashboard 가 매 호출마다 docker logs
+      파싱 → 영속 JSONL store 누적 (dedup), API 가 ?window=today|yesterday|7d|30d|all
+      파라미터 받음. UI 헤더에 selector dropdown 추가.
+    items:
+      - "src/dashboard/airborne_fire_store.py — JSONL append-only store (logs/airborne_fires/history.jsonl). (ts, symbol, side) 기반 dedup. thread-safe. load_since(utc) / count / earliest_ts API. 12 unit tests."
+      - "/api/airborne_metrics — window query parameter 추가. cache 도 window 별 5분 TTL 로 분리. 응답에 window/window_start_utc/window_end_utc/store_count/store_earliest 필드 추가."
+      - "/airborne 페이지 — header-row 에 selector dropdown (오늘/어제/최근 7일/30일/전체 누적). URL ?window=... 로 북마크 가능. 윈도우 변경 시 즉시 fetch + URL replaceState."
+      - "Cumulative behavior: dashboard 가 처음 켜진 시점부터 store 에 누적. docker logs 의 최근 4d backfill 이 매 호출에서 dedup 으로 합쳐짐. 운영 1주 후엔 7d 윈도우 의미 있음."
+    refs:
+      - "src/dashboard/airborne_fire_store.py"
+      - "src/dashboard/app.py — api_airborne_metrics"
+
   - version: "v0.6.9"
     date: "2026-05-28"
     title: "airborne-trader broker + reconciler + kill switch + docker-compose — 실거래 활성화 준비"
