@@ -12,7 +12,7 @@ import asyncio
 import html
 import re
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable
 from zoneinfo import ZoneInfo
@@ -23,11 +23,25 @@ from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnec
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from prometheus_client import CONTENT_TYPE_LATEST, CollectorRegistry, generate_latest
 
+from src.dashboard.airborne_fire_store import AirborneFireStore
 from src.dashboard.ops_counters import OpsCounters
 from src.dashboard.patch_notes import render_patch_notes_page
 from src.dashboard.shadow_runs import discover_shadow_runs, load_run_detail
 from src.dashboard.strategy_catalog import load_production_status, load_strategy_catalog
 from src.dashboard.timeline_broker import TimelineBroker
+
+# Process-wide singleton — dashboard 가 daemon FIRE 들을 영속 JSONL 에 누적.
+# docker logs rotation (4d) 보다 길게 보관 → /airborne 페이지 "all" 윈도우.
+_AIRBORNE_FIRE_STORE: AirborneFireStore | None = None
+
+
+def _get_airborne_fire_store() -> AirborneFireStore:
+    global _AIRBORNE_FIRE_STORE
+    if _AIRBORNE_FIRE_STORE is None:
+        _AIRBORNE_FIRE_STORE = AirborneFireStore(
+            "logs/airborne_fires/history.jsonl",
+        )
+    return _AIRBORNE_FIRE_STORE
 from src.live.trade_history import discover_wal_files, reconstruct_trades
 from src.live.wal import replay as wal_replay
 from src.observability.metrics import Metrics
@@ -3169,8 +3183,8 @@ tbody tr:hover{background:#1c2229}
 </style>
 </head>
 <body>
-<h1>QTA — airborne 알림 적중 (오늘 KST 자정~지금)</h1>
-<div class="subtitle">qta-airborne-daemon 의 FIRE 라인을 docker logs 에서 파싱 → Binance fapi 15m 봉 4개 시뮬 → 적중률·PF·net% 집계. routine 일일 리포트 (자정 fix) 와 같은 룰을 같은 코드로 즉시 산출.</div>
+<h1>QTA — airborne 알림 적중 (누적)</h1>
+<div class="subtitle">qta-airborne-daemon 의 FIRE 라인을 docker logs 에서 파싱 → 영속 JSONL store 누적 → Binance fapi 15m 봉 시뮬 → 적중률·PF·net% 집계. dashboard 가 처음 켜진 시점부터 store 에 누적되므로 docker rotation (4d 한도) 이후에도 옛 fire 보존.</div>
 <div class="nav">
   <a href="/">← 대시보드</a>
   <a href="/cs-tsmom">cs-tsmom</a>
@@ -3179,6 +3193,16 @@ tbody tr:hover{background:#1c2229}
   <a href="/patch-notes">패치노트</a>
 </div>
 <div class="header-row">
+  <label style="font-size:.78rem;color:var(--text2)">윈도우:
+    <select id="window-selector" onchange="changeWindow(this.value)"
+            style="background:var(--surface);color:var(--text);border:1px solid var(--border);padding:5px 10px;border-radius:4px;font-family:var(--mono);font-size:.78rem">
+      <option value="today">오늘</option>
+      <option value="yesterday">어제</option>
+      <option value="7d">최근 7일</option>
+      <option value="30d">최근 30일</option>
+      <option value="all">전체 누적</option>
+    </select>
+  </label>
   <div class="meta" id="meta">로딩 중…</div>
   <span class="rule-badge" id="rule-badge">룰: TP +1.0% / SL -0.5% / 4봉(=1h) hold · 양방향 수수료 0.08%</span>
   <button class="refresh-btn" id="refresh-btn" onclick="forceRefresh()">↻ 캐시 무효화 + 재계산</button>
@@ -3365,34 +3389,76 @@ function render(d){
   return out.join('');
 }
 
+// 현재 윈도우 — selector 가 바꿈. ?window=... 쿼리 파라미터로 fetch.
+let CURRENT_WINDOW = (new URL(location.href).searchParams.get('window')) || 'today';
+
+function _windowLabel(w){
+  const map = {
+    'today':     '오늘 (KST 자정~지금)',
+    'yesterday': '어제 (KST 어제 자정~오늘 자정)',
+    '7d':        '최근 7일 누적',
+    '30d':       '최근 30일 누적',
+    'all':       '전체 누적',
+  };
+  return map[w] || w;
+}
+
 async function refresh(){
   try{
-    const r = await fetch('/api/airborne_metrics');
+    const r = await fetch('/api/airborne_metrics?window=' + encodeURIComponent(CURRENT_WINDOW));
     const j = await r.json();
     const meta = document.getElementById('meta');
     const content = document.getElementById('content');
+    if (j.error){
+      content.innerHTML = `<div class="error">${esc(j.error)}</div>`;
+      return;
+    }
     const fires = j.fires_total ?? 0;
     const cachedTxt = j.cached ? '(5분 캐시)' : '(방금 갱신)';
-    meta.textContent = `KST ${j.date_kst || '—'} · 자정 ~ ${fmtKstFull(j.now_kst)} · FIRE ${fires} 건 · ${cachedTxt}`;
+    const storeInfo = j.store_count ? ` · store=${j.store_count}` : '';
+    const earliest = j.store_earliest ? ` (가장 옛 ${fmtKstFull(j.store_earliest)})` : '';
+    meta.innerHTML =
+      `<b>${esc(_windowLabel(j.window || CURRENT_WINDOW))}</b> · `
+      + `${fmtKstFull(j.window_start_utc)} ~ ${fmtKstFull(j.window_end_utc)} · `
+      + `FIRE <b>${fires}</b> · ${cachedTxt}${storeInfo}${earliest}`;
     content.innerHTML = render(j);
   }catch(e){
     document.getElementById('content').innerHTML =
       `<div class="error">로딩 실패: ${esc(String(e))} — 잠시 후 자동 재시도</div>`;
   }
 }
+
+function changeWindow(value){
+  CURRENT_WINDOW = value;
+  // URL 갱신 (북마크 가능)
+  const url = new URL(location.href);
+  url.searchParams.set('window', value);
+  history.replaceState(null, '', url.toString());
+  refresh();
+}
+
 async function forceRefresh(){
   const btn = document.getElementById('refresh-btn');
   btn.disabled = true;
   btn.textContent = '재계산 중…';
   try{
     // 서버 캐시는 5분 — 강제 무효화 endpoint 가 없으므로 cache-busting query 로 우회.
-    // (5분 안에는 같은 결과지만, 사용자 의도 = "최신 시각 표기 갱신")
-    const r = await fetch('/api/airborne_metrics?_=' + Date.now());
+    const r = await fetch('/api/airborne_metrics?window=' + encodeURIComponent(CURRENT_WINDOW)
+        + '&_=' + Date.now());
     const j = await r.json();
     const content = document.getElementById('content');
     const meta = document.getElementById('meta');
+    if (j.error){
+      content.innerHTML = `<div class="error">${esc(j.error)}</div>`;
+      return;
+    }
     const fires = j.fires_total ?? 0;
-    meta.textContent = `KST ${j.date_kst || '—'} · 자정 ~ ${fmtKstFull(j.now_kst)} · FIRE ${fires} 건 · (서버 캐시 ${j.cached ? '유효' : '갱신됨'})`;
+    const cachedTxt = j.cached ? '(5분 캐시)' : '(방금 갱신)';
+    const storeInfo = j.store_count ? ` · store=${j.store_count}` : '';
+    meta.innerHTML =
+      `<b>${esc(_windowLabel(j.window || CURRENT_WINDOW))}</b> · `
+      + `${fmtKstFull(j.window_start_utc)} ~ ${fmtKstFull(j.window_end_utc)} · `
+      + `FIRE <b>${fires}</b> · ${cachedTxt}${storeInfo}`;
     content.innerHTML = render(j);
   }catch(e){
     alert('재계산 실패: ' + e);
@@ -3401,6 +3467,12 @@ async function forceRefresh(){
     btn.textContent = '↻ 캐시 무효화 + 재계산';
   }
 }
+
+// 페이지 로드 시 URL 의 window 로 selector 초기화
+window.addEventListener('DOMContentLoaded', () => {
+  const sel = document.getElementById('window-selector');
+  if (sel) sel.value = CURRENT_WINDOW;
+});
 refresh();
 setInterval(refresh, 60000);  // 1분마다 (서버는 5분 캐시이므로 보통 캐시 반환)
 </script>
@@ -4338,7 +4410,9 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
         }
 
     # ── airborne 적중 메트릭 (오늘 KST 자정~지금, 실시간 시뮬레이션) ──────────
-    _airborne_metrics_cache: dict[str, Any] = {"ts": 0.0, "data": None}
+    # cache_key = window 식별자 ("today"/"yesterday"/"7d"/"30d"/"all").
+    # 각 window 별 5분 TTL.
+    _airborne_metrics_cache: dict[str, dict[str, Any]] = {}
     AIRBORNE_METRICS_CACHE_TTL = 300.0  # 5분
 
     async def _fetch_15m_bars(
@@ -4368,42 +4442,92 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
         ]
 
     @app.get("/api/airborne_metrics")
-    async def api_airborne_metrics() -> JSONResponse:
-        """오늘 KST 자정~지금 사이 airborne FIRE 의 TP/SL 시뮬레이션 메트릭.
+    async def api_airborne_metrics(
+        window: str = Query(
+            "today",
+            description="today | yesterday | all | 7d | 30d",
+        ),
+    ) -> JSONResponse:
+        """airborne FIRE 의 TP/SL 시뮬레이션 메트릭 — 누적 윈도우 지원.
 
         룰: TP +1.0% / SL -0.5% / 4봉 hold / SL_first 보수적 (routine spec 규칙 6
-        과 동일). 호출 시 docker logs 파싱 + Binance fapi 15분봉 4개씩 fetch →
-        시뮬 → 집계. 5분 캐시.
+        과 동일). 호출 시 docker logs 파싱 → 영속 JSONL 누적 → 윈도우만큼
+        load + Binance fapi 15분봉 fetch → 시뮬 → 집계. 5분 캐시 (window 별).
+
+        Windows (모두 KST 자정 기준):
+          - ``today``: 오늘 자정 ~ 지금 (기본)
+          - ``yesterday``: 어제 자정 ~ 오늘 자정
+          - ``7d``: 7일 전 자정 ~ 지금
+          - ``30d``: 30일 전 자정 ~ 지금
+          - ``all``: 영속 store 의 가장 옛 fire ~ 지금
         """
         import time as _time
         import httpx as _httpx
 
         now = _time.time()
-        if (now - _airborne_metrics_cache["ts"] < AIRBORNE_METRICS_CACHE_TTL
-                and _airborne_metrics_cache["data"] is not None):
-            return JSONResponse({**_airborne_metrics_cache["data"], "cached": True})
+        cache_key = window
+        cache_entry = _airborne_metrics_cache.get(cache_key)
+        if (cache_entry is not None
+                and now - cache_entry["ts"] < AIRBORNE_METRICS_CACHE_TTL
+                and cache_entry["data"] is not None):
+            return JSONResponse({**cache_entry["data"], "cached": True})
 
-        # 오늘 KST 자정 ~ 지금
+        # ── 윈도우 → since_utc / until_utc 계산 ──────────────────────────
         kst_now = datetime.now(_KST)
         kst_midnight = kst_now.replace(hour=0, minute=0, second=0, microsecond=0)
-        utc_cutoff = kst_midnight.astimezone(timezone.utc)
-        # docker `--since` 는 TZ 가 빠지면 daemon 로컬 TZ 로 해석된다 → 한국
-        # 호스트에서 KST cutoff 보다 9 시간 이른 라인까지 끌어옴. ``Z`` 로 명시 UTC.
-        since_iso = utc_cutoff.strftime("%Y-%m-%dT%H:%M:%SZ")
+        utc_midnight = kst_midnight.astimezone(timezone.utc)
+        utc_now = datetime.now(timezone.utc)
 
-        fires = await asyncio.to_thread(
-            _parse_airborne_fires_from_docker_logs, since_iso,
+        if window == "today":
+            since_utc = utc_midnight
+            until_utc = utc_now
+        elif window == "yesterday":
+            since_utc = utc_midnight - timedelta(days=1)
+            until_utc = utc_midnight  # 오늘 자정 직전
+        elif window == "7d":
+            since_utc = utc_midnight - timedelta(days=7)
+            until_utc = utc_now
+        elif window == "30d":
+            since_utc = utc_midnight - timedelta(days=30)
+            until_utc = utc_now
+        elif window == "all":
+            since_utc = datetime(2000, 1, 1, tzinfo=timezone.utc)
+            until_utc = utc_now
+        else:
+            return JSONResponse(
+                {"error": f"unknown window={window!r}, allowed: today/yesterday/7d/30d/all"},
+                status_code=400,
+            )
+
+        # ── docker logs --since 4d 까지 풀백 → store append (dedup) ─────
+        # docker 의 rotation 한도가 ~4d 이므로 그 안의 fire 만 backfill 가능.
+        # 그 옛 fire 는 dashboard 가 처음 켜진 시점부터 store 에 영속 누적되어야
+        # 함 — 본 PR 이후 운영 자연스러운 추세.
+        backfill_since = (utc_now - timedelta(days=4)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        live_fires = await asyncio.to_thread(
+            _parse_airborne_fires_from_docker_logs, backfill_since,
         )
-        # offset 이 다른 iso 문자열은 사전식 비교가 무의미 (예: "+09:00" > "+00:00").
-        # aware datetime 으로 풀어 정확히 비교.
-        def _fire_after_cutoff(ts_iso: str) -> bool:
+        store = _get_airborne_fire_store()
+        added = store.append_many(live_fires) if live_fires else 0
+        if added:
+            import logging as _lg
+            _lg.getLogger(__name__).info(
+                "[airborne_metrics] store +%d new fires (total=%d)",
+                added, store.count(),
+            )
+
+        # ── 윈도우의 fires 영속 store 에서 load ───────────────────────────
+        fires = store.load_since(since_utc)
+        # until_utc 컷오프 적용
+        def _within(ts_iso: str) -> bool:
             try:
-                return datetime.fromisoformat(
-                    str(ts_iso).replace("Z", "+00:00"),
-                ) >= utc_cutoff
+                ts = datetime.fromisoformat(str(ts_iso).replace("Z", "+00:00"))
+                if ts.tzinfo is None:
+                    ts = ts.replace(tzinfo=timezone.utc)
+                return since_utc <= ts < until_utc
             except (ValueError, TypeError):
                 return False
-        fires = [f for f in fires if _fire_after_cutoff(f["ts"])]
+        fires = [f for f in fires if _within(f.get("ts", ""))]
 
         sims: list[dict] = []
         if fires:
@@ -4425,8 +4549,13 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
         ]
         payload = {
             "date_kst": kst_now.strftime("%Y-%m-%d"),
-            "kst_window_start": kst_midnight.isoformat(),
+            "window": window,
+            "window_start_utc": since_utc.isoformat(),
+            "window_end_utc": until_utc.isoformat(),
+            "kst_window_start": kst_midnight.isoformat(),  # backcompat (오늘 자정)
             "now_kst": kst_now.isoformat(),
+            "store_count": store.count(),
+            "store_earliest": store.earliest_ts(),
             "fires_total": len(fires),
             "sims_total": len(sims),
             **agg,
@@ -4437,8 +4566,7 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
             },
             "cached": False,
         }
-        _airborne_metrics_cache["ts"] = now
-        _airborne_metrics_cache["data"] = payload
+        _airborne_metrics_cache[cache_key] = {"ts": now, "data": payload}
         return JSONResponse(payload)
 
     @app.get("/api/journal/today")
