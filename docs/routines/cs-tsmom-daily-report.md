@@ -161,6 +161,18 @@ JSON 파일이 없거나 비어있으면 PR 만들지 말고 종료.
     (PF·기대값) 과 오늘 결과 대조 (가능하면)
 
 ### 규칙 5 — 수동 거래 분석 항목 (테스트 아닌 실 거래만)
+- **종목 배경 한 줄** (2026-05-27 추가): 매매한 종목별로 *무엇인지* 1-2줄.
+  카테고리 / 섹터 / 시장 포지션 / 주요 catalyst. 사용자가 *왜 그 종목을 골랐는지*
+  맥락 학습 보조.
+  예시:
+  - `NEARUSDT` — Layer-1 블록체인, NEAR Foundation 의 AI agents 인프라 (NEAR Intents).
+    2024-2025 AI 토큰 내러티브에 자주 묶임.
+  - `SOLUSDT` — 고성능 L1, Solana 생태계 (memecoin·DePIN 허브). BTC 와 상관 높음.
+  - `ZECUSDT` — privacy coin (zk-SNARK). 거래소 상장 제한 risk + 알트 강세장 후행.
+  - `005930` — 삼성전자, 한국 반도체 대장주. KOSPI 시총 1위, HBM/foundry catalyst.
+  - `035720` — 카카오, 한국 인터넷 플랫폼. 카카오모빌리티·페이 사업 비중 큼.
+  종목 정보가 분명히 알려진 메이저 (BTC/ETH/SOL/삼전 등) 는 정보 정확. 마이너·신규
+  코인 (예: PUMPUSDT, BSBUSDT) 은 "정확히 모름" 명시 권장 — fabrication 금지.
 - **진입 근거**: `note` 그대로 인용 + 어떤 지표·판단인지 요약
 - **결과**: outcome(win/loss/breakeven) + realized_pnl. outcome 미입력이면
   realized_pnl 부호로 추정.
@@ -168,6 +180,23 @@ JSON 파일이 없거나 비어있으면 PR 만들지 말고 종료.
   - 익절: note 의 지표·판단이 effective. 다음 같은 패턴 보면 따라할만.
   - 손절: 같은 note 의 지표로 들어간 다른 성공 케이스가 있나? 무엇이 달랐나
     (시간대·거래량·추세 등). 가설.
+
+### 규칙 5-bis — 다음 학습 추천 (2026-05-27 추가, 수동 거래가 있을 때만)
+오늘 거래한 종목·진입 근거·결과를 종합해 사용자가 *다음에 공부하면 도움될
+토픽* 2-3개 추천. 일반 권면 (예: "리스크 관리 공부하세요") 금지 — 오늘 거래의
+구체적 갭에서 도출. 네 가지 축에서 선택:
+- **시장 구조 / 섹터**: 오늘 거래한 종목의 카테고리 동향
+  (예: NEAR 거래 → AI agent 토큰 펀더멘털 / NEAR Intents 백서)
+- **기술적 지표**: 오늘 note 에 나온 지표의 심화
+  (예: "RSI 다이버전스" → classic vs hidden divergence + MTF 활용)
+- **리스크 관리**: 오늘 익절/손절 시점이 잘못됐다면 그 영역
+  (예: 진입가 -1% 손절 → ATR-based dynamic stop, Kelly criterion)
+- **백테스트 검증**: 사용자가 쓴 룰의 5y 성능 확인 — quantum-trader-agent 의
+  spec md / bench script 참조 (예: `scripts/bench_*.py`, `docs/specs/strategies/`)
+
+각 추천 1-2줄로 *오늘 어떤 거래·결과 와 연결되는지* + 시작점 (책 / 유튜브 채널 /
+지표명 / 우리 repo 의 spec md 경로 / 외부 URL — 정확히 알면).
+모르는 자료를 fabricate 금지 — "공식 docs 참조" 같은 안전한 추천 OK.
 
 ### 규칙 6 — airborne 알림 적중 분석 (2026-05-26 추가)
 `airborne_fires` 가 비어있지 않으면 매일 적중률을 다음 룰로 시뮬레이션해 분석
@@ -267,12 +296,23 @@ cs_tsmom_top10 1줄 참조. 끝.)
 ### 거래 1 — [symbol] [direction] @ [entry_price → exit_price]
 - 시각: HH:MM:SS KST
 - 거래소: binance/kis
+- **종목 배경**: (규칙 5 — 1-2줄. 카테고리/섹터/주요 catalyst. 마이너 종목은
+  "정확히 알 수 없음" 명시 권장.)
 - 사용자 메모 (note): "..."
 - 결과: outcome + realized_pnl
 - 분석:
   - 잘한 점 또는 못한 점
 
 (거래 N건 반복)
+
+### 다음 학습 추천 (수동 거래가 있을 때만)
+
+(규칙 5-bis 참조. 오늘 거래·메모·결과 기반 *구체적* 학습 토픽 2-3개.)
+
+1. **[토픽 명]** — 오늘 어떤 거래·갭과 연결되는지 1줄. 시작점: (책/유튜브/지표/
+   spec md 경로/외부 docs URL).
+2. **[토픽 명]** — ...
+3. **[토픽 명]** — ...
 
 ## airborne 알림 적중 분석 (BB 40% 되돌림 시그널)
 
