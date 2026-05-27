@@ -15,6 +15,28 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.5"
+    date: "2026-05-27"
+    title: "live-airborne-bb-reversal-kst-hours 자동매매 추가 (KST {8,11,16,22}시 진입, 5y PF 1.081)"
+    tags: [feature]
+    summary: >
+      에어본 v1.2 bidir 시그널 + KST 4 시각 게이트 자동매매 전략 production 추가.
+      5y bench PF 1.081 / Sharpe 0.96 / exp +0.163%/trade — CLAUDE.md 5y gate 통과.
+      종목당 default_size 0.05 (= 4000$ seed 의 200$, cs-tsmom 과 동일 비중).
+      qta-airborne-daemon (Telegram 알림) 은 24h 그대로 발화 — 본 전략과 독립.
+    items:
+      - "live-airborne-bb-reversal-kst-hours — KST 8/11/16/22 시 (5y hour-of-day 분포 PF >= 1.0 + n >= 100 통과한 4 시각만) 진입. 나머지 20 시각 차단."
+      - "default_size 0.05 (cs-tsmom 종목당 비중과 동일) + stop 3% / TP 6% + cooldown 900s churn 방지."
+      - "데몬 무수정: scripts/airborne_alert_daemon.py / docker-compose.live.yml 영향 없음. signal 모듈 (src/signals/airborne_bb_reversal.py) 을 orchestrator 안에서 직접 호출."
+      - "함께 등록: live-airborne-bb-reversal-kst-morning (status=rejected, PF 0.906) — 4 일 daemon 분석 over-fit 의 historical artifact."
+      - "5y backtest evidence: reports/airborne_hourly_pf_5y.json + airborne_filter_sweep_r2_5y.json + airborne_criteria_combinations_5y.json + signal_families_5y.json."
+      - "Pine v5 수동 매매 인디케이터 (pine_scripts/airborne_confluence_scorecard.pine) + 한국어 매매 체크리스트 (docs/background/39-airborne-manual-trading-checklist.md) 함께 추가."
+    refs:
+      - "docs/specs/strategies/live-airborne-bb-reversal-kst-hours.md"
+      - "docs/specs/strategies/live-airborne-bb-reversal-kst-morning.md"
+      - "configs/orchestrator/production.yaml"
+      - "PR: #327"
+
   - version: "v0.6.4"
     date: "2026-05-27"
     title: "cs-rsi-div-crypto / cs-macd-vol-crypto DISABLED — cs-tsmom 진짜 단독 운영"

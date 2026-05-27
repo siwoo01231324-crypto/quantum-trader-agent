@@ -177,6 +177,30 @@ strategies:
   #       min_quote_vol: 10000000
   #       vol_ceiling: 2.0
 
+  # ── live-airborne-bb-reversal-kst-hours (2026-05-27, #327) ──────────────────
+  # 사용자 요청: 자동매매로 추가, 잔고 50% 내 노출, 종목당 ~200$ (= 4000$ seed 의 5%).
+  # 5y bench PF 1.081 / Sharpe 0.96 / exp +0.163%/trade. spec:
+  # docs/specs/strategies/live-airborne-bb-reversal-kst-hours.md
+  #
+  # 데몬 무수정 — qta-airborne-daemon (Telegram 알림) 은 24h 그대로 발화.
+  # 본 전략은 같은 signal 모듈을 orchestrator 안에서 직접 호출 (daemon log
+  # 의존 X). docker-compose / scripts/airborne_alert_daemon.py 영향 없음.
+  #
+  # capital_fraction 은 CrossSectional wrapper 전용 — live-scanner 는
+  # default_size × leverage 로 제어. 24 종목 × 4 시각 fire 분산 + 평균 보유
+  # 1~2h 라 일반 동시 보유 3~5 포지션 (= 15~25% equity 노출). 모든 종목 같은
+  # 시각 동시 fire 는 5y 내 0 회 관찰 → 50% 한도 자연 충족.
+  - id: live-airborne-bb-reversal-kst-hours
+    class: backtest.strategies.live_airborne_bb_reversal_kst_hours.LiveAirborneBbReversalKstHours
+    kwargs:
+      # cs-tsmom (capital_fraction 0.5 × top_n 10 = 종목당 5%) 와 동일 비중.
+      # 4000$ seed → 200$/trade. 더 큰 seed → 비례 스케일.
+      default_size: 0.05
+      stop_loss_pct: 0.03    # -3% price (5y bench 검증값)
+      take_profit_pct: 0.06  # +6% price (R/R 1:2)
+      # stop 청산 직후 같은 (sid, symbol) 재진입 15분 차단 — churn 방지.
+      cooldown_after_stop_sec: 900
+
   # cs-bb-macd-kr 는 5y bench Sharpe -0.32 → status: inactive, production 미등록.
   # 코드는 src/backtest/strategies/cs_bb_macd_kr.py 유지 — score 정의 재설계 후 활성화 검토.
 

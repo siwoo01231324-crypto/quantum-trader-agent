@@ -86,6 +86,9 @@ def test_production_yaml_registers_all_strategies():
         "cs-rsi-div-kr",
         "cs-adx-ma-kr",
         "cs-tsmom-crypto-daily",
+        # Live-scanner — airborne v1.2 bidir + KST 4 시각 게이트 (#327, v0.6.5):
+        # 5y bench PF 1.081 / Sharpe 0.96 / exp +0.163%. spec status=active.
+        "live-airborne-bb-reversal-kst-hours",
         # Smoke 통로 검증 (#236, env-gated — hold only without SMOKE_TEST_ENABLED)
         "smoke-1m-roundtrip-kis",
         "smoke-1m-roundtrip-binance",

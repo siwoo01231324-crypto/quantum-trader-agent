@@ -2,7 +2,7 @@
 type: strategy
 id: live-airborne-bb-reversal-kst-hours
 name: Live Airborne BB Reversal v1.2 Bidir (KST 8/11/16/22 Hours)
-status: backtest
+status: active
 paradigm: live-scanner
 instruments:
 - BINANCE_USDT_PERP_UNIVERSE
@@ -45,7 +45,7 @@ tags:
 - bidirectional
 - time-filter
 - kst-hours
-- backtest
+- active
 - pattern:live-scanner
 ---
 

@@ -104,6 +104,9 @@ class LiveAirborneBbReversalKstMorning(LiveScannerMixin):
         take_profit_pct: float | None = None,
         trailing_stop_pct: float | None = None,
         kst_entry_hours: tuple[int, ...] | list[int] | None = None,
+        # LiveScannerMixin ClassVar 와 동일 시맨틱 — production.yaml kwarg 로
+        # override 가능하도록 ctor 에 노출. None / 0 = 차단 없음 (기존 동작).
+        cooldown_after_stop_sec: float | None = None,
     ) -> None:
         if not 0 < default_size <= 1.0:
             raise ValueError(f"default_size must be in (0, 1], got {default_size}")
@@ -125,6 +128,12 @@ class LiveAirborneBbReversalKstMorning(LiveScannerMixin):
             self.take_profit_pct = take_profit_pct
         if trailing_stop_pct is not None:
             self.trailing_stop_pct = trailing_stop_pct
+        if cooldown_after_stop_sec is not None:
+            if cooldown_after_stop_sec < 0:
+                raise ValueError(
+                    f"cooldown_after_stop_sec >= 0 required, got {cooldown_after_stop_sec}"
+                )
+            self.cooldown_after_stop_sec = float(cooldown_after_stop_sec)
 
         if kst_entry_hours is not None:
             invalid = [h for h in kst_entry_hours if not (0 <= int(h) <= 23)]
