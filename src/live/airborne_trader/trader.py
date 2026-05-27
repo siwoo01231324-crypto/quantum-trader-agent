@@ -43,9 +43,8 @@ class OrderResult:
 
 
 class BrokerInterface(Protocol):
-    """본 PR scope 밖. 실제 Binance Futures client 는 후속 PR.
-
-    DummyBroker 로 단위 테스트 가능하게 추상화만 명시.
+    """Broker abstraction — DummyBroker (dry-run/tests) 와 BinanceFuturesBroker
+    (실거래) 모두 같은 API 로 동작.
     """
 
     async def place_market_order(
@@ -57,6 +56,14 @@ class BrokerInterface(Protocol):
     async def close_position(
         self, *, symbol: str, side: str, qty: float,
     ) -> OrderResult: ...
+
+    async def get_open_position_qty(self, symbol: str) -> float:
+        """Reconciler 용 — broker 측 실 포지션 수량 (NET long+, short−, flat 0).
+
+        DummyBroker 같은 sim broker 는 0.0 반환 (= broker flat = SQLite state 만 신뢰).
+        BinanceFuturesBroker 는 /fapi/v2/positionRisk 호출.
+        """
+        ...
 
 
 class DummyBroker:
@@ -94,6 +101,10 @@ class DummyBroker:
         return await self.place_market_order(
             symbol=symbol, side=opposite, qty=qty,
         )
+
+    async def get_open_position_qty(self, symbol: str) -> float:
+        """Dry-run broker — broker 측 실 포지션 없다고 가정 (state 만 신뢰)."""
+        return 0.0
 
 
 class AirborneTrader:
@@ -134,6 +145,19 @@ class AirborneTrader:
         now = self._now()
         decision = self.risk.evaluate(fire, now_utc=now)
         if not decision.ok:
+            # Daily loss limit 도달 첫 reject 시 kill switch 자동 트리거.
+            # 이후 모든 fire 는 risk.evaluate 의 gate 0 (kill_switch_active) 에서
+            # 차단됨 — manual unlock (--unlock-daily-kill) 까지 유지.
+            if (
+                decision.reason.startswith("daily_loss_limit")
+                and not self.state.is_kill_switch_active()
+            ):
+                self.state.trigger_kill_switch(reason=decision.reason)
+                logger.warning(
+                    "[airborne_trader] KILL SWITCH triggered — %s. "
+                    "manual unlock 까지 모든 신규 진입 차단.",
+                    decision.reason,
+                )
             self.state.record_fire_decision(
                 fire_key=key, ts_iso=fire.ts.isoformat(),
                 symbol=fire.symbol, side=fire.side,
@@ -267,6 +291,75 @@ class AirborneTrader:
             pnl_usd, status,
         )
 
+    # ── Startup reconciler ────────────────────────────────────────────────
+    async def reconcile_on_startup(self) -> dict[str, int]:
+        """Process 시작 시 broker 잔고 ↔ SQLite state 동기화.
+
+        SQLite 의 open positions 각각:
+          - broker 측 net_qty == 0 (flat) → state 의 position 을 closed_manual
+            로 mark (broker UI 또는 다른 process 가 청산한 경우).
+          - broker 측 net_qty != 0 → 정상, 그대로 monitor 계속.
+          - broker get_open_position_qty 가 raise → skip (계속 보유로 가정).
+
+        broker 에는 있는데 SQLite 에 없는 포지션은 warning 로그만 (이미 cs-tsmom
+        등 다른 entity 가 보유 중일 수 있음 — airborne_trader 가 청산할 권한 X).
+
+        Returns:
+          {"reconciled_closed": N, "still_open": M, "errors": E}
+        """
+        open_positions = self.state.list_open_positions()
+        if not open_positions:
+            logger.info("[airborne_trader] reconciler — no open positions")
+            return {"reconciled_closed": 0, "still_open": 0, "errors": 0}
+
+        closed = 0
+        still_open = 0
+        errors = 0
+        for pos in open_positions:
+            try:
+                broker_qty = await self.broker.get_open_position_qty(pos.symbol)
+            except Exception as err:  # noqa: BLE001
+                logger.warning(
+                    "[airborne_trader] reconciler get_open_position_qty %s failed: %s",
+                    pos.symbol, err,
+                )
+                errors += 1
+                continue
+
+            # Flat tolerance: |broker_qty| < 1e-9 = flat (수량 step 차이 안전 마진).
+            if abs(broker_qty) < 1e-9:
+                # Broker 측 flat — state mismatch. closed_manual 로 표시.
+                # exit_px 는 알 수 없으니 entry_px 사용 (보수적, pnl=0).
+                self.state.close_position(
+                    position_id=pos.id,
+                    exit_ts_iso=self._now().isoformat(),
+                    exit_px=pos.entry_px,
+                    status="closed_manual",
+                    realized_pnl_usd=0.0,
+                )
+                closed += 1
+                logger.warning(
+                    "[airborne_trader] reconciler — pos %d %s %s closed (broker flat). "
+                    "exit_px=entry_px (pnl=0 보수). 실 broker UI 청산이면 income 원장에서 확인.",
+                    pos.id, pos.symbol, pos.side,
+                )
+            else:
+                still_open += 1
+                logger.info(
+                    "[airborne_trader] reconciler — pos %d %s broker_qty=%.6f OK",
+                    pos.id, pos.symbol, broker_qty,
+                )
+
+        logger.info(
+            "[airborne_trader] reconciler done — closed=%d still_open=%d errors=%d",
+            closed, still_open, errors,
+        )
+        return {
+            "reconciled_closed": closed,
+            "still_open": still_open,
+            "errors": errors,
+        }
+
     # ── Main loop ──────────────────────────────────────────────────────────
     async def run_one_cycle(self) -> None:
         """단일 cycle: poll listener → handle fires → monitor positions."""
@@ -286,6 +379,11 @@ class AirborneTrader:
             self.config.max_concurrent_positions,
             sorted(self.config.kst_entry_hours),
         )
+        # Startup reconciler — process restart 시 broker 잔고 vs SQLite mismatch 정리.
+        try:
+            await self.reconcile_on_startup()
+        except Exception as err:  # noqa: BLE001
+            logger.exception("[airborne_trader] reconciler failed: %s", err)
         while not self.stop_event.is_set():
             try:
                 await self.run_one_cycle()

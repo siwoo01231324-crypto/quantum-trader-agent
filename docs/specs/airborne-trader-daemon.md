@@ -2,15 +2,15 @@
 type: spec-architecture
 id: airborne-trader-daemon
 name: Standalone Airborne Trader Daemon — daemon log listener → broker (orchestrator 통과 X)
-status: skeleton
+status: ready
 owner: siwoo
 created: 2026-05-27
-updated: 2026-05-27
+updated: 2026-05-28
 tags:
 - airborne
 - standalone-trader
 - event-driven
-- skeleton
+- ready
 ---
 
 # Standalone Airborne Trader Daemon

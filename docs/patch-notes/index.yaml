@@ -15,6 +15,29 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.9"
+    date: "2026-05-28"
+    title: "airborne-trader broker + reconciler + kill switch + docker-compose — 실거래 활성화 준비"
+    tags: [feature, safety]
+    summary: >
+      PR #329 (airborne_trader skeleton + DummyBroker) follow-up. 실거래 활성화
+      필수 4 컴포넌트 구현: BinanceFuturesBroker (async_http client wrap),
+      Startup reconciler (broker positionRisk vs SQLite mismatch 정리), Daily
+      loss kill switch + CLI manual unlock, docker-compose service. dry_run=True
+      기본값 유지 — 활성화는 docs/runbooks/airborne-trader-activation.md 체크리스트 통과 후.
+    items:
+      - "src/live/airborne_trader/brokers/binance_futures.py — AsyncBinanceFuturesClient wrap. place_market_order / close_position (reduce_only 강제) / get_mark_price (/fapi/v1/premiumIndex unsigned) / get_open_position_qty (positionRisk). client_order_id prefix 'airb-' 로 cs-tsmom·live-airborne-kst-hours 와 구분."
+      - "AirborneTrader.reconcile_on_startup() — process 시작 시 SQLite open positions 각각 broker positionRisk 조회 → flat 이면 closed_manual 처리. broker 에러는 errors 카운트, 포지션 유지. trader.run() 진입 시 자동 호출."
+      - "Kill switch — state.kill_switch table + is_active/trigger/unlock helpers. risk.evaluate 의 gate 0 으로 활성 시 모든 진입 차단. daily loss reject 시 trader.handle_fire 가 자동 trigger. CLI: airborne_trader_daemon.py --unlock-daily-kill / --status."
+      - "docker-compose.live.yml: qta-airborne-trader service. qta-airborne-daemon depends_on, /var/run/docker.sock bind mount (listener 가 docker logs 호출), ./logs/airborne_trader 영속 SQLite, 256M memory limit, restart unless-stopped."
+      - "docs/runbooks/airborne-trader-activation.md — Binance API key 발급부터 dry-run 1주 → 실거래 전환 → 일상 운영 → 비상 시 mass close 까지 단계별 가이드."
+      - "spec status skeleton → ready (실거래 활성화 가능, dry_run 권장)."
+      - "Tests: +20 new (BinanceFuturesBroker / reconciler / kill switch). 총 80 passed."
+    refs:
+      - "docs/specs/airborne-trader-daemon.md"
+      - "docs/runbooks/airborne-trader-activation.md"
+      - "PR: #329 (skeleton)"
+
   - version: "v0.6.8"
     date: "2026-05-27"
     title: "cs-tsmom 분산 정책: top_n 10→30 + min_picks 3 가드"

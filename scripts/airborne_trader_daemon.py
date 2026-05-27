@@ -100,11 +100,67 @@ def _parse(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(prog="airborne_trader_daemon")
     p.add_argument("--dry-run", action="store_true",
                    help="force dry_run=True regardless of env")
+    p.add_argument("--unlock-daily-kill", action="store_true",
+                   help="해제 후 즉시 종료 — daily loss kill switch 풀고 exit")
+    p.add_argument("--status", action="store_true",
+                   help="state 출력 후 즉시 종료 — open positions / kill switch / today PnL")
     return p.parse_args(argv)
+
+
+def _cmd_unlock_daily_kill() -> int:
+    """active kill switch 해제. 활성 없으면 안내 후 종료."""
+    cfg = AirborneTraderConfig.from_env()
+    state = AirborneTraderState(path=cfg.state_path)
+    try:
+        last = state.last_kill_switch_event()
+        if not state.is_kill_switch_active():
+            print(f"활성 kill switch 없음 (last={last})")
+            return 0
+        ok = state.unlock_kill_switch(unlocked_by="cli")
+        new_last = state.last_kill_switch_event()
+        print(f"kill switch 해제: ok={ok}  triggered={last and last['triggered_at']}  "
+              f"reason={last and last['reason']}  unlocked={new_last and new_last['unlocked_at']}")
+        return 0
+    finally:
+        state.close()
+
+
+def _cmd_status() -> int:
+    """diagnostic — open positions, kill switch, today PnL."""
+    from datetime import datetime, timezone
+    from zoneinfo import ZoneInfo
+    cfg = AirborneTraderConfig.from_env()
+    state = AirborneTraderState(path=cfg.state_path)
+    try:
+        kst = ZoneInfo("Asia/Seoul")
+        now = datetime.now(timezone.utc)
+        kst_midnight = now.astimezone(kst).replace(hour=0, minute=0, second=0, microsecond=0)
+        midnight_utc = kst_midnight.astimezone(timezone.utc).isoformat()
+        today_pnl = state.realized_pnl_since(midnight_utc)
+        print(f"== AirborneTrader Status ({now.isoformat()}) ==")
+        print(f"  state_path: {cfg.state_path}")
+        print(f"  dry_run: {cfg.dry_run}")
+        print(f"  kill_switch_active: {state.is_kill_switch_active()}")
+        ks = state.last_kill_switch_event()
+        if ks:
+            print(f"    last: {ks}")
+        print(f"  today realized PnL (KST 자정~): {today_pnl:+.2f} USDT (limit {cfg.daily_loss_limit_usd:+.0f})")
+        positions = state.list_open_positions()
+        print(f"  open positions: {len(positions)} (max {cfg.max_concurrent_positions})")
+        for p in positions:
+            print(f"    #{p.id} {p.symbol} {p.side} qty={p.qty:.6f} entry={p.entry_px} "
+                  f"stop={p.stop_px} tp={p.tp_px}")
+        return 0
+    finally:
+        state.close()
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse(argv)
+    if args.unlock_daily_kill:
+        return _cmd_unlock_daily_kill()
+    if args.status:
+        return _cmd_status()
     try:
         return asyncio.run(_main_async(args))
     except KeyboardInterrupt:

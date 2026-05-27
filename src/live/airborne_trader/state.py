@@ -90,6 +90,18 @@ CREATE TABLE IF NOT EXISTS fires_processed (
     reason TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
+
+-- Daily loss kill switch (manual unlock 필요)
+-- 활성 row: unlocked_at IS NULL. 최신 row 만 active 판정.
+-- 자동 reset 안 됨 — KST 자정 후에도 manual unlock 까진 차단 유지.
+CREATE TABLE IF NOT EXISTS kill_switch (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    triggered_at TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    unlocked_at TEXT,
+    unlocked_by TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_kill_switch_active ON kill_switch(unlocked_at);
 """
 
 
@@ -213,6 +225,66 @@ class AirborneTraderState:
         )
         row = cur.fetchone()
         return row[0] if row else None
+
+    # ── Kill switch ────────────────────────────────────────────────────────
+    def is_kill_switch_active(self) -> bool:
+        """가장 최신 kill_switch row 가 unlocked 안 됐으면 active."""
+        cur = self._conn.execute(
+            "SELECT unlocked_at FROM kill_switch ORDER BY id DESC LIMIT 1"
+        )
+        row = cur.fetchone()
+        return row is not None and row["unlocked_at"] is None
+
+    def trigger_kill_switch(self, reason: str) -> int:
+        """차단 발동. 이미 active 면 no-op (return 기존 id).
+
+        Returns: kill_switch row id.
+        """
+        if self.is_kill_switch_active():
+            cur = self._conn.execute(
+                "SELECT id FROM kill_switch ORDER BY id DESC LIMIT 1"
+            )
+            row = cur.fetchone()
+            return int(row["id"])
+        now = datetime.now(timezone.utc).isoformat()
+        cur = self._conn.execute(
+            "INSERT INTO kill_switch (triggered_at, reason) VALUES (?, ?)",
+            (now, reason),
+        )
+        return int(cur.lastrowid)
+
+    def unlock_kill_switch(self, *, unlocked_by: str = "manual") -> bool:
+        """active kill switch 해제. 해제 성공 시 True, 활성 row 없으면 False."""
+        cur = self._conn.execute(
+            "SELECT id FROM kill_switch WHERE unlocked_at IS NULL "
+            "ORDER BY id DESC LIMIT 1"
+        )
+        row = cur.fetchone()
+        if row is None:
+            return False
+        now = datetime.now(timezone.utc).isoformat()
+        self._conn.execute(
+            "UPDATE kill_switch SET unlocked_at = ?, unlocked_by = ? WHERE id = ?",
+            (now, unlocked_by, int(row["id"])),
+        )
+        return True
+
+    def last_kill_switch_event(self) -> dict | None:
+        """diagnostic — 최신 row 의 모든 필드."""
+        cur = self._conn.execute(
+            "SELECT id, triggered_at, reason, unlocked_at, unlocked_by "
+            "FROM kill_switch ORDER BY id DESC LIMIT 1"
+        )
+        row = cur.fetchone()
+        if row is None:
+            return None
+        return {
+            "id": int(row["id"]),
+            "triggered_at": str(row["triggered_at"]),
+            "reason": str(row["reason"]),
+            "unlocked_at": row["unlocked_at"],
+            "unlocked_by": row["unlocked_by"],
+        }
 
     # ── Helpers ────────────────────────────────────────────────────────────
     @staticmethod
