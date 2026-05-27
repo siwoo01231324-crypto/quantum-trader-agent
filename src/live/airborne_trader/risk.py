@@ -46,6 +46,15 @@ class AirborneTraderRisk:
             raise ValueError("now_utc must be tz-aware")
         now_utc = now_utc.astimezone(timezone.utc)
 
+        # 0. Kill switch (daily loss 도달 후 자동 trigger, manual unlock 필요)
+        if self.state.is_kill_switch_active():
+            last = self.state.last_kill_switch_event() or {}
+            return RiskDecision(
+                False,
+                f"kill_switch_active triggered_at={last.get('triggered_at')} "
+                f"reason={last.get('reason')}",
+            )
+
         # 1. KST hour gate {8, 11, 16, 22}
         kst_hour = fire.ts.astimezone(_KST).hour
         if kst_hour not in self.config.kst_entry_hours:
