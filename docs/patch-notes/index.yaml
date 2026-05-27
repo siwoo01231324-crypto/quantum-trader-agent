@@ -15,6 +15,30 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.6"
+    date: "2026-05-27"
+    title: "airborne-trader-daemon skeleton — standalone trader (qta-airborne-daemon FIRE listener → 자체 broker, top-100 universe 지원)"
+    tags: [feature, safety]
+    summary: >
+      qta-airborne-daemon 의 top-100 dynamic universe FIRE 를 자동매매하기 위한
+      독립 standalone trader process skeleton. orchestrator 통과 X (cs-tsmom 등
+      과 isolation), 자체 SQLite WAL + 자체 risk + 자체 broker. 본 PR scope =
+      skeleton + DummyBroker + 73 unit tests. 실 Binance Futures 통합 + 활성화는
+      후속 PR (spec 의 활성화 전 체크리스트 충족 후).
+    items:
+      - "src/live/airborne_fire_listener.py — docker logs --since polling, KST→UTC 정규화 (PR #323 fix), dedup window 24h."
+      - "src/live/airborne_trader/ — config (env+defaults) / state (SQLite WAL, positions+fires_processed) / risk (6-gate) / trader (async loop + DummyBroker)."
+      - "Risk 6-gate: KST hour ∈ {8,11,16,22} → stale fire (5분 초과) → max_concurrent 10 → same-symbol 차단 → cooldown 900s after stop_loss → daily loss limit -200 USDT (KST 자정 기준)."
+      - "scripts/airborne_trader_daemon.py — entry point, signal handlers, dry_run 기본값."
+      - "tests/live/airborne_trader/ — 73 unit tests (config/state/risk/trader). DummyBroker 로 dry-run path 검증."
+      - "docs/specs/airborne-trader-daemon.md — architecture + 활성화 전 체크리스트 (BinanceFuturesBroker / reconciler / daily loss kill manual unlock / 6개월 paper)."
+      - "활성화 보류: 본 PR 은 skeleton 만. 실 발주는 spec 의 체크리스트 통과 후 후속 PR. dry_run=True 가 기본값."
+    refs:
+      - "docs/specs/airborne-trader-daemon.md"
+      - "docs/specs/strategies/live-airborne-bb-reversal-kst-hours.md"
+      - "src/live/airborne_fire_listener.py"
+      - "src/live/airborne_trader/"
+
   - version: "v0.6.5"
     date: "2026-05-27"
     title: "live-airborne-bb-reversal-kst-hours 자동매매 추가 (KST {8,11,16,22}시 진입, 5y PF 1.081)"
