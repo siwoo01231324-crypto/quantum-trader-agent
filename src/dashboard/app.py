@@ -2482,10 +2482,10 @@ setInterval(refresh, 5000);
 def _render_manual_page() -> str:
     """수동 계좌 거래 입력 폼 (2026-05-21 — Claude Routines 일일 리포트용).
 
-    사용자가 Binance/KIS 에서 직접 손으로 거래한 내역을 폼으로 입력. 자동
-    fill 과 구분되도록 별도 event_type `manual_trade` 로 WAL 포맷 JSONL 에
-    append. Claude Routines 가 매일 자정 GET /api/journal/today 호출 시
-    함께 fetch 되어 분석 대상에 포함.
+    사용자가 Binance / Bybit / Flipster / KIS 에서 직접 손으로 거래한 내역을
+    폼으로 입력. 자동 fill 과 구분되도록 별도 event_type `manual_trade` 로 WAL
+    포맷 JSONL 에 append. Claude Routines 가 매일 자정 GET /api/journal/today
+    호출 시 함께 fetch 되어 분석 대상에 포함.
     """
     return """<!DOCTYPE html>
 <html lang="ko">
@@ -2552,7 +2552,7 @@ tbody td{padding:7px 10px;font-size:.78rem;border-bottom:1px solid #20262d;
 </head>
 <body>
 <h1>QTA — 수동 거래 입력</h1>
-<div class="subtitle">Binance / KIS 에서 직접 손으로 거래한 내역을 여기에 입력. Claude Routines 일일 리포트가 자동/수동 거래를 함께 분석.</div>
+<div class="subtitle">Binance / Bybit / Flipster / KIS 에서 직접 손으로 거래한 내역을 여기에 입력. Claude Routines 일일 리포트가 자동/수동 거래를 함께 분석.</div>
 <div class="nav">
   <a href="/">← 대시보드</a>
   <a href="/cs-tsmom">cs-tsmom</a>
@@ -2599,6 +2599,8 @@ tbody td{padding:7px 10px;font-size:.78rem;border-bottom:1px solid #20262d;
     <label for="venue">거래소</label>
     <select id="venue">
       <option value="binance">Binance</option>
+      <option value="bybit">Bybit</option>
+      <option value="flipster">Flipster</option>
       <option value="kis">KIS</option>
       <option value="other">기타</option>
     </select>
