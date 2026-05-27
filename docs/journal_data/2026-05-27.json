@@ -1,0 +1,2887 @@
+{
+  "date_kst": "2026-05-27",
+  "kst_window_start": "2026-05-27T00:00:00+09:00",
+  "now_kst": "2026-05-27T23:49:25.905263+09:00",
+  "counts": {
+    "auto_fills": 62,
+    "auto_signals": 163,
+    "manual_trades": 8,
+    "airborne_fires": 71
+  },
+  "auto_fills": [
+    {
+      "ts": "2026-05-26T15:48:38.071000+00:00",
+      "client_order_id": "ac6fce20a910457fbcbe71af44dcbc35efc0",
+      "broker_order_id": "721144335",
+      "symbol": "TRXUSDT",
+      "side": "BUY",
+      "qty": "21",
+      "fill_qty": "21",
+      "fill_price": "0.37651",
+      "fees": "0.00316268",
+      "fee_asset": "USDT",
+      "trade_id": "79652816",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T15:48:38.071000+00:00",
+      "client_order_id": "ac6fce20a910457fbcbe71af44dcbc35efc0",
+      "broker_order_id": "721144335",
+      "symbol": "TRXUSDT",
+      "side": "BUY",
+      "qty": "23",
+      "fill_qty": "23",
+      "fill_price": "0.37651",
+      "fees": "0.00346389",
+      "fee_asset": "USDT",
+      "trade_id": "79652817",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T15:48:38.071000+00:00",
+      "client_order_id": "ac6fce20a910457fbcbe71af44dcbc35efc0",
+      "broker_order_id": "721144335",
+      "symbol": "TRXUSDT",
+      "side": "BUY",
+      "qty": "18",
+      "fill_qty": "18",
+      "fill_price": "0.37651",
+      "fees": "0.00271087",
+      "fee_asset": "USDT",
+      "trade_id": "79652818",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T15:48:38.071000+00:00",
+      "client_order_id": "ac6fce20a910457fbcbe71af44dcbc35efc0",
+      "broker_order_id": "721144335",
+      "symbol": "TRXUSDT",
+      "side": "BUY",
+      "qty": "23",
+      "fill_qty": "23",
+      "fill_price": "0.37651",
+      "fees": "0.00346389",
+      "fee_asset": "USDT",
+      "trade_id": "79652819",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T15:48:38.071000+00:00",
+      "client_order_id": "ac6fce20a910457fbcbe71af44dcbc35efc0",
+      "broker_order_id": "721144335",
+      "symbol": "TRXUSDT",
+      "side": "BUY",
+      "qty": "16",
+      "fill_qty": "16",
+      "fill_price": "0.37651",
+      "fees": "0.00240966",
+      "fee_asset": "USDT",
+      "trade_id": "79652820",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T15:48:38.071000+00:00",
+      "client_order_id": "ac6fce20a910457fbcbe71af44dcbc35efc0",
+      "broker_order_id": "721144335",
+      "symbol": "TRXUSDT",
+      "side": "BUY",
+      "qty": "14",
+      "fill_qty": "14",
+      "fill_price": "0.37651",
+      "fees": "0.00210845",
+      "fee_asset": "USDT",
+      "trade_id": "79652821",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T15:48:38.071000+00:00",
+      "client_order_id": "ac6fce20a910457fbcbe71af44dcbc35efc0",
+      "broker_order_id": "721144335",
+      "symbol": "TRXUSDT",
+      "side": "BUY",
+      "qty": "33",
+      "fill_qty": "33",
+      "fill_price": "0.37651",
+      "fees": "0.00496993",
+      "fee_asset": "USDT",
+      "trade_id": "79652822",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T15:48:38.071000+00:00",
+      "client_order_id": "ac6fce20a910457fbcbe71af44dcbc35efc0",
+      "broker_order_id": "721144335",
+      "symbol": "TRXUSDT",
+      "side": "BUY",
+      "qty": "4654",
+      "fill_qty": "4654",
+      "fill_price": "0.37652",
+      "fees": "0.70092963",
+      "fee_asset": "USDT",
+      "trade_id": "79652823",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T15:48:38.175000+00:00",
+      "client_order_id": "5eb29733860a6946afea7d72992dd4f38a59",
+      "broker_order_id": "129828139",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "310",
+      "fill_qty": "310",
+      "fill_price": "5.817",
+      "fees": "0.721308",
+      "fee_asset": "USDT",
+      "trade_id": "39225614",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T15:53:11.319000+00:00",
+      "client_order_id": "1f8d2537c760d96f8321e92fbe733f06b8cb",
+      "broker_order_id": "129830872",
+      "symbol": "INJUSDT",
+      "side": "SELL",
+      "qty": "310",
+      "fill_qty": "310",
+      "fill_price": "5.797",
+      "fees": "0.718828",
+      "fee_asset": "USDT",
+      "trade_id": "39226260",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T16:08:11.319000+00:00",
+      "client_order_id": "ff908207dfd09b5a1b3481d96be245aed641",
+      "broker_order_id": "129839828",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "0.1",
+      "fill_qty": "0.1",
+      "fill_price": "5.759",
+      "fees": "0.00023036",
+      "fee_asset": "USDT",
+      "trade_id": "39228255",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T16:08:11.319000+00:00",
+      "client_order_id": "ff908207dfd09b5a1b3481d96be245aed641",
+      "broker_order_id": "129839828",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "304.8",
+      "fill_qty": "304.8",
+      "fill_price": "5.76",
+      "fees": "0.7022592",
+      "fee_asset": "USDT",
+      "trade_id": "39228256",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T16:14:18.235000+00:00",
+      "client_order_id": "f270dc0ae84940ac730b53c67e99b9e9f36f",
+      "broker_order_id": "129843768",
+      "symbol": "INJUSDT",
+      "side": "SELL",
+      "qty": "304.9",
+      "fill_qty": "304.9",
+      "fill_price": "5.716",
+      "fees": "0.69712336",
+      "fee_asset": "USDT",
+      "trade_id": "39229360",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T16:29:18.528000+00:00",
+      "client_order_id": "44c532ba7c2710bb03ae4947b548a7dbdffd",
+      "broker_order_id": "129853369",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "17.3",
+      "fill_qty": "17.3",
+      "fill_price": "5.759",
+      "fees": "0.03985227",
+      "fee_asset": "USDT",
+      "trade_id": "39231126",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T16:29:18.528000+00:00",
+      "client_order_id": "44c532ba7c2710bb03ae4947b548a7dbdffd",
+      "broker_order_id": "129853369",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "286.8",
+      "fill_qty": "286.8",
+      "fill_price": "5.765",
+      "fees": "0.6613608",
+      "fee_asset": "USDT",
+      "trade_id": "39231127",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T19:32:51.668000+00:00",
+      "client_order_id": "web_coin_0ztqqmv2ogq4smveeu411sf",
+      "broker_order_id": "1041169143",
+      "symbol": "",
+      "side": "",
+      "qty": "93.012",
+      "fill_qty": "93.012",
+      "fill_price": "52.19",
+      "fees": "0.97085925",
+      "fee_asset": "USDT",
+      "trade_id": "81204241",
+      "server_ts": null
+    },
+    {
+      "ts": "2026-05-26T19:32:52.200000+00:00",
+      "client_order_id": "web_coin_0ztqqmv2ogq4smveeu411sf",
+      "broker_order_id": "1041169143",
+      "symbol": "",
+      "side": "",
+      "qty": "119.762",
+      "fill_qty": "119.762",
+      "fill_price": "52.19",
+      "fees": "1.25007575",
+      "fee_asset": "USDT",
+      "trade_id": "81204242",
+      "server_ts": null
+    },
+    {
+      "ts": "2026-05-26T19:32:52.818000+00:00",
+      "client_order_id": "web_coin_0ztqqmv2ogq4smveeu411sf",
+      "broker_order_id": "1041169143",
+      "symbol": "",
+      "side": "",
+      "qty": "69.186",
+      "fill_qty": "69.186",
+      "fill_price": "52.19",
+      "fees": "0.72216346",
+      "fee_asset": "USDT",
+      "trade_id": "81204243",
+      "server_ts": null
+    },
+    {
+      "ts": "2026-05-26T19:32:56.161000+00:00",
+      "client_order_id": "web_coin_gjfjaa16gw2p5k1ncoa2vz5",
+      "broker_order_id": "13209648745",
+      "symbol": "",
+      "side": "",
+      "qty": "0.01",
+      "fill_qty": "0.01",
+      "fill_price": "76498.9",
+      "fees": "0.15299779",
+      "fee_asset": "USDT",
+      "trade_id": "495239486",
+      "server_ts": null
+    },
+    {
+      "ts": "2026-05-26T19:32:56.590000+00:00",
+      "client_order_id": "web_coin_0ztqqmv2ogq4smveeu411sf",
+      "broker_order_id": "1041169143",
+      "symbol": "",
+      "side": "",
+      "qty": "42.005",
+      "fill_qty": "42.005",
+      "fill_price": "52.19",
+      "fees": "0.43844819",
+      "fee_asset": "USDT",
+      "trade_id": "81204244",
+      "server_ts": null
+    },
+    {
+      "ts": "2026-05-26T19:33:02.935000+00:00",
+      "client_order_id": "web_coin_0ztqqmv2ogq4smveeu411sf",
+      "broker_order_id": "1041169143",
+      "symbol": "",
+      "side": "",
+      "qty": "92.702",
+      "fill_qty": "92.702",
+      "fill_price": "52.19",
+      "fees": "0.96762347",
+      "fee_asset": "USDT",
+      "trade_id": "81204245",
+      "server_ts": null
+    },
+    {
+      "ts": "2026-05-26T19:33:03.572000+00:00",
+      "client_order_id": "web_coin_0ztqqmv2ogq4smveeu411sf",
+      "broker_order_id": "1041169143",
+      "symbol": "",
+      "side": "",
+      "qty": "105.439",
+      "fill_qty": "105.439",
+      "fill_price": "52.19",
+      "fees": "1.10057228",
+      "fee_asset": "USDT",
+      "trade_id": "81204246",
+      "server_ts": null
+    },
+    {
+      "ts": "2026-05-26T19:33:03.572000+00:00",
+      "client_order_id": "web_coin_0150q8kntkg5b6yb9ftst6l",
+      "broker_order_id": "1041169146",
+      "symbol": "",
+      "side": "",
+      "qty": "7.101",
+      "fill_qty": "7.101",
+      "fill_price": "52.19",
+      "fees": "0.07412023",
+      "fee_asset": "USDT",
+      "trade_id": "81204247",
+      "server_ts": null
+    },
+    {
+      "ts": "2026-05-26T19:33:03.777000+00:00",
+      "client_order_id": "web_coin_0150q8kntkg5b6yb9ftst6l",
+      "broker_order_id": "1041169146",
+      "symbol": "",
+      "side": "",
+      "qty": "159.296",
+      "fill_qty": "159.296",
+      "fill_price": "52.19",
+      "fees": "1.66273164",
+      "fee_asset": "USDT",
+      "trade_id": "81204248",
+      "server_ts": null
+    },
+    {
+      "ts": "2026-05-26T19:33:04.372000+00:00",
+      "client_order_id": "web_coin_0150q8kntkg5b6yb9ftst6l",
+      "broker_order_id": "1041169146",
+      "symbol": "",
+      "side": "",
+      "qty": "71.059",
+      "fill_qty": "71.059",
+      "fill_price": "52.19",
+      "fees": "0.74171384",
+      "fee_asset": "USDT",
+      "trade_id": "81204249",
+      "server_ts": null
+    },
+    {
+      "ts": "2026-05-26T19:33:05.103000+00:00",
+      "client_order_id": "web_coin_0150q8kntkg5b6yb9ftst6l",
+      "broker_order_id": "1041169146",
+      "symbol": "",
+      "side": "",
+      "qty": "116.175",
+      "fill_qty": "116.175",
+      "fill_price": "52.19",
+      "fees": "1.21263465",
+      "fee_asset": "USDT",
+      "trade_id": "81204251",
+      "server_ts": null
+    },
+    {
+      "ts": "2026-05-26T19:34:01.152000+00:00",
+      "client_order_id": "eb0933d937ce49299c06f936e1523c408608",
+      "broker_order_id": "129854321",
+      "symbol": "INJUSDT",
+      "side": "SELL",
+      "qty": "304.1",
+      "fill_qty": "304.1",
+      "fill_price": "5.747",
+      "fees": "0.69906508",
+      "fee_asset": "USDT",
+      "trade_id": "39231242",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T19:49:02.432000+00:00",
+      "client_order_id": "7f2374029b375b87f73ece245e915e7819b8",
+      "broker_order_id": "129862597",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "74",
+      "fill_qty": "74",
+      "fill_price": "5.686",
+      "fees": "0.1683056",
+      "fee_asset": "USDT",
+      "trade_id": "39234696",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T22:29:27.751000+00:00",
+      "client_order_id": "12da3c1f4be1c432b05f0986f3bdddc7b1db",
+      "broker_order_id": "129962345",
+      "symbol": "INJUSDT",
+      "side": "SELL",
+      "qty": "74",
+      "fill_qty": "74",
+      "fill_price": "5.736",
+      "fees": "0.1697856",
+      "fee_asset": "USDT",
+      "trade_id": "39253193",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T22:44:27.427000+00:00",
+      "client_order_id": "e293e8658d9075b2e33447f90b7a2d8c38cc",
+      "broker_order_id": "129972293",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "0.1",
+      "fill_qty": "0.1",
+      "fill_price": "5.763",
+      "fees": "0.00023052",
+      "fee_asset": "USDT",
+      "trade_id": "39254909",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T22:44:27.427000+00:00",
+      "client_order_id": "e293e8658d9075b2e33447f90b7a2d8c38cc",
+      "broker_order_id": "129972293",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "1",
+      "fill_qty": "1",
+      "fill_price": "5.763",
+      "fees": "0.0023052",
+      "fee_asset": "USDT",
+      "trade_id": "39254910",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T22:44:27.427000+00:00",
+      "client_order_id": "e293e8658d9075b2e33447f90b7a2d8c38cc",
+      "broker_order_id": "129972293",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "77.7",
+      "fill_qty": "77.7",
+      "fill_price": "5.771",
+      "fees": "0.17936268",
+      "fee_asset": "USDT",
+      "trade_id": "39254911",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T22:44:28.175000+00:00",
+      "client_order_id": "54566f07f9c2c18507bb3430e6f4b9418233",
+      "broker_order_id": "129972318",
+      "symbol": "INJUSDT",
+      "side": "SELL",
+      "qty": "78.8",
+      "fill_qty": "78.8",
+      "fill_price": "5.737",
+      "fees": "0.18083024",
+      "fee_asset": "USDT",
+      "trade_id": "39254916",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T22:59:28.231000+00:00",
+      "client_order_id": "27fff5298202cef5b2577c966fda02dd570c",
+      "broker_order_id": "129981783",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "0.1",
+      "fill_qty": "0.1",
+      "fill_price": "5.709",
+      "fees": "0.00022836",
+      "fee_asset": "USDT",
+      "trade_id": "39256841",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T22:59:28.231000+00:00",
+      "client_order_id": "27fff5298202cef5b2577c966fda02dd570c",
+      "broker_order_id": "129981783",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "1.7",
+      "fill_qty": "1.7",
+      "fill_price": "5.709",
+      "fees": "0.00388212",
+      "fee_asset": "USDT",
+      "trade_id": "39256842",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T22:59:28.231000+00:00",
+      "client_order_id": "27fff5298202cef5b2577c966fda02dd570c",
+      "broker_order_id": "129981783",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "0.9",
+      "fill_qty": "0.9",
+      "fill_price": "5.709",
+      "fees": "0.00205523",
+      "fee_asset": "USDT",
+      "trade_id": "39256843",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T22:59:28.231000+00:00",
+      "client_order_id": "27fff5298202cef5b2577c966fda02dd570c",
+      "broker_order_id": "129981783",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "0.9",
+      "fill_qty": "0.9",
+      "fill_price": "5.709",
+      "fees": "0.00205523",
+      "fee_asset": "USDT",
+      "trade_id": "39256844",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T22:59:28.231000+00:00",
+      "client_order_id": "27fff5298202cef5b2577c966fda02dd570c",
+      "broker_order_id": "129981783",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "17.5",
+      "fill_qty": "17.5",
+      "fill_price": "5.71",
+      "fees": "0.03997",
+      "fee_asset": "USDT",
+      "trade_id": "39256845",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T22:59:28.231000+00:00",
+      "client_order_id": "27fff5298202cef5b2577c966fda02dd570c",
+      "broker_order_id": "129981783",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "17.5",
+      "fill_qty": "17.5",
+      "fill_price": "5.71",
+      "fees": "0.03997",
+      "fee_asset": "USDT",
+      "trade_id": "39256846",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T22:59:28.231000+00:00",
+      "client_order_id": "27fff5298202cef5b2577c966fda02dd570c",
+      "broker_order_id": "129981783",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "39.7",
+      "fill_qty": "39.7",
+      "fill_price": "5.72",
+      "fees": "0.0908336",
+      "fee_asset": "USDT",
+      "trade_id": "39256847",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-26T23:54:26.640000+00:00",
+      "client_order_id": "22cb4a0e6d40cadf39189f8d5c68a954c15d",
+      "broker_order_id": "130016842",
+      "symbol": "INJUSDT",
+      "side": "SELL",
+      "qty": "78.3",
+      "fill_qty": "78.3",
+      "fill_price": "5.675",
+      "fees": "0.177741",
+      "fee_asset": "USDT",
+      "trade_id": "39262223",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-27T00:09:29.283000+00:00",
+      "client_order_id": "869ba23309f9220dc8a3b6862a275f7481cd",
+      "broker_order_id": "130026819",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "17.6",
+      "fill_qty": "17.6",
+      "fill_price": "5.683",
+      "fees": "0.04000832",
+      "fee_asset": "USDT",
+      "trade_id": "39264195",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-27T00:09:29.283000+00:00",
+      "client_order_id": "869ba23309f9220dc8a3b6862a275f7481cd",
+      "broker_order_id": "130026819",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "17.6",
+      "fill_qty": "17.6",
+      "fill_price": "5.683",
+      "fees": "0.04000832",
+      "fee_asset": "USDT",
+      "trade_id": "39264196",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-27T00:09:29.283000+00:00",
+      "client_order_id": "869ba23309f9220dc8a3b6862a275f7481cd",
+      "broker_order_id": "130026819",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "0.7",
+      "fill_qty": "0.7",
+      "fill_price": "5.693",
+      "fees": "0.00159404",
+      "fee_asset": "USDT",
+      "trade_id": "39264197",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-27T00:09:29.283000+00:00",
+      "client_order_id": "869ba23309f9220dc8a3b6862a275f7481cd",
+      "broker_order_id": "130026819",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "1",
+      "fill_qty": "1",
+      "fill_price": "5.693",
+      "fees": "0.0022772",
+      "fee_asset": "USDT",
+      "trade_id": "39264198",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-27T00:09:29.283000+00:00",
+      "client_order_id": "869ba23309f9220dc8a3b6862a275f7481cd",
+      "broker_order_id": "130026819",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "1.1",
+      "fill_qty": "1.1",
+      "fill_price": "5.693",
+      "fees": "0.00250492",
+      "fee_asset": "USDT",
+      "trade_id": "39264199",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-27T00:09:29.283000+00:00",
+      "client_order_id": "869ba23309f9220dc8a3b6862a275f7481cd",
+      "broker_order_id": "130026819",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "1.7",
+      "fill_qty": "1.7",
+      "fill_price": "5.693",
+      "fees": "0.00387124",
+      "fee_asset": "USDT",
+      "trade_id": "39264200",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-27T00:09:29.283000+00:00",
+      "client_order_id": "869ba23309f9220dc8a3b6862a275f7481cd",
+      "broker_order_id": "130026819",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "36.3",
+      "fill_qty": "36.3",
+      "fill_price": "5.703",
+      "fees": "0.08280756",
+      "fee_asset": "USDT",
+      "trade_id": "39264201",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-27T01:21:46.775000+00:00",
+      "client_order_id": "3c897ebf9713ce1634014523d2a8a546a15e",
+      "broker_order_id": "130046701",
+      "symbol": "INJUSDT",
+      "side": "SELL",
+      "qty": "76",
+      "fill_qty": "76",
+      "fill_price": "5.681",
+      "fees": "0.1727024",
+      "fee_asset": "USDT",
+      "trade_id": "39264279",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-27T03:01:58.587000+00:00",
+      "client_order_id": "d8e88e91d2773ac0cdd87acd08dac2df703c",
+      "broker_order_id": "130071793",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "17.6",
+      "fill_qty": "17.6",
+      "fill_price": "5.69",
+      "fees": "0.0400576",
+      "fee_asset": "USDT",
+      "trade_id": "39264339",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-27T03:01:58.587000+00:00",
+      "client_order_id": "d8e88e91d2773ac0cdd87acd08dac2df703c",
+      "broker_order_id": "130071793",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "17.6",
+      "fill_qty": "17.6",
+      "fill_price": "5.69",
+      "fees": "0.0400576",
+      "fee_asset": "USDT",
+      "trade_id": "39264340",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-27T03:01:58.587000+00:00",
+      "client_order_id": "d8e88e91d2773ac0cdd87acd08dac2df703c",
+      "broker_order_id": "130071793",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "52.9",
+      "fill_qty": "52.9",
+      "fill_price": "5.704",
+      "fees": "0.12069664",
+      "fee_asset": "USDT",
+      "trade_id": "39264341",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-27T03:23:13.203000+00:00",
+      "client_order_id": "a2fa9e720a561602dfa3309b443341abafba",
+      "broker_order_id": "130077613",
+      "symbol": "INJUSDT",
+      "side": "SELL",
+      "qty": "88.1",
+      "fill_qty": "88.1",
+      "fill_price": "5.681",
+      "fees": "0.20019844",
+      "fee_asset": "USDT",
+      "trade_id": "39264360",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-27T04:02:48.516000+00:00",
+      "client_order_id": "723f94a4111d47533ee0132b742736c0935e",
+      "broker_order_id": "130099495",
+      "symbol": "INJUSDT",
+      "side": "BUY",
+      "qty": "81.7",
+      "fill_qty": "81.7",
+      "fill_price": "5.678",
+      "fees": "0.18555704",
+      "fee_asset": "USDT",
+      "trade_id": "39268226",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-27T04:19:01.184000+00:00",
+      "client_order_id": "28d0ee3f91a5ba90b3825f4bbd61513a6a41",
+      "broker_order_id": "130109245",
+      "symbol": "INJUSDT",
+      "side": "SELL",
+      "qty": "81.7",
+      "fill_qty": "81.7",
+      "fill_price": "5.644",
+      "fees": "0.18444592",
+      "fee_asset": "USDT",
+      "trade_id": "39269895",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-27T04:50:14.455000+00:00",
+      "client_order_id": "902933180a400cb09e0b605605edf1d6f8c4",
+      "broker_order_id": "13219354632",
+      "symbol": "BTCUSDT",
+      "side": "SELL",
+      "qty": "0.01",
+      "fill_qty": "0.01",
+      "fill_price": "75469.6",
+      "fees": "0.3018784",
+      "fee_asset": "USDT",
+      "trade_id": "495339744",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-bb-lower-bounce"
+    },
+    {
+      "ts": "2026-05-27T04:50:16.955000+00:00",
+      "client_order_id": "1d2a91fb2f737d842485d6871a399078ba3d",
+      "broker_order_id": "722022921",
+      "symbol": "TRXUSDT",
+      "side": "SELL",
+      "qty": "2",
+      "fill_qty": "2",
+      "fill_price": "0.37371",
+      "fees": "0.00029896",
+      "fee_asset": "USDT",
+      "trade_id": "79690959",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-27T04:50:16.955000+00:00",
+      "client_order_id": "1d2a91fb2f737d842485d6871a399078ba3d",
+      "broker_order_id": "722022921",
+      "symbol": "TRXUSDT",
+      "side": "SELL",
+      "qty": "15",
+      "fill_qty": "15",
+      "fill_price": "0.37371",
+      "fees": "0.00224225",
+      "fee_asset": "USDT",
+      "trade_id": "79690960",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-27T04:50:16.955000+00:00",
+      "client_order_id": "1d2a91fb2f737d842485d6871a399078ba3d",
+      "broker_order_id": "722022921",
+      "symbol": "TRXUSDT",
+      "side": "SELL",
+      "qty": "4785",
+      "fill_qty": "4785",
+      "fill_price": "0.37369",
+      "fees": "0.71524266",
+      "fee_asset": "USDT",
+      "trade_id": "79690961",
+      "server_ts": null,
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop"
+    },
+    {
+      "ts": "2026-05-27T04:50:36.163000+00:00",
+      "client_order_id": "web_PECdWZbSJbnuuLHzUOT7",
+      "broker_order_id": "112431088",
+      "symbol": "",
+      "side": "",
+      "qty": "1.3",
+      "fill_qty": "1.3",
+      "fill_price": "3.915",
+      "fees": "0.00254475",
+      "fee_asset": "USDT",
+      "trade_id": "40328030",
+      "server_ts": null
+    },
+    {
+      "ts": "2026-05-27T04:50:37.867000+00:00",
+      "client_order_id": "web_GQzjFF1PMzfqVciTIKyx",
+      "broker_order_id": "1041830874",
+      "symbol": "",
+      "side": "",
+      "qty": "338.266",
+      "fill_qty": "338.266",
+      "fill_price": "51.94",
+      "fees": "7.02781441",
+      "fee_asset": "USDT",
+      "trade_id": "81244325",
+      "server_ts": null
+    },
+    {
+      "ts": "2026-05-27T04:50:37.867000+00:00",
+      "client_order_id": "web_GQzjFF1PMzfqVciTIKyx",
+      "broker_order_id": "1041830874",
+      "symbol": "",
+      "side": "",
+      "qty": "537.471",
+      "fill_qty": "537.471",
+      "fill_price": "51.94",
+      "fees": "11.16649749",
+      "fee_asset": "USDT",
+      "trade_id": "81244326",
+      "server_ts": null
+    }
+  ],
+  "auto_signals": [
+    {
+      "ts": "2026-05-26T15:48:37.491958+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "TRXUSDT",
+      "side": "buy",
+      "qty": "4802.091",
+      "reason": "atr_breakout:last=0,max20=0,trailing_pct=0.50%"
+    },
+    {
+      "ts": "2026-05-26T15:48:37.497266+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "buy",
+      "qty": "310.083",
+      "reason": "atr_breakout:last=6,max20=6,trailing_pct=0.50%"
+    },
+    {
+      "ts": "2026-05-26T15:53:11.214765+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "310.0",
+      "reason": "live_stop_loss:entry=5.81700000000000000000000,last=5.77003180,pct=-0.0081"
+    },
+    {
+      "ts": "2026-05-26T16:08:11.250743+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "buy",
+      "qty": "304.913",
+      "reason": "atr_breakout:last=6,max20=6,trailing_pct=0.50%"
+    },
+    {
+      "ts": "2026-05-26T16:14:18.156014+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.9",
+      "reason": "live_stop_loss:entry=5.759999672023614299770416530,last=5.71308171,pct=-0.0081"
+    },
+    {
+      "ts": "2026-05-26T16:29:18.465394+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "buy",
+      "qty": "304.194",
+      "reason": "atr_breakout:last=6,max20=6,trailing_pct=0.50%"
+    },
+    {
+      "ts": "2026-05-26T17:24:07.107948+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.71318967,pct=-0.0089"
+    },
+    {
+      "ts": "2026-05-26T17:24:37.145277+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.71217259,pct=-0.0091"
+    },
+    {
+      "ts": "2026-05-26T17:25:12.090886+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.71700000,pct=-0.0083"
+    },
+    {
+      "ts": "2026-05-26T17:25:42.136835+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.70827765,pct=-0.0098"
+    },
+    {
+      "ts": "2026-05-26T17:26:12.088272+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.71300000,pct=-0.0090"
+    },
+    {
+      "ts": "2026-05-26T17:26:42.099993+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.71400000,pct=-0.0088"
+    },
+    {
+      "ts": "2026-05-26T17:27:44.086115+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.71838481,pct=-0.0080"
+    },
+    {
+      "ts": "2026-05-26T17:28:14.072788+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.71755744,pct=-0.0082"
+    },
+    {
+      "ts": "2026-05-26T17:28:44.081437+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.71100000,pct=-0.0093"
+    },
+    {
+      "ts": "2026-05-26T17:29:14.086803+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.71800000,pct=-0.0081"
+    },
+    {
+      "ts": "2026-05-26T17:29:55.082532+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.71839636,pct=-0.0080"
+    },
+    {
+      "ts": "2026-05-26T17:30:25.092403+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.71200000,pct=-0.0091"
+    },
+    {
+      "ts": "2026-05-26T17:30:55.079196+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.71239081,pct=-0.0091"
+    },
+    {
+      "ts": "2026-05-26T17:31:33.126430+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.71661145,pct=-0.0083"
+    },
+    {
+      "ts": "2026-05-26T17:32:03.096102+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.71700000,pct=-0.0083"
+    },
+    {
+      "ts": "2026-05-26T17:32:33.099012+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.71277004,pct=-0.0090"
+    },
+    {
+      "ts": "2026-05-26T17:33:03.091472+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.68862499,pct=-0.0132"
+    },
+    {
+      "ts": "2026-05-26T17:33:33.102558+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.68500000,pct=-0.0138"
+    },
+    {
+      "ts": "2026-05-26T17:34:03.091825+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.69000000,pct=-0.0130"
+    },
+    {
+      "ts": "2026-05-26T17:34:33.099024+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.70400000,pct=-0.0105"
+    },
+    {
+      "ts": "2026-05-26T17:35:03.100497+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.69834926,pct=-0.0115"
+    },
+    {
+      "ts": "2026-05-26T17:35:33.114748+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.68800000,pct=-0.0133"
+    },
+    {
+      "ts": "2026-05-26T17:36:03.113533+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.71000000,pct=-0.0095"
+    },
+    {
+      "ts": "2026-05-26T17:36:33.122672+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.71406343,pct=-0.0088"
+    },
+    {
+      "ts": "2026-05-26T17:37:29.082640+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.71752351,pct=-0.0082"
+    },
+    {
+      "ts": "2026-05-26T17:38:20.083544+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.71600000,pct=-0.0084"
+    },
+    {
+      "ts": "2026-05-26T17:39:58.086235+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.71800000,pct=-0.0081"
+    },
+    {
+      "ts": "2026-05-26T17:40:28.084734+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.71400000,pct=-0.0088"
+    },
+    {
+      "ts": "2026-05-26T17:40:58.085945+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.71528633,pct=-0.0086"
+    },
+    {
+      "ts": "2026-05-26T17:41:29.079482+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.70500000,pct=-0.0103"
+    },
+    {
+      "ts": "2026-05-26T17:41:59.092548+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.69500000,pct=-0.0121"
+    },
+    {
+      "ts": "2026-05-26T17:42:29.082516+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.70300000,pct=-0.0107"
+    },
+    {
+      "ts": "2026-05-26T17:42:59.079060+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.70173151,pct=-0.0109"
+    },
+    {
+      "ts": "2026-05-26T17:43:29.083402+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.71000000,pct=-0.0095"
+    },
+    {
+      "ts": "2026-05-26T17:43:59.087250+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.70758360,pct=-0.0099"
+    },
+    {
+      "ts": "2026-05-26T17:45:07.079294+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.71725520,pct=-0.0082"
+    },
+    {
+      "ts": "2026-05-26T17:46:03.144706+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.71812309,pct=-0.0081"
+    },
+    {
+      "ts": "2026-05-26T17:46:44.088347+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.71806449,pct=-0.0081"
+    },
+    {
+      "ts": "2026-05-26T17:47:15.099112+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.71600000,pct=-0.0084"
+    },
+    {
+      "ts": "2026-05-26T17:47:45.095686+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.71600000,pct=-0.0084"
+    },
+    {
+      "ts": "2026-05-26T17:48:16.076332+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.71300000,pct=-0.0090"
+    },
+    {
+      "ts": "2026-05-26T17:59:16.098331+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.71831581,pct=-0.0080"
+    },
+    {
+      "ts": "2026-05-26T17:59:55.080693+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.71800000,pct=-0.0081"
+    },
+    {
+      "ts": "2026-05-26T18:00:25.106536+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.71500000,pct=-0.0086"
+    },
+    {
+      "ts": "2026-05-26T18:02:26.079986+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.71829150,pct=-0.0080"
+    },
+    {
+      "ts": "2026-05-26T18:02:56.086839+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.71165781,pct=-0.0092"
+    },
+    {
+      "ts": "2026-05-26T18:03:26.080075+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.70300000,pct=-0.0107"
+    },
+    {
+      "ts": "2026-05-26T18:03:56.084100+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.70643711,pct=-0.0101"
+    },
+    {
+      "ts": "2026-05-26T18:04:26.078836+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.70400000,pct=-0.0105"
+    },
+    {
+      "ts": "2026-05-26T18:04:56.089708+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.70700000,pct=-0.0100"
+    },
+    {
+      "ts": "2026-05-26T18:05:27.093581+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.70900000,pct=-0.0097"
+    },
+    {
+      "ts": "2026-05-26T18:05:57.100885+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.70800000,pct=-0.0098"
+    },
+    {
+      "ts": "2026-05-26T18:06:27.093393+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.70600000,pct=-0.0102"
+    },
+    {
+      "ts": "2026-05-26T18:06:57.099755+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.70400000,pct=-0.0105"
+    },
+    {
+      "ts": "2026-05-26T18:07:27.103516+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.70123811,pct=-0.0110"
+    },
+    {
+      "ts": "2026-05-26T18:07:57.104773+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.69900000,pct=-0.0114"
+    },
+    {
+      "ts": "2026-05-26T18:08:28.093009+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.70100000,pct=-0.0110"
+    },
+    {
+      "ts": "2026-05-26T18:08:58.093205+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.70500000,pct=-0.0103"
+    },
+    {
+      "ts": "2026-05-26T18:09:28.089810+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.70841575,pct=-0.0098"
+    },
+    {
+      "ts": "2026-05-26T18:09:58.089620+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.71104315,pct=-0.0093"
+    },
+    {
+      "ts": "2026-05-26T18:10:28.079226+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.71844419,pct=-0.0080"
+    },
+    {
+      "ts": "2026-05-26T18:26:26.081338+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_trailing_stop:entry=5.764658664912857612627425189,last=5.77542100,pct=+0.0019"
+    },
+    {
+      "ts": "2026-05-26T18:37:05.078854+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_trailing_stop:entry=5.764658664912857612627425189,last=5.75690110,pct=-0.0013"
+    },
+    {
+      "ts": "2026-05-26T18:43:32.076261+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_trailing_stop:entry=5.764658664912857612627425189,last=5.74839092,pct=-0.0028"
+    },
+    {
+      "ts": "2026-05-26T18:44:17.082078+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.71763746,pct=-0.0082"
+    },
+    {
+      "ts": "2026-05-26T18:44:47.094885+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.70800000,pct=-0.0098"
+    },
+    {
+      "ts": "2026-05-26T18:45:18.106006+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.71500000,pct=-0.0086"
+    },
+    {
+      "ts": "2026-05-26T18:46:43.078020+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.71848599,pct=-0.0080"
+    },
+    {
+      "ts": "2026-05-26T18:49:00.095536+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.71682259,pct=-0.0083"
+    },
+    {
+      "ts": "2026-05-26T18:49:30.096098+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.70900000,pct=-0.0097"
+    },
+    {
+      "ts": "2026-05-26T18:50:00.117789+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.70700000,pct=-0.0100"
+    },
+    {
+      "ts": "2026-05-26T18:57:29.086899+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.71701797,pct=-0.0083"
+    },
+    {
+      "ts": "2026-05-26T18:57:59.089580+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.71452968,pct=-0.0087"
+    },
+    {
+      "ts": "2026-05-26T18:58:29.097305+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.71400000,pct=-0.0088"
+    },
+    {
+      "ts": "2026-05-26T18:58:59.087460+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.70400000,pct=-0.0105"
+    },
+    {
+      "ts": "2026-05-26T18:59:29.095305+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.68804579,pct=-0.0133"
+    },
+    {
+      "ts": "2026-05-26T19:00:00.092524+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.68700000,pct=-0.0135"
+    },
+    {
+      "ts": "2026-05-26T19:00:30.097898+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.68131864,pct=-0.0145"
+    },
+    {
+      "ts": "2026-05-26T19:01:00.098130+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.67600000,pct=-0.0154"
+    },
+    {
+      "ts": "2026-05-26T19:01:30.107297+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.66414261,pct=-0.0174"
+    },
+    {
+      "ts": "2026-05-26T19:02:00.102548+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.67000000,pct=-0.0164"
+    },
+    {
+      "ts": "2026-05-26T19:02:30.099017+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.66500000,pct=-0.0173"
+    },
+    {
+      "ts": "2026-05-26T19:03:00.098461+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.65961377,pct=-0.0182"
+    },
+    {
+      "ts": "2026-05-26T19:03:30.094048+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.65900000,pct=-0.0183"
+    },
+    {
+      "ts": "2026-05-26T19:04:00.112924+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.65744848,pct=-0.0186"
+    },
+    {
+      "ts": "2026-05-26T19:04:30.108290+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.63814390,pct=-0.0219"
+    },
+    {
+      "ts": "2026-05-26T19:05:00.105296+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.63500000,pct=-0.0225"
+    },
+    {
+      "ts": "2026-05-26T19:05:30.104890+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.63495252,pct=-0.0225"
+    },
+    {
+      "ts": "2026-05-26T19:06:00.098397+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.63100000,pct=-0.0232"
+    },
+    {
+      "ts": "2026-05-26T19:06:30.105983+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.63800000,pct=-0.0220"
+    },
+    {
+      "ts": "2026-05-26T19:07:00.092390+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.64500000,pct=-0.0208"
+    },
+    {
+      "ts": "2026-05-26T19:07:30.090295+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.64500000,pct=-0.0208"
+    },
+    {
+      "ts": "2026-05-26T19:08:00.092687+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.65110257,pct=-0.0197"
+    },
+    {
+      "ts": "2026-05-26T19:08:30.103116+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.65200000,pct=-0.0195"
+    },
+    {
+      "ts": "2026-05-26T19:09:00.091676+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.64686444,pct=-0.0204"
+    },
+    {
+      "ts": "2026-05-26T19:09:30.096610+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.64074718,pct=-0.0215"
+    },
+    {
+      "ts": "2026-05-26T19:10:00.099321+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.64300000,pct=-0.0211"
+    },
+    {
+      "ts": "2026-05-26T19:10:30.089311+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.64211301,pct=-0.0213"
+    },
+    {
+      "ts": "2026-05-26T19:11:01.083707+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.64027999,pct=-0.0216"
+    },
+    {
+      "ts": "2026-05-26T19:11:31.078855+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.63881195,pct=-0.0218"
+    },
+    {
+      "ts": "2026-05-26T19:12:01.139517+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.63661767,pct=-0.0222"
+    },
+    {
+      "ts": "2026-05-26T19:12:31.090454+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.63300000,pct=-0.0228"
+    },
+    {
+      "ts": "2026-05-26T19:13:01.084359+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.61950501,pct=-0.0252"
+    },
+    {
+      "ts": "2026-05-26T19:13:31.084216+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.62100000,pct=-0.0249"
+    },
+    {
+      "ts": "2026-05-26T19:14:01.078433+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.61968119,pct=-0.0251"
+    },
+    {
+      "ts": "2026-05-26T19:14:31.089266+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.60800000,pct=-0.0272"
+    },
+    {
+      "ts": "2026-05-26T19:15:01.119773+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.59400000,pct=-0.0296"
+    },
+    {
+      "ts": "2026-05-26T19:15:31.090621+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.58116933,pct=-0.0318"
+    },
+    {
+      "ts": "2026-05-26T19:16:01.088553+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.58400000,pct=-0.0313"
+    },
+    {
+      "ts": "2026-05-26T19:16:31.084236+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.58859776,pct=-0.0305"
+    },
+    {
+      "ts": "2026-05-26T19:17:01.079823+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.60100000,pct=-0.0284"
+    },
+    {
+      "ts": "2026-05-26T19:17:31.081374+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.60700000,pct=-0.0273"
+    },
+    {
+      "ts": "2026-05-26T19:18:01.079859+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.61600000,pct=-0.0258"
+    },
+    {
+      "ts": "2026-05-26T19:18:31.081123+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.61225301,pct=-0.0264"
+    },
+    {
+      "ts": "2026-05-26T19:19:01.077865+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.61741295,pct=-0.0255"
+    },
+    {
+      "ts": "2026-05-26T19:19:31.083069+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.61260498,pct=-0.0264"
+    },
+    {
+      "ts": "2026-05-26T19:20:01.079651+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.61541363,pct=-0.0259"
+    },
+    {
+      "ts": "2026-05-26T19:20:31.073342+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.62600000,pct=-0.0241"
+    },
+    {
+      "ts": "2026-05-26T19:21:01.080908+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.62118085,pct=-0.0249"
+    },
+    {
+      "ts": "2026-05-26T19:21:31.080973+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.60600000,pct=-0.0275"
+    },
+    {
+      "ts": "2026-05-26T19:22:01.087399+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.61500000,pct=-0.0260"
+    },
+    {
+      "ts": "2026-05-26T19:22:31.077772+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.61238279,pct=-0.0264"
+    },
+    {
+      "ts": "2026-05-26T19:23:01.091501+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.60913650,pct=-0.0270"
+    },
+    {
+      "ts": "2026-05-26T19:23:31.092600+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.60817687,pct=-0.0271"
+    },
+    {
+      "ts": "2026-05-26T19:24:01.092492+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.60574613,pct=-0.0276"
+    },
+    {
+      "ts": "2026-05-26T19:24:31.082099+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.61080185,pct=-0.0267"
+    },
+    {
+      "ts": "2026-05-26T19:25:01.092172+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.60700000,pct=-0.0273"
+    },
+    {
+      "ts": "2026-05-26T19:25:31.084537+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.61144809,pct=-0.0266"
+    },
+    {
+      "ts": "2026-05-26T19:26:01.088085+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.62509296,pct=-0.0242"
+    },
+    {
+      "ts": "2026-05-26T19:26:31.077173+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.61578442,pct=-0.0258"
+    },
+    {
+      "ts": "2026-05-26T19:27:01.082704+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.62239657,pct=-0.0247"
+    },
+    {
+      "ts": "2026-05-26T19:27:31.093317+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.62500000,pct=-0.0242"
+    },
+    {
+      "ts": "2026-05-26T19:28:01.077898+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.63000000,pct=-0.0234"
+    },
+    {
+      "ts": "2026-05-26T19:28:31.082362+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.62689980,pct=-0.0239"
+    },
+    {
+      "ts": "2026-05-26T19:29:01.084899+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.63171809,pct=-0.0231"
+    },
+    {
+      "ts": "2026-05-26T19:29:31.077964+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.63154705,pct=-0.0231"
+    },
+    {
+      "ts": "2026-05-26T19:30:01.088756+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.62800000,pct=-0.0237"
+    },
+    {
+      "ts": "2026-05-26T19:30:31.086656+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.63800000,pct=-0.0220"
+    },
+    {
+      "ts": "2026-05-26T19:31:01.075292+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.63905036,pct=-0.0218"
+    },
+    {
+      "ts": "2026-05-26T19:31:31.087833+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.64114506,pct=-0.0214"
+    },
+    {
+      "ts": "2026-05-26T19:32:01.080681+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.64200000,pct=-0.0213"
+    },
+    {
+      "ts": "2026-05-26T19:32:31.079472+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.64508749,pct=-0.0207"
+    },
+    {
+      "ts": "2026-05-26T19:33:01.075952+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.64800000,pct=-0.0202"
+    },
+    {
+      "ts": "2026-05-26T19:33:31.083467+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.64800000,pct=-0.0202"
+    },
+    {
+      "ts": "2026-05-26T19:34:01.084463+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "304.1",
+      "reason": "live_stop_loss:entry=5.764658664912857612627425189,last=5.64575042,pct=-0.0206"
+    },
+    {
+      "ts": "2026-05-26T19:49:02.364771+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "buy",
+      "qty": "74.01",
+      "reason": "atr_breakout:last=6,max20=6,trailing_pct=0.50%"
+    },
+    {
+      "ts": "2026-05-26T22:29:27.178989+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "74.0",
+      "reason": "live_take_profit:entry=5.686000000000000000000000,last=5.75509437,pct=+0.0122"
+    },
+    {
+      "ts": "2026-05-26T22:44:27.316503+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "buy",
+      "qty": "78.893",
+      "reason": "atr_breakout:last=6,max20=6,trailing_pct=0.50%"
+    },
+    {
+      "ts": "2026-05-26T22:44:28.085852+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "78.8",
+      "reason": "live_stop_loss:entry=5.770888324873096446700507614,last=5.72427097,pct=-0.0081"
+    },
+    {
+      "ts": "2026-05-26T22:59:28.114017+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "buy",
+      "qty": "78.333",
+      "reason": "atr_breakout:last=6,max20=6,trailing_pct=0.50%"
+    },
+    {
+      "ts": "2026-05-26T23:54:26.100894+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "78.3",
+      "reason": "live_stop_loss:entry=5.715024265644955300127713921,last=5.66927847,pct=-0.0080"
+    },
+    {
+      "ts": "2026-05-27T00:09:29.214156+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "buy",
+      "qty": "76.014",
+      "reason": "atr_breakout:last=6,max20=6,trailing_pct=0.50%"
+    },
+    {
+      "ts": "2026-05-27T01:21:46.206341+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "76.0",
+      "reason": "live_stop_loss:entry=5.693144736842105263157894737,last=5.64578700,pct=-0.0083"
+    },
+    {
+      "ts": "2026-05-27T03:01:58.119177+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "buy",
+      "qty": "88.19",
+      "reason": "atr_breakout:last=6,max20=6,trailing_pct=0.50%"
+    },
+    {
+      "ts": "2026-05-27T03:23:13.101972+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "88.1",
+      "reason": "live_stop_loss:entry=5.698406356413166855845629966,last=5.65231312,pct=-0.0081"
+    },
+    {
+      "ts": "2026-05-27T04:02:48.057998+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "buy",
+      "qty": "81.787",
+      "reason": "atr_breakout:last=6,max20=6,trailing_pct=0.50%"
+    },
+    {
+      "ts": "2026-05-27T04:19:01.100287+00:00",
+      "strategy_id": "cand-c-2026-05-20-live-breakout-with-atr-stop",
+      "symbol": "INJUSDT",
+      "side": "sell",
+      "qty": "81.7",
+      "reason": "live_stop_loss:entry=5.678000000000000000000000,last=5.63061896,pct=-0.0083"
+    }
+  ],
+  "manual_trades": [
+    {
+      "ts": "2026-05-27T14:38:14.415468+00:00",
+      "symbol": "ASTERUSDT",
+      "direction": "short",
+      "side": "sell",
+      "kind": "roundtrip",
+      "qty": 10.0,
+      "entry_price": 0.694,
+      "price": 0.694,
+      "exit_price": 0.6933,
+      "realized_pnl": -0.0006,
+      "outcome": "loss",
+      "venue": "bybit",
+      "note": "에어본 지표 포착했는데 실수로 청산버튼 누름"
+    },
+    {
+      "ts": "2026-05-27T14:38:58.481675+00:00",
+      "symbol": "ASTERUSDT",
+      "direction": "short",
+      "side": "sell",
+      "kind": "roundtrip",
+      "qty": 10.0,
+      "entry_price": 0.6926,
+      "price": 0.6926,
+      "exit_price": 0.6889,
+      "realized_pnl": 0.0294,
+      "outcome": "win",
+      "venue": "bybit",
+      "note": "에어본 지표 포착 이후 에어본 점수 7점 확인 후 거래 진행함, 이후 익절 퍼센트는 니가 계산해줘"
+    },
+    {
+      "ts": "2026-05-27T14:39:52.432489+00:00",
+      "symbol": "PHAROSUSDT",
+      "direction": "short",
+      "side": "sell",
+      "kind": "roundtrip",
+      "qty": 10.0,
+      "entry_price": 0.651,
+      "price": 0.651,
+      "exit_price": 0.6472,
+      "realized_pnl": 0.024,
+      "outcome": "win",
+      "venue": "bybit",
+      "note": "에어본 지표 포착 이후 점수 7점 확인, 거래량,FVG,오더블럭 확인 이후 거래"
+    },
+    {
+      "ts": "2026-05-27T14:41:21.445716+00:00",
+      "symbol": "XAGUSDT",
+      "direction": "long",
+      "side": "buy",
+      "kind": "roundtrip",
+      "qty": 20.0,
+      "entry_price": 74.21,
+      "price": 74.21,
+      "exit_price": 74.13,
+      "realized_pnl": -2.2238,
+      "outcome": "loss",
+      "venue": "bybit",
+      "note": "에어본 지표 포착 이후 진입, 7점 확인했으나 도지 캔들이 나왔지만 힘을 받지 못하고 미끄러짐, 근데 조금만 더 기다렸으면 반전추세 나와서 익절했을듯 이유는 리포트에 정리해주셈"
+    },
+    {
+      "ts": "2026-05-27T14:42:11.723981+00:00",
+      "symbol": "XAUUSDT",
+      "direction": "long",
+      "side": "buy",
+      "kind": "roundtrip",
+      "qty": 0.1,
+      "entry_price": 4455.23,
+      "price": 4455.23,
+      "exit_price": 4439.09,
+      "realized_pnl": -1.9351,
+      "outcome": "loss",
+      "venue": "bybit",
+      "note": "XAGUSDT 와 같은 이유, 파동을 확인했으면 조금 더 기다렸으면 익절 했을듯 아쉽다"
+    },
+    {
+      "ts": "2026-05-27T14:44:10.400711+00:00",
+      "symbol": "XMRUSDT",
+      "direction": "short",
+      "side": "sell",
+      "kind": "roundtrip",
+      "qty": 1.0,
+      "entry_price": 397.92,
+      "price": 397.92,
+      "exit_price": 397.41,
+      "realized_pnl": 0.0725,
+      "outcome": "win",
+      "venue": "bybit",
+      "note": "에어본 지표 포착 이후 진입, 거래량 클라이맥스,FVG,오더블럭 확인 후 진입했고 익절은 그냥 퍼센트만 확인하고 팔았음, LTF BB 하단에서 판매했으면 수익 극대화 할 수 있었을텐데 LTF가 뭐야? 리포트에 알려줘"
+    },
+    {
+      "ts": "2026-05-27T14:46:01.855500+00:00",
+      "symbol": "SNDKUSDT",
+      "direction": "short",
+      "side": "sell",
+      "kind": "roundtrip",
+      "qty": 0.1,
+      "entry_price": 1654.62,
+      "price": 1654.62,
+      "exit_price": 1591.52,
+      "realized_pnl": 6.2191,
+      "outcome": "win",
+      "venue": "bybit",
+      "note": "에어본 지표 포착 후 바로 숏 침, 초반에 조금 올라가서 자동매매에선 손절 나왔으나 이후 추세 완전히 꺾여서 급 하강함, 이유는 리포트에서 분석해주길 큰 이득"
+    },
+    {
+      "ts": "2026-05-27T14:49:19.655783+00:00",
+      "symbol": "SOXLUSDT",
+      "direction": "short",
+      "side": "sell",
+      "kind": "roundtrip",
+      "qty": 1.0,
+      "entry_price": 248.76,
+      "price": 248.76,
+      "exit_price": 216.71,
+      "realized_pnl": 31.881,
+      "outcome": "win",
+      "venue": "bybit",
+      "note": "에어본 지표 점수 7점 포착 이후 숏 침, SNDKUSDT와 같게 상승추세선을 타고 있어서 아 상승추세면 숏 치면 안되는구나 라고 생각하고 손절 칠 생각 하고 있었는데 한순간에 바닥으로 내리꽂아서 가장 큰 이득, 이 상승 추세선과 갑자기 꺾이는 거래량이나 이런 부분에 대한 스터디가 더 필요할 거같음, 리포트에서 추천해줘 그리고 15분 봉 조금 더 지켜보면서 추세가 꺾이는 부분이 확실히 포착되는 이후에 숏 거래 했으면 더 안전하게 거래할 수 있었을 것 같음."
+    }
+  ],
+  "airborne_fires": [
+    {
+      "ts": "2026-05-26T15:00:32+00:00",
+      "symbol": "BSBUSDT",
+      "side": "long",
+      "fire_close": 0.56776,
+      "trigger": 0.542298
+    },
+    {
+      "ts": "2026-05-26T15:00:34+00:00",
+      "symbol": "PHAROSUSDT",
+      "side": "short",
+      "fire_close": 0.6282,
+      "trigger": 0.63214
+    },
+    {
+      "ts": "2026-05-26T15:00:35+00:00",
+      "symbol": "SPCXUSDT",
+      "side": "long",
+      "fire_close": 200.63,
+      "trigger": 200.328
+    },
+    {
+      "ts": "2026-05-26T16:00:33+00:00",
+      "symbol": "BEATUSDT",
+      "side": "short",
+      "fire_close": 1.0345,
+      "trigger": 1.04612
+    },
+    {
+      "ts": "2026-05-26T16:00:34+00:00",
+      "symbol": "PUMPUSDT",
+      "side": "short",
+      "fire_close": 0.001842,
+      "trigger": 0.00186
+    },
+    {
+      "ts": "2026-05-26T16:00:35+00:00",
+      "symbol": "NVDAUSDT",
+      "side": "long",
+      "fire_close": 213.41,
+      "trigger": 212.942
+    },
+    {
+      "ts": "2026-05-26T17:00:33+00:00",
+      "symbol": "PHAUSDT",
+      "side": "short",
+      "fire_close": 0.0589,
+      "trigger": 0.059074
+    },
+    {
+      "ts": "2026-05-26T17:00:34+00:00",
+      "symbol": "BILLUSDT",
+      "side": "short",
+      "fire_close": 0.09317,
+      "trigger": 0.094744
+    },
+    {
+      "ts": "2026-05-26T18:00:34+00:00",
+      "symbol": "SUIUSDT",
+      "side": "long",
+      "fire_close": 1.009,
+      "trigger": 1.00498
+    },
+    {
+      "ts": "2026-05-26T18:00:35+00:00",
+      "symbol": "GRASSUSDT",
+      "side": "long",
+      "fire_close": 0.5519,
+      "trigger": 0.5487
+    },
+    {
+      "ts": "2026-05-26T18:00:36+00:00",
+      "symbol": "LTCUSDT",
+      "side": "long",
+      "fire_close": 51.74,
+      "trigger": 51.652
+    },
+    {
+      "ts": "2026-05-26T18:00:37+00:00",
+      "symbol": "TRUMPUSDT",
+      "side": "long",
+      "fire_close": 2.009,
+      "trigger": 2.0064
+    },
+    {
+      "ts": "2026-05-26T18:00:38+00:00",
+      "symbol": "ZEREBROUSDT",
+      "side": "long",
+      "fire_close": 0.022083,
+      "trigger": 0.0219284
+    },
+    {
+      "ts": "2026-05-26T18:00:40+00:00",
+      "symbol": "FARTCOINUSDT",
+      "side": "long",
+      "fire_close": 0.1741,
+      "trigger": 0.17314
+    },
+    {
+      "ts": "2026-05-26T19:00:33+00:00",
+      "symbol": "ZECUSDT",
+      "side": "long",
+      "fire_close": 586.87,
+      "trigger": 585.784
+    },
+    {
+      "ts": "2026-05-26T19:00:34+00:00",
+      "symbol": "NEARUSDT",
+      "side": "long",
+      "fire_close": 2.619,
+      "trigger": 2.6016
+    },
+    {
+      "ts": "2026-05-26T19:00:35+00:00",
+      "symbol": "NATGASUSDT",
+      "side": "long",
+      "fire_close": 3.015,
+      "trigger": 3.0086
+    },
+    {
+      "ts": "2026-05-26T20:00:33+00:00",
+      "symbol": "TONUSDT",
+      "side": "short",
+      "fire_close": 2.0266,
+      "trigger": 2.03148
+    },
+    {
+      "ts": "2026-05-26T22:00:33+00:00",
+      "symbol": "TSLAUSDT",
+      "side": "short",
+      "fire_close": 435.78,
+      "trigger": 437.634
+    },
+    {
+      "ts": "2026-05-26T22:00:34+00:00",
+      "symbol": "XANUSDT",
+      "side": "long",
+      "fire_close": 0.011252,
+      "trigger": 0.0112456
+    },
+    {
+      "ts": "2026-05-27T00:00:33+00:00",
+      "symbol": "VVVUSDT",
+      "side": "long",
+      "fire_close": 16.728,
+      "trigger": 16.689
+    },
+    {
+      "ts": "2026-05-27T01:00:33+00:00",
+      "symbol": "CHZUSDT",
+      "side": "short",
+      "fire_close": 0.03652,
+      "trigger": 0.036686
+    },
+    {
+      "ts": "2026-05-27T02:00:33+00:00",
+      "symbol": "PLAYUSDT",
+      "side": "short",
+      "fire_close": 0.11231,
+      "trigger": 0.112794
+    },
+    {
+      "ts": "2026-05-27T02:00:34+00:00",
+      "symbol": "BEATUSDT",
+      "side": "short",
+      "fire_close": 1.0583,
+      "trigger": 1.07532
+    },
+    {
+      "ts": "2026-05-27T02:00:35+00:00",
+      "symbol": "ERAUSDT",
+      "side": "long",
+      "fire_close": 0.1337,
+      "trigger": 0.13366
+    },
+    {
+      "ts": "2026-05-27T03:00:33+00:00",
+      "symbol": "DRIFTUSDT",
+      "side": "short",
+      "fire_close": 0.04692,
+      "trigger": 0.047434
+    },
+    {
+      "ts": "2026-05-27T03:00:34+00:00",
+      "symbol": "BILLUSDT",
+      "side": "long",
+      "fire_close": 0.08373,
+      "trigger": 0.083618
+    },
+    {
+      "ts": "2026-05-27T04:00:33+00:00",
+      "symbol": "TAOUSDT",
+      "side": "long",
+      "fire_close": 274.62,
+      "trigger": 274.23
+    },
+    {
+      "ts": "2026-05-27T05:00:33+00:00",
+      "symbol": "IOUSDT",
+      "side": "long",
+      "fire_close": 0.1724,
+      "trigger": 0.17016
+    },
+    {
+      "ts": "2026-05-27T05:00:34+00:00",
+      "symbol": "AAVEUSDT",
+      "side": "long",
+      "fire_close": 84.67,
+      "trigger": 84.078
+    },
+    {
+      "ts": "2026-05-27T05:00:35+00:00",
+      "symbol": "SEIUSDT",
+      "side": "short",
+      "fire_close": 0.06914,
+      "trigger": 0.069192
+    },
+    {
+      "ts": "2026-05-27T05:00:36+00:00",
+      "symbol": "ICPUSDT",
+      "side": "short",
+      "fire_close": 2.854,
+      "trigger": 2.8786
+    },
+    {
+      "ts": "2026-05-27T05:00:38+00:00",
+      "symbol": "FIDAUSDT",
+      "side": "long",
+      "fire_close": 0.03137,
+      "trigger": 0.031336
+    },
+    {
+      "ts": "2026-05-27T06:00:33+00:00",
+      "symbol": "UBUSDT",
+      "side": "short",
+      "fire_close": 0.21638,
+      "trigger": 0.218178
+    },
+    {
+      "ts": "2026-05-27T06:00:35+00:00",
+      "symbol": "LABUSDT",
+      "side": "long",
+      "fire_close": 4.336,
+      "trigger": 4.3269
+    },
+    {
+      "ts": "2026-05-27T07:00:33+00:00",
+      "symbol": "XAGUSDT",
+      "side": "long",
+      "fire_close": 75.24,
+      "trigger": 74.982
+    },
+    {
+      "ts": "2026-05-27T07:00:34+00:00",
+      "symbol": "FILUSDT",
+      "side": "short",
+      "fire_close": 1.052,
+      "trigger": 1.0592
+    },
+    {
+      "ts": "2026-05-27T07:00:35+00:00",
+      "symbol": "BILLUSDT",
+      "side": "long",
+      "fire_close": 0.08038,
+      "trigger": 0.07967
+    },
+    {
+      "ts": "2026-05-27T08:00:33+00:00",
+      "symbol": "CLUSDT",
+      "side": "long",
+      "fire_close": 91.22,
+      "trigger": 90.95
+    },
+    {
+      "ts": "2026-05-27T08:00:34+00:00",
+      "symbol": "RENDERUSDT",
+      "side": "long",
+      "fire_close": 2.198,
+      "trigger": 2.1782
+    },
+    {
+      "ts": "2026-05-27T09:00:33+00:00",
+      "symbol": "BZUSDT",
+      "side": "long",
+      "fire_close": 93.5,
+      "trigger": 93.154
+    },
+    {
+      "ts": "2026-05-27T09:00:34+00:00",
+      "symbol": "TSLAUSDT",
+      "side": "short",
+      "fire_close": 439.12,
+      "trigger": 439.562
+    },
+    {
+      "ts": "2026-05-27T10:00:33+00:00",
+      "symbol": "ONDOUSDT",
+      "side": "long",
+      "fire_close": 0.3978,
+      "trigger": 0.39754
+    },
+    {
+      "ts": "2026-05-27T11:00:33+00:00",
+      "symbol": "XAUUSDT",
+      "side": "long",
+      "fire_close": 4453.07,
+      "trigger": 4449.1
+    },
+    {
+      "ts": "2026-05-27T11:00:34+00:00",
+      "symbol": "XAGUSDT",
+      "side": "long",
+      "fire_close": 74.44,
+      "trigger": 74.25
+    },
+    {
+      "ts": "2026-05-27T11:00:35+00:00",
+      "symbol": "BSBUSDT",
+      "side": "short",
+      "fire_close": 0.62552,
+      "trigger": 0.633094
+    },
+    {
+      "ts": "2026-05-27T11:00:36+00:00",
+      "symbol": "ASTERUSDT",
+      "side": "short",
+      "fire_close": 0.6946,
+      "trigger": 0.69704
+    },
+    {
+      "ts": "2026-05-27T11:00:37+00:00",
+      "symbol": "PHAROSUSDT",
+      "side": "short",
+      "fire_close": 0.6553,
+      "trigger": 0.65664
+    },
+    {
+      "ts": "2026-05-27T11:00:38+00:00",
+      "symbol": "BASUSDT",
+      "side": "short",
+      "fire_close": 0.02866,
+      "trigger": 0.0287118
+    },
+    {
+      "ts": "2026-05-27T12:00:33+00:00",
+      "symbol": "MUUSDT",
+      "side": "short",
+      "fire_close": 978.14,
+      "trigger": 983.786
+    },
+    {
+      "ts": "2026-05-27T12:00:34+00:00",
+      "symbol": "SNDKUSDT",
+      "side": "short",
+      "fire_close": 1650.33,
+      "trigger": 1655.74
+    },
+    {
+      "ts": "2026-05-27T12:00:35+00:00",
+      "symbol": "SOXLUSDT",
+      "side": "short",
+      "fire_close": 248.22,
+      "trigger": 249.944
+    },
+    {
+      "ts": "2026-05-27T12:00:36+00:00",
+      "symbol": "ALTUSDT",
+      "side": "short",
+      "fire_close": 0.00815,
+      "trigger": 0.0082576
+    },
+    {
+      "ts": "2026-05-27T12:00:37+00:00",
+      "symbol": "XMRUSDT",
+      "side": "short",
+      "fire_close": 398.68,
+      "trigger": 399.712
+    },
+    {
+      "ts": "2026-05-27T12:00:38+00:00",
+      "symbol": "NATGASUSDT",
+      "side": "short",
+      "fire_close": 3.066,
+      "trigger": 3.0694
+    },
+    {
+      "ts": "2026-05-27T12:00:39+00:00",
+      "symbol": "PENDLEUSDT",
+      "side": "long",
+      "fire_close": 1.6842,
+      "trigger": 1.67972
+    },
+    {
+      "ts": "2026-05-27T13:00:32+00:00",
+      "symbol": "CLUSDT",
+      "side": "long",
+      "fire_close": 88.85,
+      "trigger": 88.218
+    },
+    {
+      "ts": "2026-05-27T13:00:33+00:00",
+      "symbol": "FILUSDT",
+      "side": "short",
+      "fire_close": 1.075,
+      "trigger": 1.0828
+    },
+    {
+      "ts": "2026-05-27T13:00:34+00:00",
+      "symbol": "BZUSDT",
+      "side": "long",
+      "fire_close": 92.68,
+      "trigger": 92.106
+    },
+    {
+      "ts": "2026-05-27T13:00:36+00:00",
+      "symbol": "INTCUSDT",
+      "side": "short",
+      "fire_close": 124.66,
+      "trigger": 125.182
+    },
+    {
+      "ts": "2026-05-27T13:00:37+00:00",
+      "symbol": "GUAUSDT",
+      "side": "long",
+      "fire_close": 0.983,
+      "trigger": 0.95382
+    },
+    {
+      "ts": "2026-05-27T13:00:38+00:00",
+      "symbol": "FFUSDT",
+      "side": "short",
+      "fire_close": 0.09738,
+      "trigger": 0.10054
+    },
+    {
+      "ts": "2026-05-27T14:00:32+00:00",
+      "symbol": "BTCUSDT",
+      "side": "long",
+      "fire_close": 75162.7,
+      "trigger": 74922.7
+    },
+    {
+      "ts": "2026-05-27T14:00:33+00:00",
+      "symbol": "XRPUSDT",
+      "side": "long",
+      "fire_close": 1.3253,
+      "trigger": 1.32006
+    },
+    {
+      "ts": "2026-05-27T14:00:35+00:00",
+      "symbol": "INTCUSDT",
+      "side": "long",
+      "fire_close": 120.35,
+      "trigger": 118.348
+    },
+    {
+      "ts": "2026-05-27T14:00:36+00:00",
+      "symbol": "NVDAUSDT",
+      "side": "long",
+      "fire_close": 211.42,
+      "trigger": 210.904
+    },
+    {
+      "ts": "2026-05-27T14:00:37+00:00",
+      "symbol": "VVVUSDT",
+      "side": "short",
+      "fire_close": 17.752,
+      "trigger": 17.8102
+    },
+    {
+      "ts": "2026-05-27T14:00:38+00:00",
+      "symbol": "BCHUSDT",
+      "side": "long",
+      "fire_close": 341.42,
+      "trigger": 339.754
+    },
+    {
+      "ts": "2026-05-27T14:00:39+00:00",
+      "symbol": "CBRSUSDT",
+      "side": "short",
+      "fire_close": 257.04,
+      "trigger": 259.22
+    },
+    {
+      "ts": "2026-05-27T14:00:40+00:00",
+      "symbol": "MSTRUSDT",
+      "side": "long",
+      "fire_close": 156.94,
+      "trigger": 155.602
+    },
+    {
+      "ts": "2026-05-27T14:00:41+00:00",
+      "symbol": "MRVLUSDT",
+      "side": "long",
+      "fire_close": 206.33,
+      "trigger": 203.152
+    }
+  ],
+  "cs_tsmom_top10": {
+    "fetched_at": "2026-05-27T14:49:26.232701+00:00",
+    "pin_date": "2026-05-21",
+    "available": true,
+    "top10": [
+      {
+        "symbol": "ZECUSDT",
+        "last_close": null,
+        "last_ts": "2026-05-27T00:00:00",
+        "score": 2.3816629804595566,
+        "rank": 1,
+        "in_top_today": true,
+        "in_top_yday": true,
+        "liquid": true,
+        "signal": "HOLD",
+        "reason": "no_data"
+      },
+      {
+        "symbol": "TRXUSDT",
+        "last_close": null,
+        "last_ts": "2026-05-27T00:00:00",
+        "score": 0.008700750944729971,
+        "rank": 2,
+        "in_top_today": true,
+        "in_top_yday": true,
+        "liquid": true,
+        "signal": "HOLD",
+        "reason": "no_data"
+      }
+    ]
+  }
+}
