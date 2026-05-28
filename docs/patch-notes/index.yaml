@@ -15,6 +15,25 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.11"
+    date: "2026-05-28"
+    title: "/airborne 페이지 성능 리팩토링 — sim cache + 병렬 fetch (30x+ 빠름)"
+    tags: [perf, feature]
+    summary: >
+      v0.6.10 누적 윈도우 도입 후 "최근 7일" 등 윈도우 누르면 매번 수십 초 걸림.
+      병목 2건 fix — (1) Binance fapi 15m 봉 fetch 가 직렬이라 100 fire = 30s+ →
+      asyncio.gather concurrency=20 병렬. (2) 옛 fire 의 sim outcome 매번 재계산
+      → 영속 JSONL sim cache (logs/airborne_fires/sim_cache.jsonl) dedup. 한
+      번 시뮬한 fire 는 같은 outcome 영구. 측정: 92 fire 1.01s (이전 30s+),
+      두 번째 호출 5분 캐시로 0.00s. 운영 1주 후엔 모든 윈도우 거의 instant.
+    items:
+      - "src/dashboard/airborne_sim_cache.py — JSONL append-only sim outcome cache (fire_key 기반 dedup). split(fires) → (cached, missing) 분리. put_many(sims) → 새 결과 영구 저장. 14 unit tests."
+      - "/api/airborne_metrics — sim cache hit lookup → cache miss 만 asyncio.gather (semaphore 20) 으로 병렬 fetch. 응답에 sim_cache_count / sim_cache_hits / sim_cache_misses 추가 (diagnostics)."
+      - "운영 효과: 1주 누적 후 sim cache count ~1000+ → 모든 윈도우 (어제·7d·30d·all) 거의 instant. 새 fire 들만 fetch 비용 소모 (보통 시간당 10건 이하)."
+    refs:
+      - "src/dashboard/airborne_sim_cache.py"
+      - "src/dashboard/app.py — api_airborne_metrics"
+
   - version: "v0.6.10"
     date: "2026-05-28"
     title: "/airborne 페이지 누적 윈도우 — 어제·7d·30d·all 표시 (영속 JSONL store)"
