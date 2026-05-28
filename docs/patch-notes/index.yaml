@@ -15,6 +15,27 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.12"
+    date: "2026-05-28"
+    title: "airborne-trader 데모 트레이딩 자동 가동 (Binance Futures Testnet, dry_run 해제)"
+    tags: [feature, safety]
+    summary: >
+      사용자 요청 — dry_run 모드 말고 바로 데모 트레이딩으로 실 발주.
+      Binance Futures Testnet (venue=testnet, base_url=testnet.binancefuture.com)
+      으로 실제 주문 전송하되 가짜 돈 (testnet wallet). .env 의 BINANCE_DEMO_API_KEY
+      + BINANCE_DEMO__SECRET_API_KEY 자동 인식. mainnet 전환은 env 한 줄만 변경.
+    items:
+      - "config.py — venue (mainnet/testnet) + base_url 필드 추가. from_env() 가 venue 별 API key 자동 선택: testnet → BINANCE_DEMO_API_KEY / BINANCE_DEMO__SECRET_API_KEY (.env 표기 그대로), mainnet → BINANCE_API_KEY / BINANCE_SECRET_KEY (우리 표준)."
+      - "default dry_run: True → False. venue 기본값 testnet 이므로 실 발주이지만 가짜 돈. 진짜 로그만 보려면 AIRBORNE_TRADER_DRY_RUN=true 명시."
+      - "scripts/airborne_trader_daemon.py — dry_run False 면 AsyncBinanceFuturesClient + BinanceFuturesBroker wiring. API key 누락 시 명확한 에러 + exit 2."
+      - "docker-compose.live.yml — AIRBORNE_TRADER_VENUE=testnet / AIRBORNE_TRADER_DRY_RUN=false 기본. 컨테이너 가동 즉시 testnet 발주 시작. mainnet 전환은 VENUE 만 변경."
+      - "Tests: 100 passed (config default 변경 반영, 다른 fixture 영향 X)."
+    refs:
+      - "src/live/airborne_trader/config.py"
+      - "scripts/airborne_trader_daemon.py"
+      - "docker-compose.live.yml — qta-airborne-trader service"
+      - "docs/runbooks/airborne-trader-activation.md"
+
   - version: "v0.6.11"
     date: "2026-05-28"
     title: "/airborne 페이지 성능 리팩토링 — sim cache + 병렬 fetch (30x+ 빠름)"

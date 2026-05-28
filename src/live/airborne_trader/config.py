@@ -3,15 +3,29 @@
 Standalone trader process 의 설정. 기존 production.yaml 과 별개 (orchestrator
 통과 X). dataclass 로 type-safe 하고 env var 자동 로드.
 
-Env vars:
-  BINANCE_API_KEY               — Futures API key
-  BINANCE_API_SECRET            — Futures API secret
-  AIRBORNE_TRADER_DAEMON        — daemon container name (기본 qta-airborne-daemon)
-  AIRBORNE_TRADER_DRY_RUN       — "1" / "true" → 발주 X, log only
-  AIRBORNE_TRADER_MAX_POSITIONS — 동시 보유 최대 (기본 10)
-  AIRBORNE_TRADER_POSITION_USD  — trade 당 USDT 노출 (기본 200)
-  AIRBORNE_TRADER_LEVERAGE      — 레버리지 (기본 10)
-  AIRBORNE_TRADER_STATE_PATH    — SQLite WAL 경로 (기본 logs/airborne_trader/state.db)
+Env vars (실거래 / Mainnet):
+  BINANCE_API_KEY                — Futures mainnet API key
+  BINANCE_SECRET_KEY             — Futures mainnet API secret
+                                   (cf. live_run.py 도 BINANCE_API_SECRET /
+                                   BINANCE_SECRET_KEY 둘 다 fallback 으로 인식.
+                                   현 .env 표준은 SECRET_KEY)
+
+Env vars (데모 / Testnet — Binance Futures Testnet):
+  BINANCE_DEMO_API_KEY           — testnet API key
+  BINANCE_DEMO__SECRET_API_KEY   — testnet API secret (.env 의 더블 underscore 그대로)
+                                   (or BINANCE_DEMO_API_SECRET 도 fallback)
+
+운영 모드 선택:
+  AIRBORNE_TRADER_VENUE          — "mainnet" (실거래) | "testnet" (데모, 기본)
+  AIRBORNE_TRADER_DRY_RUN        — "1" / "true" → 발주 X, log only (기본 false:
+                                   주문 실제 전송, 단 testnet 면 가짜 돈)
+
+Daemon / Risk / 사이즈:
+  AIRBORNE_TRADER_DAEMON         — daemon container name (기본 qta-airborne-daemon)
+  AIRBORNE_TRADER_MAX_POSITIONS  — 동시 보유 최대 (기본 10)
+  AIRBORNE_TRADER_POSITION_USD   — trade 당 USDT 노출 (기본 200)
+  AIRBORNE_TRADER_LEVERAGE       — 레버리지 (기본 10)
+  AIRBORNE_TRADER_STATE_PATH     — SQLite WAL 경로 (기본 logs/airborne_trader/state.db)
   AIRBORNE_TRADER_DAILY_LOSS_USD — 일일 손실 한도 (기본 -200 USDT)
 """
 from __future__ import annotations
@@ -48,6 +62,10 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
+_MAINNET_REST_URL = "https://fapi.binance.com"
+_TESTNET_REST_URL = "https://testnet.binancefuture.com"
+
+
 @dataclass(frozen=True)
 class AirborneTraderConfig:
     """Standalone trader 설정. 모든 필드 frozen — 런타임 변경 X."""
@@ -55,6 +73,10 @@ class AirborneTraderConfig:
     # ── Broker auth ────────────────────────────────────────────────────────
     api_key: str = ""
     api_secret: str = ""
+    # "mainnet" | "testnet" — testnet = Binance Futures 데모 (가짜 돈).
+    venue: str = "testnet"
+    # REST base URL — 미설정 시 venue 로 자동 추론.
+    base_url: str = _TESTNET_REST_URL
 
     # ── Daemon listener ────────────────────────────────────────────────────
     daemon_container: str = "qta-airborne-daemon"
@@ -76,15 +98,41 @@ class AirborneTraderConfig:
 
     # ── State / dry-run ────────────────────────────────────────────────────
     state_path: Path = field(default_factory=lambda: Path("logs/airborne_trader/state.db"))
-    dry_run: bool = True   # 기본 dry-run — production 진입 전 항상 명시
+    # 기본 False — 실제 주문 전송 (단 venue=testnet 이면 가짜 돈).
+    # 진짜로 발주 *전혀* 안 하고 로그만 보고 싶으면 AIRBORNE_TRADER_DRY_RUN=true.
+    dry_run: bool = False
     poll_interval_seconds: float = 30.0  # daemon log polling 주기
 
     @classmethod
     def from_env(cls) -> "AirborneTraderConfig":
-        """환경변수에서 로드. 미설정 = default 사용."""
+        """환경변수에서 로드. venue 별 API key 자동 선택."""
+        venue = os.environ.get("AIRBORNE_TRADER_VENUE", "testnet").strip().lower()
+        if venue not in {"mainnet", "testnet"}:
+            venue = "testnet"
+
+        if venue == "testnet":
+            api_key = os.environ.get("BINANCE_DEMO_API_KEY", "")
+            # .env 의 표기는 BINANCE_DEMO__SECRET_API_KEY (더블 _). 둘 다 인식.
+            api_secret = (
+                os.environ.get("BINANCE_DEMO__SECRET_API_KEY", "")
+                or os.environ.get("BINANCE_DEMO_API_SECRET", "")
+                or os.environ.get("BINANCE_DEMO_SECRET_KEY", "")
+            )
+            default_base_url = _TESTNET_REST_URL
+        else:
+            api_key = os.environ.get("BINANCE_API_KEY", "")
+            # 우리 프로젝트 표준은 BINANCE_SECRET_KEY. 다른 이름도 fallback.
+            api_secret = (
+                os.environ.get("BINANCE_SECRET_KEY", "")
+                or os.environ.get("BINANCE_API_SECRET", "")
+            )
+            default_base_url = _MAINNET_REST_URL
+
         return cls(
-            api_key=os.environ.get("BINANCE_API_KEY", ""),
-            api_secret=os.environ.get("BINANCE_API_SECRET", ""),
+            api_key=api_key,
+            api_secret=api_secret,
+            venue=venue,
+            base_url=os.environ.get("AIRBORNE_TRADER_BASE_URL", default_base_url),
             daemon_container=os.environ.get(
                 "AIRBORNE_TRADER_DAEMON", "qta-airborne-daemon",
             ),
@@ -100,10 +148,20 @@ class AirborneTraderConfig:
                 "AIRBORNE_TRADER_STATE_PATH",
                 "logs/airborne_trader/state.db",
             )),
-            dry_run=_env_bool("AIRBORNE_TRADER_DRY_RUN", True),
+            # 기본 False — 실 발주 (venue=testnet 이면 가짜 돈). 진짜 로그만 보고
+            # 싶으면 AIRBORNE_TRADER_DRY_RUN=true.
+            dry_run=_env_bool("AIRBORNE_TRADER_DRY_RUN", False),
         )
 
     def __post_init__(self) -> None:
+        if self.venue not in {"mainnet", "testnet"}:
+            raise ValueError(
+                f"venue must be 'mainnet' or 'testnet', got {self.venue!r}"
+            )
+        if not self.base_url or not self.base_url.startswith("http"):
+            raise ValueError(
+                f"base_url must be a valid http(s) URL, got {self.base_url!r}"
+            )
         if self.position_usd <= 0:
             raise ValueError(f"position_usd > 0 required, got {self.position_usd}")
         if self.leverage < 1:
