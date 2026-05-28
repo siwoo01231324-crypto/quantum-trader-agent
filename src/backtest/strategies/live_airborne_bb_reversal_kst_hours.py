@@ -56,3 +56,10 @@ class LiveAirborneBbReversalKstHours(LiveAirborneBbReversalKstMorning):
     take_profit_pct: ClassVar[float] = 0.06
 
     kst_entry_hours: ClassVar[frozenset[int]] = _KST_TOP_HOURS
+
+    # Dynamic Universe Architecture Phase 1 (2026-05-28) — interval 만 1h
+    # override. universe 는 부모(LiveScannerMixin) 기본 = TOP30 유지. Phase 2
+    # 에서 daemon 동기 TOP100 dynamic 으로 확장 예정.
+    @classmethod
+    def get_interval(cls) -> str:
+        return "1h"

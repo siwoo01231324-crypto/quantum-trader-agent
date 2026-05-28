@@ -350,6 +350,10 @@ def _run_dashboard_only_mode(port: int = 8000) -> int:
                 Policy(policy_version=1, name="dashboard"),
                 on_metalabeler_missing="skip",
             )
+            # Dynamic Universe Architecture Phase 1 (2026-05-28) —
+            # _build_universe_quote_provider 가 args._orchestrator 에서
+            # active 전략들의 get_universe / get_interval 수집.
+            args._orchestrator = state.orchestrator
             print(
                 f"[qta] dashboard orch attached "
                 f"({len(state.orchestrator.strategies)} strategies — toggles actionable)"
@@ -632,10 +636,58 @@ def _build_universe_quote_provider(broker_mode: str, kis_client, args):
         from src.portfolio.binance_universe import get_universe as _binance_top30
         # cs-tsmom-crypto-daily universe — dashboard / live / backtest 단일 소스
         # ``src/portfolio/binance_universe.py``. 갱신 시 그 파일 한 곳만 수정.
+        #
+        # 2026-05-28 Dynamic Universe Architecture Phase 1
+        # (docs/specs/dynamic-universe-architecture.md):
+        # - orchestrator 의 active 전략들에서 get_universe / get_interval 수집
+        #   → per-interval union 으로 fetch.
+        # - orchestrator 미주입 (legacy) 시 TOP30 / 1d — byte-identical 보존.
+        #
+        # orchestrator 는 caller (live_run main flow) 가 ``args._orchestrator``
+        # 로 늦게 attach. provider 가 closure 안에서 매 호출 시 lookup —
+        # provider 생성 시점에는 None 이어도 OK.
+        def _get_orchestrator():
+            return getattr(args, "_orchestrator", None)
+
+        def _collect_strategy_universes() -> dict[str, set[str]]:
+            """interval → symbol set. orchestrator 미주입 시 빈 dict."""
+            orchestrator = _get_orchestrator()
+            if orchestrator is None or not hasattr(orchestrator, "_strategies"):
+                return {}
+            out: dict[str, set[str]] = {}
+            for strat in orchestrator._strategies.values():
+                get_u = getattr(strat, "get_universe", None)
+                get_i = getattr(strat, "get_interval", None)
+                if not (callable(get_u) and callable(get_i)):
+                    continue
+                try:
+                    syms = list(get_u())
+                    interval = str(get_i())
+                except Exception:
+                    continue
+                if not syms or not interval:
+                    continue
+                out.setdefault(interval, set()).update(syms)
+            return out
 
         def _binance_provider():
             try:
-                return fetch_universe_klines(_binance_top30(), interval="1d")
+                per_interval = _collect_strategy_universes()
+                if not per_interval:
+                    return fetch_universe_klines(_binance_top30(), interval="1d")
+                # 같은 symbol 다른 interval 일 경우 first-wins (interval 알파벳).
+                # cs-tsmom (1d) + airborne (1h) 가 겹치는 symbol — 1d 가 먼저
+                # 들어가 cs-tsmom 회귀 X. Phase 3 에서 symbol-major 분리 검토.
+                ohlcv: dict = {}
+                for interval in sorted(per_interval.keys()):
+                    syms = sorted(per_interval[interval])
+                    try:
+                        partial = fetch_universe_klines(syms, interval=interval)
+                    except Exception:
+                        continue
+                    for sym, df in partial.items():
+                        ohlcv.setdefault(sym, df)
+                return ohlcv
             except Exception:
                 return {}
         return _binance_provider
@@ -957,6 +1009,9 @@ async def _run_pipeline_attached(
 
     def _on_orchestrator_ready(orch):
         setattr(state, "orchestrator", orch)
+        # Dynamic Universe Architecture Phase 1 (2026-05-28) —
+        # _build_universe_quote_provider 가 args._orchestrator lookup.
+        args._orchestrator = orch
         # 2026-05-20: re-entry bug fix — _live_entered 가 부팅 시 비어있어
         # 재시작 = 보유 종목 추가 매수 폭주. 이미 replay 된 store 의
         # positions 로 _live_entered 복원 → 부팅 후 첫 tick 에 보유 종목 진입 차단.
@@ -1351,6 +1406,9 @@ async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
     # #227 S3: also register live-scanner stop/TP policies once strategies load.
     def _on_orchestrator_ready(orch):
         setattr(dashboard_state, "orchestrator", orch)
+        # Dynamic Universe Architecture Phase 1 (2026-05-28) —
+        # _build_universe_quote_provider 가 args._orchestrator lookup.
+        args._orchestrator = orch
         # 2026-05-20: re-entry bug fix — _live_entered 가 부팅 시 비어있어
         # 재시작 = 보유 종목 추가 매수 폭주. 이미 replay 된 store 의
         # positions 로 _live_entered 복원 → 부팅 후 첫 tick 에 보유 종목 진입 차단.
