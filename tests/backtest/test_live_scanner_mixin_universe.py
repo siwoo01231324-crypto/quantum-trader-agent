@@ -28,10 +28,20 @@ class TestAirborneOverride:
         """airborne-kst-hours 만 interval 을 1h override (Phase 1 범위)."""
         assert LiveAirborneBbReversalKstHours.get_interval() == "1h"
 
-    def test_airborne_kst_hours_universe_inherits_default(self):
-        """Phase 1 — universe 는 부모 default (TOP30) 유지."""
+    def test_airborne_kst_hours_universe_is_dynamic_top100(self):
+        """Phase 2 — universe = binance_top_dynamic.get_top_n_symbols(100).
+
+        실 fetch 가능 환경 = 100 종목 / region-block / 오프라인 = fallback
+        BINANCE_USDT_TOP30. 둘 다 OK — 비지 않고 BTCUSDT 포함.
+        """
         from src.portfolio.binance_universe import BINANCE_USDT_TOP30
-        assert LiveAirborneBbReversalKstHours.get_universe() == list(BINANCE_USDT_TOP30)
+        universe = LiveAirborneBbReversalKstHours.get_universe()
+        assert isinstance(universe, list)
+        assert len(universe) > 0
+        assert "BTCUSDT" in universe
+        # fallback 이면 정확히 TOP30, dynamic 이면 더 많음
+        if len(universe) == len(BINANCE_USDT_TOP30):
+            assert set(universe) == set(BINANCE_USDT_TOP30)
 
     def test_airborne_kst_morning_keeps_default_interval(self):
         """rejected 부모 (kst-morning) 는 default 1d 유지 — 회귀 X."""

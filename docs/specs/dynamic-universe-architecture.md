@@ -2,7 +2,7 @@
 type: spec-architecture
 id: dynamic-universe-architecture
 name: Dynamic Universe Architecture — 전략별 universe + interval 선언으로 orchestrator 가 동적 fetch
-status: in-progress
+status: active
 owner: siwoo
 created: 2026-05-28
 updated: 2026-05-28
@@ -100,13 +100,15 @@ Phase 1 에서는 universe 가 union 으로 커진 만큼 모든 전략이 더 �
 - [x] cs-tsmom-crypto-daily 의 출력 byte-identical 회귀 검증
 - [x] 단위 테스트 — universe union / interval per fetch / unknown symbol graceful hold
 
-### Phase 2 — airborne universe TOP100 으로 확장 (후속 PR)
-- airborne 전략의 `get_universe` 가 daemon 의 top-100 동적 동기
-- `qta-airborne-trader` 컨테이너 deprecate (또는 별도 entity 유지 결정)
+### Phase 2 — airborne universe TOP100 dynamic ✅ (v0.6.14)
+- [x] `src/portfolio/binance_top_dynamic.py` — 5분 캐시 + thread-safe single-flight + fail-safe fallback
+- [x] airborne `get_universe()` = `get_top_n_symbols(100)` — daemon 과 동기
+- [ ] `qta-airborne-trader` 컨테이너 deprecate — 사용자 결정 후 별도 PR (docker-compose service 제거)
 
-### Phase 3 — Per-strategy universe filtering (후속 PR)
-- `orchestrator.run_bar` 가 각 전략에 자기 universe symbol 만 dispatch
-- 다른 전략 symbol 받아도 graceful hold 가 아닌 명시적 skip
+### Phase 3 — Per-strategy universe filtering ✅ (v0.6.14)
+- [x] `AsyncStrategyOrchestrator.run_bar` 가 각 전략의 `get_universe()` 안 symbol 만 dispatch
+- [x] get_universe 미선언 (legacy) 전략은 default TOP30 — byte-identical
+- [x] 다른 전략 symbol 받아도 skip (orchestrator 차원에서 차단)
 
 ## 회귀 위험
 

@@ -57,9 +57,17 @@ class LiveAirborneBbReversalKstHours(LiveAirborneBbReversalKstMorning):
 
     kst_entry_hours: ClassVar[frozenset[int]] = _KST_TOP_HOURS
 
-    # Dynamic Universe Architecture Phase 1 (2026-05-28) — interval 만 1h
-    # override. universe 는 부모(LiveScannerMixin) 기본 = TOP30 유지. Phase 2
-    # 에서 daemon 동기 TOP100 dynamic 으로 확장 예정.
+    # Dynamic Universe Architecture (2026-05-28):
+    # - Phase 1: interval = "1h" (이전 1d → 사실상 무용지물이던 문제 해결)
+    # - Phase 2: universe = daemon top-100 dynamic (24h 거래량 기반).
+    #   binance_top_dynamic.get_top_n_symbols(100) — 5분 캐시 + fetch 실패 시
+    #   정적 BINANCE_USDT_TOP30 fallback (graceful, 매매 안 멈춤).
     @classmethod
     def get_interval(cls) -> str:
         return "1h"
+
+    @classmethod
+    def get_universe(cls) -> list[str]:
+        """daemon 과 동기 — 24h 거래량 top-100 USDT-perp."""
+        from src.portfolio.binance_top_dynamic import get_top_n_symbols
+        return get_top_n_symbols(100)

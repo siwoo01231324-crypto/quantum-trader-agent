@@ -371,8 +371,23 @@ class AsyncStrategyOrchestrator:
                 # #227 S1 — iterate the universe and create one task per symbol.
                 # Each task receives a single-symbol market_snapshot + the
                 # per-symbol factors slice (or empty dict if none registered).
+                #
+                # 2026-05-28 Dynamic Universe Phase 3 — per-strategy filtering.
+                # 전략이 ``get_universe()`` 를 선언했으면 그 set 안의 symbol 만
+                # dispatch. 미선언 (legacy) 면 전체 universe — byte-identical.
+                # cs-tsmom 같은 universe-scan 도 default get_universe = TOP30 이라
+                # 받는 set 이 같아 회귀 X.
+                get_u_cm = getattr(type(strategy), "get_universe", None)
+                allowed: set[str] | None = None
+                if callable(get_u_cm):
+                    try:
+                        allowed = set(get_u_cm())
+                    except Exception:
+                        allowed = None
                 for symbol, hist in _universe_ohlcv.items():
                     if hist is None or len(hist) == 0:
+                        continue
+                    if allowed is not None and symbol not in allowed:
                         continue
                     last_close = float(hist["close"].iloc[-1])
                     per_symbol_snap = {
