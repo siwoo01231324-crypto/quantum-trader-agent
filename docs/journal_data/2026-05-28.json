@@ -1,0 +1,1056 @@
+{
+  "date_kst": "2026-05-28",
+  "kst_window_start": "2026-05-28T00:00:00+09:00",
+  "now_kst": "2026-05-29T01:00:21.471720+09:00",
+  "counts": {
+    "auto_fills": 0,
+    "auto_signals": 0,
+    "manual_trades": 1,
+    "airborne_fires": 139
+  },
+  "auto_fills": [],
+  "auto_signals": [],
+  "manual_trades": [
+    {
+      "ts": "2026-05-28T03:43:40.245780+00:00",
+      "symbol": "MRVLUSDT",
+      "direction": "long",
+      "side": "buy",
+      "kind": "roundtrip",
+      "qty": 1.0,
+      "entry_price": 203.74,
+      "price": 203.74,
+      "exit_price": 190.96,
+      "realized_pnl": -12.8102,
+      "outcome": "loss",
+      "venue": "bybit",
+      "note": "에어본 지표 탐지 후 롱 구매. 4H EMA 동의 지표까지 확인했으나 구매 이후 약간의 파동으 ㄹ보여주다가 새벽 6시쯤 15분봉에서 삼각 수렴 이후 상승 치솟아서 익절이 가능했으나 이거 한번 확 튀어오르는거 뭐라 그러지 이거 이후에 싹 빠지고 지금은 완전 하락추세로 돌아섬, 어쨌든 에어본 지표와 익절 기회는 있으나 오래 보지 못한 느낌, 6시쯤이 아무래도 코인이 많이 오르는거같다"
+    }
+  ],
+  "airborne_fires": [
+    {
+      "ts": "2026-05-27T15:00:33+00:00",
+      "symbol": "SNDKUSDT",
+      "side": "long",
+      "fire_close": 1550.39,
+      "trigger": 1542.71
+    },
+    {
+      "ts": "2026-05-27T15:00:34+00:00",
+      "symbol": "EWYUSDT",
+      "side": "long",
+      "fire_close": 196.32,
+      "trigger": 195.958
+    },
+    {
+      "ts": "2026-05-27T15:00:35+00:00",
+      "symbol": "SOXLUSDT",
+      "side": "long",
+      "fire_close": 209.1,
+      "trigger": 206.952
+    },
+    {
+      "ts": "2026-05-27T15:00:36+00:00",
+      "symbol": "TRXUSDT",
+      "side": "long",
+      "fire_close": 0.3703,
+      "trigger": 0.369706
+    },
+    {
+      "ts": "2026-05-27T15:00:37+00:00",
+      "symbol": "DRAMUSDT",
+      "side": "long",
+      "fire_close": 59.63,
+      "trigger": 59.336
+    },
+    {
+      "ts": "2026-05-27T15:00:38+00:00",
+      "symbol": "AMDUSDT",
+      "side": "long",
+      "fire_close": 492.13,
+      "trigger": 489.008
+    },
+    {
+      "ts": "2026-05-27T16:00:32+00:00",
+      "symbol": "SOLUSDT",
+      "side": "short",
+      "fire_close": 84.41,
+      "trigger": 84.648
+    },
+    {
+      "ts": "2026-05-27T16:00:34+00:00",
+      "symbol": "1000PEPEUSDT",
+      "side": "short",
+      "fire_close": 0.0035729,
+      "trigger": 0.00358824
+    },
+    {
+      "ts": "2026-05-27T16:00:35+00:00",
+      "symbol": "AVAXUSDT",
+      "side": "short",
+      "fire_close": 9.241,
+      "trigger": 9.2676
+    },
+    {
+      "ts": "2026-05-27T16:00:36+00:00",
+      "symbol": "PUMPUSDT",
+      "side": "short",
+      "fire_close": 0.001852,
+      "trigger": 0.001857
+    },
+    {
+      "ts": "2026-05-27T16:00:37+00:00",
+      "symbol": "SKYAIUSDT",
+      "side": "long",
+      "fire_close": 0.20846,
+      "trigger": 0.206482
+    },
+    {
+      "ts": "2026-05-27T16:00:38+00:00",
+      "symbol": "LTCUSDT",
+      "side": "short",
+      "fire_close": 52.65,
+      "trigger": 52.772
+    },
+    {
+      "ts": "2026-05-27T16:00:39+00:00",
+      "symbol": "XPLUSDT",
+      "side": "short",
+      "fire_close": 0.0912,
+      "trigger": 0.09256
+    },
+    {
+      "ts": "2026-05-27T16:00:40+00:00",
+      "symbol": "APTUSDT",
+      "side": "short",
+      "fire_close": 0.997,
+      "trigger": 1.00158
+    },
+    {
+      "ts": "2026-05-27T16:00:41+00:00",
+      "symbol": "JTOUSDT",
+      "side": "short",
+      "fire_close": 0.5474,
+      "trigger": 0.5483
+    },
+    {
+      "ts": "2026-05-27T16:00:43+00:00",
+      "symbol": "OPUSDT",
+      "side": "short",
+      "fire_close": 0.1299,
+      "trigger": 0.13
+    },
+    {
+      "ts": "2026-05-27T17:00:33+00:00",
+      "symbol": "ZECUSDT",
+      "side": "long",
+      "fire_close": 557.09,
+      "trigger": 553.602
+    },
+    {
+      "ts": "2026-05-27T17:00:34+00:00",
+      "symbol": "FFUSDT",
+      "side": "short",
+      "fire_close": 0.10624,
+      "trigger": 0.106482
+    },
+    {
+      "ts": "2026-05-27T17:00:35+00:00",
+      "symbol": "ATOMUSDT",
+      "side": "long",
+      "fire_close": 2.161,
+      "trigger": 2.161
+    },
+    {
+      "ts": "2026-05-27T18:00:33+00:00",
+      "symbol": "BTCUSDT",
+      "side": "long",
+      "fire_close": 74798.5,
+      "trigger": 74722.3
+    },
+    {
+      "ts": "2026-05-27T18:00:34+00:00",
+      "symbol": "ETHUSDT",
+      "side": "long",
+      "fire_close": 2049.67,
+      "trigger": 2046.6
+    },
+    {
+      "ts": "2026-05-27T18:00:35+00:00",
+      "symbol": "WLDUSDT",
+      "side": "long",
+      "fire_close": 0.3435,
+      "trigger": 0.34182
+    },
+    {
+      "ts": "2026-05-27T18:00:36+00:00",
+      "symbol": "XRPUSDT",
+      "side": "long",
+      "fire_close": 1.3183,
+      "trigger": 1.31766
+    },
+    {
+      "ts": "2026-05-27T18:00:37+00:00",
+      "symbol": "SUIUSDT",
+      "side": "long",
+      "fire_close": 0.9722,
+      "trigger": 0.97056
+    },
+    {
+      "ts": "2026-05-27T18:00:38+00:00",
+      "symbol": "ADAUSDT",
+      "side": "long",
+      "fire_close": 0.2379,
+      "trigger": 0.2378
+    },
+    {
+      "ts": "2026-05-27T18:00:39+00:00",
+      "symbol": "LINKUSDT",
+      "side": "long",
+      "fire_close": 9.24,
+      "trigger": 9.236
+    },
+    {
+      "ts": "2026-05-27T18:00:40+00:00",
+      "symbol": "VIRTUALUSDT",
+      "side": "long",
+      "fire_close": 0.7673,
+      "trigger": 0.76376
+    },
+    {
+      "ts": "2026-05-27T18:00:41+00:00",
+      "symbol": "CBRSUSDT",
+      "side": "short",
+      "fire_close": 261.12,
+      "trigger": 263.348
+    },
+    {
+      "ts": "2026-05-27T18:00:42+00:00",
+      "symbol": "TRUMPUSDT",
+      "side": "long",
+      "fire_close": 1.985,
+      "trigger": 1.982
+    },
+    {
+      "ts": "2026-05-27T18:00:43+00:00",
+      "symbol": "MSTRUSDT",
+      "side": "long",
+      "fire_close": 154.36,
+      "trigger": 154.304
+    },
+    {
+      "ts": "2026-05-27T18:00:44+00:00",
+      "symbol": "GENIUSUSDT",
+      "side": "short",
+      "fire_close": 0.7137,
+      "trigger": 0.71882
+    },
+    {
+      "ts": "2026-05-27T18:00:45+00:00",
+      "symbol": "EIGENUSDT",
+      "side": "long",
+      "fire_close": 0.2383,
+      "trigger": 0.23794
+    },
+    {
+      "ts": "2026-05-27T19:00:32+00:00",
+      "symbol": "NEARUSDT",
+      "side": "short",
+      "fire_close": 2.619,
+      "trigger": 2.6212
+    },
+    {
+      "ts": "2026-05-27T19:00:34+00:00",
+      "symbol": "XLMUSDT",
+      "side": "short",
+      "fire_close": 0.16588,
+      "trigger": 0.166102
+    },
+    {
+      "ts": "2026-05-27T19:00:35+00:00",
+      "symbol": "RIVERUSDT",
+      "side": "short",
+      "fire_close": 6.935,
+      "trigger": 6.9454
+    },
+    {
+      "ts": "2026-05-27T20:00:33+00:00",
+      "symbol": "GUAUSDT",
+      "side": "long",
+      "fire_close": 0.4048,
+      "trigger": 0.40308
+    },
+    {
+      "ts": "2026-05-27T20:00:34+00:00",
+      "symbol": "OPGUSDT",
+      "side": "long",
+      "fire_close": 0.194,
+      "trigger": 0.19342
+    },
+    {
+      "ts": "2026-05-27T22:00:32+00:00",
+      "symbol": "BTCUSDT",
+      "side": "long",
+      "fire_close": 74383.8,
+      "trigger": 74356.0
+    },
+    {
+      "ts": "2026-05-27T22:00:33+00:00",
+      "symbol": "ETHUSDT",
+      "side": "long",
+      "fire_close": 2018.69,
+      "trigger": 2016.42
+    },
+    {
+      "ts": "2026-05-27T22:00:36+00:00",
+      "symbol": "SOLUSDT",
+      "side": "long",
+      "fire_close": 82.24,
+      "trigger": 82.202
+    },
+    {
+      "ts": "2026-05-27T22:00:37+00:00",
+      "symbol": "ZECUSDT",
+      "side": "long",
+      "fire_close": 544.43,
+      "trigger": 543.57
+    },
+    {
+      "ts": "2026-05-27T22:00:38+00:00",
+      "symbol": "XRPUSDT",
+      "side": "long",
+      "fire_close": 1.3145,
+      "trigger": 1.31234
+    },
+    {
+      "ts": "2026-05-27T22:00:38+00:00",
+      "symbol": "DOGEUSDT",
+      "side": "long",
+      "fire_close": 0.10014,
+      "trigger": 0.099656
+    },
+    {
+      "ts": "2026-05-27T22:00:39+00:00",
+      "symbol": "SUIUSDT",
+      "side": "long",
+      "fire_close": 0.9621,
+      "trigger": 0.95888
+    },
+    {
+      "ts": "2026-05-27T22:00:40+00:00",
+      "symbol": "BNBUSDT",
+      "side": "long",
+      "fire_close": 648.71,
+      "trigger": 647.918
+    },
+    {
+      "ts": "2026-05-27T22:00:41+00:00",
+      "symbol": "1000PEPEUSDT",
+      "side": "long",
+      "fire_close": 0.0034486,
+      "trigger": 0.00344242
+    },
+    {
+      "ts": "2026-05-27T22:00:42+00:00",
+      "symbol": "TONUSDT",
+      "side": "long",
+      "fire_close": 1.8541,
+      "trigger": 1.84188
+    },
+    {
+      "ts": "2026-05-27T22:00:43+00:00",
+      "symbol": "TAOUSDT",
+      "side": "long",
+      "fire_close": 267.04,
+      "trigger": 266.162
+    },
+    {
+      "ts": "2026-05-27T22:00:44+00:00",
+      "symbol": "ADAUSDT",
+      "side": "long",
+      "fire_close": 0.2369,
+      "trigger": 0.23626
+    },
+    {
+      "ts": "2026-05-27T22:00:45+00:00",
+      "symbol": "LINKUSDT",
+      "side": "long",
+      "fire_close": 9.149,
+      "trigger": 9.143
+    },
+    {
+      "ts": "2026-05-27T22:00:46+00:00",
+      "symbol": "INJUSDT",
+      "side": "long",
+      "fire_close": 5.435,
+      "trigger": 5.4252
+    },
+    {
+      "ts": "2026-05-27T22:00:47+00:00",
+      "symbol": "RENDERUSDT",
+      "side": "long",
+      "fire_close": 2.115,
+      "trigger": 2.1128
+    },
+    {
+      "ts": "2026-05-27T22:00:48+00:00",
+      "symbol": "AVAXUSDT",
+      "side": "long",
+      "fire_close": 9.013,
+      "trigger": 9.0102
+    },
+    {
+      "ts": "2026-05-27T22:00:49+00:00",
+      "symbol": "ENAUSDT",
+      "side": "long",
+      "fire_close": 0.09308,
+      "trigger": 0.092608
+    },
+    {
+      "ts": "2026-05-27T22:00:50+00:00",
+      "symbol": "VIRTUALUSDT",
+      "side": "long",
+      "fire_close": 0.7517,
+      "trigger": 0.75006
+    },
+    {
+      "ts": "2026-05-27T22:00:51+00:00",
+      "symbol": "DOTUSDT",
+      "side": "long",
+      "fire_close": 1.229,
+      "trigger": 1.2256
+    },
+    {
+      "ts": "2026-05-27T22:00:52+00:00",
+      "symbol": "BCHUSDT",
+      "side": "long",
+      "fire_close": 336.56,
+      "trigger": 336.004
+    },
+    {
+      "ts": "2026-05-27T22:00:54+00:00",
+      "symbol": "VVVUSDT",
+      "side": "long",
+      "fire_close": 16.62,
+      "trigger": 16.5782
+    },
+    {
+      "ts": "2026-05-27T22:00:55+00:00",
+      "symbol": "AAVEUSDT",
+      "side": "long",
+      "fire_close": 83.47,
+      "trigger": 83.244
+    },
+    {
+      "ts": "2026-05-27T22:00:56+00:00",
+      "symbol": "UNIUSDT",
+      "side": "long",
+      "fire_close": 3.208,
+      "trigger": 3.1926
+    },
+    {
+      "ts": "2026-05-27T22:00:57+00:00",
+      "symbol": "TIAUSDT",
+      "side": "long",
+      "fire_close": 0.4392,
+      "trigger": 0.43792
+    },
+    {
+      "ts": "2026-05-27T22:00:58+00:00",
+      "symbol": "TRUMPUSDT",
+      "side": "long",
+      "fire_close": 1.939,
+      "trigger": 1.9256
+    },
+    {
+      "ts": "2026-05-27T22:00:59+00:00",
+      "symbol": "PENGUUSDT",
+      "side": "long",
+      "fire_close": 0.00816,
+      "trigger": 0.008152
+    },
+    {
+      "ts": "2026-05-27T22:01:00+00:00",
+      "symbol": "EDENUSDT",
+      "side": "long",
+      "fire_close": 0.06291,
+      "trigger": 0.062568
+    },
+    {
+      "ts": "2026-05-27T22:01:01+00:00",
+      "symbol": "ASTERUSDT",
+      "side": "long",
+      "fire_close": 0.6774,
+      "trigger": 0.6748
+    },
+    {
+      "ts": "2026-05-27T22:01:02+00:00",
+      "symbol": "ATOMUSDT",
+      "side": "long",
+      "fire_close": 2.12,
+      "trigger": 2.1136
+    },
+    {
+      "ts": "2026-05-27T22:01:03+00:00",
+      "symbol": "APTUSDT",
+      "side": "long",
+      "fire_close": 0.947,
+      "trigger": 0.94382
+    },
+    {
+      "ts": "2026-05-27T22:01:04+00:00",
+      "symbol": "DASHUSDT",
+      "side": "long",
+      "fire_close": 42.63,
+      "trigger": 42.436
+    },
+    {
+      "ts": "2026-05-27T22:01:05+00:00",
+      "symbol": "ARBUSDT",
+      "side": "long",
+      "fire_close": 0.1064,
+      "trigger": 0.106
+    },
+    {
+      "ts": "2026-05-27T22:01:06+00:00",
+      "symbol": "USUSDT",
+      "side": "short",
+      "fire_close": 0.007225,
+      "trigger": 0.0073406
+    },
+    {
+      "ts": "2026-05-27T22:01:07+00:00",
+      "symbol": "1000SHIBUSDT",
+      "side": "long",
+      "fire_close": 0.005408,
+      "trigger": 0.0053992
+    },
+    {
+      "ts": "2026-05-27T22:01:08+00:00",
+      "symbol": "AZTECUSDT",
+      "side": "long",
+      "fire_close": 0.0237,
+      "trigger": 0.023634
+    },
+    {
+      "ts": "2026-05-27T22:01:09+00:00",
+      "symbol": "FARTCOINUSDT",
+      "side": "long",
+      "fire_close": 0.1676,
+      "trigger": 0.16668
+    },
+    {
+      "ts": "2026-05-27T22:01:09+00:00",
+      "symbol": "EIGENUSDT",
+      "side": "long",
+      "fire_close": 0.23,
+      "trigger": 0.22876
+    },
+    {
+      "ts": "2026-05-27T23:00:32+00:00",
+      "symbol": "HYPEUSDT",
+      "side": "long",
+      "fire_close": 58.156,
+      "trigger": 58.1352
+    },
+    {
+      "ts": "2026-05-27T23:00:34+00:00",
+      "symbol": "HUSDT",
+      "side": "long",
+      "fire_close": 0.23926,
+      "trigger": 0.237588
+    },
+    {
+      "ts": "2026-05-28T01:00:33+00:00",
+      "symbol": "WLDUSDT",
+      "side": "long",
+      "fire_close": 0.3326,
+      "trigger": 0.3313
+    },
+    {
+      "ts": "2026-05-28T01:00:34+00:00",
+      "symbol": "ESPORTSUSDT",
+      "side": "short",
+      "fire_close": 0.044,
+      "trigger": 0.04466
+    },
+    {
+      "ts": "2026-05-28T02:00:32+00:00",
+      "symbol": "XAGUSDT",
+      "side": "long",
+      "fire_close": 73.3,
+      "trigger": 73.106
+    },
+    {
+      "ts": "2026-05-28T02:00:33+00:00",
+      "symbol": "XRPUSDT",
+      "side": "long",
+      "fire_close": 1.3031,
+      "trigger": 1.2992
+    },
+    {
+      "ts": "2026-05-28T02:00:34+00:00",
+      "symbol": "TAOUSDT",
+      "side": "long",
+      "fire_close": 262.68,
+      "trigger": 261.624
+    },
+    {
+      "ts": "2026-05-28T02:00:35+00:00",
+      "symbol": "ONDOUSDT",
+      "side": "long",
+      "fire_close": 0.3777,
+      "trigger": 0.3757
+    },
+    {
+      "ts": "2026-05-28T02:00:37+00:00",
+      "symbol": "1000LUNCUSDT",
+      "side": "long",
+      "fire_close": 0.08662,
+      "trigger": 0.08584
+    },
+    {
+      "ts": "2026-05-28T02:00:38+00:00",
+      "symbol": "AAVEUSDT",
+      "side": "long",
+      "fire_close": 82.44,
+      "trigger": 82.166
+    },
+    {
+      "ts": "2026-05-28T02:00:39+00:00",
+      "symbol": "PHAROSUSDT",
+      "side": "long",
+      "fire_close": 0.6254,
+      "trigger": 0.62064
+    },
+    {
+      "ts": "2026-05-28T02:00:40+00:00",
+      "symbol": "ASTERUSDT",
+      "side": "long",
+      "fire_close": 0.6742,
+      "trigger": 0.67254
+    },
+    {
+      "ts": "2026-05-28T02:00:41+00:00",
+      "symbol": "DASHUSDT",
+      "side": "long",
+      "fire_close": 41.04,
+      "trigger": 40.69
+    },
+    {
+      "ts": "2026-05-28T03:00:33+00:00",
+      "symbol": "XAUUSDT",
+      "side": "long",
+      "fire_close": 4399.48,
+      "trigger": 4398.11
+    },
+    {
+      "ts": "2026-05-28T03:00:34+00:00",
+      "symbol": "UBUSDT",
+      "side": "long",
+      "fire_close": 0.20471,
+      "trigger": 0.203248
+    },
+    {
+      "ts": "2026-05-28T03:00:35+00:00",
+      "symbol": "RENDERUSDT",
+      "side": "long",
+      "fire_close": 2.046,
+      "trigger": 2.0282
+    },
+    {
+      "ts": "2026-05-28T03:00:36+00:00",
+      "symbol": "FETUSDT",
+      "side": "long",
+      "fire_close": 0.2318,
+      "trigger": 0.23144
+    },
+    {
+      "ts": "2026-05-28T03:00:37+00:00",
+      "symbol": "GENIUSUSDT",
+      "side": "short",
+      "fire_close": 0.7931,
+      "trigger": 0.79524
+    },
+    {
+      "ts": "2026-05-28T04:00:33+00:00",
+      "symbol": "ETHUSDT",
+      "side": "long",
+      "fire_close": 1979.32,
+      "trigger": 1974.26
+    },
+    {
+      "ts": "2026-05-28T04:00:34+00:00",
+      "symbol": "SOLUSDT",
+      "side": "long",
+      "fire_close": 80.58,
+      "trigger": 80.534
+    },
+    {
+      "ts": "2026-05-28T04:00:35+00:00",
+      "symbol": "DOGEUSDT",
+      "side": "long",
+      "fire_close": 0.09806,
+      "trigger": 0.098042
+    },
+    {
+      "ts": "2026-05-28T04:00:36+00:00",
+      "symbol": "FILUSDT",
+      "side": "long",
+      "fire_close": 0.982,
+      "trigger": 0.9802
+    },
+    {
+      "ts": "2026-05-28T04:00:37+00:00",
+      "symbol": "BNBUSDT",
+      "side": "long",
+      "fire_close": 637.72,
+      "trigger": 637.41
+    },
+    {
+      "ts": "2026-05-28T04:00:38+00:00",
+      "symbol": "BSBUSDT",
+      "side": "long",
+      "fire_close": 0.38058,
+      "trigger": 0.333884
+    },
+    {
+      "ts": "2026-05-28T04:00:39+00:00",
+      "symbol": "1000PEPEUSDT",
+      "side": "long",
+      "fire_close": 0.0033761,
+      "trigger": 0.00337574
+    },
+    {
+      "ts": "2026-05-28T04:00:40+00:00",
+      "symbol": "ADAUSDT",
+      "side": "long",
+      "fire_close": 0.2318,
+      "trigger": 0.23158
+    },
+    {
+      "ts": "2026-05-28T04:00:41+00:00",
+      "symbol": "ICPUSDT",
+      "side": "long",
+      "fire_close": 2.717,
+      "trigger": 2.7102
+    },
+    {
+      "ts": "2026-05-28T04:00:42+00:00",
+      "symbol": "TONUSDT",
+      "side": "long",
+      "fire_close": 1.7755,
+      "trigger": 1.77538
+    },
+    {
+      "ts": "2026-05-28T04:00:43+00:00",
+      "symbol": "EWYUSDT",
+      "side": "long",
+      "fire_close": 191.25,
+      "trigger": 191.02
+    },
+    {
+      "ts": "2026-05-28T04:00:44+00:00",
+      "symbol": "LINKUSDT",
+      "side": "long",
+      "fire_close": 8.882,
+      "trigger": 8.8804
+    },
+    {
+      "ts": "2026-05-28T04:00:45+00:00",
+      "symbol": "CRCLUSDT",
+      "side": "long",
+      "fire_close": 99.37,
+      "trigger": 99.336
+    },
+    {
+      "ts": "2026-05-28T04:00:46+00:00",
+      "symbol": "ENAUSDT",
+      "side": "long",
+      "fire_close": 0.08948,
+      "trigger": 0.089416
+    },
+    {
+      "ts": "2026-05-28T04:00:47+00:00",
+      "symbol": "PUMPUSDT",
+      "side": "long",
+      "fire_close": 0.00171,
+      "trigger": 0.0017098
+    },
+    {
+      "ts": "2026-05-28T04:00:48+00:00",
+      "symbol": "TSLAUSDT",
+      "side": "long",
+      "fire_close": 429.76,
+      "trigger": 429.678
+    },
+    {
+      "ts": "2026-05-28T04:00:49+00:00",
+      "symbol": "VIRTUALUSDT",
+      "side": "long",
+      "fire_close": 0.6994,
+      "trigger": 0.6985
+    },
+    {
+      "ts": "2026-05-28T04:00:50+00:00",
+      "symbol": "DRAMUSDT",
+      "side": "long",
+      "fire_close": 58.4,
+      "trigger": 58.14
+    },
+    {
+      "ts": "2026-05-28T04:00:51+00:00",
+      "symbol": "RONINUSDT",
+      "side": "long",
+      "fire_close": 0.0814,
+      "trigger": 0.0813
+    },
+    {
+      "ts": "2026-05-28T04:00:52+00:00",
+      "symbol": "TRUMPUSDT",
+      "side": "long",
+      "fire_close": 1.889,
+      "trigger": 1.8876
+    },
+    {
+      "ts": "2026-05-28T04:00:53+00:00",
+      "symbol": "UNIUSDT",
+      "side": "long",
+      "fire_close": 3.037,
+      "trigger": 3.0322
+    },
+    {
+      "ts": "2026-05-28T04:00:54+00:00",
+      "symbol": "TIAUSDT",
+      "side": "long",
+      "fire_close": 0.4171,
+      "trigger": 0.41666
+    },
+    {
+      "ts": "2026-05-28T04:00:55+00:00",
+      "symbol": "XMRUSDT",
+      "side": "long",
+      "fire_close": 384.16,
+      "trigger": 383.67
+    },
+    {
+      "ts": "2026-05-28T04:00:56+00:00",
+      "symbol": "EDENUSDT",
+      "side": "long",
+      "fire_close": 0.06085,
+      "trigger": 0.060576
+    },
+    {
+      "ts": "2026-05-28T04:00:57+00:00",
+      "symbol": "PENGUUSDT",
+      "side": "long",
+      "fire_close": 0.007883,
+      "trigger": 0.0078764
+    },
+    {
+      "ts": "2026-05-28T04:00:58+00:00",
+      "symbol": "ARUSDT",
+      "side": "long",
+      "fire_close": 2.116,
+      "trigger": 2.1132
+    },
+    {
+      "ts": "2026-05-28T05:00:33+00:00",
+      "symbol": "BILLUSDT",
+      "side": "short",
+      "fire_close": 0.08515,
+      "trigger": 0.087356
+    },
+    {
+      "ts": "2026-05-28T05:00:34+00:00",
+      "symbol": "NILUSDT",
+      "side": "long",
+      "fire_close": 0.06605,
+      "trigger": 0.065024
+    },
+    {
+      "ts": "2026-05-28T05:00:35+00:00",
+      "symbol": "CHZUSDT",
+      "side": "long",
+      "fire_close": 0.03412,
+      "trigger": 0.033672
+    },
+    {
+      "ts": "2026-05-28T06:00:33+00:00",
+      "symbol": "WLDUSDT",
+      "side": "long",
+      "fire_close": 0.3083,
+      "trigger": 0.30516
+    },
+    {
+      "ts": "2026-05-28T06:00:34+00:00",
+      "symbol": "BEATUSDT",
+      "side": "short",
+      "fire_close": 1.2691,
+      "trigger": 1.2737
+    },
+    {
+      "ts": "2026-05-28T06:00:35+00:00",
+      "symbol": "VVVUSDT",
+      "side": "long",
+      "fire_close": 15.107,
+      "trigger": 14.915
+    },
+    {
+      "ts": "2026-05-28T07:00:33+00:00",
+      "symbol": "TRXUSDT",
+      "side": "long",
+      "fire_close": 0.36026,
+      "trigger": 0.3599
+    },
+    {
+      "ts": "2026-05-28T07:00:34+00:00",
+      "symbol": "RIFUSDT",
+      "side": "long",
+      "fire_close": 0.0641,
+      "trigger": 0.063886
+    },
+    {
+      "ts": "2026-05-28T08:00:33+00:00",
+      "symbol": "EDENUSDT",
+      "side": "long",
+      "fire_close": 0.05795,
+      "trigger": 0.057588
+    },
+    {
+      "ts": "2026-05-28T09:00:33+00:00",
+      "symbol": "JTOUSDT",
+      "side": "long",
+      "fire_close": 0.4848,
+      "trigger": 0.48206
+    },
+    {
+      "ts": "2026-05-28T10:00:33+00:00",
+      "symbol": "GENIUSUSDT",
+      "side": "long",
+      "fire_close": 0.6324,
+      "trigger": 0.62502
+    },
+    {
+      "ts": "2026-05-28T11:00:33+00:00",
+      "symbol": "UBUSDT",
+      "side": "long",
+      "fire_close": 0.20004,
+      "trigger": 0.199446
+    },
+    {
+      "ts": "2026-05-28T11:00:34+00:00",
+      "symbol": "XMRUSDT",
+      "side": "long",
+      "fire_close": 375.47,
+      "trigger": 375.384
+    },
+    {
+      "ts": "2026-05-28T12:00:33+00:00",
+      "symbol": "BCHUSDT",
+      "side": "long",
+      "fire_close": 301.48,
+      "trigger": 297.334
+    },
+    {
+      "ts": "2026-05-28T13:00:32+00:00",
+      "symbol": "XLMUSDT",
+      "side": "short",
+      "fire_close": 0.19091,
+      "trigger": 0.191002
+    },
+    {
+      "ts": "2026-05-28T13:00:34+00:00",
+      "symbol": "RIFUSDT",
+      "side": "short",
+      "fire_close": 0.06939,
+      "trigger": 0.070034
+    },
+    {
+      "ts": "2026-05-28T14:00:32+00:00",
+      "symbol": "ESPORTSUSDT",
+      "side": "short",
+      "fire_close": 0.0463,
+      "trigger": 0.04688
+    },
+    {
+      "ts": "2026-05-28T14:00:34+00:00",
+      "symbol": "MSTRUSDT",
+      "side": "long",
+      "fire_close": 146.48,
+      "trigger": 145.266
+    },
+    {
+      "ts": "2026-05-28T14:00:35+00:00",
+      "symbol": "NATGASUSDT",
+      "side": "short",
+      "fire_close": 3.156,
+      "trigger": 3.1602
+    },
+    {
+      "ts": "2026-05-28T14:00:36+00:00",
+      "symbol": "PENDLEUSDT",
+      "side": "long",
+      "fire_close": 1.4795,
+      "trigger": 1.47524
+    },
+    {
+      "ts": "2026-05-28T14:00:37+00:00",
+      "symbol": "HBARUSDT",
+      "side": "short",
+      "fire_close": 0.08881,
+      "trigger": 0.089092
+    }
+  ],
+  "cs_tsmom_top10": {
+    "available": false,
+    "fetched_at": null,
+    "pin_date": "",
+    "top10": [],
+    "note": "Backfill at 2026-05-29T01:00:21.471694+09:00 — historical snapshot for 2026-05-28 23:50 KST was not captured. Routine 가 'today TOP10' 으로 쓰면 부정확할 수 있음. auto_fills + auto_signals 를 primary source 로 활용."
+  },
+  "_backfill_meta": {
+    "generated_by": "scripts/export_journal_for_date.py",
+    "generated_at_kst": "2026-05-29T01:00:21.471723+09:00",
+    "utc_window": [
+      "2026-05-27T15:00:00+00:00",
+      "2026-05-28T15:00:00+00:00"
+    ],
+    "wal_files_scanned": [
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T053027Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T053140Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T060929Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T061046Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T093227Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T101328Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T102433Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T104643Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T104813Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T104943Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T111836Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T115043Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T151213Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T160723Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T163902Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T170440Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T173552Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260522T050551Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260522T054610Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260522T060335Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260522T065545Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260522T132418Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260522T180859Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260524T133741Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260525T163022Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260525T165359Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260526T033417Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260526T154834Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260527T044926Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260527T150208Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260527T162624Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260527T173656Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260528T061600Z\\wal.jsonl"
+    ],
+    "docker_error": null
+  }
+}
