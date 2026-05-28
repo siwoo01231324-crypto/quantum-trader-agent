@@ -24,6 +24,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 from prometheus_client import CONTENT_TYPE_LATEST, CollectorRegistry, generate_latest
 
 from src.dashboard.airborne_fire_store import AirborneFireStore
+from src.dashboard.airborne_sim_cache import AirborneSimCache
 from src.dashboard.ops_counters import OpsCounters
 from src.dashboard.patch_notes import render_patch_notes_page
 from src.dashboard.shadow_runs import discover_shadow_runs, load_run_detail
@@ -42,6 +43,20 @@ def _get_airborne_fire_store() -> AirborneFireStore:
             "logs/airborne_fires/history.jsonl",
         )
     return _AIRBORNE_FIRE_STORE
+
+
+# Sim outcome cache — fire → (outcome/pct/bar_idx). 한 번 계산되면 안 바뀜.
+# 옛 fire 재호출 시 캐시 hit → Binance fapi REST 0 회 (수십 초 절감).
+_AIRBORNE_SIM_CACHE: AirborneSimCache | None = None
+
+
+def _get_airborne_sim_cache() -> AirborneSimCache:
+    global _AIRBORNE_SIM_CACHE
+    if _AIRBORNE_SIM_CACHE is None:
+        _AIRBORNE_SIM_CACHE = AirborneSimCache(
+            "logs/airborne_fires/sim_cache.jsonl",
+        )
+    return _AIRBORNE_SIM_CACHE
 from src.live.trade_history import discover_wal_files, reconstruct_trades
 from src.live.wal import replay as wal_replay
 from src.observability.metrics import Metrics
@@ -4529,15 +4544,37 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
                 return False
         fires = [f for f in fires if _within(f.get("ts", ""))]
 
-        sims: list[dict] = []
-        if fires:
-            async with _httpx.AsyncClient() as client:
-                for f in fires:
-                    bars = await _fetch_15m_bars(client, f["symbol"], f["ts"])
-                    sim = _simulate_airborne_fire(f, bars)
-                    if sim is not None:
-                        sims.append({**f, **sim})
+        # ── 영속 sim cache 활용 ─────────────────────────────────────────
+        # 옛 fire 는 한 번 시뮬한 결과 (outcome/pct/bar_idx) 가 sim_cache.jsonl
+        # 에 저장됨 → 동일 fire 재호출은 캐시 hit (O(1) dict lookup, REST 0회).
+        # cache miss 인 새 fire 들만 Binance fapi 봉 fetch + 시뮬.
+        sim_cache = _get_airborne_sim_cache()
+        cached_sims, missing_fires = sim_cache.split(fires)
 
+        # cache miss 들 — asyncio.gather 로 병렬 fetch (concurrency 20).
+        # 직렬 fetch 는 100 fire = ~30초+, 병렬은 ~3초.
+        new_sims: list[dict] = []
+        if missing_fires:
+            sem = asyncio.Semaphore(20)
+            async with _httpx.AsyncClient() as client:
+                async def _sim_one(fire: dict) -> dict | None:
+                    async with sem:
+                        bars = await _fetch_15m_bars(client, fire["symbol"], fire["ts"])
+                    out = _simulate_airborne_fire(fire, bars)
+                    if out is None:
+                        return None
+                    return {**fire, **out}
+
+                results = await asyncio.gather(
+                    *(_sim_one(f) for f in missing_fires),
+                    return_exceptions=False,
+                )
+            new_sims = [r for r in results if r is not None]
+            # 영속 캐시에 새로 저장 — 같은 fire 다시 안 시뮬.
+            if new_sims:
+                sim_cache.put_many(new_sims)
+
+        sims = cached_sims + new_sims
         agg = _aggregate_airborne_sims(sims)
         # 2026-05-26 — /airborne 페이지가 per-fire 상세 행을 렌더하도록 `sims`
         # 리스트를 응답에 포함. 페이지가 별도 endpoint 를 추가로 호출하지 않게
@@ -4556,6 +4593,9 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
             "now_kst": kst_now.isoformat(),
             "store_count": store.count(),
             "store_earliest": store.earliest_ts(),
+            "sim_cache_count": sim_cache.count(),
+            "sim_cache_hits": len(cached_sims),
+            "sim_cache_misses": len(missing_fires),
             "fires_total": len(fires),
             "sims_total": len(sims),
             **agg,
