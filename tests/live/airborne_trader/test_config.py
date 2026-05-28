@@ -16,7 +16,10 @@ class TestDefaults:
         assert c.take_profit_pct == 0.06
         assert c.kst_entry_hours == frozenset({8, 11, 16, 22})
         assert c.daily_loss_limit_usd == -200.0
-        assert c.dry_run is True
+        # 2026-05-28 — default: testnet 실 발주 (가짜 돈). dry_run=True 면 로그만.
+        assert c.dry_run is False
+        assert c.venue == "testnet"
+        assert c.base_url.startswith("https://testnet.")
         assert c.cooldown_after_stop_sec == 900.0
 
 
@@ -73,7 +76,11 @@ class TestFromEnv:
         c = AirborneTraderConfig.from_env()
         assert c.leverage == 10  # default
 
-    def test_dry_run_default_is_true(self, monkeypatch):
+    def test_dry_run_default_is_false(self, monkeypatch):
+        """2026-05-28 — default False (실 발주, venue=testnet 가짜 돈)."""
         monkeypatch.delenv("AIRBORNE_TRADER_DRY_RUN", raising=False)
         c = AirborneTraderConfig.from_env()
-        assert c.dry_run is True
+        assert c.dry_run is False
+        # venue=testnet 기본 → testnet base_url
+        assert c.venue == "testnet"
+        assert c.base_url.startswith("https://testnet.")

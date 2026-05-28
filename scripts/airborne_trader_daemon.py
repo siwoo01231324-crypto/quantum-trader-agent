@@ -59,29 +59,47 @@ async def _main_async(args: argparse.Namespace) -> int:
 
     cfg = AirborneTraderConfig.from_env()
     if args.dry_run:
-        cfg = AirborneTraderConfig(
-            api_key=cfg.api_key,
-            api_secret=cfg.api_secret,
-            daemon_container=cfg.daemon_container,
-            position_usd=cfg.position_usd,
-            leverage=cfg.leverage,
-            max_concurrent_positions=cfg.max_concurrent_positions,
-            stop_loss_pct=cfg.stop_loss_pct,
-            take_profit_pct=cfg.take_profit_pct,
-            kst_entry_hours=cfg.kst_entry_hours,
-            cooldown_after_stop_sec=cfg.cooldown_after_stop_sec,
-            daily_loss_limit_usd=cfg.daily_loss_limit_usd,
-            fire_max_age_seconds=cfg.fire_max_age_seconds,
-            state_path=cfg.state_path,
-            dry_run=True,
-            poll_interval_seconds=cfg.poll_interval_seconds,
-        )
+        import dataclasses as _dc
+        cfg = _dc.replace(cfg, dry_run=True)
 
     state = AirborneTraderState(path=cfg.state_path)
     listener = AirborneFireListener(container_name=cfg.daemon_container)
     risk = AirborneTraderRisk(cfg, state)
-    # 본 PR scope: DummyBroker. 후속 PR 에서 BinanceFuturesBroker 추가.
-    broker = DummyBroker()
+
+    # Broker 선택:
+    # - dry_run=True → DummyBroker (로그만, 발주 X)
+    # - dry_run=False → BinanceFuturesBroker (실 발주, venue 별 base_url)
+    if cfg.dry_run:
+        logger.info(
+            "[airborne_trader_daemon] DRY_RUN — DummyBroker (로그 전용)"
+        )
+        broker = DummyBroker()
+    else:
+        if not (cfg.api_key and cfg.api_secret):
+            logger.error(
+                "[airborne_trader_daemon] venue=%s, dry_run=False 인데 API key/"
+                "secret 누락. env 확인 (testnet=BINANCE_DEMO_API_KEY/"
+                "BINANCE_DEMO__SECRET_API_KEY, mainnet=BINANCE_API_KEY/"
+                "BINANCE_SECRET_KEY).", cfg.venue,
+            )
+            return 2
+        from src.brokers.async_rate_limiter import AsyncBinanceRateLimiter
+        from src.brokers.binance.async_http import AsyncBinanceFuturesClient
+        from src.live.airborne_trader.brokers import BinanceFuturesBroker
+
+        rate_limiter = AsyncBinanceRateLimiter()
+        client = AsyncBinanceFuturesClient(
+            api_key=cfg.api_key,
+            secret=cfg.api_secret,
+            base_url=cfg.base_url,
+            rate_limiter=rate_limiter,
+        )
+        logger.info(
+            "[airborne_trader_daemon] LIVE — BinanceFuturesBroker venue=%s "
+            "base_url=%s (testnet=가짜 돈)",
+            cfg.venue, cfg.base_url,
+        )
+        broker = BinanceFuturesBroker(client)
 
     trader = AirborneTrader(
         config=cfg, state=state, risk=risk,
