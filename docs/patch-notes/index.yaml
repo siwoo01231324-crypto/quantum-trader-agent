@@ -15,6 +15,30 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.14"
+    date: "2026-05-28"
+    title: "Dynamic Universe Phase 2+3 — airborne TOP100 dynamic + per-strategy dispatch filter"
+    tags: [feature]
+    summary: >
+      Phase 1 (v0.6.13) 의 per-strategy interval 위에 Phase 2 + 3 완성.
+      live-airborne-bb-reversal-kst-hours 의 universe = daemon 과 동일 top-100
+      dynamic (24h 거래량 기반, 5분 캐시). orchestrator dispatch 가
+      get_universe() 안의 symbol 만 각 전략에 전달 (legacy 전략 영향 X).
+      이로써 qta-airborne-trader 컨테이너 deprecate 가능 — 대시보드 [거래 시작]
+      버튼 한 번이면 100 종목 다 자동매매.
+    items:
+      - "src/portfolio/binance_top_dynamic.py — get_top_n_symbols(n) 공유 캐시 (5분 TTL, thread-safe single-flight). fetch 실패 시 정적 BINANCE_USDT_TOP30 fallback (graceful, 매매 안 멈춤). cache_info() / clear_cache() diagnostic."
+      - "LiveAirborneBbReversalKstHours.get_universe() = binance_top_dynamic.get_top_n_symbols(100). daemon 의 top-100 universe 와 동기."
+      - "AsyncStrategyOrchestrator.run_bar — per-strategy filter. get_universe() 선언한 전략은 그 set 의 symbol 만 dispatch. 미선언 (legacy) 면 default TOP30 받음 — byte-identical."
+      - "회귀 — cs-tsmom-crypto-daily: get_universe default TOP30 그대로 → 받는 symbol 셋 동일 → 출력 byte-identical."
+      - "qta-airborne-trader 컨테이너 deprecate 가능 — orchestrator 안에서 100 종목 다 처리. 사용자 결정: docker stop / docker-compose 정리는 별도 PR."
+      - "Tests: +14 new (top_dynamic 7 + dispatch filter 3 + mixin/airborne universe 2 + 기존 regression). 총 75 portfolio + orchestrator tests pass."
+    refs:
+      - "src/portfolio/binance_top_dynamic.py"
+      - "src/portfolio/_async_orchestrator.py — run_bar dispatch filter"
+      - "src/backtest/strategies/live_airborne_bb_reversal_kst_hours.py"
+      - "docs/specs/dynamic-universe-architecture.md — Phase 2/3 완료 표기"
+
   - version: "v0.6.13"
     date: "2026-05-28"
     title: "Dynamic Universe Architecture Phase 1 — 전략별 interval 선언으로 1h/1d 분리 fetch"
