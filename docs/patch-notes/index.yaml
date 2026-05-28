@@ -15,6 +15,30 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.13"
+    date: "2026-05-28"
+    title: "Dynamic Universe Architecture Phase 1 — 전략별 interval 선언으로 1h/1d 분리 fetch"
+    tags: [feature, safety]
+    summary: >
+      기존 hardcoded `fetch_universe_klines(TOP30, interval="1d")` 가
+      모든 live-scanner 를 1d 봉 한정으로 묶어 live-airborne-bb-reversal-
+      kst-hours (1h 가정) 가 사실상 무용지물이던 문제 해결. 전략별
+      get_universe / get_interval classmethod 선언 → live_run 이 union
+      per-interval 로 fetch. cs-tsmom 등 기존 전략은 default (TOP30/1d) 유지
+      → byte-identical 회귀 X.
+    items:
+      - "LiveScannerMixin.get_universe() / get_interval() classmethod 추가. default = BINANCE_USDT_TOP30 / '1d'. 기존 전략 모두 default 상속 → 동작 byte-identical."
+      - "LiveAirborneBbReversalKstHours.get_interval() = '1h' override. 이제 1h 봉 받음 → MIN_HISTORY 미달 hold 사고 해소."
+      - "scripts/live_run.py _binance_provider — orchestrator._strategies 순회 → per-interval union → fetch_universe_klines(symbols, interval=...). 같은 symbol 다중 interval 일 시 알파벳순 first-wins (1d 우선 → cs-tsmom 회귀 X). orchestrator 미주입 (legacy) 시 TOP30/1d fallback."
+      - "args._orchestrator 주입 — dashboard pre-build + live_run on_orchestrator_ready 두 경로 모두 (state.orchestrator setter 직후 추가 1줄)."
+      - "회귀 안전성 — Phase 1 은 universe 확장 X (TOP30 유지), interval 분리만. Phase 2 에서 airborne TOP100 dynamic 확장 예정."
+      - "docs/specs/dynamic-universe-architecture.md — Phase 1/2/3 단계 정의 + 회귀 위험 mitigation."
+      - "Tests: +5 new (mixin default + airborne override). 총 47 backtest tests pass (kst-hours 20 + kst-morning 21 + mixin 5 + 기존 1)."
+    refs:
+      - "docs/specs/dynamic-universe-architecture.md"
+      - "src/backtest/strategies/_live_scanner_helpers.py"
+      - "scripts/live_run.py — _build_universe_quote_provider"
+
   - version: "v0.6.12"
     date: "2026-05-28"
     title: "airborne-trader 데모 트레이딩 자동 가동 (Binance Futures Testnet, dry_run 해제)"

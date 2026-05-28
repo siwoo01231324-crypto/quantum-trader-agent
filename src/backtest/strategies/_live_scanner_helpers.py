@@ -54,6 +54,27 @@ class LiveScannerMixin:
     stop_loss_pct: ClassVar[float] = 0.03
     take_profit_pct: ClassVar[float] = 0.06
     trailing_stop_pct: ClassVar[float | None] = None
+
+    # ── Dynamic Universe Architecture (2026-05-28, Phase 1) ───────────────
+    # 전략별 universe + interval 선언. 기본값은 BINANCE_USDT_TOP30 + "1d"
+    # (기존 hardcoded 동작과 byte-identical). 동적 universe 가 필요한 전략은
+    # subclass 에서 override.
+    @classmethod
+    def get_universe(cls) -> list[str]:
+        """전략이 fetch 받고 싶은 symbol 목록. 기본 — BINANCE_USDT_TOP30.
+
+        live_run 이 매 bar 마다 active 전략들에서 호출 후 union 으로 fetch.
+        """
+        from src.portfolio.binance_universe import BINANCE_USDT_TOP30
+        return list(BINANCE_USDT_TOP30)
+
+    @classmethod
+    def get_interval(cls) -> str:
+        """전략이 받고 싶은 봉 interval — "1d" / "1h" / "15m" 등.
+
+        기본 "1d" — 기존 fetch_universe_klines 의 default 와 동일.
+        """
+        return "1d"
     # 2026-05-21: stop/TP 청산 직후 같은 (sid, symbol) 재진입 차단 시간 (초).
     # Default 0.0 = 차단 없음 (기존 동작 보존). 0 보다 크면 orchestrator 가
     # `release_live_position()` 호출 시점에 monotonic 타임스탬프를 기록하고,
