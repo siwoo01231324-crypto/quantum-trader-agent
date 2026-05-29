@@ -15,6 +15,30 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.15"
+    date: "2026-05-29"
+    title: "Dynamic Universe 회귀 fix — args._orchestrator NameError 가 silent kill 한 100종목 dispatch 복구"
+    tags: [fix, safety]
+    summary: >
+      v0.6.13 / v0.6.14 (#336, #337) Dynamic Universe 통합 후 100 종목/1h
+      airborne dispatch 가 14시간 거래 0건. 원인: scripts/live_run.py 의 세
+      callsite (`_serve`, `_run_pipeline_attached._on_orchestrator_ready`,
+      `_run_pipeline._on_orchestrator_ready`) 모두 enclosing scope 에 존재
+      하지 않는 `args` 를 참조 — `args._orchestrator = orch` 가 매번
+      NameError → universe quote provider 가 TOP30 × 1d 폴백 (airborne 은
+      1h 가 필요해 시그널 0). 2026-05-28 daemon 은 fires 139건 정상,
+      자동 매매는 0건이던 사용자 보고로 식별.
+    items:
+      - "_run_pipeline_attached / _run_pipeline 둘 다 `args` keyword param 추가 (default None) — _factory / main() 이 자기 Namespace 를 명시 전달."
+      - "두 _on_orchestrator_ready 의 `args._orchestrator = orch` 를 `if args is not None:` 로 가드 — 누락 호출 시 silent NameError 재발 차단."
+      - "_run_dashboard_only_mode 내부 `args._orchestrator = state.orchestrator` 라인 제거 — 처음부터 NameError 로 silent skip 됐던 데드코드. universe provider 는 거래 시작 후 _factory 가 만든 args 로만 lookup."
+      - "tests/scripts/test_live_run_args_orchestrator_regression.py 신규 5건 — 시그너처 가드 + behavior 검증 (mock orchestrator 주입 시 fetch_universe_klines 가 1h/strategy.get_universe() 받는지)."
+      - "운영 영향: dashboard '거래 시작' 또는 qta.exe --symbols ... 재시작 시 dynamic universe 가 정상 작동. 기존 가동 중인 프로세스는 재시작 필요."
+    refs:
+      - "scripts/live_run.py — _run_pipeline_attached, _run_pipeline, _run_dashboard_only_mode"
+      - "tests/scripts/test_live_run_args_orchestrator_regression.py"
+      - "docs/journal_data/2026-05-28.json — auto_fills:0 / airborne_fires:139 incident"
+
   - version: "v0.6.14"
     date: "2026-05-28"
     title: "Dynamic Universe Phase 2+3 — airborne TOP100 dynamic + per-strategy dispatch filter"
