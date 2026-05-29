@@ -351,9 +351,13 @@ def _run_dashboard_only_mode(port: int = 8000) -> int:
                 on_metalabeler_missing="skip",
             )
             # Dynamic Universe Architecture Phase 1 (2026-05-28) —
-            # _build_universe_quote_provider 가 args._orchestrator 에서
-            # active 전략들의 get_universe / get_interval 수집.
-            args._orchestrator = state.orchestrator
+            # universe quote provider 는 state.orchestrator 를 lookup. _factory
+            # 가 거래 시작 시 별도 Namespace 를 만들고 _on_orchestrator_ready 에서
+            # `<ns>._orchestrator` 를 따로 set 하므로 standalone pre-build 경로
+            # 에서는 별도 attach 불필요 (universe provider 도 거래 시작 후에만
+            # 호출됨). 과거 한 줄짜리 attach 시도는 이 함수에 그 Namespace 가
+            # 존재하지 않아 NameError → try/except 로 silent skipped 되던
+            # 데드코드였음 (PR #336/#337 회귀). 제거.
             print(
                 f"[qta] dashboard orch attached "
                 f"({len(state.orchestrator.strategies)} strategies — toggles actionable)"
@@ -874,7 +878,7 @@ def _start_dashboard(state, port: int, logger):
 async def _run_pipeline_attached(
     state, config, kis_adapter, logger, duration_sec: float,
     *, binance_adapter=None, position_store=None, pnl_aggregator=None,
-    ops_counters=None,
+    ops_counters=None, args=None,
 ) -> None:
     """이미 떠있는 dashboard 에 attach — 거래만 시작 (#182 단계 2).
 
@@ -1011,7 +1015,12 @@ async def _run_pipeline_attached(
         setattr(state, "orchestrator", orch)
         # Dynamic Universe Architecture Phase 1 (2026-05-28) —
         # _build_universe_quote_provider 가 args._orchestrator lookup.
-        args._orchestrator = orch
+        # args 는 _factory 가 명시 keyword 로 넘긴 Namespace — caller 가
+        # 안 넘기면 (legacy CLI 직접 호출) skip. 과거엔 args 가 enclosing scope
+        # 에 없어 매번 NameError silent skip → universe provider 가 항상 TOP30
+        # × 1d 폴백 → airborne(1h, 100종목) 전략 무용지물. PR #336/#337 회귀.
+        if args is not None:
+            args._orchestrator = orch
         # 2026-05-20: re-entry bug fix — _live_entered 가 부팅 시 비어있어
         # 재시작 = 보유 종목 추가 매수 폭주. 이미 replay 된 store 의
         # positions 로 _live_entered 복원 → 부팅 후 첫 tick 에 보유 종목 진입 차단.
@@ -1181,6 +1190,7 @@ def _build_pipeline_factory(
             binance_adapter=binance_adapter,
             position_store=position_store, pnl_aggregator=pnl_aggregator,
             ops_counters=ops_counters,
+            args=args,
         )
 
     return _factory
@@ -1302,7 +1312,7 @@ async def _run_smoke_dual(
 
 async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
                        duration_sec: float, auto_open_browser: bool = True,
-                       *, binance_adapter=None):
+                       *, binance_adapter=None, args=None):
     from dataclasses import asdict
     from src.dashboard.app import DashboardState
     from src.dashboard.ops_counters import OpsCounters
@@ -1408,7 +1418,10 @@ async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
         setattr(dashboard_state, "orchestrator", orch)
         # Dynamic Universe Architecture Phase 1 (2026-05-28) —
         # _build_universe_quote_provider 가 args._orchestrator lookup.
-        args._orchestrator = orch
+        # main() 에서 keyword 로 명시 전달된 args 로 박는다. 과거엔 args 가
+        # enclosing scope 에 없어 NameError 로 silent skip 됐었음 (PR #336/#337 회귀).
+        if args is not None:
+            args._orchestrator = orch
         # 2026-05-20: re-entry bug fix — _live_entered 가 부팅 시 비어있어
         # 재시작 = 보유 종목 추가 매수 폭주. 이미 replay 된 store 의
         # positions 로 _live_entered 복원 → 부팅 후 첫 tick 에 보유 종목 진입 차단.
@@ -1555,6 +1568,7 @@ def main(argv: list[str] | None = None) -> int:
                 config, kis_adapter, args.dashboard_port, logger, duration_sec,
                 auto_open_browser=not args.no_browser,
                 binance_adapter=binance_adapter,
+                args=args,
             )
         )
     except KeyboardInterrupt:
