@@ -6,16 +6,42 @@ paradigm: live-scanner
 owner: siwoo
 status: candidate
 created: 2026-06-01
-instruments: [crypto-perp-USDT]
+last_updated: 2026-06-02
+instruments: [BINANCE_USDT_PERP_UNIVERSE]
 timeframe: 1h
 stop_loss_pct: 0.03
 take_profit_pct: 0.06
+backtest_period: "2021-01-01/2025-12-31"
+mdd_bt: null
+sharpe_bt: null
+annual_return_bt: null
+uses_signals:
+- bollinger
+- airborne_bb_reversal
+risk_rules:
+- short-only
+- symbol-whitelist
+- per-symbol-stop-loss-3pct
+- per-symbol-take-profit-6pct
+- kst-19-hour-entry-gate
+summary_ko: >
+  Airborne BB-reversal 시그널의 SHORT 방향만 + 21종 동적 whitelist 운영하는
+  신규 후보 전략. 147종 per-symbol 분해 + Hard OOS (train 2021-2023 / test
+  2024-2025) 로 검증한 Test PF=1.214, sumR +1,395%, 5.45 trades/day. Legacy
+  KST {8,11,16,22} 게이트는 알파 92% 손실시켜 train_PF>1 인 19시간 게이트로
+  대체. 21종 whitelist 는 weekly cron + 지속성 규칙 + 사람 review 로 drift
+  대응. 기존 airborne_trader 코드 0줄 수정 — composition 으로 risk gate 추가.
+  status candidate, testnet 4주 paper trading 후 활성화 결정.
 tags:
+- live-scanner
 - airborne
 - short-only
 - whitelist
 - bollinger
 - mean-reversion
+- pine-v1.2
+- pattern:live-scanner
+- candidate
 ---
 
 # Live Airborne SHORT-only Whitelist v1
