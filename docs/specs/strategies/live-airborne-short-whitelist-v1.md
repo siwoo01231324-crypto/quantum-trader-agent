@@ -132,7 +132,7 @@ state:
 - `active → warning`: 1주 rolling PF < 0.95
 - `warning → removed`: 추가 1주 PF < 0.95 (즉 2주 연속) **또는** 1주 PF < 0.85
 - `warning → active`: 1주 PF >= 1.0 회복
-- 매주 refresh 후 daemon 재시작 시 `status == "active"` 인 종목만 발주 universe.
+- 매주 refresh 후 orchestrator 다음 cycle 부터 자동 반영 (`get_universe()` 가 매 dispatch 마다 yaml 재로드). daemon 재시작 불필요.
 
 ### 레이어 3: 운영 안전망
 
@@ -142,55 +142,46 @@ state:
 
 ## 진입 / 청산 로직
 
-### 진입 (코드: `src/live/airborne_short_whitelist/risk.py`)
+### 운영 아키텍처 (orchestrator dispatch)
 
-기존 `AirborneTraderRisk.evaluate()` 의 모든 게이트 + 다음 2가지 새 게이트:
+본 전략은 **별도 daemon 프로세스 없이** `AsyncStrategyOrchestrator` 가 매 봉마다 `on_bar(ctx)` 를 호출하는 표준 live-scanner 패턴을 따른다. 대시보드 "거래 시작" 버튼만 누르면 자동 가동.
 
 ```
-Gate -2: side filter
-  fire.side != "short" → REJECT  reason="not_short"
-
-Gate -1: whitelist filter
-  fire.symbol not in active_whitelist → REJECT  reason="not_whitelisted"
+qta.exe (또는 dashboard)
+   └─ AsyncStrategyOrchestrator.run_bar
+        └─ for sym in strategy.get_universe():   # ← whitelist active 종목만
+             └─ on_bar(ctx={market_snapshot: history, ...})
+                  ├─ KST 19시간 게이트 → 미통과 hold
+                  ├─ evaluate_short_fire_v11 (retrace_ratio=0.6, atr_body_mult=0.3)
+                  └─ 발화 시 Signal(action="sell", reason="airborne_short_wl_fire:...")
+        └─ LivePositionRiskManager 가 stop=3% / TP=6% 청산 자동 처리
 ```
 
-이후 기존 게이트 (kill switch, KST hour, stale fire, max concurrent, etc.) 그대로 통과.
+`scripts/airborne_alert_daemon.py` (Telegram 알림) 은 본 전략과 무관 — 24시간 그대로 발화.
 
-### 청산
+### 게이트 평가 순서
 
-- `stop_loss_pct=0.03` (3%), `take_profit_pct=0.06` (6%, R/R 1:2)
-- SHORT 의 stop = `entry × 1.03` (가격 상승 시 손절)
-- SHORT 의 TP = `entry × 0.94` (가격 하락 시 익절)
-- 청산 polling: 30초마다 mark price 비교 (기존 `airborne_trader.monitor_positions` 재사용)
+1. **Universe 필터** (`get_universe()` 단계): `config/airborne_short_whitelist.yaml` 의 `status == "active"` 인 종목만 orchestrator dispatch 대상. 나머지는 호출 자체 안 됨.
+2. **Warmup** (BB_WINDOW + ATR_PERIOD 미충족): hold
+3. **KST 19시간 게이트**: `hour ∉ {0,1,2,3,5,9,10,11,12,14,15,16,17,18,19,20,21,22,23}` → hold
+4. **SHORT setup 평가**: `evaluate_short_fire_v11` (LONG 평가 자체 안 함 — beneficial side effect of code path)
+5. **Fire**: `Signal(action="sell", size=0.05, ...)` → orchestrator → `OrderIntent(reduce_only=False, ...)` ← `shorts_allowed=True`
+6. **청산**: `LivePositionRiskManager` 가 mark price 기반 stop/TP 자동 청산
+
+LONG fire 는 `on_bar` 가 evaluate_long_fire_v11 을 호출조차 안 해서 자연 차단. SHORT-only 보장.
 
 ## 운영 파라미터 (production.yaml)
 
 ```yaml
-strategies:
-  live-airborne-short-whitelist-v1:
-    enabled: false   # 초기 candidate — testnet 검증 후 true
-    paradigm: live-scanner
-    venue: binance_futures
-    side_filter: short
-    whitelist_config: config/airborne_short_whitelist.yaml
-    entry:
-      retrace_ratio: 0.6
-      bb_window: 20
-      bb_std: 2.0
-      min_close_margin: 0.001
-      atr_body_mult: 0.3
-    exit:
-      stop_loss_pct: 0.03
-      take_profit_pct: 0.06
-    risk:
-      position_usd: 200
-      leverage: 10
-      max_concurrent: 8
-      daily_loss_limit_usd: -200
-      cooldown_after_stop_sec: 900
-      # legacy {8,11,16,22} 가 알파 92% 손실 확인됨. yaml 의 kst_entry_hours
-      # 가 override (daemon 이 dataclasses.replace 로 swap)
-      kst_entry_hours: [0, 1, 2, 3, 5, 9, 10, 11, 12, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
+- id: live-airborne-short-whitelist-v1
+  class: backtest.strategies.live_airborne_short_whitelist_v1.LiveAirborneShortWhitelistV1
+  kwargs:
+    default_size: 0.05         # kst-hours 와 동일 비중 (200$ @ 4000$ seed)
+    stop_loss_pct: 0.03        # -3% price
+    take_profit_pct: 0.06      # +6% (R/R 1:2)
+    retrace_ratio: 0.6         # Hard OOS 검증 (부모 default 0.4)
+    atr_body_mult: 0.3         # Hard OOS 검증 (부모 default 0.6)
+    cooldown_after_stop_sec: 900  # stop 후 동일 (sid, symbol) 15분 재진입 차단
 ```
 
 ## 리스크 연동
@@ -204,17 +195,27 @@ strategies:
 
 ## PR 체크리스트
 
-- [ ] `docs/specs/strategies/live-airborne-short-whitelist-v1.md` (이 파일)
-- [ ] `config/airborne_short_whitelist.yaml` 초기 21종 + state
-- [ ] `src/live/airborne_short_whitelist/` 모듈
-  - [ ] `whitelist_loader.py` (yaml + validation)
-  - [ ] `risk.py` (`AirborneShortWhitelistRisk(AirborneTraderRisk)`)
-- [ ] `scripts/airborne_short_whitelist_daemon.py` (entry point)
-- [ ] `scripts/refresh_airborne_short_whitelist.py` (weekly cron)
-- [ ] `tests/live/airborne_short_whitelist/test_risk.py`
-- [ ] `tests/live/airborne_short_whitelist/test_whitelist_loader.py`
-- [ ] `docs/patch-notes/index.yaml` v0.6.16 entry
-- [ ] `scripts/check_strategy_completeness.py` 통과
+### 완료 (PR #341 + #343 머지)
+- [x] `docs/specs/strategies/live-airborne-short-whitelist-v1.md`
+- [x] `config/airborne_short_whitelist.yaml` 초기 21종 + state + kst_entry_hours
+- [x] `src/live/airborne_short_whitelist/whitelist_loader.py` (yaml + validation)
+- [x] `scripts/refresh_airborne_short_whitelist.py` (weekly cron)
+- [x] `tests/live/airborne_short_whitelist/test_whitelist_loader.py`
+- [x] `scripts/airborne_short_whitelist_hour_sweep.py` + 결과 JSON
+- [x] `docs/patch-notes/index.yaml` v0.6.17
+
+### 본 PR (orchestrator dispatch 전환)
+- [x] `src/signals/airborne_bb_reversal.py` — `retrace_ratio` kwarg 추가 (backward-compat)
+- [x] `src/backtest/strategies/live_airborne_short_whitelist_v1.py` — 실 live-scanner (parent: `LiveAirborneBbReversalKstHours`)
+- [x] `tests/backtest/test_live_airborne_short_whitelist_v1.py` — 24 tests
+- [x] `configs/orchestrator/production.yaml` — entry 등록 (testnet 활성)
+- [x] `scripts/check_strategy_completeness.py` 통과
+
+### Deprecated (다음 PR 에 정리)
+- `src/live/airborne_short_whitelist/risk.py` (daemon-only risk gate, orchestrator 패턴으로 대체됨)
+- `scripts/airborne_short_whitelist_daemon.py` (daemon entry, orchestrator 가 대신)
+- `tests/live/airborne_short_whitelist/test_risk.py` (risk gate test)
+→ 본 PR 에서는 *유지* (refresh 스크립트의 의존). 별도 cleanup PR.
 
 ## 외부 참조
 

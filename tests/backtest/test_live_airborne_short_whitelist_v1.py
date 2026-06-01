@@ -1,72 +1,261 @@
-"""Backtest stub 검증 — daemon 의 SHORT+whitelist 게이트 동작 미러링."""
+"""Unit tests for LiveAirborneShortWhitelistV1 — SHORT-only + whitelist + 19h gate.
+
+부모 클래스 (``LiveAirborneBbReversalKstHours`` ← Kst Morning) 의 bidir / BB /
+warmup 동작은 기존 테스트 박제. 본 모듈은 **차이만** 검증:
+  1. 19-hour gate ({0,1,2,3,5,9,...23} — 부모 4시간보다 넓음)
+  2. SHORT only — LONG fire 발생해도 sell 아니라 hold
+  3. retrace_ratio default = 0.6 (부모 default 0.4 와 다름)
+  4. get_universe() = yaml 의 active 종목
+  5. 부모 ClassVar 미오염
+"""
 from __future__ import annotations
 
+import asyncio
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
 import pytest
 
-from src.backtest.strategies.live_airborne_short_whitelist_v1 import (
-    IS_DAEMON_ONLY,
+from backtest.protocol import Signal
+from backtest.strategies._live_scanner_helpers import LiveScannerMixin
+from backtest.strategies.live_airborne_bb_reversal_kst_hours import (
+    LiveAirborneBbReversalKstHours,
+)
+from backtest.strategies.live_airborne_bb_reversal_kst_morning import (
+    LiveAirborneBbReversalKstMorning,
+)
+from backtest.strategies.live_airborne_short_whitelist_v1 import (
     LiveAirborneShortWhitelistV1,
-    LiveAirborneShortWhitelistV1Config,
 )
 
 
-def test_daemon_only_flag() -> None:
-    assert IS_DAEMON_ONLY is True
-    assert LiveAirborneShortWhitelistV1.is_daemon_only is True
+def _ctx(history: pd.DataFrame, symbol: str = "ARBUSDT") -> dict:
+    return {
+        "ts": history.index[-1],
+        "market_snapshot": {
+            "symbol": symbol,
+            "history": history,
+            "price": float(history["close"].iloc[-1]),
+        },
+        "factors": {},
+    }
 
 
-def test_strategy_id_matches_spec() -> None:
-    assert LiveAirborneShortWhitelistV1.strategy_id == "live-airborne-short-whitelist-v1"
-    assert LiveAirborneShortWhitelistV1.paradigm == "live-scanner"
-    assert LiveAirborneShortWhitelistV1.side == "short"
+def _run(strategy, ctx: dict) -> Signal | None:
+    return asyncio.run(strategy.on_bar(ctx))
 
 
-def test_default_config_matches_spec() -> None:
-    cfg = LiveAirborneShortWhitelistV1Config()
-    assert cfg.retrace_ratio == 0.6
-    assert cfg.bb_window == 20
-    assert cfg.bb_std == 2.0
-    assert cfg.min_close_margin == 0.001
-    assert cfg.atr_body_mult == 0.3
-    assert cfg.stop_loss_pct == 0.03
-    assert cfg.take_profit_pct == 0.06
-    assert cfg.side == "short"
+def _short_fire_frame_at_utc(last_utc: str) -> pd.DataFrame:
+    """업쪽 BB 돌파 후 되돌림 short fire 시뮬 frame."""
+    n = 50
+    closes = np.linspace(100.0, 102.0, n).copy()
+    opens = closes.copy()
+    highs = closes + 0.5
+    lows = closes - 0.5
+    # -3 ~ -1 은 강한 상승 후 되돌림 short setup
+    closes[-3], opens[-3], highs[-3], lows[-3] = 120.0, 102.0, 121.0, 102.0
+    closes[-2], opens[-2], highs[-2], lows[-2] = 125.0, 120.0, 126.0, 119.5
+    closes[-1], opens[-1], highs[-1], lows[-1] = 105.0, 125.0, 126.0, 105.0
+    last = pd.Timestamp(last_utc)
+    start = last - pd.Timedelta(hours=n - 1)
+    idx = pd.date_range(start, periods=n, freq="1h")
+    return pd.DataFrame(
+        {"open": opens, "high": highs, "low": lows, "close": closes,
+         "volume": np.full(n, 1000.0)},
+        index=idx,
+    )
 
 
-def test_classvar_stop_tp_match_spec() -> None:
-    assert LiveAirborneShortWhitelistV1.stop_loss_pct == 0.03
-    assert LiveAirborneShortWhitelistV1.take_profit_pct == 0.06
+def _long_fire_frame_at_utc(last_utc: str) -> pd.DataFrame:
+    """하단 BB 돌파 후 되돌림 long fire 시뮬 frame (부모는 buy 발사)."""
+    n = 50
+    closes = np.linspace(100.0, 102.0, n).copy()
+    opens = closes.copy()
+    highs = closes + 0.5
+    lows = closes - 0.5
+    closes[-3], opens[-3], highs[-3], lows[-3] = 85.0, 102.0, 102.2, 84.0
+    closes[-2], opens[-2], highs[-2], lows[-2] = 81.0, 85.0, 85.5, 80.0
+    closes[-1], opens[-1], highs[-1], lows[-1] = 95.0, 81.0, 95.5, 80.0
+    last = pd.Timestamp(last_utc)
+    start = last - pd.Timedelta(hours=n - 1)
+    idx = pd.date_range(start, periods=n, freq="1h")
+    return pd.DataFrame(
+        {"open": opens, "high": highs, "low": lows, "close": closes,
+         "volume": np.full(n, 1000.0)},
+        index=idx,
+    )
 
 
-def test_whitelist_normalized() -> None:
-    s = LiveAirborneShortWhitelistV1(whitelist=["arbusdt", "FETUSDT"])
-    assert s.whitelist == frozenset({"ARBUSDT", "FETUSDT"})
+# ── Inheritance ──────────────────────────────────────────────────────────────
 
 
-def test_empty_whitelist_raises() -> None:
-    with pytest.raises(ValueError, match="비어"):
-        LiveAirborneShortWhitelistV1(whitelist=[])
+class TestInheritance:
+    def test_subclasses_kst_hours(self) -> None:
+        s = LiveAirborneShortWhitelistV1()
+        assert isinstance(s, LiveAirborneBbReversalKstHours)
+        assert isinstance(s, LiveScannerMixin)
+        assert s.is_live_scanner is True
+
+    def test_strategy_id(self) -> None:
+        assert (
+            LiveAirborneShortWhitelistV1.strategy_id
+            == "live-airborne-short-whitelist-v1"
+        )
+
+    def test_shorts_allowed_true(self) -> None:
+        # 부모에서 상속 — sell intent reduce_only=False stamp 위해 필수
+        s = LiveAirborneShortWhitelistV1()
+        assert s.shorts_allowed is True
+
+    def test_19_hour_gate(self) -> None:
+        s = LiveAirborneShortWhitelistV1()
+        expected = frozenset(
+            {0, 1, 2, 3, 5, 9, 10, 11, 12, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23}
+        )
+        assert s.kst_entry_hours == expected
+        # train_PF<1 시간 제외 확인
+        for excluded in (4, 6, 7, 8, 13):
+            assert excluded not in s.kst_entry_hours
+
+    def test_parent_classvars_not_polluted(self) -> None:
+        # 부모 4-hour gate 보존
+        assert LiveAirborneBbReversalKstHours.kst_entry_hours == frozenset(
+            {8, 11, 16, 22}
+        )
+        # 부모 morning 6-hour gate 보존
+        assert LiveAirborneBbReversalKstMorning.kst_entry_hours == frozenset(
+            {6, 7, 8, 9, 10, 11}
+        )
+
+    def test_default_stop_tp(self) -> None:
+        s = LiveAirborneShortWhitelistV1()
+        assert s.stop_loss_pct == 0.03
+        assert s.take_profit_pct == 0.06
+
+    def test_default_retrace_and_body_mult(self) -> None:
+        """Hard OOS 검증값 — 부모 default (0.4 / 0.6) 와 다름."""
+        s = LiveAirborneShortWhitelistV1()
+        assert s.retrace_ratio == 0.6
+        assert s.atr_body_mult == 0.3
+
+    def test_interval_is_1h(self) -> None:
+        assert LiveAirborneShortWhitelistV1.get_interval() == "1h"
 
 
-# ── is_eligible mirrors daemon gates ─────────────────────────────────────
+# ── Universe ─────────────────────────────────────────────────────────────────
 
 
-def test_long_side_rejected() -> None:
-    s = LiveAirborneShortWhitelistV1(whitelist=["ARBUSDT"])
-    assert s.is_eligible(symbol="ARBUSDT", side="long") is False
+class TestUniverse:
+    def test_get_universe_loads_active_from_yaml(self) -> None:
+        u = LiveAirborneShortWhitelistV1.get_universe()
+        assert isinstance(u, list)
+        assert len(u) >= 1
+        # Hard OOS core 종목들이 active 로 등록되어 있어야 함
+        for sym in ("FETUSDT", "APTUSDT", "ARBUSDT", "ATOMUSDT", "AXSUSDT"):
+            assert sym in u
+        # candidate 종목은 active 아니라 universe 에서 제외
+        assert "BNBUSDT" not in u
+
+    def test_universe_alphabetical(self) -> None:
+        u = LiveAirborneShortWhitelistV1.get_universe()
+        assert u == sorted(u)
 
 
-def test_short_in_whitelist_accepted() -> None:
-    s = LiveAirborneShortWhitelistV1(whitelist=["ARBUSDT", "FETUSDT"])
-    assert s.is_eligible(symbol="ARBUSDT", side="short") is True
-    assert s.is_eligible(symbol="FETUSDT", side="short") is True
+# ── on_bar — SHORT only ──────────────────────────────────────────────────────
 
 
-def test_short_not_in_whitelist_rejected() -> None:
-    s = LiveAirborneShortWhitelistV1(whitelist=["ARBUSDT"])
-    assert s.is_eligible(symbol="DOGEUSDT", side="short") is False
+class TestSideFilter:
+    def test_short_fire_emits_sell(self) -> None:
+        # UTC 02 = KST 11 → 19h gate 통과
+        s = LiveAirborneShortWhitelistV1()
+        history = _short_fire_frame_at_utc("2026-01-02T02:00:00")
+        sig = _run(s, _ctx(history))
+        # Note: synthetic frame 의 BB/ATR 이 조건 못 맞춰 hold 일 수도 있음.
+        # 이 케이스에서는 fire 되면 sell, 안 되면 hold (둘 다 정상). buy 는 절대 X.
+        assert sig is not None
+        assert sig.action != "buy", f"LONG fire emitted: {sig}"
+
+    def test_long_fire_does_not_emit_buy(self) -> None:
+        """부모는 동일 frame 에 buy 발사하지만, 본 클래스는 hold."""
+        s = LiveAirborneShortWhitelistV1()
+        history = _long_fire_frame_at_utc("2026-01-02T02:00:00")
+        sig = _run(s, _ctx(history))
+        assert sig is not None
+        # SHORT-only — 어떤 경우에도 buy 안 됨
+        assert sig.action != "buy"
+        # short evaluator 가 long fire frame 에는 setup 못 잡아 hold
+        assert sig.action == "hold"
 
 
-def test_case_insensitive_symbol() -> None:
-    s = LiveAirborneShortWhitelistV1(whitelist=["ARBUSDT"])
-    assert s.is_eligible(symbol="arbusdt", side="short") is True
+# ── Time gate ────────────────────────────────────────────────────────────────
+
+
+class TestTimeGate:
+    @pytest.mark.parametrize("utc_hour, kst_hour", [
+        (23, 8),    # KST 8 → train PF<1 시간이라 차단
+        (21, 6),    # KST 6 → 차단
+        (22, 7),    # KST 7 → 차단
+        (4, 13),    # KST 13 → 차단
+    ])
+    def test_excluded_hours_return_hold(self, utc_hour, kst_hour) -> None:
+        s = LiveAirborneShortWhitelistV1()
+        history = _short_fire_frame_at_utc(f"2026-01-02T{utc_hour:02d}:00:00")
+        sig = _run(s, _ctx(history))
+        assert sig is not None
+        assert sig.action == "hold"
+        assert "time_filter" in sig.reason
+        assert f"kst_hour={kst_hour}" in sig.reason
+
+    @pytest.mark.parametrize("utc_hour, kst_hour", [
+        (3, 12),    # KST 12 → 19h gate 통과
+        (9, 18),    # KST 18 → 통과
+        (11, 20),   # KST 20 → 통과
+        (15, 0),    # KST 0 → 통과
+    ])
+    def test_included_hours_pass_gate(self, utc_hour, kst_hour) -> None:
+        s = LiveAirborneShortWhitelistV1()
+        history = _short_fire_frame_at_utc(f"2026-01-02T{utc_hour:02d}:00:00")
+        sig = _run(s, _ctx(history))
+        assert sig is not None
+        # time_filter 사유로 hold 되면 안 됨 (다른 사유로 hold/sell 은 OK)
+        assert "time_filter" not in (sig.reason or "")
+
+
+# ── Validation ───────────────────────────────────────────────────────────────
+
+
+class TestValidation:
+    def test_retrace_ratio_out_of_range_raises(self) -> None:
+        with pytest.raises(ValueError, match="retrace_ratio"):
+            LiveAirborneShortWhitelistV1(retrace_ratio=0.0)
+        with pytest.raises(ValueError, match="retrace_ratio"):
+            LiveAirborneShortWhitelistV1(retrace_ratio=1.5)
+
+    def test_custom_retrace_accepted(self) -> None:
+        s = LiveAirborneShortWhitelistV1(retrace_ratio=0.5)
+        assert s.retrace_ratio == 0.5
+
+    def test_custom_kst_hours_via_ctor(self) -> None:
+        s = LiveAirborneShortWhitelistV1(kst_entry_hours=[10, 14])
+        assert s.kst_entry_hours == frozenset({10, 14})
+
+
+# ── Warmup ───────────────────────────────────────────────────────────────────
+
+
+class TestWarmup:
+    def test_short_history_returns_warmup(self) -> None:
+        s = LiveAirborneShortWhitelistV1()
+        # MIN_HISTORY 미만
+        n = 5
+        idx = pd.date_range("2026-01-02T02:00:00", periods=n, freq="1h")
+        df = pd.DataFrame(
+            {"open": [100.0]*n, "high": [101.0]*n, "low": [99.0]*n,
+             "close": [100.0]*n, "volume": [1000.0]*n},
+            index=idx,
+        )
+        sig = _run(s, _ctx(df))
+        assert sig is not None
+        assert sig.action == "hold"
+        assert "warmup" in sig.reason

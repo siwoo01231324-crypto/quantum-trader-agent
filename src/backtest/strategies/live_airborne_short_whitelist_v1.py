@@ -1,100 +1,211 @@
-"""Backtest stub for ``live-airborne-short-whitelist-v1`` (daemon-only strategy).
+"""Live-scanner: SHORT-only airborne + 21-symbol whitelist + 19시간 게이트.
 
-**중요**: 본 전략은 **orchestrator 가 dispatch 하지 않는다**. ``airborne_short_whitelist_daemon`` 이 독립 프로세스로 실행되며, ``qta-airborne-daemon`` 의 FIRE 로그를 listener 가 받고 ``AirborneShortWhitelistRisk`` 가 SHORT + whitelist 게이트로 필터링 후 직접 발주한다.
+기존 ``LiveAirborneBbReversalKstHours`` (bidir, 4시간 게이트) 를 상속하고
+**세 가지 차이** 만 적용:
 
-본 파일은 다음 용도:
-  1. ``check_strategy_completeness.py`` 의 "code" 레이어 요구사항 충족
-  2. backtest 환경에서 SHORT-only + whitelist 필터링 로직을 **재현 검증**
-     (``simulate_daemon_replay``) — daemon 의 risk gate 동작이 backtest 데이터
-     에서도 동일함을 보장
-  3. 향후 orchestrator 가 SHORT side 를 지원하게 되면 이 파일을 정식 live-scanner
-     로 승격 가능 (현재는 LiveScannerMixin 의 buy-only 제약 때문에 분리됨)
+  1. **kst_entry_hours**: 4 → 19 시간 (Hard OOS 검증된 train_PF>1 시간)
+  2. **get_universe**: dynamic top-100 → ``config/airborne_short_whitelist.yaml``
+     의 status=active 인 종목만 (현재 15종)
+  3. **side filter**: LONG fire 는 hold 로 변환 — SHORT 만 발주
+  4. **retrace_ratio**: 0.4 → 0.6 (Hard OOS 검증값, signals 모듈의 신규 kwarg)
+  5. **atr_body_mult**: 0.6 → 0.3 (Hard OOS 검증값)
 
-운영 시 dispatch 는:
-  - ``scripts/airborne_short_whitelist_daemon.py`` (entry point)
-  - ``src/live/airborne_short_whitelist/risk.py`` (게이트)
-  - ``config/airborne_short_whitelist.yaml`` (whitelist state)
+청산·warmup·BB·ATR 로직은 부모 100% 재사용. 데몬 없이 orchestrator 안에서
+direct dispatch.
 
-spec: ``docs/specs/strategies/live-airborne-short-whitelist-v1.md``
+5y Hard OOS:
+  test PF = 1.214, sumR = +1,395%, 5.45 trades/day
+  vs legacy {8,11,16,22} 4-hour gate 게이트 te_PF=1.086 (알파 92% 손실)
+
+Spec: ``docs/specs/strategies/live-airborne-short-whitelist-v1.md``
+Whitelist: ``config/airborne_short_whitelist.yaml`` (weekly refresh)
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import ClassVar, Iterable
+from pathlib import Path
+from typing import ClassVar
 
-# Daemon-only strategy — orchestrator 가 dispatch 하지 않음.
-IS_DAEMON_ONLY: bool = True
+import pandas as pd
+
+import signals
+from backtest.protocol import Signal
+from backtest.strategies.live_airborne_bb_reversal_kst_hours import (
+    LiveAirborneBbReversalKstHours,
+)
+from signals.airborne_bb_reversal import (
+    evaluate_long_fire_v11,
+    evaluate_short_fire_v11,
+)
+
+# 19-hour gate — Hard OOS 의 train_PF>1 + n>=30 통과한 시간만.
+# 제외: {4, 6, 7, 8, 13} (train PF<1). legacy 의 {8,11,16,22} 와 다름.
+# 자세한 sweep 결과: ``scripts/airborne_short_whitelist_hour_sweep.py``.
+_KST_HOURS_19: frozenset[int] = frozenset(
+    {0, 1, 2, 3, 5, 9, 10, 11, 12, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23}
+)
+
+# Hard OOS 검증값. 부모 default 0.4 보다 깊은 되돌림 요구.
+_RETRACE_RATIO_HARD_OOS: float = 0.6
+_ATR_BODY_MULT_HARD_OOS: float = 0.3
+
+# Whitelist yaml 경로 — repo root 기준.
+_WHITELIST_YAML: Path = (
+    Path(__file__).resolve().parents[3] / "config" / "airborne_short_whitelist.yaml"
+)
+
+# 임포트 시점 (orchestrator 시작) 의 fallback universe — yaml 로드 실패 대비.
+# Hard OOS active 15종.
+_FALLBACK_UNIVERSE: tuple[str, ...] = (
+    "1000SHIBUSDT", "AAVEUSDT", "APTUSDT", "ARBUSDT", "ATOMUSDT",
+    "AXSUSDT", "DASHUSDT", "FETUSDT", "IDUSDT", "LTCUSDT",
+    "RIFUSDT", "UNIUSDT", "XLMUSDT", "XRPUSDT", "ZECUSDT",
+)
 
 
-@dataclass(frozen=True)
-class LiveAirborneShortWhitelistV1Config:
-    """Replay/backtest 용 설정 snapshot.
-
-    daemon 의 실제 진입/청산 인자와 동일. 새 값으로 운영하려면 동시에
-    ``config/airborne_short_whitelist.yaml`` 의 entry_params/exit_params 도
-    갱신 (사람 확인).
-    """
-    retrace_ratio: float = 0.6
-    bb_window: int = 20
-    bb_std: float = 2.0
-    min_close_margin: float = 0.001
-    atr_body_mult: float = 0.3
-    atr_period: int = 14
-    stop_loss_pct: float = 0.03
-    take_profit_pct: float = 0.06
-    side: str = "short"
+def _load_active_universe() -> list[str]:
+    """yaml 로드 시도 → active 종목 정렬 list. 실패 시 fallback."""
+    try:
+        from src.live.airborne_short_whitelist.whitelist_loader import (
+            active_symbols,
+            load_whitelist,
+        )
+        cfg = load_whitelist(_WHITELIST_YAML)
+        actives = sorted(active_symbols(cfg))
+        if actives:
+            return actives
+    except Exception:  # noqa: BLE001
+        pass
+    return list(_FALLBACK_UNIVERSE)
 
 
-class LiveAirborneShortWhitelistV1:
-    """Daemon strategy의 클래스 핸들.
+class LiveAirborneShortWhitelistV1(LiveAirborneBbReversalKstHours):
+    """SHORT-only airborne + 21-symbol whitelist + KST 19-hour 게이트.
 
-    실제 dispatch 는 ``AirborneTrader`` + ``AirborneShortWhitelistRisk`` 가
-    수행. 본 클래스는 spec metadata + replay helper container.
+    Hard OOS 검증 (train 2021-2023 / test 2024-2025):
+        test PF = 1.214, sumR = +1,395%, 5.45 trades/day
 
-    Backtest 호출 :::
-
-        cfg = LiveAirborneShortWhitelistV1Config()
-        s = LiveAirborneShortWhitelistV1(whitelist=["BTCUSDT", "ETHUSDT"])
-        # ``simulate_daemon_replay`` 는 별도 함수 — engine 통합 X.
+    Spec: docs/specs/strategies/live-airborne-short-whitelist-v1.md
     """
 
     strategy_id: ClassVar[str] = "live-airborne-short-whitelist-v1"
-    paradigm: ClassVar[str] = "live-scanner"
-    is_daemon_only: ClassVar[bool] = True
+
     stop_loss_pct: ClassVar[float] = 0.03
     take_profit_pct: ClassVar[float] = 0.06
-    side: ClassVar[str] = "short"
+    shorts_allowed: ClassVar[bool] = True  # 부모 True 명시 — sell intent reduce_only=False
+
+    # 19시간 게이트 — Hard OOS train_PF>1 결과
+    kst_entry_hours: ClassVar[frozenset[int]] = _KST_HOURS_19
 
     def __init__(
         self,
         *,
-        whitelist: Iterable[str],
-        config: LiveAirborneShortWhitelistV1Config | None = None,
+        default_size: float = 0.05,
+        min_close_margin: float | None = None,
+        atr_period: int | None = None,
+        atr_body_mult: float = _ATR_BODY_MULT_HARD_OOS,
+        retrace_ratio: float = _RETRACE_RATIO_HARD_OOS,
+        stop_loss_pct: float | None = None,
+        take_profit_pct: float | None = None,
+        trailing_stop_pct: float | None = None,
+        kst_entry_hours: tuple[int, ...] | list[int] | None = None,
+        cooldown_after_stop_sec: float | None = None,
     ) -> None:
-        self.whitelist = frozenset(s.upper() for s in whitelist)
-        if not self.whitelist:
-            raise ValueError("whitelist 비어 있음 — 최소 1종 필요")
-        self.config = config or LiveAirborneShortWhitelistV1Config()
+        # 부모 ctor 호출 (min_close_margin / atr_period 는 None 이면 부모 default 사용)
+        parent_kwargs: dict = {
+            "default_size": default_size,
+            "atr_body_mult": atr_body_mult,
+            "stop_loss_pct": stop_loss_pct,
+            "take_profit_pct": take_profit_pct,
+            "trailing_stop_pct": trailing_stop_pct,
+            "kst_entry_hours": kst_entry_hours,
+            "cooldown_after_stop_sec": cooldown_after_stop_sec,
+        }
+        if min_close_margin is not None:
+            parent_kwargs["min_close_margin"] = min_close_margin
+        if atr_period is not None:
+            parent_kwargs["atr_period"] = atr_period
+        super().__init__(**parent_kwargs)
 
-    def is_eligible(self, *, symbol: str, side: str) -> bool:
-        """Daemon 의 Gate -2 + Gate -1 동작 미러링.
+        if not (0 < retrace_ratio <= 1):
+            raise ValueError(
+                f"retrace_ratio in (0, 1] required, got {retrace_ratio}"
+            )
+        self.retrace_ratio = float(retrace_ratio)
 
-        Returns True iff side == "short" AND symbol in whitelist (대소문자 무시).
-        Backtest 에서 fire 필터링 정확도를 단위테스트로 검증할 때 사용.
+    @classmethod
+    def get_universe(cls) -> list[str]:
+        """yaml 의 status=active 종목만. 호출 시점에 yaml 재로드 — weekly
+        refresh 후 다음 ``get_universe()`` 호출부터 새 list 반영.
         """
-        if side != "short":
-            return False
-        return symbol.upper() in self.whitelist
+        return _load_active_universe()
 
-    def __repr__(self) -> str:
-        return (
-            f"LiveAirborneShortWhitelistV1(whitelist_n={len(self.whitelist)}, "
-            f"daemon_only=True)"
+    @classmethod
+    def get_interval(cls) -> str:
+        return "1h"
+
+    async def on_bar(self, ctx: object) -> Signal | None:
+        """부모와 동일한 구조이지만 *short fire 만* 발주.
+
+        부모의 bidir 로직을 그대로 호출하지 않고, ``evaluate_short_fire_v11``
+        만 평가해 LONG 평가 비용 절감 + 의도 명시.
+        """
+        snap = ctx["market_snapshot"]  # type: ignore[index]
+        history: pd.DataFrame | None = snap.get("history")
+        if history is None or len(history) < self.MIN_HISTORY:
+            return Signal(action="hold", size=0.0, reason="warmup")
+
+        # KST 시간 게이트 (부모와 동일 path)
+        from backtest.strategies.live_airborne_bb_reversal_kst_morning import (
+            _bar_hour_kst,
+        )
+        hour_kst = _bar_hour_kst(history)
+        if hour_kst is not None and hour_kst not in self.kst_entry_hours:
+            return Signal(
+                action="hold", size=0.0,
+                reason=f"time_filter:kst_hour={hour_kst}_not_in_19h",
+            )
+
+        close = history["close"]
+        bb = signals.compute(
+            "bollinger", close=close, window=self.BB_WINDOW, n_std=self.BB_STD,
+        )
+        upper = bb["upper"]
+        if pd.isna(upper.iloc[-1]) or pd.isna(upper.iloc[-2]):
+            return Signal(action="hold", size=0.0, reason="bb_warmup")
+
+        short_fires, short_setup, short_trig = evaluate_short_fire_v11(
+            history=history,
+            bb_upper=upper,
+            max_lookback=self.MAX_LOOKBACK,
+            min_close_margin=self.min_close_margin,
+            atr_period=self.atr_period,
+            atr_body_mult=self.atr_body_mult,
+            retrace_ratio=self.retrace_ratio,
         )
 
+        c_now = float(close.iloc[-1])
+        if short_fires:
+            bars_since = (
+                len(history) - 1 - short_setup.breakout_index
+                if short_setup is not None else -1
+            )
+            return Signal(
+                action="sell",
+                size=self.default_size,
+                reason=(
+                    f"airborne_short_wl_fire:bo@-{bars_since},"
+                    f"base={short_setup.base:.4f},ext={short_setup.extreme:.4f},"
+                    f"trig={short_trig:.4f},c={c_now:.4f},"
+                    f"r={self.retrace_ratio},kst={hour_kst}"
+                ),
+            )
 
-__all__ = [
-    "LiveAirborneShortWhitelistV1",
-    "LiveAirborneShortWhitelistV1Config",
-    "IS_DAEMON_ONLY",
-]
+        if short_setup is not None:
+            return Signal(
+                action="hold", size=0.0,
+                reason=(
+                    f"airborne_short_wl_pending:"
+                    f"trig={short_trig:.4f},c={c_now:.4f}"
+                ),
+            )
+        return Signal(action="hold", size=0.0, reason="no_active_short_setup")
