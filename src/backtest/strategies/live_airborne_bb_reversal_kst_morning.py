@@ -91,6 +91,13 @@ class LiveAirborneBbReversalKstMorning(LiveScannerMixin):
     stop_loss_pct: ClassVar[float] = 0.03
     take_profit_pct: ClassVar[float] = 0.06
 
+    # v1.2 부터 bidir (long + short). SELL 시그널이 short 진입일 수 있으므로
+    # orchestrator 가 OrderIntent.reduce_only 를 False 로 stamp 해야 한다 —
+    # 그렇지 않으면 Binance Futures 가 "reduceOnly with no position" -2022 로
+    # 거부 (2026-05-28 ~ 06-01 사이 airborne sell 시그널 13K+ silent REJECTED).
+    # long-only 전략은 본 attr 선언 안 함 → default False → 기존 동작 byte-identical.
+    shorts_allowed: ClassVar[bool] = True
+
     kst_entry_hours: ClassVar[frozenset[int]] = _KST_MORNING_HOURS
 
     def __init__(
