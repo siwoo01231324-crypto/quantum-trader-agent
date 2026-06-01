@@ -15,6 +15,32 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.20"
+    date: "2026-06-02"
+    title: "universe_quote.fetch_klines 가 Spot endpoint 호출 → Futures-only 심볼 HTTP 400 회귀 fix"
+    tags: [fix, safety]
+    summary: >
+      orchestrator dispatch 가 멈춰 거래 0건이던 회귀의 root cause.
+      ``binance_top_dynamic`` top-100 USDT-perp universe 중 Futures-only
+      심볼 (1000PEPEUSDT / AMDUSDT / BSBUSDT / ARMUSDT / BZUSDT 등 40+ 종목)
+      이 Spot exchangeInfo 에 없는데 ``fetch_klines`` 가 Spot URL 호출 →
+      HTTP 400 "Invalid symbol" 폭주 + retry 3회 × 0.8s = ~3s × 40+ 종목 =
+      매 dispatch 마다 2분+ 지연 → universe panel 못 받음 → 시그널 emit 0건.
+      kst-hours + short-whitelist-v1 둘 다 영향. 영향 시점: PR #337/v0.6.14
+      가 universe 를 BINANCE_USDT_TOP30 → dynamic top-100 으로 확장한 후
+      Futures-only 심볼이 들어오기 시작하면서 발생.
+    items:
+      - "src/brokers/binance/universe_quote.py — fetch_klines 의 URL 을 api.binance.com/api/v3/klines (Spot) → fapi.binance.com/fapi/v1/klines (Futures) 로 변경. 모듈 자체가 BINANCE_USDT_PERP_UNIVERSE 용이므로 Spot URL 이 버그."
+      - "검증: 1000PEPEUSDT / AMDUSDT / BSBUSDT / BTCUSDT 모두 fetch OK 확인 (이전엔 BTC 만 OK)."
+      - "tests/brokers/test_universe_quote_futures_endpoint.py 신규 2 tests — 정적 검증으로 fapi.binance.com 사용 + Spot URL 미사용 + fetch_24h_tickers (별도 함수) 의 Spot ticker 호출은 그대로 보존."
+      - "기존 17 universe_quote 테스트 회귀 0 — _klines_to_dataframe / fetch_universe_klines 동작 byte-identical."
+      - "운영 영향: live_run.py 재시작 후 다음 1h 봉 마감 시각부터 dispatch 정상화. 봉 마감 시각에 stdout 에 시그널 평가 라인이 찍혀야 정상."
+      - "fetch_24h_tickers (universe_quote.py 내 별도 함수) 는 Spot ticker 유지 — 이 함수는 binance_top_dynamic 가 호출 안 함 (그건 fapi 직접). 본 fix 영향 범위 외."
+    refs:
+      - "src/brokers/binance/universe_quote.py"
+      - "tests/brokers/test_universe_quote_futures_endpoint.py"
+      - "logs/live/20260601T191650Z — 사용자 보고 시점, fix 전 stdout 의 binance_universe_fetch_fail 폭주"
+
   - version: "v0.6.19"
     date: "2026-06-02"
     title: "live-airborne-short-whitelist-v1 — orchestrator dispatch 전환 + production.yaml 활성"
