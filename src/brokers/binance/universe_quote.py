@@ -36,8 +36,17 @@ def fetch_24h_tickers() -> list[dict]:
 def fetch_klines(symbol: str, interval: str = "1d",
                  start_ms: int | None = None, end_ms: int | None = None,
                  limit: int = 1000, retries: int = 3) -> list[list]:
-    """단일 심볼 klines 페치, 페이지네이션 안 함 (최대 1000봉). 호출자가 페이지 처리."""
-    url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={interval}&limit={limit}"
+    """단일 심볼 klines 페치, 페이지네이션 안 함 (최대 1000봉). 호출자가 페이지 처리.
+
+    **endpoint: Binance USDT-M Futures** (``fapi.binance.com/fapi/v1/klines``).
+    본 모듈은 ``BINANCE_USDT_PERP_UNIVERSE`` 의 universe quote 용. Futures-only
+    심볼 (1000PEPEUSDT / AMDUSDT / BSBUSDT / ARMUSDT / BZUSDT 등 다수, top-100
+    dynamic universe 에 포함됨) 이 Spot exchangeInfo 에 없어 이전 Spot URL
+    호출 시 HTTP 400 "Invalid symbol" 폭주 + retry 3회 × 0.8s = ~3s/symbol ×
+    40+ 종목 = 2분+ dispatch 지연 → orchestrator 가 universe panel 못 받고
+    시그널 emit 0 건 회귀 (2026-06-02 사용자 보고).
+    """
+    url = f"https://fapi.binance.com/fapi/v1/klines?symbol={symbol}&interval={interval}&limit={limit}"
     if start_ms is not None:
         url += f"&startTime={start_ms}"
     if end_ms is not None:
