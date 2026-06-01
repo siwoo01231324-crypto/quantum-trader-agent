@@ -94,9 +94,27 @@ async def _main_async(args: argparse.Namespace) -> int:
     if not actives:
         logger.error("[short_whitelist] whitelist 의 status=active 0개 — abort")
         return 3
+
+    # KST hour gate override (선택) — yaml 의 ``kst_entry_hours`` 가 있으면
+    # AirborneTraderConfig 의 default {8,11,16,22} 를 덮어쓴다. Hard OOS
+    # 검증으로 legacy gate 가 SHORT-only 알파의 92% 를 버리는 것이 확인돼
+    # 본 strategy 는 train_PF>1 인 19시간을 yaml 로 지정함.
+    # (composition — frozen config 를 dataclasses.replace 로 swap)
+    if wl_cfg.kst_entry_hours is not None:
+        cfg = _dc.replace(cfg, kst_entry_hours=wl_cfg.kst_entry_hours)
+        logger.info(
+            "[short_whitelist] kst_entry_hours override from yaml: %s "
+            "(legacy default 무시)",
+            sorted(wl_cfg.kst_entry_hours),
+        )
+
     logger.info(
         "[short_whitelist] whitelist as_of=%s active=%d %s",
         wl_cfg.as_of, len(actives), sorted(actives),
+    )
+    logger.info(
+        "[short_whitelist] kst_entry_hours effective: %s",
+        sorted(cfg.kst_entry_hours),
     )
 
     state = AirborneTraderState(path=cfg.state_path)

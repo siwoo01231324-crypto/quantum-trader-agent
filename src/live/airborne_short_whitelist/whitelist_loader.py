@@ -45,11 +45,17 @@ class WhitelistEntry:
 
 @dataclass(frozen=True)
 class WhitelistConfig:
-    """전체 whitelist 설정."""
+    """전체 whitelist 설정.
+
+    ``kst_entry_hours`` — optional list[int] (0~23). 미지정 시 None →
+    daemon 이 ``AirborneTraderConfig`` 의 default ({8,11,16,22}) 사용.
+    지정 시 daemon 이 config 를 ``dataclasses.replace`` 로 override.
+    """
     version: int
     strategy_id: str
     as_of: str                # ISO date string
     entries: dict[str, WhitelistEntry] = field(default_factory=dict)
+    kst_entry_hours: frozenset[int] | None = None
 
 
 class WhitelistValidationError(ValueError):
@@ -134,11 +140,39 @@ def load_whitelist(path: str | Path) -> WhitelistConfig:
         entry = _coerce_entry(sym, body)
         entries[entry.symbol] = entry
 
+    # Optional KST hour gate override
+    kst_hours: frozenset[int] | None = None
+    raw_hours = raw.get("kst_entry_hours")
+    if raw_hours is not None:
+        if not isinstance(raw_hours, (list, tuple)):
+            raise WhitelistValidationError(
+                f"kst_entry_hours must be a list, got {type(raw_hours).__name__}"
+            )
+        parsed: set[int] = set()
+        for h in raw_hours:
+            try:
+                hi = int(h)
+            except (TypeError, ValueError) as err:
+                raise WhitelistValidationError(
+                    f"kst_entry_hours element must be int, got {h!r}"
+                ) from err
+            if not (0 <= hi <= 23):
+                raise WhitelistValidationError(
+                    f"kst_entry_hours element {hi} not in [0, 23]"
+                )
+            parsed.add(hi)
+        if not parsed:
+            raise WhitelistValidationError(
+                "kst_entry_hours present but empty — remove field or list >=1 hour"
+            )
+        kst_hours = frozenset(parsed)
+
     return WhitelistConfig(
         version=version,
         strategy_id=strategy_id,
         as_of=as_of,
         entries=entries,
+        kst_entry_hours=kst_hours,
     )
 
 
