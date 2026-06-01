@@ -15,6 +15,32 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.17"
+    date: "2026-06-01"
+    title: "신규 전략 후보 — live-airborne-short-whitelist-v1 (SHORT-only + 21종 whitelist, Hard OOS PF=1.112)"
+    tags: [feature]
+    summary: >
+      147종 per-symbol PF 분해 + Hard OOS (train 2021-2023 / test 2024-2025)
+      검증 결과 SHORT-only + 21종 동적 whitelist 조합에서 진짜 양의 엣지 발견.
+      기존 airborne 가족 (모두 rejected) 에 의존하지 않는 새 전략으로 분리·
+      정형화. status candidate — testnet 검증 후 활성화.
+    items:
+      - "docs/specs/strategies/live-airborne-short-whitelist-v1.md — 새 전략 spec (paradigm=live-scanner, side=short only)"
+      - "config/airborne_short_whitelist.yaml — 초기 21종 whitelist (active 15 + candidate 6, Hard OOS train-funded 선별)"
+      - "src/live/airborne_short_whitelist/risk.py — AirborneShortWhitelistRisk(AirborneTraderRisk): side+whitelist 2 게이트만 추가 (기존 수정 없음, composition)"
+      - "src/live/airborne_short_whitelist/whitelist_loader.py — yaml schema validation + active/candidate/warning/removed state 머신 + 지속성 카운터"
+      - "scripts/airborne_short_whitelist_daemon.py — entry point. broker/state/listener 인프라 재사용, AirborneShortWhitelistRisk 만 wiring 차이. state path 분리 (logs/airborne_short_whitelist/state.db)."
+      - "scripts/refresh_airborne_short_whitelist.py — weekly cron: rolling 6mo PF 재계산 + 지속성 규칙(persistence)으로 anti-churn state 전이. yaml proposed 생성 (사람 review 후 commit)."
+      - "tests/live/airborne_short_whitelist/ — 22 tests (loader 10 + risk 12). 모두 통과."
+      - "운영 영향: enabled=false 초기, production.yaml 등록 미포함. testnet 4주 paper trading 후 활성화 결정."
+      - "Hard OOS 검증: 5y train PF=1.122 → 2y test PF=1.112, sumR +1191%, 8.76 trades/day. 펀딩비 반영 +1pp PF (SHORT 보유 시 수익)."
+    refs:
+      - "docs/specs/strategies/live-airborne-short-whitelist-v1.md"
+      - "config/airborne_short_whitelist.yaml"
+      - "src/live/airborne_short_whitelist/"
+      - "scripts/airborne_short_whitelist_daemon.py"
+      - "scripts/refresh_airborne_short_whitelist.py"
+
   - version: "v0.6.16"
     date: "2026-05-30"
     title: "1h 봉 index collapse fix — airborne 100종목 dispatch 가 모든 종목에서 hold 만 반환하던 root cause"

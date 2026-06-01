@@ -1,0 +1,190 @@
+---
+type: strategy
+id: live-airborne-short-whitelist-v1
+name: Live Airborne SHORT-only Whitelist v1
+paradigm: live-scanner
+owner: siwoo
+status: candidate
+created: 2026-06-01
+instruments: [crypto-perp-USDT]
+timeframe: 1h
+stop_loss_pct: 0.03
+take_profit_pct: 0.06
+tags:
+- airborne
+- short-only
+- whitelist
+- bollinger
+- mean-reversion
+---
+
+# Live Airborne SHORT-only Whitelist v1
+
+기존 `airborne-family-overview` 의 모든 변형이 5y PF<1 로 rejected 였으나, **147종 per-symbol 분해 + Hard OOS 검증** 으로 SHORT-only + 21종 whitelist 조합에 양의 엣지 발견. 본 spec 은 그 발견을 **새 전략** 으로 분리·정형화.
+
+## TL;DR
+
+| 항목 | 값 |
+|---|---|
+| 진입 신호 | v1.2 BB-reversal (`retrace_ratio=0.6`, BB(20, 2.0)) — close 기반 |
+| 방향 | **SHORT only** (LONG fire 는 무시) |
+| Universe | **21종 whitelist** (`config/airborne_short_whitelist.yaml`) |
+| Stop / TP | 3% / 6% (R/R 1:2) |
+| 5y in-sample PF | 1.122 (n=17,011) |
+| **2y Hard-OOS PF** | **1.112 (n=6,395, +1,191% sumR)** |
+| trades/day | ~8.8 (universe-wide) |
+| 펀딩 효과 | SHORT 수익 +1pp PF |
+
+## 5y 백테스트 게이트 통과 근거 (CLAUDE.md 가드)
+
+| 지표 | 값 | 임계 | 통과? |
+|---|---|---|---|
+| Profit Factor (Hard OOS) | **1.112** | > 1.0 | ✅ |
+| Expectancy (Hard OOS) | **+0.186% / trade** | > 0 | ✅ |
+| Sharpe (참고) | 비공식 — universe-wide test sumR 곡선 양수 | — | — |
+| trade count (test 2y) | 6,395 | — | (밀도 ↑) |
+
+→ 5y multi-regime · 현실 비용 10bp · funding 적용. PF·expectancy 둘 다 양수.
+
+산출물: `reports/airborne_hard_oos_funding.json` (147종 per-symbol metric).
+
+## Whitelist (21종)
+
+```
+1000LUNCUSDT, 1000SHIBUSDT, AAVEUSDT, APTUSDT, ARBUSDT, ARUSDT, ATOMUSDT,
+AXSUSDT, BCHUSDT, BNBUSDT, BTCUSDT, DASHUSDT, ETHUSDT, FETUSDT, IDUSDT,
+LTCUSDT, RIFUSDT, UNIUSDT, XLMUSDT, XRPUSDT, ZECUSDT
+```
+
+선별 기준 (`scripts/airborne_hard_oos_funding.py` 의 `train_funded` 게이트):
+- 2021-2023 (train) 의 SHORT-only 3%/6% funded PF >= 1.0
+- 2021-2023 의 SHORT-only fire 수 >= 50
+
+이 중 **2024-2025 (test) 에서도 PF>1.05 인 코어 15종**: FETUSDT, APTUSDT, ATOMUSDT, AXSUSDT, DASHUSDT, UNIUSDT, ARBUSDT, RIFUSDT, ZECUSDT, XLMUSDT, 1000SHIBUSDT, LTCUSDT, IDUSDT, AAVEUSDT, XRPUSDT.
+
+## 동적 Whitelist — Drift 대응 (3-레이어)
+
+### 레이어 1: 정기 재평가 (weekly)
+
+`scripts/refresh_airborne_short_whitelist.py` — 매주 토요일 KST 02:00 cron:
+- 직전 6개월 (rolling) 데이터로 per-symbol SHORT 3%/6% PF 재계산
+- 결과를 `config/airborne_short_whitelist.yaml` 에 후보 list 로 출력
+- diff (added / removed / kept) 동봉
+
+### 레이어 2: 지속성 규칙 (anti-churn)
+
+`config/airborne_short_whitelist.yaml` 의 `state` 필드로 종목 단위 상태 머신:
+
+```yaml
+state:
+  ARBUSDT:
+    status: active        # candidate | active | warning | removed
+    consecutive_pass: 12  # 연속 PF>1 주 수
+    consecutive_fail: 0
+  NEWALTUSDT:
+    status: candidate     # 신규 — 진입 대기
+    consecutive_pass: 2
+    consecutive_fail: 0
+```
+
+전이 규칙:
+- `candidate → active`: 3주 연속 rolling PF > 1.0 + n_trades >= 30
+- `active → warning`: 1주 rolling PF < 0.95
+- `warning → removed`: 추가 1주 PF < 0.95 (즉 2주 연속) **또는** 1주 PF < 0.85
+- `warning → active`: 1주 PF >= 1.0 회복
+- 매주 refresh 후 daemon 재시작 시 `status == "active"` 인 종목만 발주 universe.
+
+### 레이어 3: 운영 안전망
+
+- 신규 `active` 종목 = **shadow mode 4주** (testnet 만 발주, mainnet 보류)
+- whitelist 변경 시 dashboard `/airborne` 페이지에 알림 배너
+- 변경 PR 의무화 (자동 commit 금지) — refresh 스크립트는 yaml 만 생성, 사람 review 후 merge
+
+## 진입 / 청산 로직
+
+### 진입 (코드: `src/live/airborne_short_whitelist/risk.py`)
+
+기존 `AirborneTraderRisk.evaluate()` 의 모든 게이트 + 다음 2가지 새 게이트:
+
+```
+Gate -2: side filter
+  fire.side != "short" → REJECT  reason="not_short"
+
+Gate -1: whitelist filter
+  fire.symbol not in active_whitelist → REJECT  reason="not_whitelisted"
+```
+
+이후 기존 게이트 (kill switch, KST hour, stale fire, max concurrent, etc.) 그대로 통과.
+
+### 청산
+
+- `stop_loss_pct=0.03` (3%), `take_profit_pct=0.06` (6%, R/R 1:2)
+- SHORT 의 stop = `entry × 1.03` (가격 상승 시 손절)
+- SHORT 의 TP = `entry × 0.94` (가격 하락 시 익절)
+- 청산 polling: 30초마다 mark price 비교 (기존 `airborne_trader.monitor_positions` 재사용)
+
+## 운영 파라미터 (production.yaml)
+
+```yaml
+strategies:
+  live-airborne-short-whitelist-v1:
+    enabled: false   # 초기 candidate — testnet 검증 후 true
+    paradigm: live-scanner
+    venue: binance_futures
+    side_filter: short
+    whitelist_config: config/airborne_short_whitelist.yaml
+    entry:
+      retrace_ratio: 0.6
+      bb_window: 20
+      bb_std: 2.0
+      min_close_margin: 0.001
+      atr_body_mult: 0.3
+    exit:
+      stop_loss_pct: 0.03
+      take_profit_pct: 0.06
+    risk:
+      position_usd: 200
+      leverage: 10
+      max_concurrent: 8
+      daily_loss_limit_usd: -200
+      cooldown_after_stop_sec: 900
+      kst_entry_hours: [8, 11, 16, 22]   # 기존 airborne_trader 와 동일
+```
+
+## 리스크 연동
+
+- **Daily loss kill switch**: 일 −200 USDT 도달 시 자동 정지 (기존 메커니즘)
+- **Max concurrent positions**: 8 (기존 10 보다 낮춤 — short 사이드 다양성 보장)
+- **Cooldown after stop**: 15분 (기존)
+- **Per-symbol leverage cap**: 10× (기존)
+- **Whitelist 위반 시**: 단순 reject — 별도 처벌 없음
+- **펀딩 비용 모니터링**: 펀딩 rate 가 −0.1%/8h 이하 (즉 SHORT 가 지급) 인 종목은 자동 임시 제외 (운영 시 fallback)
+
+## PR 체크리스트
+
+- [ ] `docs/specs/strategies/live-airborne-short-whitelist-v1.md` (이 파일)
+- [ ] `config/airborne_short_whitelist.yaml` 초기 21종 + state
+- [ ] `src/live/airborne_short_whitelist/` 모듈
+  - [ ] `whitelist_loader.py` (yaml + validation)
+  - [ ] `risk.py` (`AirborneShortWhitelistRisk(AirborneTraderRisk)`)
+- [ ] `scripts/airborne_short_whitelist_daemon.py` (entry point)
+- [ ] `scripts/refresh_airborne_short_whitelist.py` (weekly cron)
+- [ ] `tests/live/airborne_short_whitelist/test_risk.py`
+- [ ] `tests/live/airborne_short_whitelist/test_whitelist_loader.py`
+- [ ] `docs/patch-notes/index.yaml` v0.6.16 entry
+- [ ] `scripts/check_strategy_completeness.py` 통과
+
+## 외부 참조
+
+- [[live-airborne-bb-reversal-v11]] — 진입 신호 원본 (v1.2 close-based)
+- [[airborne-family-overview]] — 가족 전체 정리 (모두 rejected, 본 spec 만 candidate)
+- [[live-universe-scanner-paradigm]] — paradigm 정의
+- `reports/airborne_hard_oos_funding.json` — Hard OOS 산출
+- `reports/airborne_100sym_per_symbol_pf.json` — 147종 per-symbol 분해
+- `reports/airborne_5y_signal_dev.json` — 60 entry-param sweep
+
+## 윤리 / 면책
+
+- 본 전략은 *백테스트 통과 candidate* 상태. 실거래 결정 사용자 본인 책임.
+- 5y 통과했어도 *미래* 일관성 보장 X. drift 발생 시 weekly refresh + persistence 로직이 잡지 못할 수 있음.
+- 알트 폭락기 (특히 2022) 의존성이 클 가능성. 알트 강세장 진입 시 PF 무너질 위험.

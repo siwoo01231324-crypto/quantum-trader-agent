@@ -1,0 +1,141 @@
+# Airborne SHORT-only Whitelist
+#
+# 본 파일은 ``scripts/refresh_airborne_short_whitelist.py`` 가 weekly 로 갱신
+# 하며, 사람이 review 후 git commit 한다. daemon 은 ``status: active`` 인
+# 종목만 발주 universe 로 사용. 상세 규칙은
+# ``docs/specs/strategies/live-airborne-short-whitelist-v1.md`` 의
+# "동적 Whitelist — Drift 대응" 섹션 참조.
+
+version: 1
+strategy_id: live-airborne-short-whitelist-v1
+as_of: 2026-06-01
+selection_method: hard_oos_train_funded
+train_window: "2021-01-01..2023-12-31"
+test_window: "2024-01-01..2025-12-31"
+min_train_pf: 1.00
+min_train_n: 50
+entry_params:
+  retrace_ratio: 0.6
+  bb_window: 20
+  bb_std: 2.0
+  min_close_margin: 0.001
+  atr_body_mult: 0.3
+exit_params:
+  stop_loss_pct: 0.03
+  take_profit_pct: 0.06
+
+# state 머신 ─ 매 weekly refresh 마다 갱신됨
+#   status:
+#     candidate  — 새로 진입 후보, 아직 활성화 X (shadow 모드)
+#     active     — 운영 universe 포함 (실거래/testnet 둘 다)
+#     warning    — 1주 PF<0.95, 다음 1주에 회복 못 하면 removed
+#     removed    — 활성 X, history 보존
+#   consecutive_pass / consecutive_fail — anti-churn 지속성 카운터
+#
+# 초기 21종 — Hard OOS train selection (2026-06-01)
+state:
+  1000LUNCUSDT:
+    status: candidate
+    consecutive_pass: 0
+    consecutive_fail: 0
+    note: "train PF=1.17 / test PF=0.89 (test_PF<1, 코어 아님)"
+  1000SHIBUSDT:
+    status: active
+    consecutive_pass: 0
+    consecutive_fail: 0
+    note: "train PF=1.10 / test PF=1.13"
+  AAVEUSDT:
+    status: active
+    consecutive_pass: 0
+    consecutive_fail: 0
+    note: "train PF=1.05 / test PF=1.07"
+  APTUSDT:
+    status: active
+    consecutive_pass: 0
+    consecutive_fail: 0
+    note: "train PF=1.31 / test PF=1.31 (코어)"
+  ARBUSDT:
+    status: active
+    consecutive_pass: 0
+    consecutive_fail: 0
+    note: "train PF=1.53 / test PF=1.18 (코어)"
+  ARUSDT:
+    status: candidate
+    consecutive_pass: 0
+    consecutive_fail: 0
+    note: "train PF=1.01 / test PF=0.87 (drift 의심)"
+  ATOMUSDT:
+    status: active
+    consecutive_pass: 0
+    consecutive_fail: 0
+    note: "train PF=1.02 / test PF=1.31 (코어)"
+  AXSUSDT:
+    status: active
+    consecutive_pass: 0
+    consecutive_fail: 0
+    note: "train PF=1.01 / test PF=1.26 (코어)"
+  BCHUSDT:
+    status: candidate
+    consecutive_pass: 0
+    consecutive_fail: 0
+    note: "train PF=1.19 / test PF=0.99 (borderline)"
+  BNBUSDT:
+    status: candidate
+    consecutive_pass: 0
+    consecutive_fail: 0
+    note: "train PF=1.02 / test PF=0.75 (drift 의심 — 코어 아님)"
+  BTCUSDT:
+    status: candidate
+    consecutive_pass: 0
+    consecutive_fail: 0
+    note: "train PF passed / test PF borderline"
+  DASHUSDT:
+    status: active
+    consecutive_pass: 0
+    consecutive_fail: 0
+    note: "train PF=1.28 / test PF=1.25 (코어)"
+  ETHUSDT:
+    status: candidate
+    consecutive_pass: 0
+    consecutive_fail: 0
+    note: "train PF=1.28 / test PF=0.92 (drift)"
+  FETUSDT:
+    status: active
+    consecutive_pass: 0
+    consecutive_fail: 0
+    note: "train PF=1.03 / test PF=1.32 (코어 — 최고 PF)"
+  IDUSDT:
+    status: active
+    consecutive_pass: 0
+    consecutive_fail: 0
+    note: "train PF=1.18 / test PF=1.10"
+  LTCUSDT:
+    status: active
+    consecutive_pass: 0
+    consecutive_fail: 0
+    note: "train PF=1.18 / test PF=1.11"
+  RIFUSDT:
+    status: active
+    consecutive_pass: 0
+    consecutive_fail: 0
+    note: "train PF=1.04 / test PF=1.15"
+  UNIUSDT:
+    status: active
+    consecutive_pass: 0
+    consecutive_fail: 0
+    note: "train PF=1.19 / test PF=1.25 (코어)"
+  XLMUSDT:
+    status: active
+    consecutive_pass: 0
+    consecutive_fail: 0
+    note: "train PF=1.09 / test PF=1.14"
+  XRPUSDT:
+    status: active
+    consecutive_pass: 0
+    consecutive_fail: 0
+    note: "train PF=1.06 / test PF=1.06"
+  ZECUSDT:
+    status: active
+    consecutive_pass: 0
+    consecutive_fail: 0
+    note: "train PF=1.03 / test PF=1.15"
