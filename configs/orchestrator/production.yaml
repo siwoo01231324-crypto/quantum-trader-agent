@@ -207,6 +207,33 @@ strategies:
       # stop 청산 직후 같은 (sid, symbol) 재진입 15분 차단 — churn 방지.
       cooldown_after_stop_sec: 900
 
+  # ── live-airborne-short-whitelist-v1 (2026-06-02, PR #341+#343 후속) ─────────
+  # SHORT-only airborne + 21종 동적 whitelist + KST 19시간 게이트.
+  # spec: docs/specs/strategies/live-airborne-short-whitelist-v1.md
+  # whitelist: config/airborne_short_whitelist.yaml (weekly refresh)
+  #
+  # Hard OOS 검증 (147종 per-symbol PF + train 2021-2023 / test 2024-2025):
+  #   test PF=1.214, sumR=+1,395%, 5.45 trades/day, win 44%
+  #   펀딩비 SHORT 수익 +1pp PF 추가
+  #
+  # kst-hours 와 *별도 엔트리* — 같은 universe 일부 overlap 하지만:
+  #   - kst-hours 는 4시간 게이트 + bidir, top-100 universe
+  #   - 본 전략은 19시간 게이트 + SHORT only, 21종 whitelist active 만
+  # 두 전략은 동시 발화해도 cooldown_after_stop_sec + max position
+  # cap 으로 자본 보호. 같은 (sid, symbol, side) 중복은 orchestrator
+  # min_order_interval_sec=300 가 backstop.
+  #
+  # 운영 시작: testnet 4주 paper trading. 통과 시 mainnet 별도 PR.
+  - id: live-airborne-short-whitelist-v1
+    class: backtest.strategies.live_airborne_short_whitelist_v1.LiveAirborneShortWhitelistV1
+    kwargs:
+      default_size: 0.05         # kst-hours 와 동일 비중
+      stop_loss_pct: 0.03        # -3% (Hard OOS 검증값)
+      take_profit_pct: 0.06      # +6% (R/R 1:2)
+      retrace_ratio: 0.6         # Hard OOS 검증값 (부모 default 0.4)
+      atr_body_mult: 0.3         # Hard OOS 검증값 (부모 default 0.6)
+      cooldown_after_stop_sec: 900
+
   # cs-bb-macd-kr 는 5y bench Sharpe -0.32 → status: inactive, production 미등록.
   # 코드는 src/backtest/strategies/cs_bb_macd_kr.py 유지 — score 정의 재설계 후 활성화 검토.
 

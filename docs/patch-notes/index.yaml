@@ -15,6 +15,28 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.19"
+    date: "2026-06-02"
+    title: "live-airborne-short-whitelist-v1 — orchestrator dispatch 전환 + production.yaml 활성"
+    tags: [feature]
+    summary: >
+      PR #341 + #343 (live-airborne-short-whitelist-v1) 는 daemon-only 아키텍처
+      (별도 프로세스 + FIRE 로그 polling) 로 설계됐으나, 다른 모든 전략처럼
+      orchestrator dispatch 방식으로 전환. 대시보드 "거래 시작" 만으로 자동
+      가동. testnet 데모 운영 시작.
+    items:
+      - "src/signals/airborne_bb_reversal.py — `find_active_*_setup_v11` / `evaluate_*_fire_v11` / `AirborneSetup.trigger` 에 retrace_ratio kwarg 추가 (default=RETRACE_RATIO=0.4, backward-compat). 본 전략은 Hard OOS 검증값 0.6 사용."
+      - "src/backtest/strategies/live_airborne_short_whitelist_v1.py — stub 클래스를 LiveAirborneBbReversalKstHours 상속의 실 live-scanner 로 교체. 차이: kst_entry_hours=19시간, get_universe=yaml active 종목, on_bar 가 evaluate_short_fire_v11 만 호출 (SHORT only), retrace_ratio=0.6, atr_body_mult=0.3."
+      - "tests/backtest/test_live_airborne_short_whitelist_v1.py — 24 tests (Inheritance, Universe, SideFilter, TimeGate, Validation, Warmup). 모두 통과."
+      - "configs/orchestrator/production.yaml — `live-airborne-short-whitelist-v1` entry 등록. kst-hours 와 별도 발화, cooldown_after_stop_sec=900 + orchestrator min_order_interval_sec=300 으로 중복 방어."
+      - "운영 영향: testnet 데모 계좌에서 자동 가동. mainnet 전환은 4주 testnet paper trading 통과 후 별도 PR."
+      - "Deprecated (다음 cleanup PR): src/live/airborne_short_whitelist/risk.py + scripts/airborne_short_whitelist_daemon.py + tests/live/airborne_short_whitelist/test_risk.py — daemon 패턴 미사용, refresh 스크립트가 whitelist_loader 만 import 하므로 본 PR 에서 유지."
+    refs:
+      - "src/signals/airborne_bb_reversal.py"
+      - "src/backtest/strategies/live_airborne_short_whitelist_v1.py"
+      - "configs/orchestrator/production.yaml"
+      - "docs/specs/strategies/live-airborne-short-whitelist-v1.md"
+
   - version: "v0.6.18"
     date: "2026-06-01"
     title: "airborne bidir 활성화 fix — shorts_allowed 선언 + sell reduce_only stamp 해제"
