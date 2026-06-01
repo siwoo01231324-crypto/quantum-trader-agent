@@ -61,7 +61,11 @@ def _normalize(fm: dict) -> dict:
         out[k] = _coerce(fm.get(k))
     for k in _OPTIONAL_LIST:
         v = fm.get(k)
-        out[k] = list(v) if isinstance(v, list) else []
+        # list 안 element 도 _coerce — YAML 의 unquoted ``2026-05-23`` 같은 값이
+        # ``datetime.date`` 로 파싱되어 tags 같은 list 안에 들어오면
+        # JSONResponse 가 그대로 serialize 못 함 (Object of type date is not JSON
+        # serializable → /api/strategies 500). PR #336 머지 후 보고된 사고.
+        out[k] = [_coerce(x) for x in v] if isinstance(v, list) else []
     for k in _OPTIONAL_SCALAR:
         out[k] = _coerce(fm.get(k, None))
     return out

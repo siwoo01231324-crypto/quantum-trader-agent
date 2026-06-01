@@ -15,6 +15,34 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.16"
+    date: "2026-05-30"
+    title: "1h 봉 index collapse fix — airborne 100종목 dispatch 가 모든 종목에서 hold 만 반환하던 root cause"
+    tags: [fix, safety]
+    summary: >
+      v0.6.13~v0.6.15 누적 Dynamic Universe 회귀의 마지막 조각. PR #338 의
+      NameError fix 후에도 자동매매 0건이던 원인은 ``_klines_to_dataframe`` 의
+      ``pd.to_datetime(...).dt.normalize()`` 가 1h fetch 의 24봉을 같은 날짜
+      index 로 collapse 시켜 airborne 전략이 history-based BB/RSI 평가에서
+      항상 hold 반환하던 것. 추가로 ``strategy_catalog._normalize`` 가
+      optional list (tags 등) 안의 YAML date 객체를 그대로 보존해
+      ``/api/strategies`` 가 JSONResponse 직렬화 단계에서 500 떨어지던 부수
+      회귀도 동시 fix.
+    items:
+      - "src/brokers/binance/universe_quote.py — _klines_to_dataframe 에 interval 인자 추가. interval='1d' 만 .dt.normalize() 적용 (cs-tsmom 5y bench byte-identical 보존), 1h/15m/4h 등은 full timestamp 보존."
+      - "_fetch_one — interval 을 _klines_to_dataframe 에 전달."
+      - "binance_universe_fetch_complete 로그에 interval 추가 — 다음 사고 진단 시간 단축."
+      - "src/dashboard/strategy_catalog.py — _normalize 가 optional list element 도 _coerce 호출. YAML 의 unquoted date(예: tags 안 2026-05-23) 가 datetime.date 인 채 JSON 직렬화 단계 도달하던 회귀 차단."
+      - "tests/brokers/test_universe_quote_1h_index.py 신규 4건 — 1h/15m 24/96봉 unique index 보존 + 1d byte-identical 가드."
+      - "tests/dashboard/test_strategy_catalog_tags_serializable.py 신규 2건 — date 가 ISO 문자열로 coerce 되고 catalog 가 e2e JSON 직렬화 가능."
+      - "운영 영향: 가동 중 live_run.py 재시작 필요. 재시작 후 다음 KST 8/11/16/22시 fires 와 동일 시각·종목으로 auto_fill 발생해야 정상."
+    refs:
+      - "src/brokers/binance/universe_quote.py"
+      - "src/dashboard/strategy_catalog.py"
+      - "tests/brokers/test_universe_quote_1h_index.py"
+      - "tests/dashboard/test_strategy_catalog_tags_serializable.py"
+      - "docs/journal_data/2026-05-29.json — 14시간 가동 후 auto_fills 0 incident"
+
   - version: "v0.6.15"
     date: "2026-05-29"
     title: "Dynamic Universe 회귀 fix — args._orchestrator NameError 가 silent kill 한 100종목 dispatch 복구"
