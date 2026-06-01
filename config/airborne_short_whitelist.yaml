@@ -24,6 +24,15 @@ exit_params:
   stop_loss_pct: 0.03
   take_profit_pct: 0.06
 
+# KST 시간 게이트 — train(2021-2023)에서 PF>=1 + n>=30 통과한 19개 시간만 진입.
+# 기존 airborne_trader 의 legacy {8,11,16,22} 는 SHORT-only + 21종 조합에서
+# 알파의 92% 를 버리고 te_sumR 도 +1455% → +120% 로 떨어뜨림이 확인됨
+# (scripts/airborne_short_whitelist_hour_sweep.py 결과).
+# 본 list 채택 시 te_PF=1.214 (24h baseline 1.180 보다 ↑), te_sumR=+1395%,
+# trades/day=5.45.
+# 제외된 시간 = {4, 6, 7, 8, 13} (train PF<1).
+kst_entry_hours: [0, 1, 2, 3, 5, 9, 10, 11, 12, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
+
 # state 머신 ─ 매 weekly refresh 마다 갱신됨
 #   status:
 #     candidate  — 새로 진입 후보, 아직 활성화 X (shadow 모드)

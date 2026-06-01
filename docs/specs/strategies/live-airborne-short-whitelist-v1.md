@@ -29,24 +29,38 @@ tags:
 | 진입 신호 | v1.2 BB-reversal (`retrace_ratio=0.6`, BB(20, 2.0)) — close 기반 |
 | 방향 | **SHORT only** (LONG fire 는 무시) |
 | Universe | **21종 whitelist** (`config/airborne_short_whitelist.yaml`) |
+| **KST 시간 게이트** | **19시간** {0,1,2,3,5,9,10,11,12,14,15,16,17,18,19,20,21,22,23} — train_PF>1 hours |
 | Stop / TP | 3% / 6% (R/R 1:2) |
-| 5y in-sample PF | 1.122 (n=17,011) |
-| **2y Hard-OOS PF** | **1.112 (n=6,395, +1,191% sumR)** |
-| trades/day | ~8.8 (universe-wide) |
+| 5y in-sample PF | 1.176 (whitelist + hour gate) |
+| **2y Hard-OOS PF** | **1.214 (n=3,977, +1,395% sumR)** |
+| trades/day | ~5.5 (whitelist + hour gate) |
 | 펀딩 효과 | SHORT 수익 +1pp PF |
 
 ## 5y 백테스트 게이트 통과 근거 (CLAUDE.md 가드)
 
 | 지표 | 값 | 임계 | 통과? |
 |---|---|---|---|
-| Profit Factor (Hard OOS) | **1.112** | > 1.0 | ✅ |
-| Expectancy (Hard OOS) | **+0.186% / trade** | > 0 | ✅ |
-| Sharpe (참고) | 비공식 — universe-wide test sumR 곡선 양수 | — | — |
-| trade count (test 2y) | 6,395 | — | (밀도 ↑) |
+| Profit Factor (Hard OOS) | **1.214** | > 1.0 | ✅ |
+| Expectancy (Hard OOS) | **+0.351% / trade** | > 0 | ✅ |
+| Sharpe (참고) | 비공식 — test sumR 곡선 양수 일관 | — | — |
+| trade count (test 2y) | 3,977 | — | ~5.5/day 운영 가능 밀도 |
 
-→ 5y multi-regime · 현실 비용 10bp · funding 적용. PF·expectancy 둘 다 양수.
+→ 5y multi-regime · 현실 비용 10bp · funding 적용 · **KST 19시간 게이트 적용**. PF·expectancy 둘 다 양수.
 
-산출물: `reports/airborne_hard_oos_funding.json` (147종 per-symbol metric).
+산출물:
+- `reports/airborne_hard_oos_funding.json` (147종 per-symbol metric)
+- `reports/airborne_short_whitelist_hour_sweep.json` (시간 게이트 검증)
+
+### Hour gate 변경 근거
+
+기존 `airborne_trader` 의 legacy default `{8, 11, 16, 22}` 는 LONG+SHORT 양방향 + 30종 시절에 선정됨. SHORT-only + 21종 조합에 적용 시:
+
+| 게이트 | te_PF | te_sumR | tr/day |
+|---|---|---|---|
+| Legacy `{8,11,16,22}` | 1.086 | +120% | 1.12 |
+| **train_PF>1 19시간** | **1.214** | **+1,395%** | **5.45** |
+
+→ legacy 사용 시 알파의 **92% 손실**. 본 spec 의 19-hour 게이트가 정답.
 
 ## Whitelist (21종)
 
@@ -148,7 +162,9 @@ strategies:
       max_concurrent: 8
       daily_loss_limit_usd: -200
       cooldown_after_stop_sec: 900
-      kst_entry_hours: [8, 11, 16, 22]   # 기존 airborne_trader 와 동일
+      # legacy {8,11,16,22} 가 알파 92% 손실 확인됨. yaml 의 kst_entry_hours
+      # 가 override (daemon 이 dataclasses.replace 로 swap)
+      kst_entry_hours: [0, 1, 2, 3, 5, 9, 10, 11, 12, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
 ```
 
 ## 리스크 연동
@@ -179,7 +195,8 @@ strategies:
 - [[live-airborne-bb-reversal-v11]] — 진입 신호 원본 (v1.2 close-based)
 - [[airborne-family-overview]] — 가족 전체 정리 (모두 rejected, 본 spec 만 candidate)
 - [[live-universe-scanner-paradigm]] — paradigm 정의
-- `reports/airborne_hard_oos_funding.json` — Hard OOS 산출
+- `reports/airborne_hard_oos_funding.json` — Hard OOS 산출 (24h baseline)
+- `reports/airborne_short_whitelist_hour_sweep.json` — KST 19-hour 게이트 검증
 - `reports/airborne_100sym_per_symbol_pf.json` — 147종 per-symbol 분해
 - `reports/airborne_5y_signal_dev.json` — 60 entry-param sweep
 

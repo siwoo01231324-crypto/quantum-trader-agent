@@ -149,3 +149,78 @@ def test_real_config_loads() -> None:
     cands = candidate_symbols(cfg)
     assert "BNBUSDT" in cands
     assert "ETHUSDT" in cands
+    # kst_entry_hours override — Hard OOS hour sweep 결과 19시간
+    assert cfg.kst_entry_hours is not None
+    assert len(cfg.kst_entry_hours) == 19
+    # 알파 음수 시간 제외 확인
+    assert 4 not in cfg.kst_entry_hours
+    assert 6 not in cfg.kst_entry_hours
+    assert 7 not in cfg.kst_entry_hours
+    assert 8 not in cfg.kst_entry_hours  # legacy default 포함했었음
+    assert 13 not in cfg.kst_entry_hours
+    # 알파 양수 시간 포함 확인 (대표)
+    assert 0 in cfg.kst_entry_hours
+    assert 12 in cfg.kst_entry_hours
+    assert 18 in cfg.kst_entry_hours
+
+
+def test_kst_entry_hours_absent_returns_none(tmp_path: Path) -> None:
+    """``kst_entry_hours`` 미지정 시 None — daemon 이 legacy default 사용."""
+    p = _write(tmp_path, """
+version: 1
+strategy_id: x
+as_of: 2026-06-01
+state:
+  ARBUSDT: {status: active, consecutive_pass: 0, consecutive_fail: 0}
+""")
+    cfg = load_whitelist(p)
+    assert cfg.kst_entry_hours is None
+
+
+def test_kst_entry_hours_parsed(tmp_path: Path) -> None:
+    p = _write(tmp_path, """
+version: 1
+strategy_id: x
+as_of: 2026-06-01
+kst_entry_hours: [0, 1, 12, 23]
+state:
+  ARBUSDT: {status: active, consecutive_pass: 0, consecutive_fail: 0}
+""")
+    cfg = load_whitelist(p)
+    assert cfg.kst_entry_hours == frozenset({0, 1, 12, 23})
+
+
+def test_kst_entry_hours_out_of_range_raises(tmp_path: Path) -> None:
+    p = _write(tmp_path, """
+version: 1
+strategy_id: x
+as_of: 2026-06-01
+kst_entry_hours: [0, 24]
+state: {ARBUSDT: {status: active, consecutive_pass: 0, consecutive_fail: 0}}
+""")
+    with pytest.raises(WhitelistValidationError, match="not in"):
+        load_whitelist(p)
+
+
+def test_kst_entry_hours_empty_list_raises(tmp_path: Path) -> None:
+    p = _write(tmp_path, """
+version: 1
+strategy_id: x
+as_of: 2026-06-01
+kst_entry_hours: []
+state: {ARBUSDT: {status: active, consecutive_pass: 0, consecutive_fail: 0}}
+""")
+    with pytest.raises(WhitelistValidationError, match="empty"):
+        load_whitelist(p)
+
+
+def test_kst_entry_hours_non_list_raises(tmp_path: Path) -> None:
+    p = _write(tmp_path, """
+version: 1
+strategy_id: x
+as_of: 2026-06-01
+kst_entry_hours: "8,11,16"
+state: {ARBUSDT: {status: active, consecutive_pass: 0, consecutive_fail: 0}}
+""")
+    with pytest.raises(WhitelistValidationError, match="list"):
+        load_whitelist(p)
