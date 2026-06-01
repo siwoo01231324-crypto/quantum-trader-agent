@@ -354,12 +354,73 @@ cs_tsmom_top10 1줄 참조. 끝.)
 - 알림: (오늘 airborne 적중률 기반 1줄 — 시간대·종목 패턴 다음날 확인 포인트)
 
 ## 작업 절차
-1. `docs/journal_data/{date_kst}.json` 읽기 (없으면 즉시 종료)
-2. 위 규칙대로 분석 후 `docs/journal/{date_kst}.md` 작성
-3. branch `claude/journal-{date_kst}` 에 commit
-4. PR 제목: `journal: {date_kst} 거래 리포트` — auto-merge 안 함, 사용자
-   리뷰 대기
-5. PR body: 핵심 한 줄 + "PR 머지 시 Obsidian 볼트 동기화됨" 안내
+
+⚠️ **각 step 의 명령을 *명시적으로 실행* 한다**. 명령 빠뜨리면 결과물이
+사라진 것처럼 보임 (5/27 HrUdm / 5/29 4bQdE·e78BM / 6/1 PK98f 사고 — branch
++ commit 까진 origin 에 올라갔으나 PR 생성을 안 해서 사용자 입장에서 "리포트가
+안 만들어진 것"처럼 보였다).
+
+### Step 1 — base 동기화 (STALE CLONE 차단)
+
+routine cloud 환경의 clone 이 master 보다 며칠 뒤처질 수 있다. 그 상태에서
+바로 commit 하면 "이미 master 에 머지된 수천~수만 줄" 이 *deletion* 으로
+포함되어 PR 머지 시 master 박살. 작업 시작 전 반드시:
+
+```bash
+git fetch origin master
+git checkout master
+git reset --hard origin/master
+```
+
+### Step 2 — 입력 검증
+
+```bash
+test -f docs/journal_data/{date_kst}.json || { echo "no input — exit"; exit 0; }
+```
+
+없으면 즉시 종료 (PR 만들지 말 것).
+
+### Step 3 — 분석 + 리포트 작성
+
+위 규칙 1~6 대로 `docs/journal_data/{date_kst}.json` 분석 후 결과를
+`docs/journal/{date_kst}.md` 에 작성.
+
+### Step 4 — branch + commit
+
+⚠️ **branch 명은 정확히 `claude/journal-{date_kst}`** (예:
+`claude/journal-2026-06-01`). random 이름 (예: `nice-pascal-XXXX`,
+`jolly-allen-XXXX`) **금지** — 사용자 PR 추적 + 사후 정리가 깨진다.
+
+```bash
+git checkout -b claude/journal-{date_kst}
+git add docs/journal/{date_kst}.md
+git commit -m "journal: {date_kst} 거래 리포트"
+git push -u origin claude/journal-{date_kst}
+```
+
+### Step 5 — PR 생성 (명령 실행 필수)
+
+⚠️ **`gh pr create` 명령을 *실제로 실행* 한다**. "PR 만들겠습니다" 만 적고
+넘기지 말 것. 누락 시 사용자 PR 목록에 안 나타나 routine 결과물이 사라진 것처럼
+보인다.
+
+```bash
+gh pr create \
+  --base master \
+  --head claude/journal-{date_kst} \
+  --title "journal: {date_kst} 거래 리포트" \
+  --body "(한눈에 섹션 핵심 1-2줄 + 'PR 머지 시 Obsidian 볼트 동기화됨' 안내)"
+```
+
+auto-merge **금지** — 사용자 리뷰 후 수동 머지.
+
+### Step 6 — 최종 확인
+
+```bash
+gh pr view --json url --jq .url
+```
+
+PR URL 이 출력되면 성공. 출력 없으면 Step 5 실패한 것 — 다시 실행.
 ````
 
 ### 4. 검증
