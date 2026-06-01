@@ -53,7 +53,16 @@ def fetch_klines(symbol: str, interval: str = "1d",
     raise RuntimeError(f"binance_klines_fetch_fail symbol={symbol}: {last_err}")
 
 
-def _klines_to_dataframe(rows: list[list]) -> pd.DataFrame:
+def _klines_to_dataframe(rows: list[list], interval: str = "1d") -> pd.DataFrame:
+    """Binance klines → pandas DataFrame.
+
+    interval 별 index 정책:
+      - "1d" — 기존 동작 보존 (``.dt.normalize()`` 으로 시각 절단). cs-tsmom-crypto-daily
+        의 5y bench 결과와 byte-identical 유지를 위함.
+      - 그 외 (1h / 15m / 4h / ...) — full ms 타임스탬프 그대로. 1h 봉의 경우
+        같은 날 24봉이 같은 date 로 collapse 되어 strategy 가 마지막 1봉만 받게
+        되던 회귀 (PR #336 Dynamic Universe Phase 1 사고)를 차단.
+    """
     if not rows:
         return pd.DataFrame()
     df = pd.DataFrame(rows, columns=[
@@ -62,7 +71,10 @@ def _klines_to_dataframe(rows: list[list]) -> pd.DataFrame:
     ])
     for c in ["open", "high", "low", "close", "volume", "quote_volume"]:
         df[c] = df[c].astype(float)
-    df.index = pd.to_datetime(df["open_time"], unit="ms").dt.normalize()
+    idx = pd.to_datetime(df["open_time"], unit="ms")
+    if interval == "1d":
+        idx = idx.dt.normalize()
+    df.index = idx
     return df[["open", "high", "low", "close", "volume", "quote_volume"]]
 
 
@@ -94,7 +106,7 @@ def fetch_universe_klines(
     def _fetch_one(sym: str):
         try:
             rows = fetch_klines(sym, interval, start_ms, end_ms)
-            return sym, _klines_to_dataframe(rows)
+            return sym, _klines_to_dataframe(rows, interval)
         except Exception as exc:
             log.warning("binance_universe_fetch_fail symbol=%s error=%s", sym, exc)
             return sym, None
@@ -113,7 +125,7 @@ def fetch_universe_klines(
                 panels[sym] = df
     elapsed = time.time() - started
     log.info(
-        "binance_universe_fetch_complete fetched=%d failed=%d elapsed_s=%.1f",
-        len(panels), len(failed), elapsed,
+        "binance_universe_fetch_complete interval=%s fetched=%d failed=%d elapsed_s=%.1f",
+        interval, len(panels), len(failed), elapsed,
     )
     return panels
