@@ -15,6 +15,29 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.17"
+    date: "2026-06-01"
+    title: "airborne bidir 활성화 fix — shorts_allowed 선언 + sell reduce_only stamp 해제"
+    tags: [fix, safety]
+    summary: >
+      v0.6.13~v0.6.16 누적 회귀 해결 후에도 자동매매 0건이던 마지막 조각.
+      airborne v1.2 (bidir long+short) 가 13K+ sell 시그널을 emit 했지만 모두
+      WAL silent REJECTED. 원인: #238 Item 7 의 ``reduce_only=(signal.action
+      == "sell")`` 가 short 진입 시그널까지 reduceOnly stamp 해 Binance Futures
+      가 "reduceOnly with no position" (-2022) 거부. signal_emitted WAL 만
+      쌓이고 order_acked 0건 (REJECTED 는 WAL append 안 함, metric 만 증가
+      — 진단도 어려웠던 silent path).
+    items:
+      - "src/portfolio/_async_orchestrator.py — sell intent 의 reduce_only 산식을 ``(signal.action == 'sell' and not getattr(strat, 'shorts_allowed', False))`` 로. shorts_allowed 미선언 (default) 전략은 byte-identical."
+      - "LiveAirborneBbReversalKstMorning — shorts_allowed: ClassVar[bool] = True 선언. 자식 KstHours 가 자동 상속 (활성 운영 전략)."
+      - "tests/portfolio/test_orchestrator_shorts_allowed.py 신규 4건 — long-only sell 은 reduce_only=True 유지, bidir sell 은 reduce_only=False, buy 양쪽 동일, airborne strategy attr 선언 검증."
+      - "운영 영향 — live_run.py 재시작 시 다음 KST {8,11,16,22}시 short 시그널이 Binance testnet 에 실제 발주. v0.6.15/v0.6.16 + 본 fix 가 합쳐져 airborne 자동매매 정상화 완성."
+    refs:
+      - "src/portfolio/_async_orchestrator.py — reduce_only stamp 산식"
+      - "src/backtest/strategies/live_airborne_bb_reversal_kst_morning.py — shorts_allowed ClassVar"
+      - "tests/portfolio/test_orchestrator_shorts_allowed.py"
+      - "logs/live/20260601T123943Z/wal.jsonl — 13K+ signal_emitted / order_acked 0 incident"
+
   - version: "v0.6.16"
     date: "2026-05-30"
     title: "1h 봉 index collapse fix — airborne 100종목 dispatch 가 모든 종목에서 hold 만 반환하던 root cause"

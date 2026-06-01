@@ -610,11 +610,17 @@ class AsyncStrategyOrchestrator:
                     side=signal.action,
                     qty=qty,
                     reason=signal.reason,
-                    # #238 Item 7 — strategies are long-only; a SELL is always
-                    # an exit, never a short entry. reduceOnly makes the
-                    # exchange no-op a "sell with no long" instead of opening
-                    # a naked short (the root incident).
-                    reduce_only=(signal.action == "sell"),
+                    # #238 Item 7 — default: long-only 전략의 SELL 은 항상 청산
+                    # 이라 reduceOnly stamp (보유 0 에서 sell 이 naked short 되는
+                    # 사고 차단). 단, ``shorts_allowed=True`` 를 선언한 bidir
+                    # 전략 (airborne v1.2 등) 은 SELL 이 short 진입일 수 있으므로
+                    # reduceOnly 해제 — testnet 가 -2022 로 거부하던 사고 회복
+                    # (2026-05-28 ~ 06-01: airborne sell 시그널 13K+ 전량 silent
+                    # REJECTED). long-only 전략 (default) 은 byte-identical.
+                    reduce_only=(
+                        signal.action == "sell"
+                        and not getattr(strat, "shorts_allowed", False)
+                    ),
                     entry_order_type=entry_order_type,
                     ref_price=(
                         order_price if entry_order_type == "post_only" else None
