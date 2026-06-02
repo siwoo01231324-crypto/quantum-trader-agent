@@ -75,6 +75,38 @@ async def execute_intents(
     """
     acks: list[OrderAck] = []
     intents_list = list(intents)
+    # PR #348 — REJECTED ack 도 WAL 에 기록 (이전 silent skip). 사유는
+    # ``ack.reject_reason`` 에. 새 event_type ``order_rejected`` 로 분리 →
+    # dashboard /signals follow_up 가 "ordered" 로 잘못 분류 안 함.
+    def _write_rejected_wal(intent_: OrderIntent, ack_: OrderAck) -> None:
+        ts_now_ = datetime.now(timezone.utc).isoformat()
+        try:
+            wal.write(WALEvent(
+                ts=ts_now_,
+                event_type="order_rejected",
+                payload={
+                    "client_order_id": ack_.client_order_id,
+                    "broker_order_id": ack_.broker_order_id,
+                    "ack_ts": ts_now_,
+                    "status": ack_.status,
+                    "origin": "executor",
+                    "strategy_id": intent_.strategy_id,
+                    "symbol": intent_.symbol,
+                    "side": (
+                        intent_.side.value if hasattr(intent_.side, "value")
+                        else str(intent_.side)
+                    ),
+                    "qty": str(intent_.qty),
+                    "broker": getattr(broker, "name", ""),
+                    "reject_reason": ack_.reject_reason,
+                },
+            ))
+        except WALWriteFailed:
+            logger.warning(
+                "order_rejected WAL write failed for %s",
+                ack_.client_order_id,
+            )
+
     for idx, intent in enumerate(intents_list):
         idempotency_key = _make_key(intent, idx)
 
@@ -90,6 +122,7 @@ async def execute_intents(
                 side=intent.side.upper(),
                 status="REJECTED",
             ).inc()
+            _write_rejected_wal(intent, ack)
             continue
 
         # 2. 변환 — MARKET, 또는 post-only 진입이면 GTX LIMIT.
@@ -104,6 +137,7 @@ async def execute_intents(
                 side=intent.side.upper(),
                 status="REJECTED",
             ).inc()
+            _write_rejected_wal(intent, ack)
             continue
 
         # 3. broker 호출 + latency 메트릭
@@ -139,6 +173,23 @@ async def execute_intents(
                     strategy_id=intent.strategy_id,
                 )
 
+        # PR #349 — Binance Futures 의 -1109 "Invalid account" 거부는 *해당
+        # 종목 leverage 가 한 번도 설정 안 된* 계정의 첫 발주에서 발생.
+        # ``ensure_leverage_minimum`` (broker 어댑터에 있을 때만) 이 종목당
+        # 1회만 REST 호출해 leverage 가 0/미설정이면 1x 로 set. 사용자가 web
+        # 에서 설정한 값은 *override 하지 않음* (leverage > 0 면 no-op).
+        # 어댑터 내부 캐시 (``_leverage_minimum_done``) 가 재호출 폭주 차단.
+        # KIS / PaperBroker 는 본 메서드 미지원 → getattr fallback 으로 skip.
+        ensure_min = getattr(broker, "ensure_leverage_minimum", None)
+        if ensure_min is not None:
+            try:
+                await ensure_min(req.symbol)
+            except Exception as err:  # noqa: BLE001 — leverage 못 set 해도 발주 시도
+                logger.debug(
+                    "ensure_leverage_minimum failed for %s: %s — proceed",
+                    req.symbol, err,
+                )
+
         t0 = time.monotonic()
         try:
             ack = await broker.place_order(req)
@@ -149,10 +200,47 @@ async def execute_intents(
             ack = _reject(intent, idempotency_key, f"BROKER_ERROR:{exc}")
         latency = time.monotonic() - t0
 
-        # 4. order_acked WAL append — 정상 ack 만 (Architect note #2)
-        # WAL writes serialized via single consumer task (loop.py:167); WS fill listener writes via asyncio.Queue (Stage 5)
-        if ack.status not in ("REJECTED",):
-            ts_now = datetime.now(timezone.utc).isoformat()
+        # 4. WAL append — Architect note #2
+        # WAL writes serialized via single consumer task (loop.py:167);
+        # WS fill listener writes via asyncio.Queue (Stage 5)
+        ts_now = datetime.now(timezone.utc).isoformat()
+        if ack.status == "REJECTED":
+            # 2026-06-02 PR #348 — REJECTED 도 WAL 에 기록 (별도 event_type).
+            # 이전: silent skip → 13884+ sell 시그널이 모두 REJECTED 인데 WAL
+            # 흔적 0 → 사용자 보고 "거래 안 함" 진단 불가능 (PR #342 의 same
+            # incident). 새 event_type ``order_rejected`` 로 분리해 dashboard
+            # /signals follow_up 로직이 "ordered" 로 잘못 분류 안 함.
+            try:
+                wal.write(WALEvent(
+                    ts=ts_now,
+                    event_type="order_rejected",
+                    payload={
+                        "client_order_id": ack.client_order_id,
+                        "broker_order_id": ack.broker_order_id,
+                        "ack_ts": ts_now,
+                        "status": ack.status,
+                        "origin": "executor",
+                        "strategy_id": intent.strategy_id,
+                        "symbol": intent.symbol,
+                        "side": (
+                            intent.side.value if hasattr(intent.side, "value")
+                            else str(intent.side)
+                        ),
+                        "qty": str(intent.qty),
+                        "broker": getattr(broker, "name", ""),
+                        # 핵심 진단 필드. KILL_SWITCH / CONVERSION:... /
+                        # BROKER_ERROR:... / WAL_WRITE_FAIL 또는 binance
+                        # error code (-2022 reduce_only / -2010 invalid order 등).
+                        "reject_reason": ack.reject_reason,
+                    },
+                ))
+            except WALWriteFailed:
+                logger.warning(
+                    "order_rejected WAL write failed for %s",
+                    ack.client_order_id,
+                )
+        else:
+            # 기존 동작 byte-identical (NEW / FILLED / PARTIALLY_FILLED 등).
             try:
                 wal.write(WALEvent(
                     ts=ts_now,

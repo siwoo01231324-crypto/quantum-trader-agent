@@ -15,8 +15,8 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
-  - version: "v0.6.21"
-    date: "2026-06-02"
+  - version: "v0.6.24"
+    date: "2026-06-03"
     title: "capital-allocation-v1 — 3 전략 자본 배분 + 주간 whitelist refresh 절차 기획서"
     tags: [feature, docs]
     summary: >
@@ -31,10 +31,60 @@ versions:
       - "configs/orchestrator/production.yaml — cs-tsmom capital_fraction 0.5→0.4 (3 전략 동시 운영 safety 20% 확보), kst-hours default_size 0.05→0.04, short-whitelist default_size 0.05→0.04. 합산 시드 비중 100% → 80%."
       - "Leverage 정책: 코드 단 1x 고정 (Hard OOS 검증값). Binance Futures 웹에서 종목당 leverage 변경 시 default_size 의 의미가 margin 비중으로 바뀜 — 사용자 결정 영역."
       - "운영 영향: live_run.py 재시작 시 즉시 적용. cs-tsmom 의 종목당 비중이 5% → 4% 로 축소 (top_n=10 기준), 두 airborne 의 per-trade 가 5% → 4%."
+      - "버전 노트: 원래 v0.6.21 로 prepend 됐으나 PR #348/#350 (v0.6.22/v0.6.23) 가 먼저 머지돼 충돌 발생 → 본 entry 를 v0.6.24 로 재번호. 변경 내용은 PR #347 commit 그대로 (production.yaml 비중 변경 동일)."
     refs:
       - "docs/specs/capital-allocation-v1.md"
       - "docs/runbooks/airborne-short-whitelist-refresh.md"
       - "configs/orchestrator/production.yaml"
+
+  - version: "v0.6.23"
+    date: "2026-06-03"
+    title: "ensure_leverage_minimum — Binance -1109 'Invalid account' 거부 fix (자동매매 정상화)"
+    tags: [fix, safety]
+    summary: >
+      v0.6.22 (PR #348) 진단 인프라로 발견한 실제 거부 사유 처리. kst-hours
+      + short-whitelist-v1 의 15,302 sell 시그널이 모두 BROKER_ERROR
+      [-1109] Invalid account 로 거부됨. Root cause: Binance Futures testnet
+      의 -1109 는 해당 종목 leverage 가 한 번도 설정 안 된 계정의 첫 발주에서
+      발생. ensure_leverage 함수는 있었으나 발주 path 에서 호출 안 됨.
+    items:
+      - "src/brokers/binance/async_adapter.py — AsyncBinanceFuturesAdapter.ensure_leverage_minimum 신규. 종목당 1회 get_position_risk 호출 → leverage==0 (미설정) 이면 fallback=1x 로 set, leverage>0 (사용자 web 값) 이면 no-op. 어댑터 인스턴스 캐시 (_leverage_minimum_done) 로 동일 symbol 재호출 폭주 차단."
+      - "src/live/executor.py — broker.place_order 직전에 getattr(broker, 'ensure_leverage_minimum', None) 호출. KIS / PaperBroker 처럼 미지원 broker 는 graceful skip. ensure 실패해도 place_order 시도."
+      - "tests/brokers/binance/test_ensure_leverage_minimum.py 신규 6 tests — 미설정 fallback, user 값 보존, 캐시 효과, 종목 분리."
+      - "tests/live/test_executor_order_rejected_wal.py +3 tests — executor 가 발주 직전 호출 / 미지원 broker graceful skip / 실패 시 발주 계속."
+      - "기존 executor + adapter 회귀 0건. 총 16 PASS."
+      - "사용자 의도 보존: Binance Futures 웹에서 종목별 leverage 설정한 값이 코드 강제 변경 X. 본 fix 는 *첫 거래 가능한 상태* 만 보장."
+      - "운영 영향: live_run.py 재시작 시 즉시 적용. 다음 봉 마감 시 거부 종목 (XPLUSDT/ONDOUSDT/XAGUSDT/RIFUSDT/NATGASUSDT 등) 첫 발주에서 ensure_leverage_minimum 이 1x 로 set → 두 번째 발주부터 정상 체결 예상. 또는 사용자가 Binance 웹에서 leverage 변경 시 본 함수는 그대로 통과."
+    refs:
+      - "src/brokers/binance/async_adapter.py"
+      - "src/live/executor.py"
+      - "tests/brokers/binance/test_ensure_leverage_minimum.py"
+      - "tests/live/test_executor_order_rejected_wal.py"
+      - "logs/live/20260602T065341Z/wal.jsonl — 15,302 order_rejected -1109 incident"
+
+  - version: "v0.6.22"
+    date: "2026-06-02"
+    title: "executor — REJECTED ack 를 WAL 에 기록 (`order_rejected` event_type), silent failure 진단 가능"
+    tags: [fix, safety]
+    summary: >
+      v0.6.18 (PR #342) 의 shorts_allowed fix 후에도 자동매매 정상 작동 안 함.
+      kst-hours 가 20,479 sell 시그널 emit 했지만 order_acked=0 — 모든 거래가
+      REJECTED 인데 WAL 에 기록 0건 (silent failure). 원인:
+      ``executor.py`` 의 ``if ack.status not in ("REJECTED",):`` 가 거부 ack
+      를 WAL 에 안 적던 옛 동작. 사용자 보고 "거래 안 함" 의 진단을 어렵게 만든
+      구조적 결함. 본 PR 은 진단 인프라 fix (실제 거부 사유 자체는 별도 PR).
+    items:
+      - "src/live/executor.py — REJECTED ack 를 새 event_type ``order_rejected`` 로 WAL 에 기록. ``ack.reject_reason`` (KILL_SWITCH / CONVERSION:... / BROKER_ERROR:... / -2022 / -2010 등) 함께 포함."
+      - "별도 event_type 사용 이유: 기존 order_acked 는 dashboard /signals follow_up 가 'ordered' 로 분류함. REJECTED 가 order_acked 면 'ordered' 로 잘못 표시 → 그래서 분리."
+      - "KILL_SWITCH / CONVERSION early-return 경로도 ``_write_rejected_wal`` 헬퍼로 WAL 기록 (이전 early-return 시에도 silent skip 됐음)."
+      - "tests/live/test_executor_order_rejected_wal.py 신규 3 tests — broker REJECTED, 정상 ack byte-identical 보존, KILL_SWITCH 거부 사유 기록."
+      - "기존 8 executor 테스트 회귀 0건."
+      - "운영 영향: live_run.py 재시작 시 즉시 적용. 다음 sell 시그널 거부 시 WAL 에 reject_reason 기록 → 거부 사유 확인 후 별도 PR 로 실 발주 fix 진행 가능."
+      - "Follow-up PR 예상: (1) ack.reject_reason 이 binance error code (-2022 등) 인지 확인 후 fix, (2) churn 차단 (kst-hours 의 매 tick 시그널 발화 cooldown), (3) dashboard /api/signals 에 order_rejected 도 follow_up 으로 노출."
+    refs:
+      - "src/live/executor.py"
+      - "tests/live/test_executor_order_rejected_wal.py"
+      - "logs/live/20260601T193617Z/wal.jsonl — 20,479 signal_emitted / order_acked 0 incident"
 
   - version: "v0.6.20"
     date: "2026-06-02"
