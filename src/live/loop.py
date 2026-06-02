@@ -6,6 +6,7 @@ if sys.platform == "win32":
 
 import logging
 import signal
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -469,9 +470,18 @@ async def run_shadow_loop(
             max_attempts = 100  # ~ days of retries; daemon should outlive any
                                 # transient outage but eventually give up if
                                 # the exchange WS is permanently down.
+            # 2026-06-03 debug — producer 가 ticks 받는지 진단용
+            _producer_tick_count = 0
             while not stop_event.is_set() and attempt < max_attempts:
                 try:
+                    logger.info("producer.iter_start attempt=%d", attempt)
                     async for tick in feed:
+                        if _producer_tick_count == 0:
+                            logger.info(
+                                "producer.FIRST_TICK %s @ %s (qty=%s)",
+                                tick.symbol, tick.price, tick.qty,
+                            )
+                        _producer_tick_count += 1
                         if stop_event.is_set():
                             break
                         if tick_queue.full():
@@ -541,11 +551,26 @@ async def run_shadow_loop(
             from src.live.cs_basket_dispatcher import BasketDispatcher
             basket_dispatcher = BasketDispatcher()
             logger.info("cs_basket_dispatcher.enabled — universe-scan auto-orders")
+            # 2026-06-03 debug — consumer 가 tick 받는지 진단용
+            _consumer_tick_count = 0
+            _consumer_timeout_count = 0
             while not stop_event.is_set():
                 try:
                     tick = await asyncio.wait_for(tick_queue.get(), timeout=1.0)
                 except asyncio.TimeoutError:
+                    _consumer_timeout_count += 1
+                    if _consumer_timeout_count in (5, 30, 300):
+                        logger.warning(
+                            "consumer.NO_TICK %ds — producer may be stuck",
+                            _consumer_timeout_count,
+                        )
                     continue
+                if _consumer_tick_count == 0:
+                    logger.info(
+                        "consumer.FIRST_TICK %s @ %s (after %d timeouts)",
+                        tick.symbol, tick.price, _consumer_timeout_count,
+                    )
+                _consumer_tick_count += 1
                 ms = _tick_to_market_state(tick)
                 paper_broker.update_market(ms)
                 ts = datetime.fromisoformat(tick.ts)
@@ -563,7 +588,15 @@ async def run_shadow_loop(
                 if config.balance_provider is not None:
                     await asyncio.to_thread(snapshot_builder.refresh_balance)
                 snapshot = snapshot_builder.build_snapshot(tick)
+                if _consumer_tick_count == 1:
+                    logger.info("consumer.run_bar_start tick=%d ts=%s", _consumer_tick_count, ts.isoformat())
+                _t0 = time.monotonic() if _consumer_tick_count <= 3 else None
                 intents = await orchestrator.run_bar(ts, snapshot)
+                if _t0 is not None:
+                    logger.info(
+                        "consumer.run_bar_done tick=%d elapsed=%.2fs intents=%d",
+                        _consumer_tick_count, time.monotonic() - _t0, len(intents),
+                    )
                 if intents:
                     # Emit timeline `signal_emitted` events ahead of order
                     # placement so the dashboard / WAL audit trail captures
