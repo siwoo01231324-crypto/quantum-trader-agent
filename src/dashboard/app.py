@@ -2731,17 +2731,34 @@ async function submitTrade(){
     return;
   }
   btn.disabled=true;
-  btn.textContent='저장 중…';
+  btn.textContent=_editingTs?'수정 중…':'저장 중…';
   try{
-    const r=await fetch('/api/manual_trade',{method:'POST',
+    // _editingTs 면 PATCH (수정), 아니면 POST (신규)
+    let url, method;
+    if(_editingTs){
+      url='/api/manual_trade/'+encodeURIComponent(_editingTs);
+      method='PATCH';
+    }else{
+      url='/api/manual_trade';
+      method='POST';
+    }
+    const r=await fetch(url,{method:method,
       headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     const j=await r.json();
     if(j.ok){
       status.className='status success';
+      status.style.background='';
+      status.style.color='';
       const dirTag=payload.direction.toUpperCase();
-      status.textContent=`거래 추가 완료 — ${payload.symbol} ${dirTag} ${payload.qty} @ ${payload.entry_price}`+
-        (payload.exit_price?` → ${payload.exit_price}`:'')+
-        (payload.realized_pnl!=null?` (PnL ${payload.realized_pnl})`:'');
+      if(_editingTs){
+        status.textContent=`거래 수정 완료 — ${payload.symbol} ${dirTag} ${payload.qty} @ ${payload.entry_price}`;
+      }else{
+        status.textContent=`거래 추가 완료 — ${payload.symbol} ${dirTag} ${payload.qty} @ ${payload.entry_price}`+
+          (payload.exit_price?` → ${payload.exit_price}`:'')+
+          (payload.realized_pnl!=null?` (PnL ${payload.realized_pnl})`:'');
+      }
+      _editingTs=null;
+      btn.style.background='';
       document.getElementById('symbol').value='';
       document.getElementById('qty').value='';
       document.getElementById('entry_price').value='';
@@ -2756,14 +2773,18 @@ async function submitTrade(){
       await loadList();
     }else{
       status.className='status error';
-      status.textContent='저장 실패: '+(j.reason||'unknown');
+      status.style.background='';
+      status.style.color='';
+      status.textContent=(_editingTs?'수정':'저장')+' 실패: '+(j.reason||'unknown');
     }
   }catch(e){
     status.className='status error';
+    status.style.background='';
+    status.style.color='';
     status.textContent='요청 실패: '+e;
   }finally{
     btn.disabled=false;
-    btn.textContent='거래 추가';
+    btn.textContent=_editingTs?'수정 저장':'거래 추가';
   }
 }
 function fmtPnlCell(v){
@@ -2796,7 +2817,7 @@ async function loadList(){
       list.innerHTML='<div class="empty">'+(showAll?'저장된 수동 거래 없음.':'오늘 입력한 수동 거래 없음.'+hint)+'</div>';
       return;
     }
-    let html='<table><thead><tr><th>시각</th><th>거래소</th><th>종목</th><th>방향</th><th>수량</th><th>진입가</th><th>청산가</th><th>실현손익</th><th>결과</th><th>메모</th></tr></thead><tbody>';
+    let html='<table><thead><tr><th>시각</th><th>거래소</th><th>종목</th><th>방향</th><th>수량</th><th>진입가</th><th>청산가</th><th>실현손익</th><th>결과</th><th>메모</th><th>액션</th></tr></thead><tbody>';
     for(const t of trades){
       const dir=t.direction||(t.side==='buy'?'long':t.side==='sell'?'short':'');
       const dirTxt=dir?dir.toUpperCase():(t.side||'').toUpperCase();
@@ -2806,7 +2827,8 @@ async function loadList(){
       const outcome=t.outcome||'';
       const outcomeTxt=outcome==='win'?'익절':outcome==='loss'?'손절':outcome==='breakeven'?'본전':'—';
       const outcomeCls=outcome?('outcome-'+outcome):'';
-      html+=`<tr>
+      const tsAttr=esc(t.ts||'');
+      html+=`<tr data-ts="${tsAttr}">
         <td>${esc(fmtKst(t.ts))}</td>
         <td>${esc(t.venue||'—')}</td>
         <td>${esc(t.symbol)}</td>
@@ -2817,14 +2839,93 @@ async function loadList(){
         <td>${fmtPnlCell(t.realized_pnl)}</td>
         <td class="${outcomeCls}">${esc(outcomeTxt)}</td>
         <td class="note-cell" title="${esc(t.note)}">${esc(t.note)}</td>
+        <td class="actions-cell">
+          <button class="tg-btn act-edit" data-ts="${tsAttr}" title="수정">✎</button>
+          <button class="tg-btn act-delete" data-ts="${tsAttr}" title="삭제">🗑</button>
+        </td>
       </tr>`;
     }
     html+='</tbody></table>';
     list.innerHTML=html;
+    // 버튼 wire-up (delegation)
+    list.querySelectorAll('.act-edit').forEach(b=>b.addEventListener('click', onEditClick));
+    list.querySelectorAll('.act-delete').forEach(b=>b.addEventListener('click', onDeleteClick));
   }catch(e){
     document.getElementById('today-list').innerHTML='<div class="empty">로딩 실패: '+esc(String(e))+'</div>';
   }
 }
+
+// ── 수정 / 삭제 (2026-06-03) ───────────────────────────────────────
+// 현재 편집 중인 거래의 ts. null 이면 신규 추가 모드 (POST), 값 있으면 수정 모드 (PATCH).
+let _editingTs = null;
+
+async function onDeleteClick(e){
+  const ts=e.currentTarget.getAttribute('data-ts');
+  if(!ts) return;
+  if(!confirm('이 거래를 삭제하시겠습니까?\n시각: '+fmtKst(ts)+'\n복구 불가.')) return;
+  try{
+    const r=await fetch('/api/manual_trade/'+encodeURIComponent(ts),{method:'DELETE'});
+    const j=await r.json();
+    const status=document.getElementById('status');
+    if(j.ok){
+      status.className='status success';
+      status.textContent='거래 삭제됨 ('+fmtKst(ts)+')';
+      await loadList();
+    }else{
+      status.className='status error';
+      status.textContent='삭제 실패: '+(j.reason||'unknown');
+    }
+  }catch(e){
+    document.getElementById('status').className='status error';
+    document.getElementById('status').textContent='요청 실패: '+e;
+  }
+}
+
+async function onEditClick(e){
+  const ts=e.currentTarget.getAttribute('data-ts');
+  if(!ts) return;
+  // 현재 row 의 값들을 폼에 채우기 (오늘분에선 today list, 전체모드면 recent)
+  // 가장 단순한 방법: 마지막으로 받은 trades 에서 ts 매칭.
+  // loadList 안 state 못 잡으니, GET /api/manual_trade/recent?limit=500 다시 조회.
+  try{
+    const r=await fetch('/api/manual_trade/recent?limit=500');
+    const j=await r.json();
+    const t=(j.trades||[]).find(x=>String(x.ts)===String(ts));
+    if(!t){
+      alert('해당 거래를 못 찾았어요 (이미 삭제됐을 수 있음)');
+      return;
+    }
+    // 폼에 값 채우기
+    document.getElementById('symbol').value=t.symbol||'';
+    document.getElementById('qty').value=t.qty!=null?t.qty:'';
+    document.getElementById('entry_price').value=t.entry_price!=null?t.entry_price:(t.price!=null?t.price:'');
+    document.getElementById('exit_price').value=t.exit_price!=null?t.exit_price:'';
+    document.getElementById('realized_pnl').value=t.realized_pnl!=null?t.realized_pnl:'';
+    document.getElementById('venue').value=t.venue||'binance';
+    document.getElementById('note').value=t.note||'';
+    // 토글 그룹
+    const dir=t.direction||(t.side==='buy'?'long':t.side==='sell'?'short':'long');
+    const dg=document.getElementById('dir-group');
+    dg.querySelectorAll('.tg-btn').forEach(x=>x.classList.toggle('active', x.getAttribute('data-val')===dir));
+    const og=document.getElementById('outcome-group');
+    og.querySelectorAll('.tg-btn').forEach(x=>x.classList.toggle('active', x.getAttribute('data-val')===(t.outcome||'')));
+    _editingTs=ts;
+    document.getElementById('submit-btn').textContent='수정 저장';
+    document.getElementById('submit-btn').style.background='var(--yellow)';
+    // 페이지 상단 안내
+    const status=document.getElementById('status');
+    status.className='status';
+    status.style.display='block';
+    status.style.background='rgba(240,165,0,.15)';
+    status.style.color='var(--yellow)';
+    status.textContent='✎ 수정 모드 — 폼 값 바꾸고 "수정 저장" 클릭. 취소하려면 페이지 새로고침.';
+    // 폼 위치로 스크롤
+    window.scrollTo({top:0, behavior:'smooth'});
+  }catch(e){
+    alert('수정 모드 진입 실패: '+e);
+  }
+}
+
 loadList();
 
 async function exportJournal(doPush){
@@ -4332,6 +4433,177 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
             "log_path": str(path),
             "total_all_time": len(all_trades),
         })
+
+    # ── 수동 거래 수정/삭제 (2026-06-03) ───────────────────────────────────
+    # JSONL 은 append-only 이지만, 수동 입력 실수는 흔함 → ts 를 key 로
+    # 전체 파일 재기록. 영향 row 만 갱신/제거, 나머지 byte-identical.
+
+    def _rewrite_manual_trades(records: list[dict]) -> None:
+        """log JSONL 전체 재기록 — atomic temp-file swap.
+
+        records: full {ts, event_type, schema_version, payload} dict list.
+        파일 부재 시 새로 생성. corruption tolerant — 호출자가 _read_raw 의
+        결과를 그대로 수정해 넘기는 것이 안전.
+        """
+        import json as _json
+        import tempfile
+        path = _manual_trade_log_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        # 같은 디렉토리에 임시 파일 → atomic rename
+        fd, tmp_path = tempfile.mkstemp(
+            prefix="manual_trade_", suffix=".jsonl.tmp",
+            dir=str(path.parent),
+        )
+        try:
+            with open(fd, "w", encoding="utf-8") as f:
+                for rec in records:
+                    f.write(_json.dumps(rec, ensure_ascii=False) + "\n")
+            # Windows 에서 os.replace 가 atomic
+            import os as _os
+            _os.replace(tmp_path, str(path))
+        except Exception:
+            # cleanup
+            try:
+                import os as _os
+                if _os.path.exists(tmp_path):
+                    _os.unlink(tmp_path)
+            except Exception:
+                pass
+            raise
+
+    def _read_manual_trades_raw() -> list[dict]:
+        """log JSONL raw record list (event_type / schema_version / payload 통째)."""
+        import json as _json
+        path = _manual_trade_log_path()
+        if not path.exists():
+            return []
+        out: list[dict] = []
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                out.append(_json.loads(line))
+            except _json.JSONDecodeError:
+                continue
+        return out
+
+    @app.delete("/api/manual_trade/{trade_ts}")
+    async def api_manual_trade_delete(trade_ts: str) -> JSONResponse:
+        """ts 로 단일 row 삭제. 잘못 입력한 거래 제거.
+
+        다른 row 는 byte-identical 보존 (corruption-tolerant raw read +
+        atomic rewrite).
+        """
+        try:
+            all_raw = _read_manual_trades_raw()
+        except Exception as err:  # noqa: BLE001
+            return JSONResponse(
+                {"ok": False, "reason": f"read_failed: {err}"}, status_code=500,
+            )
+        kept = [r for r in all_raw if str(r.get("ts")) != trade_ts]
+        if len(kept) == len(all_raw):
+            return JSONResponse(
+                {"ok": False, "reason": f"trade not found ts={trade_ts}"},
+                status_code=404,
+            )
+        try:
+            _rewrite_manual_trades(kept)
+        except Exception as err:  # noqa: BLE001
+            return JSONResponse(
+                {"ok": False, "reason": f"write_failed: {err}"}, status_code=500,
+            )
+        return JSONResponse({"ok": True, "deleted_ts": trade_ts,
+                             "remaining": len(kept)})
+
+    @app.patch("/api/manual_trade/{trade_ts}")
+    async def api_manual_trade_patch(
+        trade_ts: str, body: dict[str, Any],
+    ) -> JSONResponse:
+        """ts 로 단일 row payload 필드 update.
+
+        Body 의 어떤 필드든 전달 시 그 필드만 갱신. symbol/qty/entry_price/
+        exit_price/realized_pnl/outcome/direction/side/kind/venue/note 등.
+        ``ts`` 자체 (record key) 는 변경 불가.
+
+        부분 update — body 에 없는 필드는 그대로. 폼이 일부 필드만 수정해
+        보내도 OK.
+        """
+        try:
+            all_raw = _read_manual_trades_raw()
+        except Exception as err:  # noqa: BLE001
+            return JSONResponse(
+                {"ok": False, "reason": f"read_failed: {err}"}, status_code=500,
+            )
+        found_idx: int | None = None
+        for i, r in enumerate(all_raw):
+            if str(r.get("ts")) == trade_ts:
+                found_idx = i
+                break
+        if found_idx is None:
+            return JSONResponse(
+                {"ok": False, "reason": f"trade not found ts={trade_ts}"},
+                status_code=404,
+            )
+        # body 의 입력 정규화 (POST 와 동일 path 통과)
+        rec = all_raw[found_idx]
+        pl = dict(rec.get("payload") or {})
+
+        # 허용 필드만 update — record key (ts, event_type, schema_version) 보호
+        ALLOWED = {
+            "symbol", "direction", "side", "kind", "qty", "entry_price",
+            "price", "exit_price", "realized_pnl", "outcome", "venue", "note",
+        }
+        # 정규화: symbol upper, direction lower, etc.
+        for k, v in body.items():
+            if k not in ALLOWED:
+                continue
+            if k == "symbol" and isinstance(v, str):
+                pl["symbol"] = v.strip().upper()
+            elif k in ("direction", "side", "kind", "venue", "outcome") and isinstance(v, str):
+                pl[k] = v.strip().lower() or pl.get(k)
+            elif k in ("qty", "entry_price", "price", "exit_price", "realized_pnl"):
+                if v in ("", None):
+                    pl[k] = None
+                else:
+                    try:
+                        pl[k] = float(v)
+                    except (TypeError, ValueError):
+                        return JSONResponse(
+                            {"ok": False, "reason": f"{k} must be numeric"},
+                            status_code=400,
+                        )
+            else:
+                pl[k] = v
+
+        # entry_price ↔ price legacy sync
+        if "entry_price" in body and "price" not in body:
+            pl["price"] = pl.get("entry_price")
+        elif "price" in body and "entry_price" not in body:
+            pl["entry_price"] = pl.get("price")
+
+        # kind 자동 재산정 (exit_price 추가/제거 시)
+        if "exit_price" in body:
+            if pl.get("exit_price") not in (None, "", 0, 0.0):
+                pl["kind"] = "roundtrip"
+            elif pl.get("kind") == "roundtrip":
+                pl["kind"] = "entry"
+
+        # outcome 검증
+        if pl.get("outcome") not in (None, "", "win", "loss", "breakeven"):
+            return JSONResponse(
+                {"ok": False, "reason": "outcome must be win/loss/breakeven"},
+                status_code=400,
+            )
+        rec["payload"] = pl
+        all_raw[found_idx] = rec
+        try:
+            _rewrite_manual_trades(all_raw)
+        except Exception as err:  # noqa: BLE001
+            return JSONResponse(
+                {"ok": False, "reason": f"write_failed: {err}"}, status_code=500,
+            )
+        return JSONResponse({"ok": True, "ts": trade_ts, "payload": pl})
 
     @app.get("/manual", response_class=HTMLResponse)
     async def manual_page() -> HTMLResponse:
