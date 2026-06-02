@@ -2862,7 +2862,7 @@ let _editingTs = null;
 async function onDeleteClick(e){
   const ts=e.currentTarget.getAttribute('data-ts');
   if(!ts) return;
-  if(!confirm('이 거래를 삭제하시겠습니까?\n시각: '+fmtKst(ts)+'\n복구 불가.')) return;
+  if(!confirm('이 거래를 삭제하시겠습니까? 시각: '+fmtKst(ts)+' (복구 불가)')) return;
   try{
     const r=await fetch('/api/manual_trade/'+encodeURIComponent(ts),{method:'DELETE'});
     const j=await r.json();
