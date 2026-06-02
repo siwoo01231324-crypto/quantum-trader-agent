@@ -117,7 +117,8 @@ AIRBORNE_FEE_PCT = 0.08   # 양방향 합산 (taker 0.04% × 2)
 def _simulate_airborne_fire(
     fire: dict, bars: list[dict],
 ) -> dict | None:
-    """단일 fire 의 4봉 시뮬 결과. bars 가 비어있으면 None.
+    """단일 fire 의 4봉 시뮬 결과. bars 가 비어있거나 4봉 미만이면서 TP/SL 조기
+    종결도 없으면 None — 통계 / 캐시 양쪽에서 incomplete sim 제외.
 
     Args:
         fire: {ts, symbol, side, fire_close, ...}
@@ -127,6 +128,10 @@ def _simulate_airborne_fire(
         {outcome: "TP"|"SL"|"SL_first"|"timeout", pct: float, bar_idx: int}
         - pct: 손익비 (TP=+1.0, SL=-0.5, timeout=실제 close 변화율 부호조정)
         - bar_idx: 1-based 닿은 봉 번호
+        None — 4봉 다 닫히기 전에 호출됐고 그 짧은 구간 안에 TP/SL 도 안 찍힌
+          경우. caller (api_airborne_metrics) 가 None 인 fire 는 캐시 저장 안
+          하고 metric 집계에서도 제외 → 다음 호출 때 4봉 다 닫혀있으면 정상
+          sim 으로 재계산. 영원히 timeout 으로 박혀 통계를 오염시키던 회귀 차단.
     """
     if not bars:
         return None
@@ -148,6 +153,15 @@ def _simulate_airborne_fire(
             return {"outcome": "SL", "pct": -AIRBORNE_SL_PCT * 100, "bar_idx": idx}
         if hit_tp:
             return {"outcome": "TP", "pct": +AIRBORNE_TP_PCT * 100, "bar_idx": idx}
+    # 조기 종결 (TP/SL/SL_first) 안 찍혔는데 4봉 다 닫히기 전 호출 = incomplete.
+    # AirborneSimCache 가 한 번 박힌 결과를 절대 갱신 안 하는 dedup 구조라
+    # incomplete 결과를 그대로 저장하면 영원히 timeout 으로 오염된다 (사용자
+    # 2026-06-02 NOMUSDT incident — fire 1분 후 페이지 새로고침으로 1봉만
+    # fetch 된 sim 이 +0.04% timeout 으로 박힘). 4봉 부족하면 None 반환 →
+    # caller 가 캐시 skip + 통계 제외 → 다음 새로고침에 4봉 다 닫혀있으면 정상
+    # 시뮬로 재계산.
+    if len(bars) < AIRBORNE_HOLD_BARS:
+        return None
     final_close = float(bars[-1]["close"])
     if is_long:
         pct = (final_close - entry) / entry * 100
