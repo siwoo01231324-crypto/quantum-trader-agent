@@ -15,7 +15,7 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
-  - version: "v0.6.24"
+  - version: "v0.6.25"
     date: "2026-06-03"
     title: "/airborne 시뮬 캐시 — incomplete sim 영구 저장 차단 (4봉 미만 + TP/SL 없음 = None)"
     tags: [fix, safety]
@@ -37,6 +37,28 @@ versions:
       - "src/dashboard/app.py — _simulate_airborne_fire"
       - "src/dashboard/airborne_sim_cache.py — put_many dedup 의 한계 (한 번 박히면 갱신 안 함)"
       - "tests/dashboard/test_simulate_airborne_fire.py"
+
+  - version: "v0.6.24"
+    date: "2026-06-03"
+    title: "capital-allocation-v1 — 3 전략 자본 배분 + 주간 whitelist refresh 절차 기획서"
+    tags: [feature, docs]
+    summary: >
+      cs-tsmom-crypto-daily / live-airborne-bb-reversal-kst-hours /
+      live-airborne-short-whitelist-v1 3 전략 동시 운영 시 자본 배분 ·
+      레버리지 · 동시 보유 한도를 spec 으로 명시. 보수적 안 (1x leverage,
+      합산 80% margin) 채택. production.yaml 의 cs-tsmom capital_fraction
+      0.5 → 0.4, 두 airborne 의 default_size 0.05 → 0.04 적용.
+    items:
+      - "docs/specs/capital-allocation-v1.md 신규 — 3 전략 시드 비중 (40/20/20), per-trade size, 동시 한도, leverage 정책, 자본 충돌 방어 정리."
+      - "docs/runbooks/airborne-short-whitelist-refresh.md 신규 — 주간 토 02:00 KST refresh 절차 (수동/Windows Task Scheduler 옵션), state 머신 (candidate/active/warning/removed) 전이 규칙."
+      - "configs/orchestrator/production.yaml — cs-tsmom capital_fraction 0.5→0.4 (3 전략 동시 운영 safety 20% 확보), kst-hours default_size 0.05→0.04, short-whitelist default_size 0.05→0.04. 합산 시드 비중 100% → 80%."
+      - "Leverage 정책: 코드 단 1x 고정 (Hard OOS 검증값). Binance Futures 웹에서 종목당 leverage 변경 시 default_size 의 의미가 margin 비중으로 바뀜 — 사용자 결정 영역."
+      - "운영 영향: live_run.py 재시작 시 즉시 적용. cs-tsmom 의 종목당 비중이 5% → 4% 로 축소 (top_n=10 기준), 두 airborne 의 per-trade 가 5% → 4%."
+      - "버전 노트: 원래 v0.6.21 로 prepend 됐으나 PR #348/#350 (v0.6.22/v0.6.23) 가 먼저 머지돼 충돌 발생 → 본 entry 를 v0.6.24 로 재번호. 변경 내용은 PR #347 commit 그대로 (production.yaml 비중 변경 동일)."
+    refs:
+      - "docs/specs/capital-allocation-v1.md"
+      - "docs/runbooks/airborne-short-whitelist-refresh.md"
+      - "configs/orchestrator/production.yaml"
 
   - version: "v0.6.23"
     date: "2026-06-03"

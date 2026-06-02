@@ -138,14 +138,16 @@ strategies:
       rebal_freq: 5
       warmup_bars: 252
       weights_kind: crypto
-      # 사용자 요청 (2026-05-21): 잔고의 50% 배정.
+      # 2026-06-02 capital-allocation-v1: 0.5 → 0.4 (3 전략 동시 운영 safety
+      # margin 20% 확보). 3 전략 합산 80%: cs-tsmom 40% + kst-hours 20% +
+      # short-whitelist 20%. spec: docs/specs/capital-allocation-v1.md
       # 2026-05-27 v0.6.7: top_n 10→30 (universe 전체 양수 score 종목 다 매수)
-      # + min_picks 3 (양수 종목 < 3 이면 hold). "시드 50% 안에서 N종 자유롭게
-      # 비중 분배" 의도. 예: 양수 10종 → 각 5%; 5종 → 각 10%; 3종 → 각 16.7%;
-      # 1~2종 → hold (집중 회피 — ZEC 단독 50% 같은 사고 차단).
-      # ⚠️ 5y bench (top_n=10 기준) PF 1.32 / Sharpe 1.33 보장 깨질 수 있음.
-      # paper 1~2주 모니터링 후 top_n=30 기준 재검증.
-      capital_fraction: 0.5
+      # + min_picks 3 (양수 종목 < 3 이면 hold). "시드 40% 안에서 N종 자유롭게
+      # 비중 분배" 의도. 예: 양수 10종 → 각 4%; 5종 → 각 8%; 3종 → 각 13.3%;
+      # 1~2종 → hold (집중 회피 — ZEC 단독 40% 같은 사고 차단).
+      # ⚠️ 5y bench (top_n=10 / capital_fraction=0.5 기준) PF 1.32 / Sharpe
+      # 1.33 보장 깨질 수 있음 — paper 1~2주 모니터링 후 재검증.
+      capital_fraction: 0.4
       min_picks: 3
       params:
         top_n: 30
@@ -199,9 +201,10 @@ strategies:
   - id: live-airborne-bb-reversal-kst-hours
     class: backtest.strategies.live_airborne_bb_reversal_kst_hours.LiveAirborneBbReversalKstHours
     kwargs:
-      # cs-tsmom (capital_fraction 0.5 × top_n 10 = 종목당 5%) 와 동일 비중.
-      # 4000$ seed → 200$/trade. 더 큰 seed → 비례 스케일.
-      default_size: 0.05
+      # 2026-06-02 capital-allocation-v1: 0.05 → 0.04 (시드 20% 비중, 동시
+      # 5 보유 = 20%). spec: docs/specs/capital-allocation-v1.md
+      # 3 전략 합산 80%: cs-tsmom 40% + kst-hours 20% + short-whitelist 20%.
+      default_size: 0.04
       stop_loss_pct: 0.03    # -3% price (5y bench 검증값)
       take_profit_pct: 0.06  # +6% price (R/R 1:2)
       # stop 청산 직후 같은 (sid, symbol) 재진입 15분 차단 — churn 방지.
@@ -227,7 +230,9 @@ strategies:
   - id: live-airborne-short-whitelist-v1
     class: backtest.strategies.live_airborne_short_whitelist_v1.LiveAirborneShortWhitelistV1
     kwargs:
-      default_size: 0.05         # kst-hours 와 동일 비중
+      # 2026-06-02 capital-allocation-v1: 0.05 → 0.04 (시드 20% 비중, 동시 5).
+      # spec: docs/specs/capital-allocation-v1.md
+      default_size: 0.04         # kst-hours 와 동일 비중
       stop_loss_pct: 0.03        # -3% (Hard OOS 검증값)
       take_profit_pct: 0.06      # +6% (R/R 1:2)
       retrace_ratio: 0.6         # Hard OOS 검증값 (부모 default 0.4)
