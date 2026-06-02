@@ -15,8 +15,8 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
-  - version: "v0.6.23"
-    date: "2026-06-02"
+  - version: "v0.6.24"
+    date: "2026-06-03"
     title: "/airborne 시뮬 캐시 — incomplete sim 영구 저장 차단 (4봉 미만 + TP/SL 없음 = None)"
     tags: [fix, safety]
     summary: >
@@ -37,6 +37,31 @@ versions:
       - "src/dashboard/app.py — _simulate_airborne_fire"
       - "src/dashboard/airborne_sim_cache.py — put_many dedup 의 한계 (한 번 박히면 갱신 안 함)"
       - "tests/dashboard/test_simulate_airborne_fire.py"
+
+  - version: "v0.6.23"
+    date: "2026-06-03"
+    title: "ensure_leverage_minimum — Binance -1109 'Invalid account' 거부 fix (자동매매 정상화)"
+    tags: [fix, safety]
+    summary: >
+      v0.6.22 (PR #348) 진단 인프라로 발견한 실제 거부 사유 처리. kst-hours
+      + short-whitelist-v1 의 15,302 sell 시그널이 모두 BROKER_ERROR
+      [-1109] Invalid account 로 거부됨. Root cause: Binance Futures testnet
+      의 -1109 는 해당 종목 leverage 가 한 번도 설정 안 된 계정의 첫 발주에서
+      발생. ensure_leverage 함수는 있었으나 발주 path 에서 호출 안 됨.
+    items:
+      - "src/brokers/binance/async_adapter.py — AsyncBinanceFuturesAdapter.ensure_leverage_minimum 신규. 종목당 1회 get_position_risk 호출 → leverage==0 (미설정) 이면 fallback=1x 로 set, leverage>0 (사용자 web 값) 이면 no-op. 어댑터 인스턴스 캐시 (_leverage_minimum_done) 로 동일 symbol 재호출 폭주 차단."
+      - "src/live/executor.py — broker.place_order 직전에 getattr(broker, 'ensure_leverage_minimum', None) 호출. KIS / PaperBroker 처럼 미지원 broker 는 graceful skip. ensure 실패해도 place_order 시도."
+      - "tests/brokers/binance/test_ensure_leverage_minimum.py 신규 6 tests — 미설정 fallback, user 값 보존, 캐시 효과, 종목 분리."
+      - "tests/live/test_executor_order_rejected_wal.py +3 tests — executor 가 발주 직전 호출 / 미지원 broker graceful skip / 실패 시 발주 계속."
+      - "기존 executor + adapter 회귀 0건. 총 16 PASS."
+      - "사용자 의도 보존: Binance Futures 웹에서 종목별 leverage 설정한 값이 코드 강제 변경 X. 본 fix 는 *첫 거래 가능한 상태* 만 보장."
+      - "운영 영향: live_run.py 재시작 시 즉시 적용. 다음 봉 마감 시 거부 종목 (XPLUSDT/ONDOUSDT/XAGUSDT/RIFUSDT/NATGASUSDT 등) 첫 발주에서 ensure_leverage_minimum 이 1x 로 set → 두 번째 발주부터 정상 체결 예상. 또는 사용자가 Binance 웹에서 leverage 변경 시 본 함수는 그대로 통과."
+    refs:
+      - "src/brokers/binance/async_adapter.py"
+      - "src/live/executor.py"
+      - "tests/brokers/binance/test_ensure_leverage_minimum.py"
+      - "tests/live/test_executor_order_rejected_wal.py"
+      - "logs/live/20260602T065341Z/wal.jsonl — 15,302 order_rejected -1109 incident"
 
   - version: "v0.6.22"
     date: "2026-06-02"

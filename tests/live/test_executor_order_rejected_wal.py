@@ -132,6 +132,93 @@ async def test_normal_ack_still_written_as_order_acked(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_executor_calls_ensure_leverage_minimum_before_place_order(tmp_path):
+    """PR #349 — broker 가 ensure_leverage_minimum 가지면 발주 직전 호출."""
+    wal_path = tmp_path / "wal.jsonl"
+    wal = WAL(wal_path)
+    calls: list[str] = []
+
+    class _BrokerWithLeverage:
+        name = "binance_futures_async"
+        paper = False
+
+        async def ensure_leverage_minimum(self, symbol: str, fallback_leverage: int = 1) -> None:
+            calls.append(symbol)
+
+        async def place_order(self, req: OrderRequest) -> OrderAck:
+            return OrderAck(
+                broker_order_id="b-1",
+                client_order_id=req.client_order_id,
+                symbol=req.symbol,
+                status="NEW",
+                ts=datetime.now(timezone.utc),
+                qty=req.qty,
+                price=Decimal("1"),
+            )
+
+    await execute_intents(
+        [_intent(side="buy", symbol="XPLUSDT")],
+        broker=_BrokerWithLeverage(),
+        kill_switch=KillSwitch(),
+        wal=wal, metrics=Metrics(),
+    )
+    assert calls == ["XPLUSDT"], (
+        f"ensure_leverage_minimum should be called once with the symbol "
+        f"before place_order, got: {calls}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_executor_skips_when_broker_lacks_ensure_leverage(tmp_path):
+    """KIS / paper broker 처럼 ensure_leverage_minimum 미지원 broker 는 graceful skip."""
+    wal_path = tmp_path / "wal.jsonl"
+    wal = WAL(wal_path)
+    # _BrokerNew 는 ensure_leverage_minimum 메서드 없음
+    await execute_intents(
+        [_intent(side="buy")],
+        broker=_BrokerNew(),
+        kill_switch=KillSwitch(),
+        wal=wal, metrics=Metrics(),
+    )
+    # 통과만 하면 OK — 다른 broker 에서 AttributeError 발생하면 안 됨
+
+
+@pytest.mark.asyncio
+async def test_executor_continues_when_ensure_leverage_fails(tmp_path):
+    """ensure_leverage_minimum 이 에러 던져도 place_order 는 시도되어야 함."""
+    wal_path = tmp_path / "wal.jsonl"
+    wal = WAL(wal_path)
+    place_called = []
+
+    class _BrokerLeverageFails:
+        name = "binance_futures_async"
+        paper = False
+
+        async def ensure_leverage_minimum(self, symbol: str, fallback_leverage: int = 1) -> None:
+            raise RuntimeError("leverage REST timeout")
+
+        async def place_order(self, req: OrderRequest) -> OrderAck:
+            place_called.append(req.symbol)
+            return OrderAck(
+                broker_order_id="b-1",
+                client_order_id=req.client_order_id,
+                symbol=req.symbol,
+                status="NEW",
+                ts=datetime.now(timezone.utc),
+                qty=req.qty,
+                price=Decimal("1"),
+            )
+
+    await execute_intents(
+        [_intent(side="buy")], broker=_BrokerLeverageFails(),
+        kill_switch=KillSwitch(), wal=wal, metrics=Metrics(),
+    )
+    assert place_called == ["BTCUSDT"], (
+        "place_order must still be attempted even if ensure_leverage_minimum fails"
+    )
+
+
+@pytest.mark.asyncio
 async def test_kill_switch_rejection_logged(tmp_path):
     """KILL_SWITCH 거부도 order_rejected 로 기록 (사유 확인 가능)."""
     wal_path = tmp_path / "wal.jsonl"
