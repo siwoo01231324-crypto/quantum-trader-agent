@@ -15,6 +15,29 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.23"
+    date: "2026-06-02"
+    title: "/airborne 시뮬 캐시 — incomplete sim 영구 저장 차단 (4봉 미만 + TP/SL 없음 = None)"
+    tags: [fix, safety]
+    summary: >
+      사용자 보고 (2026-06-02 NOMUSDT) — fire 직후 페이지 새로고침 시
+      mainnet 봉이 1개만 닫혀 있어 ``_fetch_15m_bars(limit=4)`` 가 1봉만 받고
+      ``_simulate_airborne_fire`` 가 그 결과를 ``timeout +0.04% bar_idx=1`` 로
+      반환. ``AirborneSimCache.put_many`` 가 그대로 영속 저장 →
+      ``put_many`` 의 dedup (``if key in self._cache: continue``) 이 한 번
+      박힌 row 를 절대 갱신하지 않으므로 4봉 다 닫혀도 영원히 그 잘못된
+      결과를 반환 → ``/api/airborne_metrics`` 의 win_rate / PF / timeout
+      bucket 모두 오염.
+    items:
+      - "src/dashboard/app.py — _simulate_airborne_fire 가 ``len(bars) < AIRBORNE_HOLD_BARS (=4)`` AND TP/SL 조기 종결도 없는 경우 ``None`` 반환. caller (_sim_one) 가 이미 None 정확히 처리 (``return None`` → ``[r for r in results if r is not None]``) — 변경 불필요."
+      - "조기 종결 (TP/SL/SL_first) 은 정의상 final — 1봉 안에서 TP 찍혔으면 4봉 다 닫혀도 안 바뀌므로 그대로 반환 → 캐시 정상."
+      - "tests/dashboard/test_simulate_airborne_fire.py 신규 7건 — empty bars / 4봉 timeout / 4봉 중 TP 조기 종결 / 1봉 incomplete None / 3봉 incomplete None / 1봉만 있어도 TP 면 정상 / 1봉만 있어도 SL 면 정상 / short side 도 동일 가드."
+      - "사후 정리 — ``logs/airborne_fires/sim_cache.jsonl`` 에 이미 박힌 incomplete row (``outcome=timeout`` AND ``bar_idx<4``) 는 운영자가 별도로 grep/jq 정리 필요. 본 PR 은 신규 회귀 차단까지만."
+    refs:
+      - "src/dashboard/app.py — _simulate_airborne_fire"
+      - "src/dashboard/airborne_sim_cache.py — put_many dedup 의 한계 (한 번 박히면 갱신 안 함)"
+      - "tests/dashboard/test_simulate_airborne_fire.py"
+
   - version: "v0.6.22"
     date: "2026-06-02"
     title: "executor — REJECTED ack 를 WAL 에 기록 (`order_rejected` event_type), silent failure 진단 가능"
