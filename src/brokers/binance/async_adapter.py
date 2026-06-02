@@ -334,6 +334,40 @@ class AsyncBinanceFuturesAdapter:
             return
         await self._client.set_leverage(symbol, leverage)
 
+    async def ensure_leverage_minimum(
+        self,
+        symbol: str,
+        fallback_leverage: int = 1,
+    ) -> None:
+        """발주 직전 종목 leverage 가 *어떤 값으로든* 설정돼 있는지만 확인.
+
+        2026-06-03 PR #349 root cause: Binance Futures testnet 의 -1109
+        "Invalid account" 거부는 *해당 종목 leverage 가 한 번도 설정 안 된*
+        계정에서 발주할 때 발생. ``ensure_leverage`` 와 달리 사용자가 web 에서
+        설정한 값을 *override 하지 않음*:
+
+          - get_position_risk → leverage > 0 면 이미 설정됨 (사용자 web 값 보존)
+          - leverage == 0 / 미상 → ``fallback_leverage`` (default 1) 로 1회 set
+
+        사용자 의도: "Binance 웹에서 leverage 설정하면 그대로 작동". 본 함수는
+        그걸 깨지 않으면서 *첫 거래 가능한 상태* 만 보장. 사용자가 그 후 web
+        에서 자유 변경 가능.
+
+        성능: 어댑터 인스턴스 level 캐시 (``_leverage_minimum_done``) 로
+        동일 symbol 두 번째 호출부터 즉시 return — REST 폭주 차단. 캐시는
+        프로세스 단위 — 재시작 시 재확인.
+        """
+        if not hasattr(self, "_leverage_minimum_done"):
+            self._leverage_minimum_done: set[str] = set()
+        if symbol in self._leverage_minimum_done:
+            return
+        risks = await self._client.get_position_risk(symbol)
+        if risks and risks[0].leverage > 0:
+            self._leverage_minimum_done.add(symbol)
+            return
+        await self._client.set_leverage(symbol, fallback_leverage)
+        self._leverage_minimum_done.add(symbol)
+
     async def ensure_margin_type(self, symbol: str, mode: MarginType) -> None:
         risks = await self._client.get_position_risk(symbol)
         if risks:
