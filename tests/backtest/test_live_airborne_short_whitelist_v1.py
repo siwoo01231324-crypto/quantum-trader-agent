@@ -259,3 +259,29 @@ class TestWarmup:
         assert sig is not None
         assert sig.action == "hold"
         assert "warmup" in sig.reason
+
+
+# ── No re-fire within same bar (2026-06-04 RIFUSDT 폭주 fix) ───────────────────
+
+
+class TestNoReFireWithinSameBar:
+    """첫 fire 후 같은 (symbol, bar_ts) 평가는 hold 만 반환.
+
+    RIFUSDT 폭주 사고 (#regression): WS tick 마다 on_bar 재호출 → cached fire
+    signal 그대로 반환 → 같은 봉 안에서 145회 SELL 폭주.
+    """
+
+    def test_second_eval_in_same_bar_returns_hold(self) -> None:
+        # KST 11시 (UTC 02:00) — 19h 게이트 통과 시각
+        df = _short_fire_frame_at_utc("2026-01-02T02:00:00")
+        s = LiveAirborneShortWhitelistV1()
+
+        first = _run(s, _ctx(df))
+        assert first is not None
+        assert first.action == "sell", f"first fire expected sell, got {first.action}"
+
+        # 같은 frame (= 같은 last_bar_ts) 로 재호출 — fire 아니라 hold 받아야 함
+        second = _run(s, _ctx(df))
+        assert second is not None
+        assert second.action == "hold", f"re-eval should be hold, got {second.action}"
+        assert "fired_this_bar" in second.reason

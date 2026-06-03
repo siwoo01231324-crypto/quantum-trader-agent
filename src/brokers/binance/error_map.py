@@ -19,6 +19,7 @@ _MAP: dict[int, type[BrokerError]] = {
     -2013: InvalidOrderError,    # NO_SUCH_ORDER
     -2019: InsufficientFundsError,  # MARGIN_NOT_SUFFICIENT
     -2020: InvalidOrderError,    # UNABLE_TO_FILL (FOK)
+    -2027: InvalidOrderError,    # MAX_NOTIONAL_EXCEEDED — symbol position cap hit
     -4061: ValidationError,      # POSITION_SIDE_NOT_MATCH
     -4164: InvalidOrderError,    # MIN_NOTIONAL
 }

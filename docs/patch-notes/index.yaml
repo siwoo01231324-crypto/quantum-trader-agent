@@ -15,6 +15,36 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.26"
+    date: "2026-06-04"
+    title: "airborne 같은-봉 재발화 차단 + Binance -2027 cooldown + size 0.04 → 0.16"
+    tags: [fix, safety, perf]
+    summary: >
+      2026-06-03 RIFUSDT testnet 사고 — 09:05 KST hour 9 게이트 통과 후
+      같은 1h 봉 안에서 ``live-airborne-short-whitelist-v1`` 가 1분 20초
+      동안 145회 SELL 발주 (총 노출 ≈ $24,890, 의도된 $200 의 124배).
+      ``LiveAirborneShortWhitelistV1.on_bar`` /
+      ``LiveAirborneBbReversalKstMorning.on_bar`` 가 fire 후 cache 에
+      SELL/BUY 신호를 그대로 저장 → 매 WS tick 마다 cache hit → 캐시된
+      fire 시그널이 그대로 반환되어 폭주.
+      별도로 testnet 의 종목별 maxNotionalValue 한도 ($25,000) 초과 시
+      -2027 거부가 매 1m tick 반복되어 6,000/min REST limit 초과 → IP ban
+      → 다른 청산 경로까지 마비.
+    items:
+      - "src/backtest/strategies/live_airborne_short_whitelist_v1.py — fire 직후 ``_last_eval_signal[symbol]`` 을 ``Signal(hold, reason=airborne_short_wl_fired_this_bar)`` 로 덮어쓰기. 다음 봉 마감까지 hold 만 반환."
+      - "src/backtest/strategies/live_airborne_bb_reversal_kst_morning.py — long/short 양쪽 fire 분기 동일 패턴 (부모 클래스 → kst-hours 도 자동 상속)."
+      - "src/brokers/binance/error_map.py — ``-2027 → InvalidOrderError`` 매핑 추가."
+      - "src/brokers/binance/async_adapter.py — ``place_order`` 에 ``(symbol, side)`` 5분 cooldown 가드. -2027 받으면 cooldown 등록 + 같은 (sym, side) 발주는 거래소 안 부르고 로컬 ``REJECTED`` 반환. 반대 side (청산) 는 영향 없음."
+      - "configs/orchestrator/production.yaml — 두 airborne 의 ``default_size: 0.04 → 0.16``. 21종 분산 × 20x 레버리지에서 1포지션이 실계좌 1포지션 (12% 마진) 와 동급. 총 마진 사용 ≈ 12%, 백테스트 알파(가격 SL/TP 비율) 무관 → PF/Sharpe 게이트 그대로."
+      - "tests/brokers/binance/test_async_adapter_edges.py — -2027 cooldown 3건 회귀 테스트 (등록·skip·반대 side 미차단)."
+      - "tests/backtest/test_live_airborne_short_whitelist_v1.py — 같은 봉 재발화 차단 1건."
+      - "tests/backtest/test_live_airborne_bb_reversal_kst_morning.py — long/short 양쪽 재발화 차단 2건."
+    refs:
+      - "src/backtest/strategies/live_airborne_short_whitelist_v1.py"
+      - "src/backtest/strategies/live_airborne_bb_reversal_kst_morning.py"
+      - "src/brokers/binance/async_adapter.py"
+      - "configs/orchestrator/production.yaml"
+
   - version: "v0.6.25"
     date: "2026-06-03"
     title: "/airborne 시뮬 캐시 — incomplete sim 영구 저장 차단 (4봉 미만 + TP/SL 없음 = None)"
