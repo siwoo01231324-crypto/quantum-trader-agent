@@ -85,6 +85,72 @@ DEFAULT_TOP_N = 100  # 2026-05-22: 50 → 100. SKYAI 처럼 거래량 변동 큰
 COOLDOWN_HOURS = 4  # suppress repeat (symbol, side) fires within this window
 BAR_MS_1H = 3_600_000
 
+# 2026-06-04 — 텔레그램 알림 본문에 "어떤 production 전략이 이 fire 로 진입할지"
+# 안내 추가. production.yaml 의 두 airborne 전략과 정확히 일치하는 게이트.
+# live_airborne_bb_reversal_kst_hours._KST_TOP_HOURS 와 동일.
+_KST_HOURS_KSTHOURS: frozenset[int] = frozenset({8, 11, 16, 22})
+# live_airborne_short_whitelist_v1._KST_HOURS_19 와 동일 (제외: {4,6,7,8,13}).
+_KST_HOURS_SHORT_WL: frozenset[int] = frozenset(
+    {0, 1, 2, 3, 5, 9, 10, 11, 12, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23}
+)
+# whitelist 활성 종목 lazy cache — daemon 수명 동안 1회 로드. weekly refresh
+# 시 daemon 재시작 필요.
+_WHITELIST_ACTIVE_CACHE: frozenset[str] | None = None
+
+
+def _load_whitelist_active() -> frozenset[str]:
+    global _WHITELIST_ACTIVE_CACHE
+    if _WHITELIST_ACTIVE_CACHE is not None:
+        return _WHITELIST_ACTIVE_CACHE
+    try:
+        from live.airborne_short_whitelist.whitelist_loader import (
+            active_symbols,
+            load_whitelist,
+        )
+        path = _ROOT / "config" / "airborne_short_whitelist.yaml"
+        cfg = load_whitelist(path)
+        _WHITELIST_ACTIVE_CACHE = active_symbols(cfg)
+        log.info("whitelist loaded: %d active symbols", len(_WHITELIST_ACTIVE_CACHE))
+    except Exception as exc:  # noqa: BLE001
+        log.warning("whitelist load failed (%s) — short-whitelist 안내 disabled", exc)
+        _WHITELIST_ACTIVE_CACHE = frozenset()
+    return _WHITELIST_ACTIVE_CACHE
+
+
+def _kst_hour_from_open_time(open_time_ms: int) -> int:
+    """1h 봉의 open time (ms) → KST hour. strategy 의 게이트와 일관성."""
+    ts = pd.Timestamp(open_time_ms, unit="ms", tz="UTC").tz_convert("Asia/Seoul")
+    return int(ts.hour)
+
+
+def _format_strategy_notice(*, side: str, kst_hour: int, symbol: str) -> str:
+    """이 fire 로 어떤 production 전략이 진입할지 안내 (3 줄)."""
+    in_kst4 = kst_hour in _KST_HOURS_KSTHOURS
+    in_kst19 = kst_hour in _KST_HOURS_SHORT_WL
+    in_wl = symbol in _load_whitelist_active()
+
+    # kst-hours: bidir (long + short 둘 다 진입), 게이트 {8,11,16,22}.
+    if in_kst4:
+        kst_line = "✅ 진입 예정"
+    else:
+        kst_line = f"❌ KST {kst_hour}시 — 게이트 외 (8/11/16/22만)"
+
+    # short-whitelist: SHORT only + 21종 화이트리스트 + 19시간 게이트.
+    if side.lower() == "long":
+        wl_line = "❌ LONG 미지원 (숏 전용 전략)"
+    elif not in_wl:
+        wl_line = "❌ 화이트리스트 외 종목"
+    elif not in_kst19:
+        wl_line = f"❌ KST {kst_hour}시 — 게이트 외 ({{4,6,7,8,13}} 제외)"
+    else:
+        wl_line = "✅ 진입 예정"
+
+    return (
+        "🤖 봇 진입 가능성:\n"
+        f"   • kst-hours (양방향): {kst_line}\n"
+        f"   • short-whitelist (숏 전용): {wl_line}"
+    )
+
 
 @dataclass
 class SymbolState:
@@ -165,10 +231,23 @@ def dispatch_fire(
         symbol=symbol, side=side, ev=ev, setup=setup, trigger=trigger,
         history_5m=state.history_5m,
     )
-    title = f"Airborne v1.1 {side.upper()} — {symbol} (1h)"
+    # 2026-06-04 — 알림 가독성 개선: 이모지 방향 + 한글 본문 + 봇 진입 가능성 안내.
+    # LONG = BB 하단 돌파 후 반등 → extreme=최저점 / SHORT = BB 상단 돌파 후 후퇴 → extreme=최고점.
+    if side.lower() == "long":
+        title = f"🟢⬆️ 롱 진입 신호 — {symbol} (1시간봉)"
+        extreme_label = "최저점"
+    else:
+        title = f"🔴⬇️ 숏 진입 신호 — {symbol} (1시간봉)"
+        extreme_label = "최고점"
+    kst_hour = _kst_hour_from_open_time(ev.open_time)
+    notice = _format_strategy_notice(side=side, kst_hour=kst_hour, symbol=symbol)
     body = (
-        f"40% retrace fired at {ev.close:.6g} (trigger {trigger:.6g}, "
-        f"base {setup.base:.6g}, extreme {setup.extreme:.6g})"
+        "✨ 40% 되돌림 발화 (Airborne v1.1)\n"
+        f"   현재가: {ev.close:.6g}\n"
+        f"   진입가(40% 되돌림): {trigger:.6g}\n"
+        f"   돌파 시작가: {setup.base:.6g}  /  {extreme_label}: {setup.extreme:.6g}\n"
+        "\n"
+        f"{notice}"
     )
     if dry_run:
         print(f"[DRY] {title}\n  {body}\n  {payload}", flush=True)
