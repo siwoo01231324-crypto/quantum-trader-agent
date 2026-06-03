@@ -217,7 +217,12 @@ class LiveAirborneShortWhitelistV1(LiveAirborneBbReversalKstHours):
                 ),
             )
             self._last_eval_bar_ts[symbol] = last_bar_ts
-            self._last_eval_signal[symbol] = result
+            # 2026-06-04 RIFUSDT 폭주 fix — fire 직후 cache 를 hold 로 덮어써서
+            # 같은 봉 안에서의 중복 재발화 차단. 진입은 봉당 1회만.
+            self._last_eval_signal[symbol] = Signal(
+                action="hold", size=0.0,
+                reason="airborne_short_wl_fired_this_bar",
+            )
             return result
 
         if short_setup is not None:

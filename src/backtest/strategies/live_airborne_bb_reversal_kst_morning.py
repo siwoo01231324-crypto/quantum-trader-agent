@@ -212,12 +212,17 @@ class LiveAirborneBbReversalKstMorning(LiveScannerMixin):
 
         c_now = float(close.iloc[-1])
 
+        # 2026-06-04 RIFUSDT 폭주 fix — fire 직후 cache 를 hold 로 덮어써서
+        # 같은 봉 안에서의 중복 재발화 차단. fire signal 은 caller 로 반환만 하고
+        # cache 에는 hold 를 저장 → 다음 WS tick (같은 봉) 은 hold 반환.
+        # 진입은 봉당 1회. (cache_return helper 는 fire/hold 양쪽 다 캐싱이라
+        # 여기서는 명시적으로 분리.)
         if long_fires:
             bars_since = (
                 len(history) - 1 - long_setup.breakout_index
                 if long_setup is not None else -1
             )
-            return _cache_return(Signal(
+            fire = Signal(
                 action="buy",
                 size=self.default_size,
                 reason=(
@@ -226,13 +231,19 @@ class LiveAirborneBbReversalKstMorning(LiveScannerMixin):
                     f"trig={long_trig:.4f},c={c_now:.4f},"
                     f"ratio={RETRACE_RATIO},kst={hour_kst}"
                 ),
-            ))
+            )
+            self._last_eval_bar_ts[symbol] = last_bar_ts
+            self._last_eval_signal[symbol] = Signal(
+                action="hold", size=0.0,
+                reason="airborne_v12_fired_this_bar",
+            )
+            return fire
         if short_fires:
             bars_since = (
                 len(history) - 1 - short_setup.breakout_index
                 if short_setup is not None else -1
             )
-            return _cache_return(Signal(
+            fire = Signal(
                 action="sell",
                 size=self.default_size,
                 reason=(
@@ -241,7 +252,13 @@ class LiveAirborneBbReversalKstMorning(LiveScannerMixin):
                     f"trig={short_trig:.4f},c={c_now:.4f},"
                     f"ratio={RETRACE_RATIO},kst={hour_kst}"
                 ),
-            ))
+            )
+            self._last_eval_bar_ts[symbol] = last_bar_ts
+            self._last_eval_signal[symbol] = Signal(
+                action="hold", size=0.0,
+                reason="airborne_v12_fired_this_bar",
+            )
+            return fire
 
         # 게이트 통과 + 시그널 없음 — 어떤 setup 이 활성인지 reason 에 표시
         if long_setup is not None:
