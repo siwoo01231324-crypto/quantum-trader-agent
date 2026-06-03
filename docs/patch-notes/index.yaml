@@ -15,6 +15,26 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.27"
+    date: "2026-06-04"
+    title: "Airborne 텔레그램 알림 가독성 개선 — 이모지·한글 본문·봇 진입 안내"
+    tags: [feature, docs]
+    summary: >
+      사용자 요청 (2026-06-04). ``scripts/airborne_alert_daemon`` 의
+      Telegram FIRE 알림이 영문 한 줄 ("Airborne v1.1 LONG — BTCUSDT (1h)
+      / 40% retrace fired at X (trigger Y, base Z, extreme W)") 이라 화면
+      한눈에 방향·뜻 인지 어려웠음. 이모지 + 일상 한글 라벨 + production
+      전략 진입 가능성 안내 3종 추가.
+    items:
+      - "Title — ``🟢⬆️ 롱 진입 신호`` / ``🔴⬇️ 숏 진입 신호`` 이모지로 방향 즉시 식별, ``1시간봉`` 한글화."
+      - "Body — ``현재가 / 진입가(40% 되돌림) / 돌파 시작가 / 최저점 (long) 또는 최고점 (short)`` 일상 한글 라벨. base/extreme 영어 용어 제거."
+      - "Body 하단 NOTICE — ``🤖 봇 진입 가능성`` 섹션. live-airborne-bb-reversal-kst-hours (양방향, KST {8,11,16,22} 게이트) 와 live-airborne-short-whitelist-v1 (숏 전용, 19시간 게이트, 화이트리스트 종목만) 두 production 전략 각각에 대해 ``✅ 진입 예정`` / ``❌ 사유`` 표시."
+      - "scripts/airborne_alert_daemon.py — ``_kst_hour_from_open_time`` / ``_format_strategy_notice`` / ``_load_whitelist_active`` (lazy yaml load) 신규 helper + ``dispatch_fire`` 의 title/body 리팩토링."
+      - "tests/scripts/test_airborne_alert_daemon.py — 5건 회귀 (kst_hour 변환 / long fire kst-hours 게이트 / long 차단 / short kst 8시 kst-hours만 적격 / short title·body 라벨 검증). 기존 20 tests 통과 유지 → 총 25."
+    refs:
+      - "scripts/airborne_alert_daemon.py"
+      - "tests/scripts/test_airborne_alert_daemon.py"
+
   - version: "v0.6.26"
     date: "2026-06-04"
     title: "airborne 같은-봉 재발화 차단 + Binance -2027 cooldown + size 0.04 → 0.16"

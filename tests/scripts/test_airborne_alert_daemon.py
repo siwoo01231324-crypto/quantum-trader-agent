@@ -57,8 +57,12 @@ def test_dispatch_fire_calls_notify_with_payload():
     assert len(captured) == 1
     level, title, body, fields = captured[0]
     assert level == "info"
-    assert "LONG" in title and "BTCUSDT" in title and "1h" in title
-    assert "trigger 92" in body or "trigger 92.0" in body or "92" in body
+    # 2026-06-04 — title 이모지 + 한글 본문 으로 개편.
+    assert "롱" in title and "BTCUSDT" in title and "1시간봉" in title
+    assert "🟢" in title or "⬆️" in title  # long 이모지
+    assert "진입가(40% 되돌림): 92" in body
+    assert "돌파 시작가: 98" in body and "최저점: 88" in body  # long → 최저점
+    assert "🤖 봇 진입 가능성" in body  # NOTICE 섹션
     assert fields["symbol"] == "BTCUSDT"
     assert fields["side"] == "long"
     assert fields["fire_close"] == "95"
@@ -311,3 +315,64 @@ def test_run_daemon_rejects_unknown_mode():
     """Invalid mode arg should raise ValueError (no silent fallthrough)."""
     with pytest.raises(ValueError, match="unknown mode"):
         _asyncio.run(daemon.run_daemon(top_n=5, mode="bogus"))
+
+
+# ── 2026-06-04 알림 가독성 개선 (이모지 / 한글 / 봇 전략 안내) ────────────────
+
+
+def test_kst_hour_from_open_time_returns_korean_time():
+    # 2026-01-01 00:00 UTC = 2026-01-01 09:00 KST
+    open_time_ms = int(pd.Timestamp("2026-01-01T00:00:00", tz="UTC").value // 1_000_000)
+    assert daemon._kst_hour_from_open_time(open_time_ms) == 9
+
+
+def test_strategy_notice_long_fires_kst_hours_only_at_gate():
+    # KST 11시 LONG — kst-hours 진입 예정, short-whitelist 는 LONG 미지원
+    notice = daemon._format_strategy_notice(
+        side="long", kst_hour=11, symbol="BTCUSDT",
+    )
+    assert "kst-hours" in notice
+    assert "✅ 진입 예정" in notice
+    assert "LONG 미지원" in notice or "숏 전용" in notice
+
+
+def test_strategy_notice_long_blocked_outside_gate():
+    notice = daemon._format_strategy_notice(
+        side="long", kst_hour=6, symbol="BTCUSDT",
+    )
+    assert "❌" in notice
+    assert "8/11/16/22" in notice
+
+
+def test_strategy_notice_short_at_kst_8_only_kst_hours_eligible():
+    # KST 8 — kst-hours 통과, short-whitelist 는 8시 제외
+    notice = daemon._format_strategy_notice(
+        side="short", kst_hour=8, symbol="RIFUSDT",  # whitelist 가정
+    )
+    assert "kst-hours (양방향): ✅ 진입 예정" in notice
+    # short-whitelist 는 화이트리스트 외 (BTCUSDT 같은 종목) 또는 8시 게이트 외
+    assert "❌" in notice.split("short-whitelist")[1]
+
+
+def test_dispatch_fire_title_has_short_emoji_and_korean():
+    spy_calls: list[tuple[str, str, str, dict]] = []
+
+    def spy(level: str, title: str, body: str, fields: dict) -> None:
+        spy_calls.append((level, title, body, fields))
+
+    state = daemon.SymbolState()
+    ev = _make_kline_event(symbol="RIFUSDT", close=0.0857)
+    setup = AirborneSetup(base=0.0900, extreme=0.0913, breakout_index=8)
+
+    daemon.dispatch_fire(
+        symbol="RIFUSDT", side="short", state=state, ev=ev,
+        setup=setup, trigger=0.0907, dry_run=False, notify_fn=spy,
+    )
+
+    assert len(spy_calls) == 1
+    _, title, body, _ = spy_calls[0]
+    assert "숏" in title and "RIFUSDT" in title
+    assert "🔴" in title or "⬇️" in title
+    assert "🤖 봇 진입 가능성" in body
+    assert "현재가:" in body and "진입가(40% 되돌림):" in body
+    assert "최고점:" in body  # short → 최고점 label
