@@ -204,7 +204,10 @@ strategies:
       # 2026-06-02 capital-allocation-v1: 0.05 → 0.04 (시드 20% 비중, 동시
       # 5 보유 = 20%). spec: docs/specs/capital-allocation-v1.md
       # 3 전략 합산 80%: cs-tsmom 40% + kst-hours 20% + short-whitelist 20%.
-      default_size: 0.04
+      # 2026-06-04 — 0.04 → 0.16. 21종 동시 보유 시 1종 비중이 실계좌(1종 12%
+      # 마진) 와 동급이 되도록. 총 마진 ≈ 12% (21 × 0.16 / 20x lev). 백테스트
+      # 알파(PF/Sharpe) 는 size 무관 → 5y 게이트 영향 없음.
+      default_size: 0.16
       stop_loss_pct: 0.03    # -3% price (5y bench 검증값)
       take_profit_pct: 0.06  # +6% price (R/R 1:2)
       # stop 청산 직후 같은 (sid, symbol) 재진입 15분 차단 — churn 방지.
@@ -232,7 +235,8 @@ strategies:
     kwargs:
       # 2026-06-02 capital-allocation-v1: 0.05 → 0.04 (시드 20% 비중, 동시 5).
       # spec: docs/specs/capital-allocation-v1.md
-      default_size: 0.04         # kst-hours 와 동일 비중
+      # 2026-06-04 — 0.04 → 0.16 (kst-hours 와 동일, 실계좌 1종 비중 매칭).
+      default_size: 0.16         # kst-hours 와 동일 비중
       stop_loss_pct: 0.03        # -3% (Hard OOS 검증값)
       take_profit_pct: 0.06      # +6% (R/R 1:2)
       retrace_ratio: 0.6         # Hard OOS 검증값 (부모 default 0.4)
