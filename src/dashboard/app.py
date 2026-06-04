@@ -5495,6 +5495,27 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
             )
         return JSONResponse({"available": True, "binance": binance})
 
+    @app.get("/api/account/bitget")
+    async def api_account_bitget() -> JSONResponse:
+        """Bitget 잔고/포지션 — Demo or Mainnet (P5).
+
+        provider.fetch() 의 ``bitget`` 키를 반환. _fetch_bitget 은 sync httpx
+        라 to_thread 로 오프-loop 실행. KIS+Binance 캐시와 공유 (15s TTL).
+        """
+        provider = state.account_info_provider
+        if provider is None:
+            return JSONResponse({"available": False})
+        import asyncio
+        try:
+            data = await asyncio.to_thread(provider.fetch)
+            bitget = (data or {}).get("bitget", {"ok": False})
+        except Exception as err:  # noqa: BLE001
+            return JSONResponse(
+                {"available": True,
+                 "bitget": {"ok": False, "error": str(err)}}
+            )
+        return JSONResponse({"available": True, "bitget": bitget})
+
     # ── venue 실증 가시화 (#238 follow-up) ───────────────────────────────
     @app.get("/api/venue_equity_status")
     async def api_venue_equity_status() -> JSONResponse:

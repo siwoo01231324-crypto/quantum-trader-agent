@@ -312,6 +312,23 @@ class AsyncBitgetFuturesAdapter:
             )
         return positions
 
+    async def get_net_positions(self) -> dict[str, Decimal]:
+        """SIGNED net qty per symbol — mirrors Binance adapter.
+
+        Bitget v2 의 PositionResponse 는 ``total`` (abs qty) + ``holdSide``
+        (long/short). PositionReconciler 가 ground-truth 비교에 sign 필요해서
+        long = +total, short = -total. 0 인 symbol 은 제외 — caller 는
+        absent 면 net 0 으로 간주.
+        """
+        raw = await self._client.get_all_positions()
+        out: dict[str, Decimal] = {}
+        for p in raw:
+            if p.total == Decimal("0"):
+                continue
+            signed = p.total if p.holdSide == "long" else -p.total
+            out[p.symbol] = out.get(p.symbol, Decimal("0")) + signed
+        return out
+
     async def get_balance(self) -> list[Balance]:
         # USDT margin coin only (matches whitelist + production.yaml).
         # MVP: query BTCUSDT as proxy symbol for marginCoin=USDT account.

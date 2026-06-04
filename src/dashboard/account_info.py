@@ -160,7 +160,16 @@ class AccountInfoProvider:
                     )
                     binance = prev_bn
 
-            data = {"kis": kis, "binance": binance}
+            bitget = self._safe(self._fetch_bitget, "Bitget")
+            if not bitget.get("ok") and prev_cache is not None:
+                prev_bg = prev_cache.get("bitget", {})
+                if prev_bg.get("ok"):
+                    logger.debug(
+                        "Bitget fetch failed — reusing previous cache value"
+                    )
+                    bitget = prev_bg
+
+            data = {"kis": kis, "binance": binance, "bitget": bitget}
             with self._state_lock:
                 self._cache = data
                 self._cache_at = datetime.now(timezone.utc)
@@ -260,6 +269,125 @@ class AccountInfoProvider:
             "eval_amount": eval_amt,
             "n_positions": len(bal.output1 or []),
             "rt_cd": getattr(bal, "rt_cd", None),
+        }
+
+    # ── Bitget USDT-M Futures (P5) ───────────────────────────────────────────
+
+    def _resolve_bitget_creds(self) -> tuple[str, str, str, bool] | None:
+        """Bitget 자격증명 해석 → (api_key, secret, passphrase, paper).
+
+        Demo 우선 (BITGET_DEMO_*). 없으면 mainnet (BITGET_API_*). 둘 다
+        없으면 None — 카드는 ``ok=False`` 로 표시되어 다른 거래소 영향 없음.
+        """
+        def _strip(v: str | None) -> str:
+            return (v or "").strip().strip('"').strip("'")
+
+        demo_key = _strip(os.environ.get("BITGET_DEMO_API_KEY"))
+        demo_sec = _strip(os.environ.get("BITGET_DEMO_SECRET"))
+        demo_pass = _strip(os.environ.get("BITGET_DEMO_PASSPHRASE"))
+        if demo_key and demo_sec and demo_pass:
+            return demo_key, demo_sec, demo_pass, True
+
+        live_key = _strip(os.environ.get("BITGET_API_KEY"))
+        live_sec = _strip(os.environ.get("BITGET_API_SECRET"))
+        live_pass = _strip(os.environ.get("BITGET_API_PASSPHRASE"))
+        if live_key and live_sec and live_pass:
+            return live_key, live_sec, live_pass, False
+        return None
+
+    def _fetch_bitget(self) -> dict[str, Any]:
+        creds = self._resolve_bitget_creds()
+        if creds is None:
+            return {
+                "ok": False,
+                "error": "Bitget 자격증명 누락 (BITGET_DEMO_API_KEY/SECRET/PASSPHRASE 또는 BITGET_API_*)",
+            }
+        api_key, api_secret, passphrase, paper = creds
+
+        import base64  # noqa: PLC0415
+        import hashlib  # noqa: PLC0415
+        import hmac  # noqa: PLC0415
+        import time as _time  # noqa: PLC0415
+        import urllib.parse  # noqa: PLC0415
+        import httpx  # noqa: PLC0415
+
+        base_url = "https://api.bitget.com"
+        product_type = "USDT-FUTURES"
+
+        def _signed_get(path: str, params: dict) -> dict:
+            ts = str(int(_time.time() * 1000))
+            qs = "?" + urllib.parse.urlencode(params)
+            sig_input = f"{ts}GET{path}{qs}".encode()
+            sig = base64.b64encode(
+                hmac.new(api_secret.encode(), sig_input, hashlib.sha256).digest()
+            ).decode()
+            headers = {
+                "ACCESS-KEY": api_key,
+                "ACCESS-SIGN": sig,
+                "ACCESS-TIMESTAMP": ts,
+                "ACCESS-PASSPHRASE": passphrase,
+                "Content-Type": "application/json",
+            }
+            if paper:
+                headers["paptrading"] = "1"
+            with httpx.Client(timeout=10.0) as c:
+                r = c.get(f"{base_url}{path}{qs}", headers=headers)
+            return r.json()
+
+        # 1. 잔고
+        acc = _signed_get("/api/v2/mix/account/account", {
+            "productType": product_type, "symbol": "BTCUSDT", "marginCoin": "USDT",
+        })
+        if str(acc.get("code")) != "00000":
+            return {"ok": False, "error": f"Bitget account: {acc.get('msg')}"}
+        acc_data = acc.get("data") or {}
+        wallet = float(acc_data.get("accountEquity") or 0)
+        available = float(acc_data.get("available") or 0)
+        upnl_account = float(acc_data.get("unrealizedPL") or 0)
+
+        # 2. 포지션
+        positions: list[dict] = []
+        total_unrealized = upnl_account
+        try:
+            ps = _signed_get("/api/v2/mix/position/all-position", {
+                "productType": product_type, "marginCoin": "USDT",
+            })
+            if str(ps.get("code")) == "00000":
+                position_unrealized = 0.0
+                for p in ps.get("data") or []:
+                    total = float(p.get("total") or 0)
+                    if total == 0:
+                        continue
+                    hold_side = p.get("holdSide", "long")
+                    upnl = float(p.get("unrealizedPL") or 0)
+                    position_unrealized += upnl
+                    positions.append({
+                        "symbol": p.get("symbol"),
+                        "amt": total if hold_side == "long" else -total,
+                        "side": "LONG" if hold_side == "long" else "SHORT",
+                        "entry_price": float(p.get("openPriceAvg") or 0),
+                        "mark_price": float(p.get("markPrice") or 0),
+                        "unrealized_pnl": round(upnl, 4),
+                    })
+                # account.unrealizedPL 이 비어있으면 포지션 합계로 fallback.
+                if upnl_account == 0:
+                    total_unrealized = position_unrealized
+        except Exception as err:  # noqa: BLE001
+            logger.warning("Bitget position fetch failed: %s", err)
+
+        api_key_masked = api_key[:4] + "****" + api_key[-4:] if len(api_key) >= 8 else api_key
+        return {
+            "ok": True,
+            "paper": paper,
+            "base_url_short": base_url.replace("https://", "") + (
+                " (demo/paptrading)" if paper else ""
+            ),
+            "api_key_masked": api_key_masked,
+            "wallet_balance_usdt": round(wallet, 4),
+            "available_usdt": round(available, 4),
+            "total_unrealized_pnl": round(total_unrealized, 4),
+            "positions": positions,
+            "n_positions": len(positions),
         }
 
     # ── Binance USDS-M Futures ───────────────────────────────────────────────
