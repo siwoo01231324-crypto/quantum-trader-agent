@@ -1141,6 +1141,47 @@ body{{
         <div class="last-ts" id="bnb-detail">API Key: <span id="bnb-key">—</span> &nbsp;|&nbsp; <span id="bnb-mode">—</span> &nbsp;|&nbsp; 기준 <span id="bnb-snap" title="이 카드 데이터의 스냅샷 시각 (KST). 실제 Binance 화면과의 미세차이는 이 지연 때문 — 계산은 Binance 의 unRealizedProfit 그대로 사용">—</span></div>
       </div>
 
+      <!-- Bitget Futures 계좌 카드 (P5) -->
+      <div class="card card-sm" id="account-card-bitget">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <span style="font-size:12px;font-weight:600;color:var(--text)">Bitget Futures <span style="font-size:10px;color:var(--text3);font-weight:400">USDT-M</span></span>
+          <span id="bg-status" class="status-chip status-idle"><span class="dot"></span>조회 중</span>
+        </div>
+        <div class="acct-hero">
+          <div class="acct-hero-cell">
+            <div class="acct-hero-label">지갑 잔고</div>
+            <div class="acct-hero-val" id="bg-wallet">—</div>
+            <div class="acct-hero-sub">USDT</div>
+          </div>
+          <div class="acct-hero-cell">
+            <div class="acct-hero-label">가용 증거금</div>
+            <div class="acct-hero-val" id="bg-avail">—</div>
+            <div class="acct-hero-sub">USDT</div>
+          </div>
+          <div class="acct-hero-cell">
+            <div class="acct-hero-label">미실현 손익</div>
+            <div class="acct-hero-val" id="bg-upnl">—</div>
+            <div class="acct-hero-sub" id="bg-pos-n">포지션 —</div>
+          </div>
+        </div>
+        <div style="margin-top:12px;max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:4px" id="bg-pos-wrap">
+          <table class="pos-table">
+            <thead>
+              <tr>
+                <th>심볼 / 방향</th>
+                <th>수량</th>
+                <th>진입가</th>
+                <th>미실현 PnL</th>
+              </tr>
+            </thead>
+            <tbody id="bg-pos-rows">
+              <tr><td colspan="4" style="text-align:center;color:var(--text3);padding:14px;font-family:var(--sans);font-size:11px">포지션 없음</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="last-ts" id="bg-detail">API Key: <span id="bg-key">—</span> &nbsp;|&nbsp; <span id="bg-mode">—</span> &nbsp;|&nbsp; 기준 <span id="bg-snap" title="Bitget 스냅샷 시각 (KST). 15s TTL 캐시 — 실 Bitget 화면과 약간의 지연 가능.">—</span></div>
+      </div>
+
       <!-- KIS 계좌 카드 -->
       <div class="card card-sm" id="account-card-kis">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
@@ -1680,6 +1721,74 @@ async function bnbFastRefresh() {{
 }}
 bnbFastRefresh();
 setInterval(bnbFastRefresh, 10000);
+
+// ── Bitget Futures (P5) ─────────────────────────────────────────
+let _bgSnapAt = null;
+function renderBitget(b) {{
+  b = b || {{}};
+  const set = (id, v) => {{ const e = document.getElementById(id); if (e) e.textContent = v; }};
+  setStatusChip('bg-status', !!b.ok, '연결됨', b.error || '실패');
+  set('bg-key', b.api_key_masked || '—');
+  set('bg-mode', b.ok ? (b.paper ? 'Demo' : 'Mainnet') + ' · ' + (b.base_url_short || '') : '—');
+  const walEl = document.getElementById('bg-wallet');
+  if (walEl) {{ walEl.textContent = b.ok ? fmtNum(b.wallet_balance_usdt, 2) : '—'; }}
+  const avEl = document.getElementById('bg-avail');
+  if (avEl) {{ avEl.textContent = b.ok ? fmtNum(b.available_usdt, 2) : '—'; }}
+  const upnlEl = document.getElementById('bg-upnl');
+  if (upnlEl) {{
+    const u = b.total_unrealized_pnl;
+    if (b.ok && u != null) {{
+      const sign = u >= 0 ? '+' : '';
+      upnlEl.textContent = sign + fmtNum(u, 2);
+      colorEl(upnlEl, u);
+    }} else {{
+      upnlEl.textContent = '—';
+      upnlEl.style.color = 'var(--text2)';
+    }}
+  }}
+  set('bg-pos-n', b.ok ? (b.n_positions || 0) + ' 개 포지션' : '포지션 —');
+  const posRows = document.getElementById('bg-pos-rows');
+  if (posRows) {{
+    const ps = (b.ok && b.positions) ? b.positions : [];
+    if (ps.length === 0) {{
+      posRows.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text3);padding:14px;font-family:var(--sans);font-size:11px">열린 포지션 없음</td></tr>';
+    }} else {{
+      posRows.innerHTML = ps.map(p => {{
+        const isLong = p.side === 'LONG';
+        const sideCls = isLong ? 'side-long' : 'side-short';
+        const sideTxt = isLong ? 'LONG' : 'SHORT';
+        const pnlHtml = fmtPnl(p.unrealized_pnl, ' USDT');
+        return `<tr>
+          <td><span class="stratpos-sym">${{escHtml(p.symbol)}}</span><br><span class="side-badge ${{sideCls}}">${{sideTxt}}</span></td>
+          <td style="text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums">${{escHtml(p.amt)}}</td>
+          <td style="text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums">${{fmtNum(p.entry_price,4)}}</td>
+          <td style="text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums">${{pnlHtml}}</td>
+        </tr>`;
+      }}).join('');
+    }}
+  }}
+  _bgSnapAt = b.ok ? new Date() : null;
+  bgSnapTick();
+}}
+function bgSnapTick() {{
+  const el = document.getElementById('bg-snap');
+  if (!el) return;
+  if (!_bgSnapAt) {{ el.textContent = '—'; return; }}
+  const age = Math.max(0, Math.round((Date.now() - _bgSnapAt.getTime()) / 1000));
+  el.textContent = fmtKst(_bgSnapAt.toISOString()).slice(11, 19)
+    + (age > 0 ? ' (' + age + '초 전)' : ' (방금)');
+}}
+setInterval(bgSnapTick, 1000);
+async function bgFastRefresh() {{
+  try {{
+    const r = await fetch('/api/account/bitget');
+    const d = await r.json();
+    if (!d.available) {{ renderBitget({{ok: false}}); return; }}
+    renderBitget(d.bitget || {{}});
+  }} catch (err) {{ console.warn('bgFast', err); }}
+}}
+bgFastRefresh();
+setInterval(bgFastRefresh, 10000);
 
 let _acctInflight = false;
 async function acctRefreshGuarded() {{

@@ -27,7 +27,7 @@ versions:
       - "config/airborne_short_whitelist.yaml — RIFUSDT status: active → removed (Bitget 미상장, 영구 제외). 1000SHIBUSDT → SHIBUSDT (Bitget 1코인 단위 — 알파 무관, 가격 비율 동일). active 14종."
       - "src/backtest/strategies/live_airborne_short_whitelist_v1.py — _FALLBACK_UNIVERSE 도 동일 매핑 (yaml 로드 실패 시 fallback)."
       - "src/brokers/bitget/async_adapter.py — ``get_net_positions`` 신규. holdSide 부호 적용한 signed dict. PositionReconciler 가 broker ground-truth 비교에 필요. 미구현 시 reconciler 가 매 60s WARNING 폭주 + 실제 sync 안 됨."
-      - "src/dashboard/account_info.py — ``_fetch_bitget`` + ``_resolve_bitget_creds`` 추가. Binance 와 동일 shape (wallet/available/positions/upnl). fetch() 결과 dict 에 ``bitget`` 키 추가 + prev_cache fallback. 실측: Demo \$5,000 잔고 정상 조회."
+      - "src/dashboard/account_info.py — ``_fetch_bitget`` + ``_resolve_bitget_creds`` 추가. Binance 와 동일 shape (wallet/available/positions/upnl). fetch() 결과 dict 에 ``bitget`` 키 추가 + prev_cache fallback. 실측: Demo 5000 USDT 잔고 정상 조회."
       - "src/dashboard/app.py — ``/api/account/bitget`` REST 엔드포인트. provider.fetch() 의 ``bitget`` 키 반환. 항상 200, 예외 시 ``ok=False``."
       - "docker-compose.live.yml — ``live-daemon-bitget`` 서비스. BITGET_BROKER_MODE env 로 demo/mainnet 전환 (default demo). 별도 log/state 디렉토리로 Binance daemon + KIS daemon 과 ProcessLock 분리. restart=unless-stopped + healthcheck."
       - "Smoke 검증: ``python scripts/live_run.py --broker bitget-demo --feed mock --max-iterations 3`` → orchestrator 부팅 + fill consumer + mark-price consumer + reconciler 모두 정상 시작/종료 (zero WARNING)."
