@@ -108,6 +108,106 @@ class BinancePublicFeed:
             self._ws = None
 
 
+class BitgetPublicFeed:
+    """Bitget USDT-M Futures public ``trade`` channel feed (P4b — no API key).
+
+    Mirrors :class:`BinancePublicFeed` shape: ``async for tick in feed`` yields
+    :class:`~src.live.types.Tick`. Bitget's ``trade`` channel pushes per-trade
+    events (price + size + side + ts) for the subscribed symbols.
+
+    Endpoint:
+      - Demo: ``wss://wspap.bitget.com/v2/ws/public`` (wspap subdomain)
+      - Live: ``wss://ws.bitget.com/v2/ws/public``
+
+    Subscribe args:
+      ``{"instType": "USDT-FUTURES", "channel": "trade", "instId": "<symbol>"}``
+
+    Multi-symbol: Bitget allows ≤50 channels per subscribe frame; we chunk on
+    connect. snapshot_builder gets a tick per match across all subscribed
+    symbols (mirrors Binance's combined aggTrade union, just per-symbol push).
+    """
+    DEFAULT_LIVE = "wss://ws.bitget.com/v2/ws/public"
+    DEFAULT_DEMO = "wss://wspap.bitget.com/v2/ws/public"
+
+    def __init__(
+        self,
+        symbols: list[str] | None = None,
+        *,
+        paper: bool = True,
+        base_url: str | None = None,
+    ) -> None:
+        self._symbols: list[str] = list(symbols or [])
+        self._base_url = base_url or (self.DEFAULT_DEMO if paper else self.DEFAULT_LIVE)
+        self._ws = None
+        self._closed = False
+
+    async def connect(self) -> None:
+        import websockets
+        if not self._symbols:
+            raise RuntimeError("BitgetPublicFeed: no symbols subscribed")
+        logger.info("BitgetPublicFeed connecting to %s (%d symbols)",
+                    self._base_url, len(self._symbols))
+        self._ws = await websockets.connect(self._base_url, ping_interval=20)
+        # Subscribe (chunked at 50 per frame — Bitget recommendation).
+        CHUNK = 50
+        for i in range(0, len(self._symbols), CHUNK):
+            args = [
+                {"instType": "USDT-FUTURES", "channel": "trade", "instId": s}
+                for s in self._symbols[i:i + CHUNK]
+            ]
+            await self._ws.send(json.dumps({"op": "subscribe", "args": args}))
+
+    async def subscribe(self, symbols: list[str]) -> None:
+        # MVP: append to in-memory list; effective on next connect.
+        self._symbols.extend(symbols)
+
+    def __aiter__(self) -> AsyncIterator:
+        return self._iter()
+
+    async def _iter(self) -> AsyncIterator:
+        from src.live.types import Tick
+        if self._ws is None:
+            raise RuntimeError("Feed not connected")
+        async for raw in self._ws:
+            if self._closed:
+                break
+            try:
+                msg = json.loads(raw)
+            except json.JSONDecodeError as err:
+                logger.warning("BitgetPublicFeed parse error: %s", err)
+                continue
+            arg = msg.get("arg") or {}
+            if arg.get("channel") != "trade":
+                continue
+            sym = str(arg.get("instId", ""))
+            for row in msg.get("data") or []:
+                try:
+                    # Bitget v2 trade row: [ts, price, size, side]
+                    server_ts_ms = int(row[0])
+                    server_ts = datetime.fromtimestamp(
+                        server_ts_ms / 1000, tz=timezone.utc
+                    ).isoformat()
+                    yield Tick(
+                        symbol=sym,
+                        price=Decimal(str(row[1])),
+                        qty=Decimal(str(row[2])),
+                        ts=datetime.now(timezone.utc).isoformat(),
+                        server_ts=server_ts,
+                    )
+                except (IndexError, ValueError) as err:
+                    logger.warning("BitgetPublicFeed row skip (%s): %r", err, row)
+                    continue
+
+    async def aclose(self) -> None:
+        self._closed = True
+        if self._ws is not None:
+            try:
+                await self._ws.close()
+            except Exception:
+                pass
+            self._ws = None
+
+
 class BinanceMarkPriceFeed:
     """Binance USDT-M Futures `!markPrice@arr@1s` stream — all-symbol mark price.
 
@@ -199,6 +299,96 @@ class BinanceMarkPriceFeed:
                     logger.warning(
                         "BinanceMarkPriceFeed event skip (%s): %r", err, ev,
                     )
+                    continue
+            if batch:
+                yield batch
+
+    async def aclose(self) -> None:
+        self._closed = True
+        if self._ws is not None:
+            try:
+                await self._ws.close()
+            except Exception:
+                pass
+            self._ws = None
+
+
+class BitgetMarkPriceFeed:
+    """Bitget USDT-M Futures ``ticker`` channel for per-symbol mark price (P4b).
+
+    Mirrors :class:`BinanceMarkPriceFeed` shape: ``async for batch in feed``
+    yields ``list[tuple[symbol, mark_price, ts]]`` — one tuple per ticker
+    message. Bitget does NOT have an all-symbol single-stream equivalent of
+    Binance's ``!markPrice@arr@1s``; we subscribe per symbol, and each ticker
+    push becomes a 1-element batch (caller logic stays identical).
+
+    Endpoint same as :class:`BitgetPublicFeed` (public WS).
+    """
+    DEFAULT_LIVE = "wss://ws.bitget.com/v2/ws/public"
+    DEFAULT_DEMO = "wss://wspap.bitget.com/v2/ws/public"
+
+    def __init__(
+        self,
+        symbols: list[str] | None = None,
+        *,
+        paper: bool = True,
+        base_url: str | None = None,
+    ) -> None:
+        self._symbols: list[str] = list(symbols or [])
+        self._base_url = base_url or (self.DEFAULT_DEMO if paper else self.DEFAULT_LIVE)
+        self._ws = None
+        self._closed = False
+
+    async def connect(self) -> None:
+        import websockets
+        if not self._symbols:
+            raise RuntimeError("BitgetMarkPriceFeed: no symbols subscribed")
+        logger.info("BitgetMarkPriceFeed connecting to %s (%d symbols)",
+                    self._base_url, len(self._symbols))
+        self._ws = await websockets.connect(self._base_url, ping_interval=20)
+        CHUNK = 50
+        for i in range(0, len(self._symbols), CHUNK):
+            args = [
+                {"instType": "USDT-FUTURES", "channel": "ticker", "instId": s}
+                for s in self._symbols[i:i + CHUNK]
+            ]
+            await self._ws.send(json.dumps({"op": "subscribe", "args": args}))
+
+    def __aiter__(self) -> AsyncIterator:
+        return self._iter()
+
+    async def _iter(self) -> AsyncIterator:
+        if self._ws is None:
+            raise RuntimeError("Feed not connected")
+        async for raw in self._ws:
+            if self._closed:
+                break
+            try:
+                msg = json.loads(raw)
+            except json.JSONDecodeError as err:
+                logger.warning("BitgetMarkPriceFeed parse error: %s", err)
+                continue
+            arg = msg.get("arg") or {}
+            if arg.get("channel") != "ticker":
+                continue
+            batch: list[tuple[str, Decimal, datetime]] = []
+            for row in msg.get("data") or []:
+                if not isinstance(row, dict):
+                    continue
+                mark = row.get("markPrice")
+                if mark is None or mark == "":
+                    continue
+                try:
+                    sym = str(row["instId"])
+                    price = Decimal(str(mark))
+                    ts_ms = int(row.get("ts") or 0)
+                    ts = (
+                        datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc)
+                        if ts_ms else datetime.now(timezone.utc)
+                    )
+                    batch.append((sym, price, ts))
+                except (KeyError, ValueError) as err:
+                    logger.warning("BitgetMarkPriceFeed event skip (%s): %r", err, row)
                     continue
             if batch:
                 yield batch

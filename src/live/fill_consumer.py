@@ -240,3 +240,112 @@ async def run_binance_fill_consumer(
                 await sleep(delay)
                 if stop_event.is_set():
                     return
+
+
+async def run_bitget_fill_consumer(
+    stream_factory: Callable[[], AsyncIterator[BrokerFill]],
+    *,
+    wal: WAL,
+    position_store,
+    stop_event: asyncio.Event,
+    max_attempts: int = _DEFAULT_MAX_ATTEMPTS,
+    sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+) -> None:
+    """Bitget v2 private WS user-data fill consumer (P4b).
+
+    Same contract as :func:`run_binance_fill_consumer` — only the logger
+    labels and the WSConfigError remediation message differ (env-vars are
+    BITGET_DEMO_* / BITGET_API_*; subdomain is wspap.bitget.com for demo).
+    """
+    seen: set[tuple[str, str]] = set()
+    attempt = 0
+
+    while not stop_event.is_set() and attempt < max_attempts:
+        try:
+            stream = stream_factory()
+            async for fill in stream:
+                if stop_event.is_set():
+                    break
+                attempt = 0
+                dedup_key = (fill.broker_order_id, fill.trade_id)
+                if dedup_key in seen:
+                    logger.debug(
+                        "bitget_fill_consumer: duplicate fill skipped %s",
+                        dedup_key,
+                    )
+                    continue
+                seen.add(dedup_key)
+
+                ctx = position_store.resolve_order_context(
+                    fill.client_order_id
+                ) if position_store is not None else None
+                if ctx is not None:
+                    symbol, side, strategy_id = ctx
+                else:
+                    symbol = ""
+                    side = ""
+                    strategy_id = None
+                    logger.warning(
+                        "bitget_fill_consumer: cannot resolve order context "
+                        "for coid=%r (broker_order_id=%s trade_id=%s) — "
+                        "emitting order_filled WITHOUT strategy_id",
+                        fill.client_order_id, fill.broker_order_id,
+                        fill.trade_id,
+                    )
+
+                event = broker_fill_to_order_filled_event(
+                    fill, symbol=symbol, side=side, strategy_id=strategy_id,
+                )
+                try:
+                    wal.write(event)
+                except WALWriteFailed as exc:
+                    logger.error(
+                        "bitget_fill_consumer: WAL write failed for fill "
+                        "coid=%r trade_id=%s: %s",
+                        fill.client_order_id, fill.trade_id, exc,
+                    )
+            return
+        except asyncio.CancelledError:
+            raise
+        except WSConfigError as err:
+            logger.error(
+                "bitget_fill_consumer: fill stream permanently unavailable "
+                "(%s) — NOT retrying. Live Bitget fills will NOT reach the "
+                "dashboard/PnL until BITGET_DEMO_API_KEY / BITGET_DEMO_SECRET "
+                "/ BITGET_DEMO_PASSPHRASE are corrected (demo subdomain "
+                "is wspap.bitget.com). Trading continues; this only affects "
+                "fill visibility.",
+                err,
+            )
+            return
+        except BaseException as err:  # noqa: BLE001
+            if stop_event.is_set():
+                return
+            attempt += 1
+            if attempt >= max_attempts:
+                logger.error(
+                    "bitget_fill_consumer: reconnect exhausted %d attempts "
+                    "(%s: %s) — giving up; live fills will no longer reach "
+                    "the WAL until restart",
+                    max_attempts, type(err).__name__, err,
+                )
+                return
+            delay = backoff_delay(attempt - 1, base=1.0, cap=30.0)
+            logger.warning(
+                "bitget_fill_consumer: stream error (attempt=%d/%d, "
+                "sleep=%.1fs): %s: %s",
+                attempt, max_attempts, delay,
+                type(err).__name__, err,
+            )
+            if sleep is asyncio.sleep:
+                try:
+                    await asyncio.wait_for(stop_event.wait(), timeout=delay)
+                    return
+                except asyncio.TimeoutError:
+                    pass
+                except asyncio.CancelledError:
+                    raise
+            else:
+                await sleep(delay)
+                if stop_event.is_set():
+                    return
