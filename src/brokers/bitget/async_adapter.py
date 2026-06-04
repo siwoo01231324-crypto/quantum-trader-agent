@@ -44,6 +44,7 @@ from src.brokers.bitget.async_http import (
     LIVE_PRODUCT_TYPE,
     REST_BASE_LIVE,
 )
+from src.brokers.bitget.async_ws import AsyncBitgetUserDataStream, OverflowPolicy
 from src.brokers.bitget.symbol_filters import SymbolFilters
 from src.brokers.errors import (
     BrokerClosedError,
@@ -74,6 +75,8 @@ class AsyncBitgetFuturesAdapter:
         base_url: str = REST_BASE_LIVE,
         paper: bool = True,
         kill_switch: object | None = None,
+        fill_queue_size: int = 1000,
+        overflow_policy: "OverflowPolicy" = "block",
     ) -> None:
         self.paper = paper
         self._kill_switch = kill_switch
@@ -85,10 +88,16 @@ class AsyncBitgetFuturesAdapter:
         self._product_type = DEMO_PRODUCT_TYPE if paper else LIVE_PRODUCT_TYPE
         self._symbol_filters = SymbolFilters(base_url=base_url, paper=paper)
         self._hedge_mode: bool | None = None
-        # Bitget -2027 equivalent: code 40774 (max notional exceeded).
+        # Bitget -2027 equivalent: code 40762 (qty exceeds upper limit).
         # Local cooldown to prevent rate-limit cascade (mirrors Binance fix).
         self._max_notional_cooldown: dict[tuple[str, str], float] = {}
         self._MAX_NOTIONAL_COOLDOWN_SEC: float = 300.0
+        # WS user-data stream — lazily built on first stream_fills().
+        self._ws_stream: AsyncBitgetUserDataStream | None = None
+        self._ws_creds = (api_key, secret, passphrase)
+        self._ws_paper = paper
+        self._fill_queue_size = fill_queue_size
+        self._overflow_policy: "OverflowPolicy" = overflow_policy
 
     # ── kill switch ──────────────────────────────────────────────────────────
 
@@ -362,12 +371,18 @@ class AsyncBitgetFuturesAdapter:
             return HealthStatus.DOWN
 
     def stream_fills(self) -> AsyncIterator[BrokerFill]:
-        """User-data WS stream — implemented in P2 (async_ws.py)."""
-        raise NotImplementedError(
-            "Bitget user-data WS not yet implemented (Phase 2). "
-            "P1 supports REST polling only via reconciler."
+        """Return an AsyncIterator that yields BrokerFill from Bitget private WS."""
+        key, sec, pas = self._ws_creds
+        self._ws_stream = AsyncBitgetUserDataStream(
+            api_key=key, secret=sec, passphrase=pas,
+            paper=self._ws_paper,
+            queue_size=self._fill_queue_size,
+            overflow_policy=self._overflow_policy,
         )
+        return self._ws_stream.stream_fills()
 
     async def aclose(self) -> None:
         self._closing = True
+        if self._ws_stream is not None:
+            await self._ws_stream.aclose()
         await self._client.aclose()

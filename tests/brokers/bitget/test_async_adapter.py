@@ -278,7 +278,16 @@ async def test_ensure_position_mode_caches_and_skips_redundant():
 
 
 @pytest.mark.asyncio
-async def test_stream_fills_raises_not_implemented_in_p1():
+async def test_stream_fills_returns_async_iterator():
+    # 2026-06-05 P2 — stream_fills() now constructs AsyncBitgetUserDataStream.
+    # We don't actually connect (no real WS), just verify the iterator surface.
     ad = _make_adapter()
-    with pytest.raises(NotImplementedError, match=r"Phase 2"):
-        ad.stream_fills()
+    # _ws_creds set in _make_adapter via Inject (we don't have it normally).
+    ad._ws_creds = ("k", "s", "p")
+    ad._ws_paper = True
+    ad._fill_queue_size = 100
+    ad._overflow_policy = "block"
+    it = ad.stream_fills()
+    assert hasattr(it, "__anext__"), "stream_fills must return AsyncIterator"
+    # Cleanup the lazy WS stream (no connection was made yet).
+    ad._ws_stream._stop.set()

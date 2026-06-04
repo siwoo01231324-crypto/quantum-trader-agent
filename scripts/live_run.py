@@ -444,11 +444,14 @@ def _build_parser() -> argparse.ArgumentParser:
             "kis-paper",
             "kis-paper-shadow",
             "binance-testnet-shadow",  # #231 S1 — Binance shadow live-daemon
+            "bitget-demo",             # P4 — Bitget USDT-M Futures Demo (paper trading)
+            "bitget-mainnet",          # P4 — Bitget USDT-M Futures mainnet (real money)
             "smoke-dual",              # smoke test — KIS paper 005930 + Binance testnet BTCUSDT 동시
         ],
         default="binance-testnet-shadow",
         help="브로커 모드 (default: binance-testnet-shadow — cs-tsmom-crypto-daily "
              "자동발주 가능). KIS 모의 가동은 명시적으로 --broker kis-paper-shadow. "
+             "bitget-demo / bitget-mainnet 은 Bitget USDT-M Futures (P4). "
              "smoke-dual 은 KIS + Binance 둘 다 병렬 (SMOKE_TEST_ENABLED=1 필요). "
              "기본값 변경 2026-05-21 — 직전엔 kis-paper-shadow 였음.",
     )
@@ -634,6 +637,53 @@ def _build_binance_adapter(broker_mode: str):
     )
 
 
+def _build_bitget_adapter(broker_mode: str):
+    """P4 — Bitget USDT-M Futures adapter (Demo or Mainnet).
+
+    Env vars (single chain — no fallbacks; Bitget API key has 3 components):
+      API key:    BITGET_DEMO_API_KEY (paper) / BITGET_API_KEY (live)
+      API secret: BITGET_DEMO_SECRET  (paper) / BITGET_API_SECRET (live)
+      Passphrase: BITGET_DEMO_PASSPHRASE (paper) / BITGET_API_PASSPHRASE (live)
+
+    Demo trading routes via the ``paptrading: 1`` REST header and
+    ``wspap.bitget.com`` WS subdomain (auto-selected by ``paper=True``).
+
+    KIS / paper-only / Binance 모드면 None 반환.
+    """
+    if broker_mode not in ("bitget-demo", "bitget-mainnet"):
+        return None
+    from src.brokers.bitget.async_adapter import AsyncBitgetFuturesAdapter
+
+    paper = broker_mode == "bitget-demo"
+
+    def _strip(v):
+        return (v or "").strip().strip('"').strip("'")
+
+    if paper:
+        api_key = _strip(os.environ.get("BITGET_DEMO_API_KEY"))
+        secret = _strip(os.environ.get("BITGET_DEMO_SECRET"))
+        passphrase = _strip(os.environ.get("BITGET_DEMO_PASSPHRASE"))
+        var_names = ["BITGET_DEMO_API_KEY", "BITGET_DEMO_SECRET", "BITGET_DEMO_PASSPHRASE"]
+    else:
+        api_key = _strip(os.environ.get("BITGET_API_KEY"))
+        secret = _strip(os.environ.get("BITGET_API_SECRET"))
+        passphrase = _strip(os.environ.get("BITGET_API_PASSPHRASE"))
+        var_names = ["BITGET_API_KEY", "BITGET_API_SECRET", "BITGET_API_PASSPHRASE"]
+
+    missing = [name for name, val in zip(var_names, (api_key, secret, passphrase)) if not val]
+    if missing:
+        raise SystemExit(
+            f"broker_mode='{broker_mode}' requires env vars: {', '.join(missing)}"
+        )
+
+    return AsyncBitgetFuturesAdapter(
+        api_key=api_key,
+        secret=secret,
+        passphrase=passphrase,
+        paper=paper,
+    )
+
+
 def _build_universe_quote_provider(broker_mode: str, kis_client, args):
     """#231 S2 — broker_mode 기반 universe OHLCV provider 빌드.
 
@@ -721,6 +771,61 @@ def _build_universe_quote_provider(broker_mode: str, kis_client, args):
             except Exception:
                 return {}
         return _binance_provider
+
+    if broker_mode in ("bitget-demo", "bitget-mainnet"):
+        # P4 — Bitget universe quote provider. Same closure pattern as Binance
+        # (per-interval union from orchestrator strategies). Fallback when no
+        # orchestrator attached: top-30 USDT pairs ≈ Binance baseline.
+        from src.brokers.bitget.universe_quote import fetch_universe_klines as _bg_fetch
+        from src.portfolio.binance_universe import get_universe as _binance_top30  # symbol shared
+
+        def _bg_get_orchestrator():
+            return getattr(args, "_orchestrator", None)
+
+        def _bg_collect_strategy_universes() -> dict[str, set[str]]:
+            orchestrator = _bg_get_orchestrator()
+            if orchestrator is None or not hasattr(orchestrator, "_strategies"):
+                return {}
+            out: dict[str, set[str]] = {}
+            for strat in orchestrator._strategies.values():
+                get_u = getattr(strat, "get_universe", None)
+                get_i = getattr(strat, "get_interval", None)
+                if not (callable(get_u) and callable(get_i)):
+                    continue
+                try:
+                    syms = list(get_u())
+                    interval = str(get_i())
+                except Exception:
+                    continue
+                if not syms or not interval:
+                    continue
+                # 1000PEPEUSDT / 1000SHIBUSDT 매핑 (Bitget 은 1코인 단위라 multiplier 없음).
+                # P0 사전조사 결과: 우리 universe 의 1000X 종목만 매핑 필요.
+                normalized = [
+                    s.removeprefix("1000") if s.startswith("1000") and s.endswith("USDT") else s
+                    for s in syms
+                ]
+                out.setdefault(interval, set()).update(normalized)
+            return out
+
+        def _bitget_provider():
+            try:
+                per_interval = _bg_collect_strategy_universes()
+                if not per_interval:
+                    return _bg_fetch(_binance_top30(), interval="1d")
+                ohlcv: dict = {}
+                for interval in sorted(per_interval.keys()):
+                    syms = sorted(per_interval[interval])
+                    try:
+                        partial = _bg_fetch(syms, interval=interval)
+                    except Exception:
+                        continue
+                    for sym, df in partial.items():
+                        ohlcv.setdefault(sym, df)
+                return ohlcv
+            except Exception:
+                return {}
+        return _bitget_provider
 
     return None
 
