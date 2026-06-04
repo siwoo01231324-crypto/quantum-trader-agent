@@ -56,9 +56,11 @@ _WHITELIST_YAML: Path = (
 # 임포트 시점 (orchestrator 시작) 의 fallback universe — yaml 로드 실패 대비.
 # Hard OOS active 15종.
 _FALLBACK_UNIVERSE: tuple[str, ...] = (
-    "1000SHIBUSDT", "AAVEUSDT", "APTUSDT", "ARBUSDT", "ATOMUSDT",
+    # 2026-06-05 — Bitget 호환성: 1000SHIBUSDT→SHIBUSDT (Bitget 단일 unit),
+    # RIFUSDT 제외 (Bitget 미상장). 알파 영향 없음 (price 비율 동일).
+    "SHIBUSDT", "AAVEUSDT", "APTUSDT", "ARBUSDT", "ATOMUSDT",
     "AXSUSDT", "DASHUSDT", "FETUSDT", "IDUSDT", "LTCUSDT",
-    "RIFUSDT", "UNIUSDT", "XLMUSDT", "XRPUSDT", "ZECUSDT",
+    "UNIUSDT", "XLMUSDT", "XRPUSDT", "ZECUSDT",
 )
 
 
