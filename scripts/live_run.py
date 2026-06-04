@@ -309,6 +309,8 @@ def _run_dashboard_only_mode(port: int = 8000) -> int:
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
+    # 2026-06-05 — httpx INFO 폭주 차단 (universe-quote refresh 100+ REST).
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     # 거래 시작 시 실제로 어느 broker 로 갈지 미리 알려준다 (#$$$).
     _env_broker = os.environ.get("QTA_DEFAULT_BROKER", "").strip()
     if _env_broker:
@@ -1705,6 +1707,10 @@ def main(argv: list[str] | None = None) -> int:
         level=args.log_level,
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
+    # 2026-06-05 — httpx 라이브러리 INFO 로그가 universe-quote refresh (수십~수백
+    # 종목 REST) 마다 폭주. 운영 운영 가시성 0 (실 distractor) + 디스크 IO 낭비.
+    # 에러는 WARNING 이상이라 유지.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     logger = logging.getLogger("live_run")
     yaml_path = Path(args.production_yaml)
     if not yaml_path.is_absolute():

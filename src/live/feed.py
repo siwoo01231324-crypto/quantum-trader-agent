@@ -182,19 +182,32 @@ class BitgetPublicFeed:
             sym = str(arg.get("instId", ""))
             for row in msg.get("data") or []:
                 try:
-                    # Bitget v2 trade row: [ts, price, size, side]
-                    server_ts_ms = int(row[0])
+                    # Bitget v2 trade row shape varies by endpoint version:
+                    #   list: [ts, price, size, side]
+                    #   dict: {"ts","price","size","side"}
+                    # 2026-06-05 — 운영 가동 중 dict 형식이 docker logs 에서
+                    # KeyError: 0 폭주를 일으켜 producer 재접속 무한 → 양 형식
+                    # 모두 지원.
+                    if isinstance(row, dict):
+                        ts_raw = row.get("ts") or row.get("T") or 0
+                        px_raw = row.get("price") or row.get("p") or "0"
+                        sz_raw = row.get("size") or row.get("sz") or row.get("v") or "0"
+                    else:
+                        ts_raw = row[0]
+                        px_raw = row[1]
+                        sz_raw = row[2]
+                    server_ts_ms = int(ts_raw)
                     server_ts = datetime.fromtimestamp(
                         server_ts_ms / 1000, tz=timezone.utc
                     ).isoformat()
                     yield Tick(
                         symbol=sym,
-                        price=Decimal(str(row[1])),
-                        qty=Decimal(str(row[2])),
+                        price=Decimal(str(px_raw)),
+                        qty=Decimal(str(sz_raw)),
                         ts=datetime.now(timezone.utc).isoformat(),
                         server_ts=server_ts,
                     )
-                except (IndexError, ValueError) as err:
+                except (IndexError, KeyError, ValueError, TypeError) as err:
                     logger.warning("BitgetPublicFeed row skip (%s): %r", err, row)
                     continue
 

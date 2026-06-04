@@ -78,6 +78,27 @@ async def test_public_feed_yields_ticks_from_trade_channel():
 
 
 @pytest.mark.asyncio
+async def test_public_feed_handles_dict_shape_trade_rows():
+    # 2026-06-05 — 운영 docker logs 에서 Bitget v2 trade channel 이 dict 형식
+    # 로 push → producer KeyError: 0 무한 재접속. 양 형식 모두 지원해야 함.
+    feed = BitgetPublicFeed(["BTCUSDT"], paper=True)
+    msg = json.dumps({
+        "action": "update",
+        "arg": {"instType": "USDT-FUTURES", "channel": "trade", "instId": "BTCUSDT"},
+        "data": [{"ts": "1780000000000", "price": "67500.5", "size": "0.005", "side": "sell"}],
+    })
+    feed._ws = _MockWS([msg])
+    ticks: list = []
+    async for t in feed:
+        ticks.append(t)
+        if ticks:
+            break
+    assert len(ticks) == 1
+    assert ticks[0].price == Decimal("67500.5")
+    assert ticks[0].qty == Decimal("0.005")
+
+
+@pytest.mark.asyncio
 async def test_public_feed_skips_non_trade_channel():
     feed = BitgetPublicFeed(["BTCUSDT"], paper=True)
     feed._ws = _MockWS([
