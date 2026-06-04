@@ -15,6 +15,29 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.28"
+    date: "2026-06-05"
+    title: "/airborne-2pct 페이지 — 같은 fires set 을 +2%/-1% 룰로 시뮬한 별도 통계 (룰 비교용)"
+    tags: [feature]
+    summary: >
+      사용자 요청 (2026-06-04 SKYAIUSDT 사례). dashboard `/airborne` 알림 적중
+      페이지는 +1%/-0.5% (1h hold) 룰 기준 통계인데 실 자동매매 전략은
+      +6%/-3% 룰. 실 거래에서 +1% 익절 가능했던 fire 도 +6% 못 찍어 -3% SL
+      까지 끌려간 패턴 다수. 룰 적합도 비교를 위해 동일 fires set 을 더 넓은
+      폭(+2%/-1%) 룰로 별도 시뮬한 페이지/엔드포인트 추가.
+    items:
+      - "src/dashboard/app.py — _simulate_airborne_fire 시그너처에 tp_pct/sl_pct/hold_bars keyword 추가 (default = 기존 +1%/-0.5%/4 → 기존 caller byte-identical)."
+      - "_get_airborne_sim_cache(rule_key) — rule_key 별 인스턴스 분리. default 는 logs/airborne_fires/sim_cache.jsonl, 2pct 는 sim_cache_2pct.jsonl. 한 fire 의 두 룰 결과가 같은 파일에 안 섞임."
+      - "/api/airborne_metrics — query param ``rule=default|2pct`` 추가. cache_key 에 rule 포함 (window 별·룰 별 분리 캐싱)."
+      - "/airborne-2pct HTML 페이지 신규 — 기존 /airborne 페이지 HTML 본문 재사용 (fetch URL에 rule 박고 헤더에 룰 chip 표시 + 룰 토글 nav)."
+      - "tests/dashboard/test_airborne_2pct_rule.py 신규 8건 — 룰 상수 1:2 손익비 가드 / default 호출 byte-identical / 2pct threshold 정확 / cache 경로 분리 / rule_key 별 인스턴스 / unknown 룰 fallback."
+      - "기존 dashboard airborne 테스트 34건 회귀 0. 총 42 PASS."
+      - "운영: dashboard 재시작 후 /airborne 와 /airborne-2pct 둘 다 접근 가능. 두 룰의 win rate / PF / timeout 비율을 같은 fires 로 직접 비교 가능."
+    refs:
+      - "src/dashboard/app.py — _simulate_airborne_fire / _get_airborne_sim_cache / _render_airborne_page / api_airborne_metrics"
+      - "tests/dashboard/test_airborne_2pct_rule.py"
+      - "logs/airborne_fires/sim_cache_2pct.jsonl — 신규 캐시 파일"
+
   - version: "v0.6.27"
     date: "2026-06-04"
     title: "Airborne 텔레그램 알림 가독성 개선 — 이모지·한글 본문·봇 진입 안내"
