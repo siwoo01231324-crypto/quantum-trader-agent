@@ -654,6 +654,11 @@ def _build_bitget_adapter(broker_mode: str):
     """
     if broker_mode not in ("bitget-demo", "bitget-mainnet"):
         return None
+    # 2026-06-05 — venue 라우팅: 전략의 get_universe() 가 본 env 확인해 Bitget
+    # 거래량 top-100 으로 분기. Binance 미상장 종목 호출 → 400 폭주 + REST
+    # rate-limit 낭비 root cause fix. Binance 모드는 env 미설정 → 기존 byte-
+    # identical.
+    os.environ["QTA_BROKER_VENUE"] = "bitget"
     from src.brokers.bitget.async_adapter import AsyncBitgetFuturesAdapter
 
     paper = broker_mode == "bitget-demo"

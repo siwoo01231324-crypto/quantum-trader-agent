@@ -68,6 +68,17 @@ class LiveAirborneBbReversalKstHours(LiveAirborneBbReversalKstMorning):
 
     @classmethod
     def get_universe(cls) -> list[str]:
-        """daemon 과 동기 — 24h 거래량 top-100 USDT-perp."""
+        """24h 거래량 top-100 USDT-perp — venue 자동 라우팅.
+
+        2026-06-05 — Binance / Bitget 동시 운영. env ``QTA_BROKER_VENUE`` 가
+        ``bitget`` 이면 Bitget 거래량 기준 (Bitget 미상장 종목 사전 제외 →
+        ``status=400`` 폭주 + API rate-limit 낭비 차단). 그 외 (기본/binance)
+        는 기존 Binance 동작 byte-identical.
+        """
+        import os
+        venue = os.environ.get("QTA_BROKER_VENUE", "").strip().lower()
+        if venue == "bitget":
+            from src.portfolio.bitget_top_dynamic import get_top_n_symbols
+            return get_top_n_symbols(100)
         from src.portfolio.binance_top_dynamic import get_top_n_symbols
         return get_top_n_symbols(100)
