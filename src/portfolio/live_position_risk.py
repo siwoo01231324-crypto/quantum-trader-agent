@@ -264,12 +264,21 @@ class LivePositionRiskManager:
                 f"entry={avg_cost},last={last_price},pct={pct_change:+.4f}"
             )
             # LONG exit = SELL the held qty; SHORT exit = BUY (cover) abs(qty).
+            # 2026-06-05: reduce_only=True 강제. 모든 청산 발주는 정의상 보유
+            # 축소만 허용 — 어떤 이유로든 store qty 가 broker 실 qty 보다
+            # 크게 박혔을 때 (예: 옛 disabled 전략 store 잔량 살아남 사고
+            # 2026-06-05 BEATUSDT) broker 가 자동으로 over qty reject. PR
+            # #362 의 cross-run filter 가 root cause 차단이고, 본 reduce_only
+            # 강제는 안전망 2중. airborne 같은 bidir 전략의 short *진입* sell
+            # 은 orchestrator 에서 만들고 본 함수와 무관 (PR #342 shorts_allowed
+            # 가드 그대로 작동).
             intents.append(OrderIntent(
                 strategy_id=strategy_id,
                 symbol=symbol,
                 side="buy" if is_short else "sell",
                 qty=float(abs(held)),
                 reason=reason,
+                reduce_only=True,
             ))
             self._emit_stop_event(
                 strategy_id=strategy_id,
