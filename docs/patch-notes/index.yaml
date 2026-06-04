@@ -15,6 +15,30 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.31"
+    date: "2026-06-05"
+    title: "exit 발주 안전망 — LivePositionRiskManager 청산 OrderIntent 에 reduce_only=True 강제"
+    tags: [fix, safety]
+    summary: >
+      PR #362 (cross-run replay filter, v0.6.30) 가 옛 store 잔량 살아남기
+      root cause 차단이라면, 본 PR 은 broker 측 자동 거부 안전망 2중. 어떤
+      이유로든 store qty 가 broker 실 qty 보다 크게 박혀있는 상태에서 청산
+      발주가 들어가도 Binance Futures 가 "reduceOnly with no position" /
+      "reduceOnly qty larger than position" 으로 자동 reject → LONG/SHORT
+      뒤집기 사고 차단. 2026-06-05 BEATUSDT 사고 같은 over-shoot 가 다른
+      경로로 발생해도 broker 층에서 막힘.
+    items:
+      - "src/portfolio/live_position_risk.py — evaluate() 의 청산 OrderIntent (SL/TP/trailing 모든 트리거) 에 reduce_only=True 강제. LONG exit (sell) / SHORT exit (buy=cover) 모두 동일."
+      - "airborne 같은 bidir 전략의 short *진입* sell intent 는 orchestrator 에서 생성 — 본 함수 영향 X. PR #342 shorts_allowed 가드 (sell + shorts_allowed=True 면 reduce_only=False) 그대로 작동."
+      - "tests/portfolio/test_live_risk_exit_reduce_only.py 신규 4건 — LONG SL/TP exit + SHORT SL/TP exit 모두 reduce_only=True 가드."
+      - "기존 live_position_risk / risk_mgr_pending_exit / atr_dynamic_stop 회귀 0건. 총 48 PASS."
+      - "운영 영향: live_run.py 재시작 즉시 적용. 청산 발주가 reduce_only flag 붙어 binance 로 전송 → 보유 없으면 발주 자체 reject (-2022). 정상 보유분만 청산."
+    refs:
+      - "src/portfolio/live_position_risk.py — evaluate() OrderIntent 생성"
+      - "tests/portfolio/test_live_risk_exit_reduce_only.py"
+      - "PR #362 — cross-run replay filter (root cause 차단) 의 2중 안전망"
+      - "PR #342 — orchestrator 의 shorts_allowed 가드 (short 진입과 호환)"
+
   - version: "v0.6.30"
     date: "2026-06-05"
     title: "cross-run replay 가 disabled 전략 옛 fill 제외 — BEATUSDT/TRX 잔량→broker over-shoot 뒤집기 사고 차단"
@@ -36,13 +60,14 @@ versions:
       - "tests/live/test_replay_allowed_strategy_filter.py 신규 8건 — None filter byte-identical / set filter disabled skip / dir replay 전파 / pnl aggregator 도 동일 / production.yaml commented entry 제외 helper / missing file empty set fallback."
       - "기존 store/pnl 테스트 27건 회귀 0. 총 35 PASS."
       - "운영 영향: live_run.py 재시작 즉시 적용. 다음 재시작부터 disabled 전략 옛 fill 무시 → store 에 활성 전략만 복원. 이미 broker 에 떠있는 over-shoot 포지션 (BEATUSDT LONG 634 등) 은 별개로 사용자가 binance UI 에서 수동 청산 필요 (자동 청산 안 함)."
-      - "후속 PR 예상: LivePositionRiskManager / PositionReconciler 청산 발주에 reduce_only=True 강제 (over-shoot 안전망 2중)."
+      - "후속 — PR #363 (v0.6.31) 머지로 broker 측 reduce_only 안전망 2중 완성."
     refs:
       - "src/live/strategy_position_store.py"
       - "src/live/pnl_aggregator.py"
       - "scripts/live_run.py — _active_strategy_ids"
       - "tests/live/test_replay_allowed_strategy_filter.py"
       - "PR #258 — cross-run replay warm-guard (같은 process 토글만 커버) 의 확장"
+      - "PR #363 — broker reduce_only=True 안전망 (2중 보호)"
 
   - version: "v0.6.29"
     date: "2026-06-05"
