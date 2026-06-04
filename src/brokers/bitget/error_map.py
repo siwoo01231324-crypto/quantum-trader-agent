@@ -41,6 +41,7 @@ _MAP: dict[str, type[BrokerError]] = {
     "40725": InvalidOrderError,          # service unavailable for symbol
     "40762": InvalidOrderError,          # order qty exceeds upper limit (= Binance -2027 equivalent)
     "40774": InvalidOrderError,          # order type / position mode mismatch (NOT max notional)
+    "40786": InvalidOrderError,          # duplicate clientOid (24h dedup)
     "40808": InvalidOrderError,          # parameter verification exception
     "41114": RateLimitError,             # rate limit exceeded
     "42001": InvalidOrderError,          # cannot place order (general)

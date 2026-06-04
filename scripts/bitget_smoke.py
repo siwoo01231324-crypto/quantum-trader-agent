@@ -97,8 +97,10 @@ async def _run(broker_mode: str, place_test_order: bool) -> int:
             from src.brokers.base import OrderRequest, OrderType, PositionSide
             from src.execution.base import Side, TimeInForce
 
+            # clientOid 는 매 실행 unique — Bitget 이 24h 안 중복 거부 (40786).
+            import time as _time
             req = OrderRequest(
-                client_order_id="bgsmoke0001",
+                client_order_id=f"bgsmoke{int(_time.time())}",
                 symbol="BTCUSDT",
                 side=Side.BUY,
                 qty=Decimal("0.001"),
@@ -109,6 +111,9 @@ async def _run(broker_mode: str, place_test_order: bool) -> int:
             )
             ack = await ad.place_order(req)
             print(f"  5. place_order LIMIT BUY : oid={ack.broker_order_id} status={ack.status}")
+            # Bitget detail API 가 막 발주된 orderId 를 즉시 못 찾아 40109 반환하는
+            # 경우가 있음 — 짧은 polling delay 로 안정화. 실측 1초면 충분.
+            await asyncio.sleep(1.0)
             detail = await ad.get_order(symbol="BTCUSDT", broker_order_id=ack.broker_order_id)
             print(f"     get_order            : status={detail.status} filled={detail.filled_qty}")
             await ad.cancel_order(symbol="BTCUSDT", broker_order_id=ack.broker_order_id)

@@ -1008,7 +1008,8 @@ def _start_dashboard(state, port: int, logger):
 
 async def _run_pipeline_attached(
     state, config, kis_adapter, logger, duration_sec: float,
-    *, binance_adapter=None, position_store=None, pnl_aggregator=None,
+    *, binance_adapter=None, bitget_adapter=None,
+    position_store=None, pnl_aggregator=None,
     ops_counters=None, args=None,
 ) -> None:
     """이미 떠있는 dashboard 에 attach — 거래만 시작 (#182 단계 2).
@@ -1200,9 +1201,11 @@ async def _run_pipeline_attached(
     # Binance UI 에서 직접 close 했을 때 store 가 모르고 phantom long 보유 →
     # stop fire → broker SHORT 진입 사이클을 차단. WAL + dashboard timeline
     # 양쪽으로 알림. single-holder mismatch 는 auto-fix, 그 외는 알림만.
+    # P4b — Bitget 도 동일 reconciler 사용 (broker.get_positions 시그니처 동일).
     reconciler_task: asyncio.Task | None = None
     reconciler_stop = asyncio.Event()
-    if binance_adapter is not None and position_store is not None:
+    _live_broker_adapter = binance_adapter or bitget_adapter
+    if _live_broker_adapter is not None and position_store is not None:
         from src.live.position_reconciler import PositionReconciler  # noqa: PLC0415
 
         def _sync_orch_live_entered(sid: str, symbol: str, qty) -> None:
@@ -1215,7 +1218,7 @@ async def _run_pipeline_attached(
 
         reconciler = PositionReconciler(
             position_store=position_store,
-            broker=binance_adapter,
+            broker=_live_broker_adapter,
             wal_observer=_wal_observer,
             alert_publisher=(
                 (lambda p: state.timeline_broker.publish(p))
@@ -1232,7 +1235,12 @@ async def _run_pipeline_attached(
 
     try:
         await _run_with_duration(
-            run_shadow_loop(config, kis_adapter=kis_adapter, binance_adapter=binance_adapter),
+            run_shadow_loop(
+                config,
+                kis_adapter=kis_adapter,
+                binance_adapter=binance_adapter,
+                bitget_adapter=bitget_adapter,
+            ),
             duration_sec,
         )
     finally:
@@ -1324,6 +1332,7 @@ def _build_pipeline_factory(
             config.kis_client = _build_kis_client(args.feed, args.symbols)
         kis_adapter = _build_kis_adapter(args.broker)
         binance_adapter = _build_binance_adapter(args.broker)  # #231 S1
+        bitget_adapter = _build_bitget_adapter(args.broker)    # P4b
         # #231 S2 — universe-scan strategies 가 live dispatch 되도록 provider wire.
         # #238 — smoke 검증 중에는 350종목 universe fetch 가 KIS 초당 한도를 폭주
         # 시키므로 SMOKE_TEST_ENABLED=1 이면 provider 미주입 (cs-* 전략은 hold 폴백).
@@ -1337,6 +1346,7 @@ def _build_pipeline_factory(
         await _run_pipeline_attached(
             state, config, kis_adapter, logger, duration_sec,
             binance_adapter=binance_adapter,
+            bitget_adapter=bitget_adapter,
             position_store=position_store, pnl_aggregator=pnl_aggregator,
             ops_counters=ops_counters,
             args=args,
@@ -1461,7 +1471,7 @@ async def _run_smoke_dual(
 
 async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
                        duration_sec: float, auto_open_browser: bool = True,
-                       *, binance_adapter=None, args=None):
+                       *, binance_adapter=None, bitget_adapter=None, args=None):
     from dataclasses import asdict
     from src.dashboard.app import DashboardState
     from src.dashboard.ops_counters import OpsCounters
@@ -1633,10 +1643,11 @@ async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
             )
 
     # 2026-05-21 — Binance broker ↔ position_store reconciler (CLI 경로).
-    # _run_pipeline_attached 와 동일 와이어링. Binance broker 모드일 때만 가동.
+    # _run_pipeline_attached 와 동일 와이어링. Binance/Bitget broker 모드일 때 가동.
     reconciler_task: asyncio.Task | None = None
     reconciler_stop = asyncio.Event()
-    if binance_adapter is not None:
+    _live_broker_cli = binance_adapter or bitget_adapter
+    if _live_broker_cli is not None:
         from src.live.position_reconciler import PositionReconciler  # noqa: PLC0415
 
         def _sync_orch_live_entered(sid: str, symbol: str, qty) -> None:
@@ -1649,7 +1660,7 @@ async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
 
         reconciler = PositionReconciler(
             position_store=position_store,
-            broker=binance_adapter,
+            broker=_live_broker_cli,
             wal_observer=_wal_observer,
             alert_publisher=lambda p: timeline_broker.publish(p),
             on_position_synced=_sync_orch_live_entered,
@@ -1664,7 +1675,9 @@ async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
     try:
         await _run_with_duration(
             run_shadow_loop(
-                config, kis_adapter=kis_adapter, binance_adapter=binance_adapter,
+                config, kis_adapter=kis_adapter,
+                binance_adapter=binance_adapter,
+                bitget_adapter=bitget_adapter,
             ),
             duration_sec,
         )
@@ -1723,7 +1736,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         kis_adapter = _build_kis_adapter(args.broker)
         binance_adapter = _build_binance_adapter(args.broker)  # #231 S1
-        # #231 S2 — universe-scan strategies wire (KIS / Binance provider)
+        bitget_adapter = _build_bitget_adapter(args.broker)    # P4b
+        # #231 S2 — universe-scan strategies wire (KIS / Binance / Bitget provider)
         config.universe_quote_provider = _build_universe_quote_provider(
             args.broker, config.kis_client, args,
         )
@@ -1732,6 +1746,7 @@ def main(argv: list[str] | None = None) -> int:
                 config, kis_adapter, args.dashboard_port, logger, duration_sec,
                 auto_open_browser=not args.no_browser,
                 binance_adapter=binance_adapter,
+                bitget_adapter=bitget_adapter,
                 args=args,
             )
         )
