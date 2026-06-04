@@ -146,7 +146,12 @@ class StrategyPositionStore:
                 out[sid] = positions
         return out
 
-    def replay_from_wal_dir(self, log_dir: Path | str) -> int:
+    def replay_from_wal_dir(
+        self,
+        log_dir: Path | str,
+        *,
+        allowed_strategy_ids: set[str] | None = None,
+    ) -> int:
         """Cross-run restore: glob 모든 WAL under log_dir 후 각각 replay.
 
         매 run 마다 새 wal_path (logs/live/{run_id}/wal.jsonl) 가 생성되므로
@@ -154,6 +159,14 @@ class StrategyPositionStore:
         시작 → restore_live_entered 가 빈 dict 로 호출 → _live_entered 비어있음
         → 재진입 매수 폭주. 본 메서드가 dashboard 의 /api/strategy_positions
         와 동일한 cross-run aggregate 패턴 (trade_history.discover_wal_files).
+
+        ``allowed_strategy_ids`` (2026-06-05 추가):
+          - ``None`` (default): 모든 sid 복원 — 기존 동작 byte-identical.
+          - ``set[str]``: 그 set 의 sid 만 복원. 외 sid 의 order_acked / order_filled
+            는 skip. production.yaml 에서 disabled 처리한 전략 (예: cand-c-*)
+            의 옛 잔량이 store 에 살아남아 LivePositionRiskManager 가 부풀린 qty
+            로 청산 발주 → broker over-shoot 으로 LONG/SHORT 뒤집기 사고
+            (2026-06-05 BEATUSDT/TRXUSDT) 방지.
 
         Returns: replay 된 WAL 파일 수 (진단용).
         """
@@ -163,10 +176,15 @@ class StrategyPositionStore:
             return 0
         paths = discover_wal_files(log_dir)
         for p in paths:
-            self.replay_from_wal(p)
+            self.replay_from_wal(p, allowed_strategy_ids=allowed_strategy_ids)
         return len(paths)
 
-    def replay_from_wal(self, wal_path: Path | str) -> None:
+    def replay_from_wal(
+        self,
+        wal_path: Path | str,
+        *,
+        allowed_strategy_ids: set[str] | None = None,
+    ) -> None:
         """Cross-run restore from WAL.
 
         Processes 2 event types:
@@ -179,6 +197,9 @@ class StrategyPositionStore:
 
         Event order in WAL is chronological so acks/placed come before fills,
         ensuring the map is warm by the time a fill is ingested.
+
+        ``allowed_strategy_ids`` (2026-06-05): set 주어지면 그 set 의 sid 의
+        event 만 적용. None 이면 모든 sid 복원 (기존 동작 byte-identical).
         """
         events, _corruptions = replay(wal_path)
         for event in events:
@@ -189,6 +210,8 @@ class StrategyPositionStore:
                 coid = payload.get("client_order_id")
                 sym = payload.get("symbol")
                 side = payload.get("side")
+                if allowed_strategy_ids is not None and sid not in allowed_strategy_ids:
+                    continue
                 if sid and coid:
                     self.register_order(client_order_id=coid, strategy_id=sid)
                     if sym and side:
@@ -197,6 +220,13 @@ class StrategyPositionStore:
                             side=side, strategy_id=sid,
                         )
             elif et == "order_filled":
+                if allowed_strategy_ids is not None:
+                    # fill payload 자체의 sid 또는 coid → sid resolve 후 필터.
+                    sid = payload.get("strategy_id") or self._resolve_strategy(
+                        payload.get("client_order_id", "")
+                    )
+                    if sid not in allowed_strategy_ids:
+                        continue
                 self.ingest_fill_event(et, payload)
 
     def ingest_fill_event(self, event_type: str, payload: dict) -> None:

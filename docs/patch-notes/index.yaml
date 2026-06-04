@@ -39,6 +39,36 @@ versions:
       - "PR #362 — cross-run replay filter (root cause 차단) 의 2중 안전망"
       - "PR #342 — orchestrator 의 shorts_allowed 가드 (short 진입과 호환)"
 
+  - version: "v0.6.30"
+    date: "2026-06-05"
+    title: "cross-run replay 가 disabled 전략 옛 fill 제외 — BEATUSDT/TRX 잔량→broker over-shoot 뒤집기 사고 차단"
+    tags: [fix, safety]
+    summary: >
+      2026-06-05 사용자 보고. live_run.py 재시작 후 BEATUSDT 가 broker 에 LONG
+      634 (entry 1.50, mark 1.43, -41 USDT 손실) 로 떠있음. airborne 이
+      SHORT 547 진입했는데 LONG 으로 뒤집힘. 원인: cross-run replay 가
+      production.yaml 에서 disabled 처리한 옛 cand-c-* 전략의 buy/sell fill
+      을 모두 복원해 store 에 옛 잔량 (TRXUSDT 653, ONDOUSDT 16358 등) 살아남.
+      LivePositionRiskManager 가 부풀린 qty 로 청산 발주 → broker over-shoot
+      으로 LONG/SHORT 뒤집힘. PR #258 (cross-run warm-guard) 가 같은 process
+      내 토글 케이스만 막았던 한계.
+    items:
+      - "src/live/strategy_position_store.py — replay_from_wal / replay_from_wal_dir 에 allowed_strategy_ids: set[str]|None keyword 추가. None (default) = 모든 sid 복원 (기존 동작 byte-identical). set 주어지면 그 외 sid 의 order_acked/order_filled 는 skip."
+      - "src/live/pnl_aggregator.py — 동일 keyword 추가 — disabled 전략의 옛 realized PnL 도 통계에서 제외."
+      - "scripts/live_run.py — _active_strategy_ids(yaml_path) helper 신규. production.yaml 의 uncommented strategy id set 만 반환. _run_pipeline_attached / _run_pipeline 의 cross-run replay 호출처 4곳에서 active set 전달."
+      - "logger.info 에 active_sids count 노출 — 다음 사고 진단 단축."
+      - "tests/live/test_replay_allowed_strategy_filter.py 신규 8건 — None filter byte-identical / set filter disabled skip / dir replay 전파 / pnl aggregator 도 동일 / production.yaml commented entry 제외 helper / missing file empty set fallback."
+      - "기존 store/pnl 테스트 27건 회귀 0. 총 35 PASS."
+      - "운영 영향: live_run.py 재시작 즉시 적용. 다음 재시작부터 disabled 전략 옛 fill 무시 → store 에 활성 전략만 복원. 이미 broker 에 떠있는 over-shoot 포지션 (BEATUSDT LONG 634 등) 은 별개로 사용자가 binance UI 에서 수동 청산 필요 (자동 청산 안 함)."
+      - "후속 — PR #363 (v0.6.31) 머지로 broker 측 reduce_only 안전망 2중 완성."
+    refs:
+      - "src/live/strategy_position_store.py"
+      - "src/live/pnl_aggregator.py"
+      - "scripts/live_run.py — _active_strategy_ids"
+      - "tests/live/test_replay_allowed_strategy_filter.py"
+      - "PR #258 — cross-run replay warm-guard (같은 process 토글만 커버) 의 확장"
+      - "PR #363 — broker reduce_only=True 안전망 (2중 보호)"
+
   - version: "v0.6.29"
     date: "2026-06-05"
     title: "live-airborne-bb-reversal-kst-hours — TP/SL 을 +1%/-0.5% 로 변경 (옛 +6%/-3%)"
