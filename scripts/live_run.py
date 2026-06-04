@@ -185,6 +185,32 @@ def _count_strategies(yaml_path: Path) -> int:
         return 0
 
 
+def _active_strategy_ids(yaml_path: Path) -> set[str]:
+    """production.yaml 의 active (uncommented) strategy id set (2026-06-05).
+
+    cross-run replay 가 disabled 전략 (commented `- id: ...`) 의 옛 fill
+    이벤트까지 복원하면 store 에 옛 잔량이 살아남아 LivePositionRiskManager
+    가 부풀린 qty 로 청산 발주 → broker over-shoot 으로 LONG/SHORT 뒤집기
+    사고 (2026-06-05 BEATUSDT incident). 본 함수가 active set 을 반환해
+    replay 가 그 set 의 sid 만 store/aggregator 에 적용하도록 한다.
+
+    파싱 실패 / 파일 없음 → 빈 set (caller 는 fallback 으로 None 전달 처리).
+    """
+    try:
+        import yaml  # noqa: PLC0415
+        data = yaml.safe_load(Path(yaml_path).read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            return set()
+        out: set[str] = set()
+        for s in (data.get("strategies") or []):
+            sid = (s or {}).get("id")
+            if isinstance(sid, str) and sid:
+                out.add(sid)
+        return out
+    except Exception:
+        return set()
+
+
 def _print_startup_banner(strategies_count: int, dashboard_port: int) -> None:
     """ASCII 시작 배너 — qta.exe 더블클릭 시 콘솔창에 표시 (#182)."""
     url = f"http://localhost:{dashboard_port}" if dashboard_port > 0 else "(dashboard off)"
@@ -926,18 +952,36 @@ async def _run_pipeline_attached(
                 log_dir = Path(config.wal_path).parent.parent
             else:
                 log_dir = Path("logs/live")  # fallback
+            # 2026-06-05 active filter: disabled 전략 (production.yaml commented)
+            # 의 옛 fill 은 store/pnl 에 누적 안 됨 — BEATUSDT/TRX 잔량 사고 방지.
+            # 파싱 실패면 빈 set → None 전달 → 기존 동작 byte-identical.
+            _allowed_sids = _active_strategy_ids(
+                config.production_yaml if getattr(config, "production_yaml", None)
+                else _bundle_root() / "configs/orchestrator/production.yaml"
+            )
+            _allowed_arg = _allowed_sids or None
             try:
-                n_store = position_store.replay_from_wal_dir(log_dir)
-                n_pnl = pnl_aggregator.replay_from_wal_dir(log_dir)
+                n_store = position_store.replay_from_wal_dir(
+                    log_dir, allowed_strategy_ids=_allowed_arg,
+                )
+                n_pnl = pnl_aggregator.replay_from_wal_dir(
+                    log_dir, allowed_strategy_ids=_allowed_arg,
+                )
                 logger.info(
-                    "cross-run replay: %d WAL files (store=%d / pnl=%d) from %s",
+                    "cross-run replay: %d WAL files (store=%d / pnl=%d) from %s "
+                    "active_sids=%d",
                     max(n_store, n_pnl), n_store, n_pnl, log_dir,
+                    len(_allowed_sids),
                 )
             except Exception as err:
                 logger.warning("cross-run replay failed: %s — fallback to single-path", err)
                 if config.wal_path and Path(config.wal_path).exists():
-                    position_store.replay_from_wal(config.wal_path)
-                    pnl_aggregator.replay_from_wal(config.wal_path)
+                    position_store.replay_from_wal(
+                        config.wal_path, allowed_strategy_ids=_allowed_arg,
+                    )
+                    pnl_aggregator.replay_from_wal(
+                        config.wal_path, allowed_strategy_ids=_allowed_arg,
+                    )
 
     def _wal_observer(ev) -> None:
         if state.timeline_broker is not None:
@@ -1333,18 +1377,33 @@ async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
         log_dir = Path(config.wal_path).parent.parent
     else:
         log_dir = Path("logs/live")
+    # 2026-06-05 active filter — _run_pipeline_attached 와 동일 가드.
+    _allowed_sids = _active_strategy_ids(
+        config.production_yaml if getattr(config, "production_yaml", None)
+        else _bundle_root() / "configs/orchestrator/production.yaml"
+    )
+    _allowed_arg = _allowed_sids or None
     try:
-        n_store = position_store.replay_from_wal_dir(log_dir)
-        n_pnl = pnl_aggregator.replay_from_wal_dir(log_dir)
+        n_store = position_store.replay_from_wal_dir(
+            log_dir, allowed_strategy_ids=_allowed_arg,
+        )
+        n_pnl = pnl_aggregator.replay_from_wal_dir(
+            log_dir, allowed_strategy_ids=_allowed_arg,
+        )
         logger.info(
-            "cross-run replay: %d WAL files (store=%d / pnl=%d) from %s",
-            max(n_store, n_pnl), n_store, n_pnl, log_dir,
+            "cross-run replay: %d WAL files (store=%d / pnl=%d) from %s "
+            "active_sids=%d",
+            max(n_store, n_pnl), n_store, n_pnl, log_dir, len(_allowed_sids),
         )
     except Exception as err:
         logger.warning("cross-run replay failed: %s — fallback to single-path", err)
         if config.wal_path and Path(config.wal_path).exists():
-            position_store.replay_from_wal(config.wal_path)
-            pnl_aggregator.replay_from_wal(config.wal_path)
+            position_store.replay_from_wal(
+                config.wal_path, allowed_strategy_ids=_allowed_arg,
+            )
+            pnl_aggregator.replay_from_wal(
+                config.wal_path, allowed_strategy_ids=_allowed_arg,
+            )
     dashboard_state = DashboardState(
         timeline_broker=timeline_broker,
         wal_path=config.wal_path,
