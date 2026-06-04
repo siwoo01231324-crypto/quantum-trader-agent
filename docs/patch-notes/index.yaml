@@ -15,6 +15,30 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.29"
+    date: "2026-06-05"
+    title: "live-airborne-bb-reversal-kst-hours — TP/SL 을 +1%/-0.5% 로 변경 (옛 +6%/-3%)"
+    tags: [feature, safety]
+    summary: >
+      사용자 결정 (2026-06-05). 옛 +6%/-3% 룰 하에서 라인 잡은 후 +6% 까지
+      안 가서 다시 떨어져 -3% SL 까지 끌려가는 패턴 다수 (예: 2026-06-04
+      SKYAIUSDT). 15분봉 기준 dashboard ``/airborne`` 시뮬 (TP +1% / SL -0.5%
+      / 4봉 hold) 결과가 실 거래와 일치 — 라인 잡자마자 빠르게 익절되는
+      패턴. R/R 1:2 유지.
+    items:
+      - "configs/orchestrator/production.yaml — live-airborne-bb-reversal-kst-hours: stop_loss_pct 0.03→0.005, take_profit_pct 0.06→0.010. R/R 1:2 유지. cooldown_after_stop_sec 900 (15분) 그대로."
+      - "docs/specs/strategies/live-airborne-bb-reversal-kst-hours.md — frontmatter stop_loss_pct/take_profit_pct/profit_factor_bt/expectancy_bt/verdict_5y/last_updated 갱신. 5y bench 결과 변경: 옛 PF 1.081 PASS → 새 룰 PF 0.545 REJECTED (KST 6-12 morning gate sweep 기준). 사용자 운영 판단 caveat 명시."
+      - "live-airborne-short-whitelist-v1 은 자체 Hard OOS (3%/6%) 검증값이라 변경 X."
+      - "tests/configs/test_airborne_kst_hours_stops.py 신규 6건 — production.yaml 값 정확 / R/R 1:2 가드 / cooldown 보존 / spec frontmatter↔production.yaml drift 차단 / verdict_5y 가 새 룰 반영 확인."
+      - "운영 영향: live_run.py 재시작 즉시 적용. 새 진입은 1%/0.5% 룰. 기존 보유 포지션은 LivePositionRiskManager 가 기존 룰로 청산 후 자동 새 룰 전환."
+      - "회귀 caveat: 5y bench 에서 모든 룰 PF<1 (8개 sweep). 옛 룰 (3%/6%) 이 그중 PF 가장 높음 (0.91). 새 룰 PF 0.55 가 8개 중 최악. 사용자가 추세 회귀 가능성 인지하고 운영 판단."
+    refs:
+      - "configs/orchestrator/production.yaml"
+      - "docs/specs/strategies/live-airborne-bb-reversal-kst-hours.md"
+      - "tests/configs/test_airborne_kst_hours_stops.py"
+      - "reports/eval_live_airborne_kst_morning_5y.json — 8 룰 sweep 결과 (caveat 근거)"
+      - "PR #359 — /airborne-2pct 페이지 (룰 비교 도구)"
+
   - version: "v0.6.28"
     date: "2026-06-05"
     title: "/airborne-2pct 페이지 — 같은 fires set 을 +2%/-1% 룰로 시뮬한 별도 통계 (룰 비교용)"

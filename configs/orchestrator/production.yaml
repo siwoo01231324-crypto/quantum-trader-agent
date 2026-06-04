@@ -208,8 +208,19 @@ strategies:
       # 마진) 와 동급이 되도록. 총 마진 ≈ 12% (21 × 0.16 / 20x lev). 백테스트
       # 알파(PF/Sharpe) 는 size 무관 → 5y 게이트 영향 없음.
       default_size: 0.16
-      stop_loss_pct: 0.03    # -3% price (5y bench 검증값)
-      take_profit_pct: 0.06  # +6% price (R/R 1:2)
+      # 2026-06-05: 사용자 결정 — TP/SL 을 +1.0% / -0.5% (R/R 1:2 유지) 로 변경.
+      # 사유: 15분봉 기준 dashboard `/airborne` 시뮬 (TP 1%, SL 0.5%, 4봉 hold)
+      # 결과가 실 거래 환경과 일치 — 라인 잡자마자 빠르게 익절 패턴 다수.
+      # 옛 +6%/-3% 룰 하에서는 +6% 까지 안 가서 다시 떨어져 -3% SL 까지
+      # 끌려가는 케이스 (예: 2026-06-04 SKYAIUSDT) 다수 보고.
+      # caveat: 5y bench (`reports/eval_live_airborne_kst_morning_5y.json`,
+      # KST 6-12 gate 기준)에서는 8개 룰 모두 PF<1 / exp<0 으로 게이트 통과 0.
+      # 0.5%/1.0% 룰의 5y bench PF=0.545 (8개 중 최악), 옛 3.0%/6.0% PF=0.906
+      # (8개 중 최선). 단 사용자 운영 (KST 8/11/16/22 hours gate) 의 실시간
+      # 1h hold 시뮬은 양수 net 보임 → 사용자가 현 시장에 1%/0.5% 적합하다고
+      # 운영 판단. 추세 회귀 가능성 인지하고 모니터링 필요.
+      stop_loss_pct: 0.005   # -0.5% price (R/R 1:2 유지)
+      take_profit_pct: 0.010 # +1.0% price (R/R 1:2 유지)
       # stop 청산 직후 같은 (sid, symbol) 재진입 15분 차단 — churn 방지.
       cooldown_after_stop_sec: 900
 
