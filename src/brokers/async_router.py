@@ -126,6 +126,20 @@ class AsyncOrderRouter:
     async def get_balance(self):
         return await self.active.get_balance()
 
+    # ── ensure_leverage_minimum forward (2026-06-03 PR #353) ─────────────────
+    # executor 가 발주 직전 broker.ensure_leverage_minimum(symbol) 을
+    # getattr 로 호출. 본 router 가 active adapter 의 같은 메서드로 forward
+    # 안 하면 getattr 가 None → -1109 Invalid account 거부 폭주
+    # (logs/live/20260602T182844Z: 786 sell signals 전량 거부).
+    # active adapter 가 미지원이면 graceful skip.
+    async def ensure_leverage_minimum(
+        self, symbol: str, fallback_leverage: int = 1,
+    ) -> None:
+        m = getattr(self.active, "ensure_leverage_minimum", None)
+        if m is None:
+            return
+        await m(symbol, fallback_leverage)
+
     # ── health ────────────────────────────────────────────────────────────────
 
     async def health_check(self) -> HealthStatus:
