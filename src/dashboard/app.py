@@ -829,7 +829,8 @@ body{{
    scroll inside their own box — without this the header floats 52px DOWN
    inside the box and overlaps the rows. */
 .trades-wrap .pos-table thead th,
-#bnb-pos-wrap .pos-table thead th{{top:0;z-index:2;background:var(--surface)}}
+#bnb-pos-wrap .pos-table thead th,
+#bg-pos-wrap .pos-table thead th{{top:0;z-index:2;background:var(--surface)}}
 
 /* ── 전략 포지션 테이블 ── */
 .stratpos-sym{{font-family:var(--mono);font-weight:600;font-size:13px;color:var(--text)}}

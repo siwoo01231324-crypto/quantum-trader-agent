@@ -1554,14 +1554,27 @@ async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
     # 이미 trading loop 가 가동 중이므로 controller.start 는 재진입 noop 처럼
     # 동작하면 OK. 미설정 시 dashboard 가 ``컨트롤러 미주입 (cmd 모드)`` +
     # ``controller unavailable`` 503 반환 (사용자 보고 결함).
-    from src.dashboard.run_controller import RunController as _RC  # noqa: PLC0415
-    dashboard_state.run_controller = _RC(
+    from src.dashboard.run_controller import (  # noqa: PLC0415
+        RunController as _RC,
+        STATUS_RUNNING as _STAT_RUN,
+    )
+    from datetime import datetime as _dt, timezone as _tz  # noqa: PLC0415
+    _rc = _RC(
         _build_pipeline_factory(
             dashboard_state, logger,
             position_store=position_store, pnl_aggregator=pnl_aggregator,
             ops_counters=ops_counters,
         )
     )
+    # _run_pipeline 은 본 함수 안에서 이미 trading loop 가 도는 모드라
+    # ``state = RUNNING`` 으로 pre-mark. dashboard 의 거래 시작 버튼 클릭은
+    # RunController.start 가 ``already running`` 반환 → 중복 진입 방지.
+    # 사용자가 거래 정지 버튼을 누르면 RunController.stop 이 자기 task 가
+    # None 이라 ``not running`` 반환. trading loop 자체 정지는 Ctrl+C / SIGINT.
+    _rc.state.status = _STAT_RUN
+    _rc.state.started_at = _dt.now(_tz.utc).isoformat()
+    _rc.state.request_params = {"mode": "auto-launched (cmd)", "broker": config.broker_mode}
+    dashboard_state.run_controller = _rc
     # #238 follow-up Issue 2 — trade history / 전략별 포지션은 영구·누적이어야
     # 한다. config.wal_path = {log_dir}/{run_id}/wal.jsonl 이므로 log_dir 은
     # 항상 parent.parent. 이 한 줄이 없으면 _resolve_log_dir 이 None →

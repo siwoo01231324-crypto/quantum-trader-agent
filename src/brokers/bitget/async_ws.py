@@ -227,10 +227,9 @@ class AsyncBitgetUserDataStream:
                     asyncio.TimeoutError,
                     OSError) as exc:
                 attempt += 1
-                backoff = exponential_backoff(attempt)
-                log.warning("bitget WS disconnect (attempt %d): %s — retry in %.1fs",
-                            attempt, exc, backoff)
-                await asyncio.sleep(backoff)
+                log.warning("bitget WS disconnect (attempt %d): %s — retry with backoff",
+                            attempt, exc)
+                await exponential_backoff(attempt)
             except WSConfigError:
                 # login / subscribe failure — fatal, don't retry forever
                 raise

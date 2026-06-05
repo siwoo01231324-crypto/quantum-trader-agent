@@ -244,10 +244,9 @@ class BitgetMarketDataStream:
             except (websockets.exceptions.ConnectionClosed,
                     asyncio.TimeoutError, OSError) as exc:
                 attempt += 1
-                backoff = exponential_backoff(attempt)
-                log.warning("bitget market WS disconnect (attempt %d): %s — retry in %.1fs",
-                            attempt, exc, backoff)
-                await asyncio.sleep(backoff)
+                log.warning("bitget market WS disconnect (attempt %d): %s — retry with backoff",
+                            attempt, exc)
+                await exponential_backoff(attempt)
 
     def stream_klines(self) -> AsyncIterator[KlineEvent]:
         if self._task is None:
