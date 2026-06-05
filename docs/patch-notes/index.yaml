@@ -15,6 +15,34 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.33"
+    date: "2026-06-05"
+    title: "multi-alpha-altcoin-v1 — 4 layer 결합 전략 신규 (status: rejected, 5y PF 0.747)"
+    tags: [feature]
+    summary: >
+      사용자 요청 (2026-06-05) — 학술 리서치 4건 (lead-lag SSRN 3974583, regime
+      arXiv 2112.15321, pairs trading arXiv 2109.10662, outlier mean reversion)
+      을 한 전략에 결합한 universe-scan strategy. 결과: 5y bench PF 0.747 /
+      exp -0.133%/trade 로 CLAUDE.md 게이트 미통과 → status: rejected. 코드는
+      보존 — 후속 sweep (소형 alt 추가, statsmodels 환경 cointegration 실 검증,
+      Layer 4 regime threshold 완화) 자료로.
+    items:
+      - "docs/specs/strategies/multi-alpha-altcoin-v1.md — paradigm=universe-scan / 1h / R/R 1:2 (stop 0.0075, tp 0.015) / timeout 4h / shorts_allowed=True. 4 layer 결합 흐름과 5y bench 결과 verdict_5y 명시."
+      - "src/backtest/strategies/multi_alpha_altcoin_v1.py — MultiAlphaAltcoinV1 + 4 layer helpers (cointegration_pvalue / rolling_correlation / lead_lag_direction / spread_zscore). daily cache 로 cointegration test + corr 계산을 매 봉 X → 매 일 1회 minimize."
+      - "scripts/bench_multi_alpha_altcoin_v1_5y.py — 5y 1h 봉 24 종목 (BTC 외 23) Binance Futures paginated fetch + 4 layer 시뮬 + by_layer 집계."
+      - "reports/eval_multi_alpha_altcoin_v1_5y.json — 10 종목 5y 결과: n=788 trades, PF 0.747, exp -0.133%, wr 34.1%, by_layer={lead_lag: n=788}. outlier layer 0 trade (메이저 alt 의 5y BTC corr 항상 ≥0.3 → 디커플링 체제 진입 X)."
+      - "tests/backtest/test_multi_alpha_altcoin_v1.py 신규 20건 (16 PASS + 4 statsmodels skip) — 4 helper 분기 + evaluate() 분기 + on_bar wiring 가드."
+      - "production.yaml 미등록 (status: rejected). 코드/spec 보존 — 후속 재설계 자료. CLAUDE.md 5y 게이트 (PF>1 AND exp>0) 통과 전엔 활성화 금지 규칙 준수."
+      - "한계: statsmodels Python 3.14 wheel 미지원 → cointegration test 가 더미 pvalue=0.04 로 모두 pass 처리됨 (학술 정당성 약함). 실 검증은 statsmodels 환경에서 후속."
+    refs:
+      - "docs/specs/strategies/multi-alpha-altcoin-v1.md"
+      - "src/backtest/strategies/multi_alpha_altcoin_v1.py"
+      - "scripts/bench_multi_alpha_altcoin_v1_5y.py"
+      - "reports/eval_multi_alpha_altcoin_v1_5y.json"
+      - "tests/backtest/test_multi_alpha_altcoin_v1.py"
+      - "SSRN 3974583 — Cross-Cryptocurrency Return Predictability (lead-lag)"
+      - "arXiv 2109.10662 — Dynamic Cointegration-Based Pairs Trading"
+
   - version: "v0.6.32"
     date: "2026-06-05"
     title: "Bitget go-live 마무리 — whitelist 정리 + get_net_positions + dashboard + docker-compose"
