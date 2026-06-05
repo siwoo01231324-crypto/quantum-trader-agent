@@ -395,6 +395,13 @@ class AsyncStrategyOrchestrator:
                         "history": hist,
                         "price": last_close,
                         "equity_krw": _equity_krw,
+                        # 2026-06-05: cross-symbol info — strategy 가 BTC trend
+                        # filter 같은 universe-wide 가드를 적용할 수 있도록
+                        # 전체 universe ohlcv 도 함께 노출. live-airborne 의
+                        # btc_trend_filter (airborne 이 하락추세에서 LONG 잡는
+                        # 사고 차단) 가 첫 소비자. 다른 strategy 는 본 key 를
+                        # ignore — backward-compatible.
+                        "universe_ohlcv": _universe_ohlcv,
                     }
                     per_symbol_factors = _universe_factors.get(symbol, {}) or {}
                     ctx = {
