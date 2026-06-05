@@ -348,9 +348,11 @@ def _run_dashboard_only_mode(port: int = 8000) -> int:
         state = DashboardState(timeline_broker=TimelineBroker(), wal_path=None)
         # #238 follow-up Issue 2 — standalone dashboard (no active pipeline)
         # must still show PERMANENT cross-run trade history. Seed log_dir to
-        # the `--log-dir` default so prior runs under logs/live/ surface
-        # immediately on boot (a later pipeline overwrites with its own).
-        state.log_dir = Path("logs/live")
+        # the `--log-dir` default so prior runs surface immediately on boot
+        # (a later pipeline overwrites with its own).
+        # 2026-06-05 — default 변경 logs/live → logs/shadow-bitget 와 일치
+        # (Bitget 이전 후 표준 broker). 옛 logs/live 도 있으면 동시 surface.
+        state.log_dir = Path("logs/shadow-bitget")
         state.position_provider = position_store.get_positions
         state.pnl_aggregator = pnl_aggregator
         state.ops_counters = ops_counters
@@ -1037,6 +1039,12 @@ async def _run_pipeline_attached(
     from dataclasses import asdict
     # WAL path 를 state 에 노출 — WS replay 가 이 세션의 과거 이벤트를 복원할 수 있게.
     state.wal_path = config.wal_path
+    # 2026-06-05 — dashboard 가 거래시작 버튼으로 들어온 pipeline 의 log_dir
+    # 을 알도록 동기화. 미설정 시 standalone 모드의 line 353 default 가
+    # 영구 고정되어 dashboard 가 옛 logs/live 만 보임 (사용자 보고: bitget
+    # 거래내역 / 전략별 포지션 깜깜).
+    if config.wal_path is not None:
+        state.log_dir = Path(config.wal_path).parent.parent
     # 2026-05-21 fix: cross-run replay 가드 완화. 이전엔 wal_path.exists() 가
     # False 면 cross-run 도 skip (= 첫 거래 직전 wal_path 미생성 케이스에서 store/
     # aggregator 가 빈 상태로 시작 → restore_live_entered 무효 → 매수 폭주).
