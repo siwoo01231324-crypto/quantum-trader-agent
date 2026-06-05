@@ -145,6 +145,11 @@ class BitgetPublicFeed:
         import websockets
         if not self._symbols:
             raise RuntimeError("BitgetPublicFeed: no symbols subscribed")
+        # 재접속 회귀 fix: aclose() 가 켠 _closed=True 를 여기서 다시 끈다.
+        # 안 끄면 같은 인스턴스로 재접속 시 _iter 가 첫 프레임(구독 ack)에서
+        # 즉시 break → 데이터 0 → producer 가 "closed cleanly" 무한 재접속
+        # 후 100회 소진하고 종료 (운영 2026-06-06 거래 stopped 사고).
+        self._closed = False
         logger.info("BitgetPublicFeed connecting to %s (%d symbols)",
                     self._base_url, len(self._symbols))
         self._ws = await websockets.connect(self._base_url, ping_interval=20)
@@ -158,8 +163,12 @@ class BitgetPublicFeed:
             await self._ws.send(json.dumps({"op": "subscribe", "args": args}))
 
     async def subscribe(self, symbols: list[str]) -> None:
-        # MVP: append to in-memory list; effective on next connect.
-        self._symbols.extend(symbols)
+        # dedupe — connect() 가 이미 self._symbols 전체를 재구독하므로, 재접속
+        # 마다 loop 가 subscribe(config.symbols) 를 다시 부를 때 blind extend
+        # 하면 심볼이 무한 증가(운영 로그 430→1010)해 구독 프레임 비대 + Bitget
+        # 종료 유발. 신규 심볼만 추가한다 (순서 보존).
+        seen = set(self._symbols)
+        self._symbols.extend(s for s in symbols if s not in seen)
 
     def __aiter__(self) -> AsyncIterator:
         return self._iter()
@@ -356,6 +365,8 @@ class BitgetMarkPriceFeed:
         import websockets
         if not self._symbols:
             raise RuntimeError("BitgetMarkPriceFeed: no symbols subscribed")
+        # 재접속 회귀 fix (BitgetPublicFeed 와 동일) — aclose() 후 _closed 리셋.
+        self._closed = False
         logger.info("BitgetMarkPriceFeed connecting to %s (%d symbols)",
                     self._base_url, len(self._symbols))
         self._ws = await websockets.connect(self._base_url, ping_interval=20)
