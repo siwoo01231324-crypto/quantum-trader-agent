@@ -1717,7 +1717,38 @@ def main(argv: list[str] | None = None) -> int:
     if _is_no_args(argv):
         if os.environ.get("QTA_FIRST_RUN_HELP_ONLY", "").lower() == "true":
             return _show_first_run_help()
-        return _run_dashboard_only_mode()
+        # 2026-06-05 — 인자 없이 띄우면 *자동 거래* 진입 (이전엔 dashboard 만
+        # 띄우고 trading loop 안 돌아서 ``ops_counters: bars_seen=0`` /
+        # LivePositionRiskManager 미가동 / DOT TP +3% 인데 청산 안 됨).
+        # 사용자 보고: '자동매매가 그게 자동매매야' — default 인자 (Bitget
+        # Demo + 핵심 3종목) 주입 후 정상 ``_run_pipeline`` 로 위임.
+        # CLI args 명시 시 그대로 우선.
+        # symbols: 시작 시 broker 의 *열린 포지션 symbols* + 핵심 ticker 합집합.
+        # 미가입 mark-price 가 있으면 그 종목 TP/SL 평가 자체가 안 됨 → 사용자
+        # DOT +3% 보고도 익절 안 되는 사고 root cause.
+        _open_syms: set[str] = set()
+        try:
+            import asyncio as _asyncio  # noqa: PLC0415
+            _bg = _build_bitget_adapter("bitget-demo")
+            if _bg is not None:
+                _open = _asyncio.run(_bg.get_positions())
+                for _p in _open:
+                    if getattr(_p, "qty", 0) and getattr(_p, "qty", 0) != 0:
+                        _open_syms.add(_p.symbol)
+                _asyncio.run(_bg.aclose())
+        except Exception:  # noqa: BLE001
+            pass
+        _default_syms = sorted(_open_syms | {
+            "BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "XRPUSDT",
+            "ADAUSDT", "BNBUSDT", "LINKUSDT", "DOTUSDT", "AVAXUSDT",
+        })
+        argv = [
+            "--broker", "bitget-demo",
+            "--symbols", ",".join(_default_syms),
+            "--feed", "binance",
+            "--log-dir", "logs/shadow-bitget",
+        ]
+        av = argv
     args = parse_args(argv)
     logging.basicConfig(
         level=args.log_level,
