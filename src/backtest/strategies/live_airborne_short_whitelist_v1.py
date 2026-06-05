@@ -56,9 +56,11 @@ _WHITELIST_YAML: Path = (
 # 임포트 시점 (orchestrator 시작) 의 fallback universe — yaml 로드 실패 대비.
 # Hard OOS active 15종.
 _FALLBACK_UNIVERSE: tuple[str, ...] = (
-    "1000SHIBUSDT", "AAVEUSDT", "APTUSDT", "ARBUSDT", "ATOMUSDT",
+    # 2026-06-05 — Bitget 호환성: 1000SHIBUSDT→SHIBUSDT (Bitget 단일 unit),
+    # RIFUSDT 제외 (Bitget 미상장). 알파 영향 없음 (price 비율 동일).
+    "SHIBUSDT", "AAVEUSDT", "APTUSDT", "ARBUSDT", "ATOMUSDT",
     "AXSUSDT", "DASHUSDT", "FETUSDT", "IDUSDT", "LTCUSDT",
-    "RIFUSDT", "UNIUSDT", "XLMUSDT", "XRPUSDT", "ZECUSDT",
+    "UNIUSDT", "XLMUSDT", "XRPUSDT", "ZECUSDT",
 )
 
 
@@ -217,7 +219,12 @@ class LiveAirborneShortWhitelistV1(LiveAirborneBbReversalKstHours):
                 ),
             )
             self._last_eval_bar_ts[symbol] = last_bar_ts
-            self._last_eval_signal[symbol] = result
+            # 2026-06-04 RIFUSDT 폭주 fix — fire 직후 cache 를 hold 로 덮어써서
+            # 같은 봉 안에서의 중복 재발화 차단. 진입은 봉당 1회만.
+            self._last_eval_signal[symbol] = Signal(
+                action="hold", size=0.0,
+                reason="airborne_short_wl_fired_this_bar",
+            )
             return result
 
         if short_setup is not None:

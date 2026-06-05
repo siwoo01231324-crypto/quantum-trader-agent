@@ -15,6 +15,233 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.35"
+    date: "2026-06-05"
+    title: "airborne 텔레그램 알림 동기 — v0.6.34 의 KST gate v2 + BTC trend filter 반영"
+    tags: [fix, safety]
+    summary: >
+      사용자 지적 (2026-06-05) — "텔레그램에서 kst-hours 거래 예정 알림 와도
+      실제론 필터링돼서 안 살 수도 있잖아 통일시켜야 될 거 같은데?". v0.6.34
+      (PR #370) 가 strategy 의 KST gate {8,11,16,22} → {7,8,16,20,22} 변경 +
+      BTC trend filter 추가했지만 daemon 의 텔레그램 안내는 옛 set hardcode +
+      BTC 정보 0 상태였음. 알림이 거짓.
+    items:
+      - "scripts/airborne_alert_daemon.py — _KST_HOURS_KSTHOURS / _KST_HOURS_SHORT_WL 을 strategy 모듈에서 직접 import (truth source 단일). 다음에 또 바뀌어도 daemon 코드 수정 불필요."
+      - "_kst_hours_label() 헬퍼 신규 — 안내 문자열 자동 생성. set 변경 시 '8/11/16/22' 같은 옛값 hardcode 0."
+      - "_BTC_DOWNTREND_STATE 모듈 캐시 + _update_btc_trend_state() — BTCUSDT 1h 봉 마감 시 strategy 의 _btc_is_downtrend 그대로 호출. 결과를 다음 fire 알림에 반영."
+      - "WS / polling 두 main loop 모두 BTC 마감 시 _update_btc_trend_state(BTCUSDT history_1h) 호출."
+      - "_format_strategy_notice — KST gate PASS 면 BTC trend 추가 체크. LONG + BTC 하락추세 → '❌ BTC 하락추세 LONG 차단 (reason)'. SHORT 은 그대로 통과 (strategy 와 일관)."
+      - "tests/scripts/test_airborne_daemon_sync_v2.py 신규 13건 — truth source 통일 / KST 11 차단 / KST 7,20 통과 / label 자동 생성 / BTC trend state 갱신 / 하락추세 LONG 차단 / 하락추세 SHORT 통과 / 상승추세 LONG 통과 / state None 시 graceful."
+      - "운영 영향: airborne_alert_daemon 재시작 즉시 적용. 다음 fire 부터 텔레그램 안내가 실제 strategy 진입 결정과 100% 일치. 사용자 혼란 (안내와 실거래 mismatch) 해소."
+    refs:
+      - "scripts/airborne_alert_daemon.py"
+      - "src/backtest/strategies/live_airborne_bb_reversal_kst_hours.py — _KST_TOP_HOURS_V2, _btc_is_downtrend (import 대상)"
+      - "src/backtest/strategies/live_airborne_short_whitelist_v1.py — _KST_HOURS_19 (import 대상)"
+      - "tests/scripts/test_airborne_daemon_sync_v2.py"
+      - "PR #370 v0.6.34 — KST gate v2 + BTC trend filter 의 알림 동기"
+
+  - version: "v0.6.34"
+    date: "2026-06-05"
+    title: "airborne kst-hours v2 — KST gate 재설계 ({7,8,16,20,22}) + BTC trend filter (시장 동조 손실 차단)"
+    tags: [feature, safety]
+    summary: >
+      30d sim_cache 데이터 분석 + 6/04 journal incident 분석 기반 2건 fix.
+      (1) KST entry hours {8,11,16,22} → {7,8,16,20,22} — 11시 PF 0.69 손실시각
+      제거 + 07시 PF 4.66 (n=105) / 20시 PF 2.32 추가. (2) BTC trend filter —
+      BTC < EMA200(1h) OR 직전 24h < -1% 면 LONG entry 자체 차단 (short 그대로).
+      6/04 incident (bb-reversal 14 LONG 종목 새벽~오전 -3% 동시 청산) 같은
+      시장 동조 손실 차단.
+    items:
+      - "src/portfolio/_async_orchestrator.py — per_symbol_snap 에 ``universe_ohlcv`` 키 추가. strategy 가 cross-symbol info (BTC ohlcv 등) lookup 가능. 다른 strategy 는 ignore — backward-compatible."
+      - "src/backtest/strategies/live_airborne_bb_reversal_kst_hours.py — kst_entry_hours ClassVar 갱신 ({7,8,16,20,22}). _btc_is_downtrend helper 신규 (EMA200 cross OR 24h drawdown). on_bar override — super().on_bar buy intent 면 BTC trend check → downtrend 시 hold 변환. ``btc_trend_filter_enabled`` kwarg (default True) — False 시 옛 동작 byte-identical."
+      - "docs/specs/strategies/live-airborne-bb-reversal-kst-hours.md — verdict_5y 갱신, v2 변경 명시. 옛 5y bench (PF 0.545) 는 옛 set 기준이라 무효."
+      - "tests/backtest/test_airborne_kst_hours_btc_trend.py 신규 12건 — KST gate v2 / BTC EMA cross / 24h drawdown / uptrend pass / downtrend block / sell pass / filter disabled byte-identical / universe_ohlcv 없을 때 graceful."
+      - "tests/backtest/test_live_airborne_bb_reversal_kst_hours.py 기존 갱신 — 옛 {8,11,16,22} assertion → 새 {7,8,16,20,22}. 11시 통과 → 차단, 7시 차단 → 통과. parametrize set 다 갱신."
+      - "총 35 tests pass (신규 12 + 갱신 23). 기존 다른 airborne 테스트 영향 0."
+      - "운영 영향: live_run.py 재시작 즉시 적용. 다음 봉 마감부터 (1) 11시 진입 차단 / 7,20시 진입 활성 (2) BTC 하락추세 시 LONG entry 자체 차단. 6/04 같은 동조 손실 자동 차단."
+      - "후속 (별개 PR): 5y bench 재실행 — 새 set + filter 적용한 결과로 spec verdict 갱신. statsmodels Python 3.14 wheel 미지원 환경 회피."
+    refs:
+      - "src/portfolio/_async_orchestrator.py"
+      - "src/backtest/strategies/live_airborne_bb_reversal_kst_hours.py"
+      - "docs/specs/strategies/live-airborne-bb-reversal-kst-hours.md"
+      - "tests/backtest/test_airborne_kst_hours_btc_trend.py"
+      - "tests/backtest/test_live_airborne_bb_reversal_kst_hours.py"
+      - "docs/journal/2026-06-04.md — 14 LONG 동시 -3% 청산 incident"
+      - "logs/airborne_fires/sim_cache.jsonl — 30d KST hour PF 분석 source"
+
+  - version: "v0.6.32"
+    date: "2026-06-05"
+    title: "Bitget go-live 마무리 — whitelist 정리 + get_net_positions + dashboard + docker-compose"
+    tags: [feature, safety, docs]
+    summary: >
+      Bitget P1~P4b (PR #364/#365/#366/#367) 까지 wiring 완료 후 실 가동
+      직전 4가지 정리. ``--broker bitget-demo`` 로 부팅 시 zero warning,
+      reconciler/fill consumer/mark-price consumer 모두 정상 가동 확인.
+    items:
+      - "config/airborne_short_whitelist.yaml — RIFUSDT status: active → removed (Bitget 미상장, 영구 제외). 1000SHIBUSDT → SHIBUSDT (Bitget 1코인 단위 — 알파 무관, 가격 비율 동일). active 14종."
+      - "src/backtest/strategies/live_airborne_short_whitelist_v1.py — _FALLBACK_UNIVERSE 도 동일 매핑 (yaml 로드 실패 시 fallback)."
+      - "src/brokers/bitget/async_adapter.py — ``get_net_positions`` 신규. holdSide 부호 적용한 signed dict. PositionReconciler 가 broker ground-truth 비교에 필요. 미구현 시 reconciler 가 매 60s WARNING 폭주 + 실제 sync 안 됨."
+      - "src/dashboard/account_info.py — ``_fetch_bitget`` + ``_resolve_bitget_creds`` 추가. Binance 와 동일 shape (wallet/available/positions/upnl). fetch() 결과 dict 에 ``bitget`` 키 추가 + prev_cache fallback. 실측: Demo 5000 USDT 잔고 정상 조회."
+      - "src/dashboard/app.py — ``/api/account/bitget`` REST 엔드포인트. provider.fetch() 의 ``bitget`` 키 반환. 항상 200, 예외 시 ``ok=False``."
+      - "docker-compose.live.yml — ``live-daemon-bitget`` 서비스. BITGET_BROKER_MODE env 로 demo/mainnet 전환 (default demo). 별도 log/state 디렉토리로 Binance daemon + KIS daemon 과 ProcessLock 분리. restart=unless-stopped + healthcheck."
+      - "Smoke 검증: ``python scripts/live_run.py --broker bitget-demo --feed mock --max-iterations 3`` → orchestrator 부팅 + fill consumer + mark-price consumer + reconciler 모두 정상 시작/종료 (zero WARNING)."
+    refs:
+      - "config/airborne_short_whitelist.yaml"
+      - "src/brokers/bitget/async_adapter.py"
+      - "src/dashboard/account_info.py"
+      - "docker-compose.live.yml"
+
+  - version: "v0.6.31"
+    date: "2026-06-05"
+    title: "exit 발주 안전망 — LivePositionRiskManager 청산 OrderIntent 에 reduce_only=True 강제"
+    tags: [fix, safety]
+    summary: >
+      PR #362 (cross-run replay filter, v0.6.30) 가 옛 store 잔량 살아남기
+      root cause 차단이라면, 본 PR 은 broker 측 자동 거부 안전망 2중. 어떤
+      이유로든 store qty 가 broker 실 qty 보다 크게 박혀있는 상태에서 청산
+      발주가 들어가도 Binance Futures 가 "reduceOnly with no position" /
+      "reduceOnly qty larger than position" 으로 자동 reject → LONG/SHORT
+      뒤집기 사고 차단. 2026-06-05 BEATUSDT 사고 같은 over-shoot 가 다른
+      경로로 발생해도 broker 층에서 막힘.
+    items:
+      - "src/portfolio/live_position_risk.py — evaluate() 의 청산 OrderIntent (SL/TP/trailing 모든 트리거) 에 reduce_only=True 강제. LONG exit (sell) / SHORT exit (buy=cover) 모두 동일."
+      - "airborne 같은 bidir 전략의 short *진입* sell intent 는 orchestrator 에서 생성 — 본 함수 영향 X. PR #342 shorts_allowed 가드 (sell + shorts_allowed=True 면 reduce_only=False) 그대로 작동."
+      - "tests/portfolio/test_live_risk_exit_reduce_only.py 신규 4건 — LONG SL/TP exit + SHORT SL/TP exit 모두 reduce_only=True 가드."
+      - "기존 live_position_risk / risk_mgr_pending_exit / atr_dynamic_stop 회귀 0건. 총 48 PASS."
+      - "운영 영향: live_run.py 재시작 즉시 적용. 청산 발주가 reduce_only flag 붙어 binance 로 전송 → 보유 없으면 발주 자체 reject (-2022). 정상 보유분만 청산."
+    refs:
+      - "src/portfolio/live_position_risk.py — evaluate() OrderIntent 생성"
+      - "tests/portfolio/test_live_risk_exit_reduce_only.py"
+      - "PR #362 — cross-run replay filter (root cause 차단) 의 2중 안전망"
+      - "PR #342 — orchestrator 의 shorts_allowed 가드 (short 진입과 호환)"
+
+  - version: "v0.6.30"
+    date: "2026-06-05"
+    title: "cross-run replay 가 disabled 전략 옛 fill 제외 — BEATUSDT/TRX 잔량→broker over-shoot 뒤집기 사고 차단"
+    tags: [fix, safety]
+    summary: >
+      2026-06-05 사용자 보고. live_run.py 재시작 후 BEATUSDT 가 broker 에 LONG
+      634 (entry 1.50, mark 1.43, -41 USDT 손실) 로 떠있음. airborne 이
+      SHORT 547 진입했는데 LONG 으로 뒤집힘. 원인: cross-run replay 가
+      production.yaml 에서 disabled 처리한 옛 cand-c-* 전략의 buy/sell fill
+      을 모두 복원해 store 에 옛 잔량 (TRXUSDT 653, ONDOUSDT 16358 등) 살아남.
+      LivePositionRiskManager 가 부풀린 qty 로 청산 발주 → broker over-shoot
+      으로 LONG/SHORT 뒤집힘. PR #258 (cross-run warm-guard) 가 같은 process
+      내 토글 케이스만 막았던 한계.
+    items:
+      - "src/live/strategy_position_store.py — replay_from_wal / replay_from_wal_dir 에 allowed_strategy_ids: set[str]|None keyword 추가. None (default) = 모든 sid 복원 (기존 동작 byte-identical). set 주어지면 그 외 sid 의 order_acked/order_filled 는 skip."
+      - "src/live/pnl_aggregator.py — 동일 keyword 추가 — disabled 전략의 옛 realized PnL 도 통계에서 제외."
+      - "scripts/live_run.py — _active_strategy_ids(yaml_path) helper 신규. production.yaml 의 uncommented strategy id set 만 반환. _run_pipeline_attached / _run_pipeline 의 cross-run replay 호출처 4곳에서 active set 전달."
+      - "logger.info 에 active_sids count 노출 — 다음 사고 진단 단축."
+      - "tests/live/test_replay_allowed_strategy_filter.py 신규 8건 — None filter byte-identical / set filter disabled skip / dir replay 전파 / pnl aggregator 도 동일 / production.yaml commented entry 제외 helper / missing file empty set fallback."
+      - "기존 store/pnl 테스트 27건 회귀 0. 총 35 PASS."
+      - "운영 영향: live_run.py 재시작 즉시 적용. 다음 재시작부터 disabled 전략 옛 fill 무시 → store 에 활성 전략만 복원. 이미 broker 에 떠있는 over-shoot 포지션 (BEATUSDT LONG 634 등) 은 별개로 사용자가 binance UI 에서 수동 청산 필요 (자동 청산 안 함)."
+      - "후속 — PR #363 (v0.6.31) 머지로 broker 측 reduce_only 안전망 2중 완성."
+    refs:
+      - "src/live/strategy_position_store.py"
+      - "src/live/pnl_aggregator.py"
+      - "scripts/live_run.py — _active_strategy_ids"
+      - "tests/live/test_replay_allowed_strategy_filter.py"
+      - "PR #258 — cross-run replay warm-guard (같은 process 토글만 커버) 의 확장"
+      - "PR #363 — broker reduce_only=True 안전망 (2중 보호)"
+
+  - version: "v0.6.29"
+    date: "2026-06-05"
+    title: "live-airborne-bb-reversal-kst-hours — TP/SL 을 +1%/-0.5% 로 변경 (옛 +6%/-3%)"
+    tags: [feature, safety]
+    summary: >
+      사용자 결정 (2026-06-05). 옛 +6%/-3% 룰 하에서 라인 잡은 후 +6% 까지
+      안 가서 다시 떨어져 -3% SL 까지 끌려가는 패턴 다수 (예: 2026-06-04
+      SKYAIUSDT). 15분봉 기준 dashboard ``/airborne`` 시뮬 (TP +1% / SL -0.5%
+      / 4봉 hold) 결과가 실 거래와 일치 — 라인 잡자마자 빠르게 익절되는
+      패턴. R/R 1:2 유지.
+    items:
+      - "configs/orchestrator/production.yaml — live-airborne-bb-reversal-kst-hours: stop_loss_pct 0.03→0.005, take_profit_pct 0.06→0.010. R/R 1:2 유지. cooldown_after_stop_sec 900 (15분) 그대로."
+      - "docs/specs/strategies/live-airborne-bb-reversal-kst-hours.md — frontmatter stop_loss_pct/take_profit_pct/profit_factor_bt/expectancy_bt/verdict_5y/last_updated 갱신. 5y bench 결과 변경: 옛 PF 1.081 PASS → 새 룰 PF 0.545 REJECTED (KST 6-12 morning gate sweep 기준). 사용자 운영 판단 caveat 명시."
+      - "live-airborne-short-whitelist-v1 은 자체 Hard OOS (3%/6%) 검증값이라 변경 X."
+      - "tests/configs/test_airborne_kst_hours_stops.py 신규 6건 — production.yaml 값 정확 / R/R 1:2 가드 / cooldown 보존 / spec frontmatter↔production.yaml drift 차단 / verdict_5y 가 새 룰 반영 확인."
+      - "운영 영향: live_run.py 재시작 즉시 적용. 새 진입은 1%/0.5% 룰. 기존 보유 포지션은 LivePositionRiskManager 가 기존 룰로 청산 후 자동 새 룰 전환."
+      - "회귀 caveat: 5y bench 에서 모든 룰 PF<1 (8개 sweep). 옛 룰 (3%/6%) 이 그중 PF 가장 높음 (0.91). 새 룰 PF 0.55 가 8개 중 최악. 사용자가 추세 회귀 가능성 인지하고 운영 판단."
+    refs:
+      - "configs/orchestrator/production.yaml"
+      - "docs/specs/strategies/live-airborne-bb-reversal-kst-hours.md"
+      - "tests/configs/test_airborne_kst_hours_stops.py"
+      - "reports/eval_live_airborne_kst_morning_5y.json — 8 룰 sweep 결과 (caveat 근거)"
+      - "PR #359 — /airborne-2pct 페이지 (룰 비교 도구)"
+
+  - version: "v0.6.28"
+    date: "2026-06-05"
+    title: "/airborne-2pct 페이지 — 같은 fires set 을 +2%/-1% 룰로 시뮬한 별도 통계 (룰 비교용)"
+    tags: [feature]
+    summary: >
+      사용자 요청 (2026-06-04 SKYAIUSDT 사례). dashboard `/airborne` 알림 적중
+      페이지는 +1%/-0.5% (1h hold) 룰 기준 통계인데 실 자동매매 전략은
+      +6%/-3% 룰. 실 거래에서 +1% 익절 가능했던 fire 도 +6% 못 찍어 -3% SL
+      까지 끌려간 패턴 다수. 룰 적합도 비교를 위해 동일 fires set 을 더 넓은
+      폭(+2%/-1%) 룰로 별도 시뮬한 페이지/엔드포인트 추가.
+    items:
+      - "src/dashboard/app.py — _simulate_airborne_fire 시그너처에 tp_pct/sl_pct/hold_bars keyword 추가 (default = 기존 +1%/-0.5%/4 → 기존 caller byte-identical)."
+      - "_get_airborne_sim_cache(rule_key) — rule_key 별 인스턴스 분리. default 는 logs/airborne_fires/sim_cache.jsonl, 2pct 는 sim_cache_2pct.jsonl. 한 fire 의 두 룰 결과가 같은 파일에 안 섞임."
+      - "/api/airborne_metrics — query param ``rule=default|2pct`` 추가. cache_key 에 rule 포함 (window 별·룰 별 분리 캐싱)."
+      - "/airborne-2pct HTML 페이지 신규 — 기존 /airborne 페이지 HTML 본문 재사용 (fetch URL에 rule 박고 헤더에 룰 chip 표시 + 룰 토글 nav)."
+      - "tests/dashboard/test_airborne_2pct_rule.py 신규 8건 — 룰 상수 1:2 손익비 가드 / default 호출 byte-identical / 2pct threshold 정확 / cache 경로 분리 / rule_key 별 인스턴스 / unknown 룰 fallback."
+      - "기존 dashboard airborne 테스트 34건 회귀 0. 총 42 PASS."
+      - "운영: dashboard 재시작 후 /airborne 와 /airborne-2pct 둘 다 접근 가능. 두 룰의 win rate / PF / timeout 비율을 같은 fires 로 직접 비교 가능."
+    refs:
+      - "src/dashboard/app.py — _simulate_airborne_fire / _get_airborne_sim_cache / _render_airborne_page / api_airborne_metrics"
+      - "tests/dashboard/test_airborne_2pct_rule.py"
+      - "logs/airborne_fires/sim_cache_2pct.jsonl — 신규 캐시 파일"
+
+  - version: "v0.6.27"
+    date: "2026-06-04"
+    title: "Airborne 텔레그램 알림 가독성 개선 — 이모지·한글 본문·봇 진입 안내"
+    tags: [feature, docs]
+    summary: >
+      사용자 요청 (2026-06-04). ``scripts/airborne_alert_daemon`` 의
+      Telegram FIRE 알림이 영문 한 줄 ("Airborne v1.1 LONG — BTCUSDT (1h)
+      / 40% retrace fired at X (trigger Y, base Z, extreme W)") 이라 화면
+      한눈에 방향·뜻 인지 어려웠음. 이모지 + 일상 한글 라벨 + production
+      전략 진입 가능성 안내 3종 추가.
+    items:
+      - "Title — ``🟢⬆️ 롱 진입 신호`` / ``🔴⬇️ 숏 진입 신호`` 이모지로 방향 즉시 식별, ``1시간봉`` 한글화."
+      - "Body — ``현재가 / 진입가(40% 되돌림) / 돌파 시작가 / 최저점 (long) 또는 최고점 (short)`` 일상 한글 라벨. base/extreme 영어 용어 제거."
+      - "Body 하단 NOTICE — ``🤖 봇 진입 가능성`` 섹션. live-airborne-bb-reversal-kst-hours (양방향, KST {8,11,16,22} 게이트) 와 live-airborne-short-whitelist-v1 (숏 전용, 19시간 게이트, 화이트리스트 종목만) 두 production 전략 각각에 대해 ``✅ 진입 예정`` / ``❌ 사유`` 표시."
+      - "scripts/airborne_alert_daemon.py — ``_kst_hour_from_open_time`` / ``_format_strategy_notice`` / ``_load_whitelist_active`` (lazy yaml load) 신규 helper + ``dispatch_fire`` 의 title/body 리팩토링."
+      - "tests/scripts/test_airborne_alert_daemon.py — 5건 회귀 (kst_hour 변환 / long fire kst-hours 게이트 / long 차단 / short kst 8시 kst-hours만 적격 / short title·body 라벨 검증). 기존 20 tests 통과 유지 → 총 25."
+    refs:
+      - "scripts/airborne_alert_daemon.py"
+      - "tests/scripts/test_airborne_alert_daemon.py"
+
+  - version: "v0.6.26"
+    date: "2026-06-04"
+    title: "airborne 같은-봉 재발화 차단 + Binance -2027 cooldown + size 0.04 → 0.16"
+    tags: [fix, safety, perf]
+    summary: >
+      2026-06-03 RIFUSDT testnet 사고 — 09:05 KST hour 9 게이트 통과 후
+      같은 1h 봉 안에서 ``live-airborne-short-whitelist-v1`` 가 1분 20초
+      동안 145회 SELL 발주 (총 노출 ≈ $24,890, 의도된 $200 의 124배).
+      ``LiveAirborneShortWhitelistV1.on_bar`` /
+      ``LiveAirborneBbReversalKstMorning.on_bar`` 가 fire 후 cache 에
+      SELL/BUY 신호를 그대로 저장 → 매 WS tick 마다 cache hit → 캐시된
+      fire 시그널이 그대로 반환되어 폭주.
+      별도로 testnet 의 종목별 maxNotionalValue 한도 ($25,000) 초과 시
+      -2027 거부가 매 1m tick 반복되어 6,000/min REST limit 초과 → IP ban
+      → 다른 청산 경로까지 마비.
+    items:
+      - "src/backtest/strategies/live_airborne_short_whitelist_v1.py — fire 직후 ``_last_eval_signal[symbol]`` 을 ``Signal(hold, reason=airborne_short_wl_fired_this_bar)`` 로 덮어쓰기. 다음 봉 마감까지 hold 만 반환."
+      - "src/backtest/strategies/live_airborne_bb_reversal_kst_morning.py — long/short 양쪽 fire 분기 동일 패턴 (부모 클래스 → kst-hours 도 자동 상속)."
+      - "src/brokers/binance/error_map.py — ``-2027 → InvalidOrderError`` 매핑 추가."
+      - "src/brokers/binance/async_adapter.py — ``place_order`` 에 ``(symbol, side)`` 5분 cooldown 가드. -2027 받으면 cooldown 등록 + 같은 (sym, side) 발주는 거래소 안 부르고 로컬 ``REJECTED`` 반환. 반대 side (청산) 는 영향 없음."
+      - "configs/orchestrator/production.yaml — 두 airborne 의 ``default_size: 0.04 → 0.16``. 21종 분산 × 20x 레버리지에서 1포지션이 실계좌 1포지션 (12% 마진) 와 동급. 총 마진 사용 ≈ 12%, 백테스트 알파(가격 SL/TP 비율) 무관 → PF/Sharpe 게이트 그대로."
+      - "tests/brokers/binance/test_async_adapter_edges.py — -2027 cooldown 3건 회귀 테스트 (등록·skip·반대 side 미차단)."
+      - "tests/backtest/test_live_airborne_short_whitelist_v1.py — 같은 봉 재발화 차단 1건."
+      - "tests/backtest/test_live_airborne_bb_reversal_kst_morning.py — long/short 양쪽 재발화 차단 2건."
+    refs:
+      - "src/backtest/strategies/live_airborne_short_whitelist_v1.py"
+      - "src/backtest/strategies/live_airborne_bb_reversal_kst_morning.py"
+      - "src/brokers/binance/async_adapter.py"
+      - "configs/orchestrator/production.yaml"
+
   - version: "v0.6.25"
     date: "2026-06-03"
     title: "/airborne 시뮬 캐시 — incomplete sim 영구 저장 차단 (4봉 미만 + TP/SL 없음 = None)"

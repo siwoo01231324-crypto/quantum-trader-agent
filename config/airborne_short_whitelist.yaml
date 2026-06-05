@@ -48,11 +48,11 @@ state:
     consecutive_pass: 0
     consecutive_fail: 0
     note: "train PF=1.17 / test PF=0.89 (test_PF<1, 코어 아님)"
-  1000SHIBUSDT:
+  SHIBUSDT:
     status: active
     consecutive_pass: 0
     consecutive_fail: 0
-    note: "train PF=1.10 / test PF=1.13"
+    note: "train PF=1.10 / test PF=1.13 (was 1000SHIBUSDT — Bitget 단일 unit)"
   AAVEUSDT:
     status: active
     consecutive_pass: 0
@@ -124,10 +124,10 @@ state:
     consecutive_fail: 0
     note: "train PF=1.18 / test PF=1.11"
   RIFUSDT:
-    status: active
+    status: removed
     consecutive_pass: 0
     consecutive_fail: 0
-    note: "train PF=1.04 / test PF=1.15"
+    note: "train PF=1.04 / test PF=1.15 — Bitget 미상장, 2026-06-05 영구 제외"
   UNIUSDT:
     status: active
     consecutive_pass: 0

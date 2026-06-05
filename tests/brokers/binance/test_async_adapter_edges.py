@@ -16,7 +16,7 @@ import pytest
 from src.brokers.base import MarginType, OrderRequest, OrderType, PositionSide
 from src.brokers.binance.async_adapter import AsyncBinanceFuturesAdapter
 from src.brokers.binance.schemas import PlaceOrderResponse
-from src.brokers.errors import BrokerStartupError
+from src.brokers.errors import BrokerStartupError, InvalidOrderError
 from src.execution.base import Side, TimeInForce
 
 
@@ -97,3 +97,93 @@ async def test_ensure_position_mode_matches_succeeds():
     adapter._client.get_position_mode = AsyncMock(return_value=True)
     await adapter.ensure_position_mode(hedge=True)
     assert adapter._hedge_mode is True
+
+
+# ── -2027 max-notional cooldown (2026-06-03) ──────────────────────────────────
+# testnet 의 종목별 maxNotionalValue 한도(VVVUSDT=25,000) 를 넘으면 -2027 거부.
+# (sym, side) cooldown 으로 동일 발주가 매 1m tick 거래소까지 도달해 6000/min
+# rate-limit → IP ban → 다른 종목까지 마비되는 폭주를 차단.
+
+
+def _mk_market_req(side: Side, *, reduce_only: bool = False,
+                   cid: str = "regression0001") -> OrderRequest:
+    return OrderRequest(
+        client_order_id=cid,
+        symbol="VVVUSDT",
+        side=side,
+        qty=Decimal("6.95"),
+        order_type=OrderType.MARKET,
+        price=None,
+        tif=TimeInForce.GTC,
+        position_side=PositionSide.BOTH,
+        reduce_only=reduce_only,
+    )
+
+
+@pytest.mark.asyncio
+async def test_max_notional_2027_registers_cooldown_and_reraises():
+    adapter = _make_adapter()
+    adapter._client.place_order = AsyncMock(
+        side_effect=InvalidOrderError(
+            "[-2027] Exceeded the maximum allowable position at current leverage."
+        )
+    )
+    # symbol filters: any quantization succeeds
+    adapter._symbol_filters = MagicMock()
+    adapter._symbol_filters.lot_step.return_value = Decimal("0.01")
+    adapter._symbol_filters.min_qty.return_value = Decimal("0.01")
+
+    with pytest.raises(InvalidOrderError, match=r"\[-2027\]"):
+        await adapter.place_order(_mk_market_req(Side.SELL))
+
+    assert ("VVVUSDT", "SELL") in adapter._max_notional_cooldown
+
+
+@pytest.mark.asyncio
+async def test_max_notional_cooldown_skips_subsequent_call():
+    """During cooldown, identical (sym, side) returns local REJECTED ack — no exchange."""
+    adapter = _make_adapter()
+    adapter._client.place_order = AsyncMock(
+        side_effect=InvalidOrderError("[-2027] cap reached")
+    )
+    adapter._symbol_filters = MagicMock()
+    adapter._symbol_filters.lot_step.return_value = Decimal("0.01")
+    adapter._symbol_filters.min_qty.return_value = Decimal("0.01")
+
+    # 1st call → cooldown registered
+    with pytest.raises(InvalidOrderError):
+        await adapter.place_order(_mk_market_req(Side.SELL))
+    adapter._client.place_order.reset_mock()
+
+    # 2nd call → locally REJECTED, exchange not touched
+    ack = await adapter.place_order(_mk_market_req(Side.SELL))
+    assert ack.status == "REJECTED"
+    assert ack.broker_order_id == ""
+    assert adapter._client.place_order.await_count == 0
+
+
+@pytest.mark.asyncio
+async def test_max_notional_cooldown_does_not_block_opposite_side():
+    """SELL cooldown must NOT block BUY reduce-only (exit) on same symbol."""
+    adapter = _make_adapter()
+    adapter._client.place_order = AsyncMock(
+        side_effect=InvalidOrderError("[-2027] cap reached")
+    )
+    adapter._symbol_filters = MagicMock()
+    adapter._symbol_filters.lot_step.return_value = Decimal("0.01")
+    adapter._symbol_filters.min_qty.return_value = Decimal("0.01")
+
+    with pytest.raises(InvalidOrderError):
+        await adapter.place_order(_mk_market_req(Side.SELL))
+    # SELL on cooldown, but BUY (reduce) must reach exchange
+    adapter._client.place_order.reset_mock()
+    adapter._client.place_order.side_effect = None
+    adapter._client.place_order.return_value = PlaceOrderResponse(
+        orderId=42, clientOrderId="cid", symbol="VVVUSDT", status="NEW",
+        updateTime=1700000000000, origQty=Decimal("6.95"), price=Decimal("0"),
+    )
+    ack = await adapter.place_order(
+        _mk_market_req(Side.BUY, reduce_only=True, cid="reduce0001")
+    )
+    assert ack.status == "NEW"
+    assert adapter._client.place_order.await_count == 1

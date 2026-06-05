@@ -185,6 +185,32 @@ def _count_strategies(yaml_path: Path) -> int:
         return 0
 
 
+def _active_strategy_ids(yaml_path: Path) -> set[str]:
+    """production.yaml 의 active (uncommented) strategy id set (2026-06-05).
+
+    cross-run replay 가 disabled 전략 (commented `- id: ...`) 의 옛 fill
+    이벤트까지 복원하면 store 에 옛 잔량이 살아남아 LivePositionRiskManager
+    가 부풀린 qty 로 청산 발주 → broker over-shoot 으로 LONG/SHORT 뒤집기
+    사고 (2026-06-05 BEATUSDT incident). 본 함수가 active set 을 반환해
+    replay 가 그 set 의 sid 만 store/aggregator 에 적용하도록 한다.
+
+    파싱 실패 / 파일 없음 → 빈 set (caller 는 fallback 으로 None 전달 처리).
+    """
+    try:
+        import yaml  # noqa: PLC0415
+        data = yaml.safe_load(Path(yaml_path).read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            return set()
+        out: set[str] = set()
+        for s in (data.get("strategies") or []):
+            sid = (s or {}).get("id")
+            if isinstance(sid, str) and sid:
+                out.add(sid)
+        return out
+    except Exception:
+        return set()
+
+
 def _print_startup_banner(strategies_count: int, dashboard_port: int) -> None:
     """ASCII 시작 배너 — qta.exe 더블클릭 시 콘솔창에 표시 (#182)."""
     url = f"http://localhost:{dashboard_port}" if dashboard_port > 0 else "(dashboard off)"
@@ -283,6 +309,8 @@ def _run_dashboard_only_mode(port: int = 8000) -> int:
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
+    # 2026-06-05 — httpx INFO 폭주 차단 (universe-quote refresh 100+ REST).
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     # 거래 시작 시 실제로 어느 broker 로 갈지 미리 알려준다 (#$$$).
     _env_broker = os.environ.get("QTA_DEFAULT_BROKER", "").strip()
     if _env_broker:
@@ -320,9 +348,11 @@ def _run_dashboard_only_mode(port: int = 8000) -> int:
         state = DashboardState(timeline_broker=TimelineBroker(), wal_path=None)
         # #238 follow-up Issue 2 — standalone dashboard (no active pipeline)
         # must still show PERMANENT cross-run trade history. Seed log_dir to
-        # the `--log-dir` default so prior runs under logs/live/ surface
-        # immediately on boot (a later pipeline overwrites with its own).
-        state.log_dir = Path("logs/live")
+        # the `--log-dir` default so prior runs surface immediately on boot
+        # (a later pipeline overwrites with its own).
+        # 2026-06-05 — default 변경 logs/live → logs/shadow-bitget 와 일치
+        # (Bitget 이전 후 표준 broker). 옛 logs/live 도 있으면 동시 surface.
+        state.log_dir = Path("logs/shadow-bitget")
         state.position_provider = position_store.get_positions
         state.pnl_aggregator = pnl_aggregator
         state.ops_counters = ops_counters
@@ -418,13 +448,17 @@ def _build_parser() -> argparse.ArgumentParser:
             "kis-paper",
             "kis-paper-shadow",
             "binance-testnet-shadow",  # #231 S1 — Binance shadow live-daemon
+            "bitget-demo",             # P4 — Bitget USDT-M Futures Demo (paper trading)
+            "bitget-mainnet",          # P4 — Bitget USDT-M Futures mainnet (real money)
             "smoke-dual",              # smoke test — KIS paper 005930 + Binance testnet BTCUSDT 동시
         ],
-        default="binance-testnet-shadow",
-        help="브로커 모드 (default: binance-testnet-shadow — cs-tsmom-crypto-daily "
-             "자동발주 가능). KIS 모의 가동은 명시적으로 --broker kis-paper-shadow. "
+        default="bitget-demo",
+        help="브로커 모드 (default: bitget-demo — 2026-06-05 부터 Bitget 이전. "
+             "Binance 로 돌리려면 --broker binance-testnet-shadow). KIS 모의 가동은 "
+             "--broker kis-paper-shadow. bitget-mainnet 은 실거래 (1주 demo 검증 후). "
              "smoke-dual 은 KIS + Binance 둘 다 병렬 (SMOKE_TEST_ENABLED=1 필요). "
-             "기본값 변경 2026-05-21 — 직전엔 kis-paper-shadow 였음.",
+             "기본값 변경 이력: 2026-05-21 kis-paper-shadow → binance-testnet-shadow, "
+             "2026-06-05 → bitget-demo.",
     )
     parser.add_argument(
         "--duration", default="0",
@@ -451,8 +485,10 @@ def _build_parser() -> argparse.ArgumentParser:
         help="초기 페이퍼 잔고 (KRW 또는 USDT, default 100000)",
     )
     parser.add_argument(
-        "--log-dir", type=str, default="logs/live",
-        help="로그/WAL 기본 디렉토리 (default logs/live)",
+        "--log-dir", type=str, default="logs/shadow-bitget",
+        help="로그/WAL 기본 디렉토리. 2026-06-05 default 변경: "
+             "logs/live → logs/shadow-bitget (--broker bitget-demo 와 일치). "
+             "Binance 모드로 돌리려면 --log-dir logs/shadow-binance 명시.",
     )
     parser.add_argument(
         "--run-id", type=str, default=None,
@@ -608,6 +644,58 @@ def _build_binance_adapter(broker_mode: str):
     )
 
 
+def _build_bitget_adapter(broker_mode: str):
+    """P4 — Bitget USDT-M Futures adapter (Demo or Mainnet).
+
+    Env vars (single chain — no fallbacks; Bitget API key has 3 components):
+      API key:    BITGET_DEMO_API_KEY (paper) / BITGET_API_KEY (live)
+      API secret: BITGET_DEMO_SECRET  (paper) / BITGET_API_SECRET (live)
+      Passphrase: BITGET_DEMO_PASSPHRASE (paper) / BITGET_API_PASSPHRASE (live)
+
+    Demo trading routes via the ``paptrading: 1`` REST header and
+    ``wspap.bitget.com`` WS subdomain (auto-selected by ``paper=True``).
+
+    KIS / paper-only / Binance 모드면 None 반환.
+    """
+    if broker_mode not in ("bitget-demo", "bitget-mainnet"):
+        return None
+    # 2026-06-05 — venue 라우팅: 전략의 get_universe() 가 본 env 확인해 Bitget
+    # 거래량 top-100 으로 분기. Binance 미상장 종목 호출 → 400 폭주 + REST
+    # rate-limit 낭비 root cause fix. Binance 모드는 env 미설정 → 기존 byte-
+    # identical.
+    os.environ["QTA_BROKER_VENUE"] = "bitget"
+    from src.brokers.bitget.async_adapter import AsyncBitgetFuturesAdapter
+
+    paper = broker_mode == "bitget-demo"
+
+    def _strip(v):
+        return (v or "").strip().strip('"').strip("'")
+
+    if paper:
+        api_key = _strip(os.environ.get("BITGET_DEMO_API_KEY"))
+        secret = _strip(os.environ.get("BITGET_DEMO_SECRET"))
+        passphrase = _strip(os.environ.get("BITGET_DEMO_PASSPHRASE"))
+        var_names = ["BITGET_DEMO_API_KEY", "BITGET_DEMO_SECRET", "BITGET_DEMO_PASSPHRASE"]
+    else:
+        api_key = _strip(os.environ.get("BITGET_API_KEY"))
+        secret = _strip(os.environ.get("BITGET_API_SECRET"))
+        passphrase = _strip(os.environ.get("BITGET_API_PASSPHRASE"))
+        var_names = ["BITGET_API_KEY", "BITGET_API_SECRET", "BITGET_API_PASSPHRASE"]
+
+    missing = [name for name, val in zip(var_names, (api_key, secret, passphrase)) if not val]
+    if missing:
+        raise SystemExit(
+            f"broker_mode='{broker_mode}' requires env vars: {', '.join(missing)}"
+        )
+
+    return AsyncBitgetFuturesAdapter(
+        api_key=api_key,
+        secret=secret,
+        passphrase=passphrase,
+        paper=paper,
+    )
+
+
 def _build_universe_quote_provider(broker_mode: str, kis_client, args):
     """#231 S2 — broker_mode 기반 universe OHLCV provider 빌드.
 
@@ -695,6 +783,61 @@ def _build_universe_quote_provider(broker_mode: str, kis_client, args):
             except Exception:
                 return {}
         return _binance_provider
+
+    if broker_mode in ("bitget-demo", "bitget-mainnet"):
+        # P4 — Bitget universe quote provider. Same closure pattern as Binance
+        # (per-interval union from orchestrator strategies). Fallback when no
+        # orchestrator attached: top-30 USDT pairs ≈ Binance baseline.
+        from src.brokers.bitget.universe_quote import fetch_universe_klines as _bg_fetch
+        from src.portfolio.binance_universe import get_universe as _binance_top30  # symbol shared
+
+        def _bg_get_orchestrator():
+            return getattr(args, "_orchestrator", None)
+
+        def _bg_collect_strategy_universes() -> dict[str, set[str]]:
+            orchestrator = _bg_get_orchestrator()
+            if orchestrator is None or not hasattr(orchestrator, "_strategies"):
+                return {}
+            out: dict[str, set[str]] = {}
+            for strat in orchestrator._strategies.values():
+                get_u = getattr(strat, "get_universe", None)
+                get_i = getattr(strat, "get_interval", None)
+                if not (callable(get_u) and callable(get_i)):
+                    continue
+                try:
+                    syms = list(get_u())
+                    interval = str(get_i())
+                except Exception:
+                    continue
+                if not syms or not interval:
+                    continue
+                # 1000PEPEUSDT / 1000SHIBUSDT 매핑 (Bitget 은 1코인 단위라 multiplier 없음).
+                # P0 사전조사 결과: 우리 universe 의 1000X 종목만 매핑 필요.
+                normalized = [
+                    s.removeprefix("1000") if s.startswith("1000") and s.endswith("USDT") else s
+                    for s in syms
+                ]
+                out.setdefault(interval, set()).update(normalized)
+            return out
+
+        def _bitget_provider():
+            try:
+                per_interval = _bg_collect_strategy_universes()
+                if not per_interval:
+                    return _bg_fetch(_binance_top30(), interval="1d")
+                ohlcv: dict = {}
+                for interval in sorted(per_interval.keys()):
+                    syms = sorted(per_interval[interval])
+                    try:
+                        partial = _bg_fetch(syms, interval=interval)
+                    except Exception:
+                        continue
+                    for sym, df in partial.items():
+                        ohlcv.setdefault(sym, df)
+                return ohlcv
+            except Exception:
+                return {}
+        return _bitget_provider
 
     return None
 
@@ -877,7 +1020,8 @@ def _start_dashboard(state, port: int, logger):
 
 async def _run_pipeline_attached(
     state, config, kis_adapter, logger, duration_sec: float,
-    *, binance_adapter=None, position_store=None, pnl_aggregator=None,
+    *, binance_adapter=None, bitget_adapter=None,
+    position_store=None, pnl_aggregator=None,
     ops_counters=None, args=None,
 ) -> None:
     """이미 떠있는 dashboard 에 attach — 거래만 시작 (#182 단계 2).
@@ -895,6 +1039,12 @@ async def _run_pipeline_attached(
     from dataclasses import asdict
     # WAL path 를 state 에 노출 — WS replay 가 이 세션의 과거 이벤트를 복원할 수 있게.
     state.wal_path = config.wal_path
+    # 2026-06-05 — dashboard 가 거래시작 버튼으로 들어온 pipeline 의 log_dir
+    # 을 알도록 동기화. 미설정 시 standalone 모드의 line 353 default 가
+    # 영구 고정되어 dashboard 가 옛 logs/live 만 보임 (사용자 보고: bitget
+    # 거래내역 / 전략별 포지션 깜깜).
+    if config.wal_path is not None:
+        state.log_dir = Path(config.wal_path).parent.parent
     # 2026-05-21 fix: cross-run replay 가드 완화. 이전엔 wal_path.exists() 가
     # False 면 cross-run 도 skip (= 첫 거래 직전 wal_path 미생성 케이스에서 store/
     # aggregator 가 빈 상태로 시작 → restore_live_entered 무효 → 매수 폭주).
@@ -926,18 +1076,36 @@ async def _run_pipeline_attached(
                 log_dir = Path(config.wal_path).parent.parent
             else:
                 log_dir = Path("logs/live")  # fallback
+            # 2026-06-05 active filter: disabled 전략 (production.yaml commented)
+            # 의 옛 fill 은 store/pnl 에 누적 안 됨 — BEATUSDT/TRX 잔량 사고 방지.
+            # 파싱 실패면 빈 set → None 전달 → 기존 동작 byte-identical.
+            _allowed_sids = _active_strategy_ids(
+                config.production_yaml if getattr(config, "production_yaml", None)
+                else _bundle_root() / "configs/orchestrator/production.yaml"
+            )
+            _allowed_arg = _allowed_sids or None
             try:
-                n_store = position_store.replay_from_wal_dir(log_dir)
-                n_pnl = pnl_aggregator.replay_from_wal_dir(log_dir)
+                n_store = position_store.replay_from_wal_dir(
+                    log_dir, allowed_strategy_ids=_allowed_arg,
+                )
+                n_pnl = pnl_aggregator.replay_from_wal_dir(
+                    log_dir, allowed_strategy_ids=_allowed_arg,
+                )
                 logger.info(
-                    "cross-run replay: %d WAL files (store=%d / pnl=%d) from %s",
+                    "cross-run replay: %d WAL files (store=%d / pnl=%d) from %s "
+                    "active_sids=%d",
                     max(n_store, n_pnl), n_store, n_pnl, log_dir,
+                    len(_allowed_sids),
                 )
             except Exception as err:
                 logger.warning("cross-run replay failed: %s — fallback to single-path", err)
                 if config.wal_path and Path(config.wal_path).exists():
-                    position_store.replay_from_wal(config.wal_path)
-                    pnl_aggregator.replay_from_wal(config.wal_path)
+                    position_store.replay_from_wal(
+                        config.wal_path, allowed_strategy_ids=_allowed_arg,
+                    )
+                    pnl_aggregator.replay_from_wal(
+                        config.wal_path, allowed_strategy_ids=_allowed_arg,
+                    )
 
     def _wal_observer(ev) -> None:
         if state.timeline_broker is not None:
@@ -1051,9 +1219,11 @@ async def _run_pipeline_attached(
     # Binance UI 에서 직접 close 했을 때 store 가 모르고 phantom long 보유 →
     # stop fire → broker SHORT 진입 사이클을 차단. WAL + dashboard timeline
     # 양쪽으로 알림. single-holder mismatch 는 auto-fix, 그 외는 알림만.
+    # P4b — Bitget 도 동일 reconciler 사용 (broker.get_positions 시그니처 동일).
     reconciler_task: asyncio.Task | None = None
     reconciler_stop = asyncio.Event()
-    if binance_adapter is not None and position_store is not None:
+    _live_broker_adapter = binance_adapter or bitget_adapter
+    if _live_broker_adapter is not None and position_store is not None:
         from src.live.position_reconciler import PositionReconciler  # noqa: PLC0415
 
         def _sync_orch_live_entered(sid: str, symbol: str, qty) -> None:
@@ -1066,7 +1236,7 @@ async def _run_pipeline_attached(
 
         reconciler = PositionReconciler(
             position_store=position_store,
-            broker=binance_adapter,
+            broker=_live_broker_adapter,
             wal_observer=_wal_observer,
             alert_publisher=(
                 (lambda p: state.timeline_broker.publish(p))
@@ -1083,7 +1253,12 @@ async def _run_pipeline_attached(
 
     try:
         await _run_with_duration(
-            run_shadow_loop(config, kis_adapter=kis_adapter, binance_adapter=binance_adapter),
+            run_shadow_loop(
+                config,
+                kis_adapter=kis_adapter,
+                binance_adapter=binance_adapter,
+                bitget_adapter=bitget_adapter,
+            ),
             duration_sec,
         )
     finally:
@@ -1128,19 +1303,19 @@ def _build_pipeline_factory(
         smoke_on = os.environ.get("SMOKE_TEST_ENABLED", "").lower() in ("1", "true", "yes")
         broker = params.get("broker")
         if not broker:
-            # #238 — broker 선택을 smoke 와 분리. 우선순위:
+            # 우선순위:
             #   1. params.broker (dashboard 가 명시 전달 시)
             #   2. QTA_DEFAULT_BROKER env (운영자가 dashboard 버튼 default 지정)
             #   3. SMOKE_TEST_ENABLED=1 → binance-testnet-shadow (smoke 통로검증)
-            #   4. fallback → kis-paper-shadow (legacy #182 default)
-            # 이전엔 SMOKE 끄면 무조건 KIS 라 BTC 전략을 dashboard 로 못 돌렸음.
+            #   4. fallback → bitget-demo (2026-06-05 Bitget 이전 — 이전엔
+            #      kis-paper-shadow 였음)
             env_broker = os.environ.get("QTA_DEFAULT_BROKER", "").strip()
             if env_broker:
                 broker = env_broker
             elif smoke_on:
                 broker = "binance-testnet-shadow"
             else:
-                broker = "kis-paper-shadow"
+                broker = "bitget-demo"
         duration = params.get("duration") or "0"
 
         if broker == "smoke-dual":
@@ -1156,6 +1331,26 @@ def _build_pipeline_factory(
         # 무관 — binance-testnet-shadow 인데 005930 fallback 되면 feed 가 비어 무의미.
         if broker == "binance-testnet-shadow" and not params.get("symbols"):
             symbols = ["BTCUSDT"]
+        # 2026-06-05 — Bitget broker 면 *현재 열린 포지션* + 핵심 10 종목. mark-price
+        # feed 가 그 종목들 구독해야 TP/SL 평가 가능 — 미구독이면 DOT 같은
+        # 보유 포지션의 TP fire 자체 안 됨 (사용자 사고 root cause).
+        if broker in ("bitget-demo", "bitget-mainnet") and not params.get("symbols"):
+            _open: set[str] = set()
+            try:
+                import asyncio as _asyncio  # noqa: PLC0415
+                _bg = _build_bitget_adapter(broker)
+                if _bg is not None:
+                    _ps = await _bg.get_positions()
+                    for _p in _ps:
+                        if getattr(_p, "qty", 0) and float(getattr(_p, "qty", 0)) != 0:
+                            _open.add(_p.symbol)
+                    await _bg.aclose()
+            except Exception:  # noqa: BLE001
+                pass
+            symbols = sorted(_open | {
+                "BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "XRPUSDT",
+                "ADAUSDT", "BNBUSDT", "LINKUSDT", "DOTUSDT", "AVAXUSDT",
+            })
         # 2026-05-21: 거래 시작 시 실제 어디로 가는지 stdout 에 명시 — bars=0
         # 인데 어디 막혔는지 진단 즉시 가능 (.env 미로드 / 한국장 마감 등).
         print(
@@ -1175,6 +1370,7 @@ def _build_pipeline_factory(
             config.kis_client = _build_kis_client(args.feed, args.symbols)
         kis_adapter = _build_kis_adapter(args.broker)
         binance_adapter = _build_binance_adapter(args.broker)  # #231 S1
+        bitget_adapter = _build_bitget_adapter(args.broker)    # P4b
         # #231 S2 — universe-scan strategies 가 live dispatch 되도록 provider wire.
         # #238 — smoke 검증 중에는 350종목 universe fetch 가 KIS 초당 한도를 폭주
         # 시키므로 SMOKE_TEST_ENABLED=1 이면 provider 미주입 (cs-* 전략은 hold 폴백).
@@ -1188,6 +1384,7 @@ def _build_pipeline_factory(
         await _run_pipeline_attached(
             state, config, kis_adapter, logger, duration_sec,
             binance_adapter=binance_adapter,
+            bitget_adapter=bitget_adapter,
             position_store=position_store, pnl_aggregator=pnl_aggregator,
             ops_counters=ops_counters,
             args=args,
@@ -1312,7 +1509,7 @@ async def _run_smoke_dual(
 
 async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
                        duration_sec: float, auto_open_browser: bool = True,
-                       *, binance_adapter=None, args=None):
+                       *, binance_adapter=None, bitget_adapter=None, args=None):
     from dataclasses import asdict
     from src.dashboard.app import DashboardState
     from src.dashboard.ops_counters import OpsCounters
@@ -1333,18 +1530,33 @@ async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
         log_dir = Path(config.wal_path).parent.parent
     else:
         log_dir = Path("logs/live")
+    # 2026-06-05 active filter — _run_pipeline_attached 와 동일 가드.
+    _allowed_sids = _active_strategy_ids(
+        config.production_yaml if getattr(config, "production_yaml", None)
+        else _bundle_root() / "configs/orchestrator/production.yaml"
+    )
+    _allowed_arg = _allowed_sids or None
     try:
-        n_store = position_store.replay_from_wal_dir(log_dir)
-        n_pnl = pnl_aggregator.replay_from_wal_dir(log_dir)
+        n_store = position_store.replay_from_wal_dir(
+            log_dir, allowed_strategy_ids=_allowed_arg,
+        )
+        n_pnl = pnl_aggregator.replay_from_wal_dir(
+            log_dir, allowed_strategy_ids=_allowed_arg,
+        )
         logger.info(
-            "cross-run replay: %d WAL files (store=%d / pnl=%d) from %s",
-            max(n_store, n_pnl), n_store, n_pnl, log_dir,
+            "cross-run replay: %d WAL files (store=%d / pnl=%d) from %s "
+            "active_sids=%d",
+            max(n_store, n_pnl), n_store, n_pnl, log_dir, len(_allowed_sids),
         )
     except Exception as err:
         logger.warning("cross-run replay failed: %s — fallback to single-path", err)
         if config.wal_path and Path(config.wal_path).exists():
-            position_store.replay_from_wal(config.wal_path)
-            pnl_aggregator.replay_from_wal(config.wal_path)
+            position_store.replay_from_wal(
+                config.wal_path, allowed_strategy_ids=_allowed_arg,
+            )
+            pnl_aggregator.replay_from_wal(
+                config.wal_path, allowed_strategy_ids=_allowed_arg,
+            )
     dashboard_state = DashboardState(
         timeline_broker=timeline_broker,
         wal_path=config.wal_path,
@@ -1352,6 +1564,24 @@ async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
     dashboard_state.position_provider = position_store.get_positions
     dashboard_state.pnl_aggregator = pnl_aggregator
     dashboard_state.ops_counters = ops_counters
+    # 2026-06-05 — 계좌 카드 (Binance + Bitget + KIS) 데이터 소스. 누락 시
+    # ``/api/account/info`` 가 available=False 반환 → dashboard 가 "계좌 연결
+    # 실패" 로 표시. _run_dashboard_only_mode 만 set 하고 _run_pipeline 은
+    # 안 set 해서 인자 있는 모드에서 dashboard 가 깜깜이던 회귀 fix.
+    from src.dashboard.account_info import AccountInfoProvider as _AIP  # noqa: PLC0415
+    dashboard_state.account_info_provider = _AIP()
+    # 2026-06-05 — dashboard 의 거래 시작/정지 버튼 컨트롤러. _run_pipeline 은
+    # 이미 trading loop 가 가동 중이므로 controller.start 는 재진입 noop 처럼
+    # 동작하면 OK. 미설정 시 dashboard 가 ``컨트롤러 미주입 (cmd 모드)`` +
+    # ``controller unavailable`` 503 반환 (사용자 보고 결함).
+    from src.dashboard.run_controller import RunController as _RC  # noqa: PLC0415
+    dashboard_state.run_controller = _RC(
+        _build_pipeline_factory(
+            dashboard_state, logger,
+            position_store=position_store, pnl_aggregator=pnl_aggregator,
+            ops_counters=ops_counters,
+        )
+    )
     # #238 follow-up Issue 2 — trade history / 전략별 포지션은 영구·누적이어야
     # 한다. config.wal_path = {log_dir}/{run_id}/wal.jsonl 이므로 log_dir 은
     # 항상 parent.parent. 이 한 줄이 없으면 _resolve_log_dir 이 None →
@@ -1469,10 +1699,11 @@ async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
             )
 
     # 2026-05-21 — Binance broker ↔ position_store reconciler (CLI 경로).
-    # _run_pipeline_attached 와 동일 와이어링. Binance broker 모드일 때만 가동.
+    # _run_pipeline_attached 와 동일 와이어링. Binance/Bitget broker 모드일 때 가동.
     reconciler_task: asyncio.Task | None = None
     reconciler_stop = asyncio.Event()
-    if binance_adapter is not None:
+    _live_broker_cli = binance_adapter or bitget_adapter
+    if _live_broker_cli is not None:
         from src.live.position_reconciler import PositionReconciler  # noqa: PLC0415
 
         def _sync_orch_live_entered(sid: str, symbol: str, qty) -> None:
@@ -1485,7 +1716,7 @@ async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
 
         reconciler = PositionReconciler(
             position_store=position_store,
-            broker=binance_adapter,
+            broker=_live_broker_cli,
             wal_observer=_wal_observer,
             alert_publisher=lambda p: timeline_broker.publish(p),
             on_position_synced=_sync_orch_live_entered,
@@ -1500,7 +1731,9 @@ async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
     try:
         await _run_with_duration(
             run_shadow_loop(
-                config, kis_adapter=kis_adapter, binance_adapter=binance_adapter,
+                config, kis_adapter=kis_adapter,
+                binance_adapter=binance_adapter,
+                bitget_adapter=bitget_adapter,
             ),
             duration_sec,
         )
@@ -1522,12 +1755,21 @@ def main(argv: list[str] | None = None) -> int:
     if _is_no_args(argv):
         if os.environ.get("QTA_FIRST_RUN_HELP_ONLY", "").lower() == "true":
             return _show_first_run_help()
+        # 2026-06-05 — 인자 없이 띄우면 standalone (dashboard 만). 사용자가
+        # '거래 시작' 버튼 누르면 그때 RunController.start → pipeline_factory
+        # → _run_pipeline_attached 실행. 옛 시도 (auto-default-args 주입) 는
+        # 사용자가 시작 안 눌렀는데도 RUNNING 으로 표시되어 회피로 분류됨 —
+        # 정상 status machine (IDLE → STARTING → RUNNING → STOPPED) 으로 복원.
         return _run_dashboard_only_mode()
     args = parse_args(argv)
     logging.basicConfig(
         level=args.log_level,
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
+    # 2026-06-05 — httpx 라이브러리 INFO 로그가 universe-quote refresh (수십~수백
+    # 종목 REST) 마다 폭주. 운영 운영 가시성 0 (실 distractor) + 디스크 IO 낭비.
+    # 에러는 WARNING 이상이라 유지.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     logger = logging.getLogger("live_run")
     yaml_path = Path(args.production_yaml)
     if not yaml_path.is_absolute():
@@ -1559,7 +1801,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         kis_adapter = _build_kis_adapter(args.broker)
         binance_adapter = _build_binance_adapter(args.broker)  # #231 S1
-        # #231 S2 — universe-scan strategies wire (KIS / Binance provider)
+        bitget_adapter = _build_bitget_adapter(args.broker)    # P4b
+        # #231 S2 — universe-scan strategies wire (KIS / Binance / Bitget provider)
         config.universe_quote_provider = _build_universe_quote_provider(
             args.broker, config.kis_client, args,
         )
@@ -1568,6 +1811,7 @@ def main(argv: list[str] | None = None) -> int:
                 config, kis_adapter, args.dashboard_port, logger, duration_sec,
                 auto_open_browser=not args.no_browser,
                 binance_adapter=binance_adapter,
+                bitget_adapter=bitget_adapter,
                 args=args,
             )
         )

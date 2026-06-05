@@ -238,3 +238,37 @@ class TestBarHourKstHelper:
 
     def test_empty_returns_none(self):
         assert _bar_hour_kst(pd.DataFrame({"close": []})) is None
+
+
+# ── No re-fire within same bar (2026-06-04 RIFUSDT 폭주 fix) ───────────────────
+
+
+class TestNoReFireWithinSameBar:
+    """첫 fire 후 같은 (symbol, bar_ts) 평가는 hold 만 반환.
+
+    같은 1h 봉 안에서 매 WS tick 마다 cached fire 시그널이 그대로 반환되어
+    중복 발주 폭주가 발생. fire 직후 cache 를 hold 로 덮어쓰는 fix 의 회귀
+    방지.
+    """
+
+    def test_long_fire_does_not_re_fire_same_bar(self):
+        history = _long_fire_frame_at_utc("2026-01-01T21:00:00")  # KST 06
+        s = LiveAirborneBbReversalKstMorning()
+        first = _run(s, _ctx(history))
+        assert first is not None
+        assert first.action == "buy"
+        second = _run(s, _ctx(history))
+        assert second is not None
+        assert second.action == "hold"
+        assert "fired_this_bar" in second.reason
+
+    def test_short_fire_does_not_re_fire_same_bar(self):
+        history = _short_fire_frame_at_utc("2026-01-01T21:00:00")  # KST 06
+        s = LiveAirborneBbReversalKstMorning()
+        first = _run(s, _ctx(history))
+        assert first is not None
+        assert first.action == "sell"
+        second = _run(s, _ctx(history))
+        assert second is not None
+        assert second.action == "hold"
+        assert "fired_this_bar" in second.reason

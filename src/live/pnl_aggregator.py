@@ -163,19 +163,40 @@ class PnLAggregator:
             ts=ts,
         )
 
-    def replay_from_wal(self, wal_path: Path | str) -> None:
+    def replay_from_wal(
+        self,
+        wal_path: Path | str,
+        *,
+        allowed_strategy_ids: set[str] | None = None,
+    ) -> None:
+        """``allowed_strategy_ids`` (2026-06-05): set 주어지면 payload 의 sid 가
+        그 set 에 없는 fill 은 skip. None 이면 모든 sid 누적 (기존 동작 byte-identical).
+        """
         events, _ = replay(wal_path)
         for event in events:
             payload = dict(event.payload or {})
             payload.setdefault("ts", event.ts)
+            if allowed_strategy_ids is not None:
+                sid = payload.get("strategy_id")
+                if sid is not None and sid not in allowed_strategy_ids:
+                    continue
             self.ingest_fill_event(event.event_type, payload)
 
-    def replay_from_wal_dir(self, log_dir: Path | str) -> int:
+    def replay_from_wal_dir(
+        self,
+        log_dir: Path | str,
+        *,
+        allowed_strategy_ids: set[str] | None = None,
+    ) -> int:
         """Cross-run restore: glob 모든 WAL under log_dir + 각각 replay.
 
         매 run 마다 새 wal_path 가 생성되므로 single-path replay 만으로는
         부팅 시 aggregator 가 비어있음 → realized/daily/monthly PnL 0. 본
         메서드가 모든 run 의 fill events 누적 → realized PnL 정상 갱신.
+
+        ``allowed_strategy_ids`` (2026-06-05): 그 set 의 sid 만 누적. 옛 disabled
+        전략 (production.yaml 미등록) 의 realized PnL 이 통계에 들어가 부정확
+        하던 사고 차단. None 이면 byte-identical.
 
         Returns: replay 된 WAL 파일 수.
         """
@@ -185,7 +206,7 @@ class PnLAggregator:
             return 0
         paths = discover_wal_files(log_dir)
         for p in paths:
-            self.replay_from_wal(p)
+            self.replay_from_wal(p, allowed_strategy_ids=allowed_strategy_ids)
         return len(paths)
 
     @property
