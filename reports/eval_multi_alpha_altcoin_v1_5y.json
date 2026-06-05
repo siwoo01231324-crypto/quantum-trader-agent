@@ -1,0 +1,34 @@
+{
+  "generated_at": "2026-06-04T21:13:17.701921+00:00",
+  "months": 60,
+  "symbols_count": 10,
+  "cost_bps": 10.0,
+  "strategy_params": {
+    "stop_loss_pct": 0.0075,
+    "take_profit_pct": 0.015,
+    "timeout_bars": 4,
+    "coint_window_bars": 1440,
+    "corr_window_bars": 720,
+    "regime_corr_high": 0.7,
+    "regime_corr_low": 0.3,
+    "lead_lag_ret_threshold": 0.01,
+    "zscore_threshold": 2.0
+  },
+  "n": 788,
+  "PF": 0.7474157411922996,
+  "expectancy": -0.0013341039030251016,
+  "win_rate": 0.3413705583756345,
+  "sum_pct": -1.05127387558378,
+  "by_layer": {
+    "lead_lag": {
+      "n": 788,
+      "PF": 0.7474157411922996,
+      "expectancy": -0.0013341039030251016,
+      "win_rate": 0.3413705583756345,
+      "sum_pct": -1.05127387558378
+    }
+  },
+  "gate_pass": "False",
+  "gate_rule": "PF > 1.0 AND expectancy > 0 (CLAUDE.md 5y backtest gate)",
+  "elapsed_sec": 243.699946641922
+}
