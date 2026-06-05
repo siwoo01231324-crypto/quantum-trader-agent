@@ -1,11 +1,16 @@
 from __future__ import annotations
 import sys
 import asyncio
-if sys.platform == "win32":
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+# 2026-06-03 — Selector 강제 제거. Python 3.14 + Windows 의 default 는
+# Proactor loop 인데, 코드가 강제로 Selector 로 바꾸면 websockets 라이브러리가
+# 처음 3 tick 처리 후 ws.recv() 에서 stuck (producer 가 무한 idle). 외부
+# ad-hoc 테스트 (default Proactor) 는 ticks 정상 push. 본 fix 는 Windows
+# default (Proactor) 그대로 사용. KIS REST + httpx 는 둘 다 정상 작동.
+# Selector 가 필요한 경우 (subprocess 등) 별도 라이브러리에서 명시 설정.
 
 import logging
 import signal
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -46,6 +51,7 @@ class ShadowConfig:
     # #231 S1: binance-testnet-shadow added for Binance shadow live-daemon.
     broker_mode: Literal[
         "paper-only", "kis-paper-shadow", "kis-paper", "binance-testnet-shadow",
+        "bitget-demo", "bitget-mainnet",  # P4b — Bitget USDT-M Futures
     ] = "paper-only"
     # Phase 2 feed mode (#177).
     #   "auto"   — KIS REST polling for any 6-digit KRX symbol; Binance WS otherwise
@@ -179,6 +185,7 @@ def _build_router(
     paper_broker: PaperBroker,
     kis_adapter=None,
     binance_adapter=None,
+    bitget_adapter=None,
 ):
     """Return the active broker/router for the given broker_mode.
 
@@ -186,6 +193,7 @@ def _build_router(
     broker_mode == "kis-paper"               → AsyncOrderRouter(active=KIS adapter)
     broker_mode == "kis-paper-shadow"        → AsyncOrderRouter(active=KIS, fallback swap to PaperBroker)
     broker_mode == "binance-testnet-shadow"  → AsyncOrderRouter(active=Binance testnet, fallback swap to PaperBroker) (#231 S1)
+    broker_mode in {"bitget-demo","bitget-mainnet"} → AsyncOrderRouter(active=Bitget adapter) (P4b)
     """
     if broker_mode == "paper-only":
         return paper_broker
@@ -206,6 +214,16 @@ def _build_router(
             )
         return AsyncOrderRouter(
             active=binance_adapter,
+            kill_switch=kill_switch,
+            metrics=metrics,
+        )
+    if broker_mode in ("bitget-demo", "bitget-mainnet"):
+        if bitget_adapter is None:
+            raise ValueError(
+                f"broker_mode='{broker_mode}' requires bitget_adapter to be provided"
+            )
+        return AsyncOrderRouter(
+            active=bitget_adapter,
             kill_switch=kill_switch,
             metrics=metrics,
         )
@@ -297,6 +315,12 @@ def _select_feed(config: ShadowConfig) -> MarketDataFeed:
                 "feed_mode=kis (or auto with KRX symbols) requires ShadowConfig.kis_client"
             )
         return KISMarketFeed(config.symbols, config.kis_client)
+    # P4b — Bitget broker_mode 면 BitgetPublicFeed (trade channel). Demo 는
+    # wspap subdomain 자동 라우팅. mainnet 도 region-restricted issue 없음.
+    if config.broker_mode in ("bitget-demo", "bitget-mainnet"):
+        from src.live.feed import BitgetPublicFeed  # local import — avoid binance.* eager load
+        paper = config.broker_mode == "bitget-demo"
+        return BitgetPublicFeed(config.symbols, paper=paper)
     # #238 hotfix — testnet broker 면 testnet WS endpoint 명시. 한국 IP 에서
     # mainnet (fstream.binance.com) 은 connect 되지만 aggTrade 0건 push (지역 차단).
     base_url = (
@@ -345,6 +369,7 @@ async def run_shadow_loop(
     kill_switch: KillSwitch | None = None,
     kis_adapter=None,
     binance_adapter=None,  # #231 S1 — broker_mode=binance-testnet-shadow 용
+    bitget_adapter=None,   # P4b — broker_mode in {bitget-demo, bitget-mainnet} 용
     wait_for_session_fn: Callable[..., Any] = wait_until_session_open,
 ) -> None:
     """Phase 1 Shadow Live Loop.
@@ -392,6 +417,7 @@ async def run_shadow_loop(
         router = _build_router(
             config.broker_mode, kill_switch, metrics, paper_broker,
             kis_adapter=kis_adapter, binance_adapter=binance_adapter,
+            bitget_adapter=bitget_adapter,
         )
         # Build the manual-close executor closure as soon as the broker
         # pipeline is wired. The dashboard's manual-close endpoint calls this
@@ -469,9 +495,18 @@ async def run_shadow_loop(
             max_attempts = 100  # ~ days of retries; daemon should outlive any
                                 # transient outage but eventually give up if
                                 # the exchange WS is permanently down.
+            # 2026-06-03 debug — producer 가 ticks 받는지 진단용
+            _producer_tick_count = 0
             while not stop_event.is_set() and attempt < max_attempts:
                 try:
+                    logger.info("producer.iter_start attempt=%d", attempt)
                     async for tick in feed:
+                        if _producer_tick_count == 0:
+                            logger.info(
+                                "producer.FIRST_TICK %s @ %s (qty=%s)",
+                                tick.symbol, tick.price, tick.qty,
+                            )
+                        _producer_tick_count += 1
                         if stop_event.is_set():
                             break
                         if tick_queue.full():
@@ -541,11 +576,26 @@ async def run_shadow_loop(
             from src.live.cs_basket_dispatcher import BasketDispatcher
             basket_dispatcher = BasketDispatcher()
             logger.info("cs_basket_dispatcher.enabled — universe-scan auto-orders")
+            # 2026-06-03 debug — consumer 가 tick 받는지 진단용
+            _consumer_tick_count = 0
+            _consumer_timeout_count = 0
             while not stop_event.is_set():
                 try:
                     tick = await asyncio.wait_for(tick_queue.get(), timeout=1.0)
                 except asyncio.TimeoutError:
+                    _consumer_timeout_count += 1
+                    if _consumer_timeout_count in (5, 30, 300):
+                        logger.warning(
+                            "consumer.NO_TICK %ds — producer may be stuck",
+                            _consumer_timeout_count,
+                        )
                     continue
+                if _consumer_tick_count == 0:
+                    logger.info(
+                        "consumer.FIRST_TICK %s @ %s (after %d timeouts)",
+                        tick.symbol, tick.price, _consumer_timeout_count,
+                    )
+                _consumer_tick_count += 1
                 ms = _tick_to_market_state(tick)
                 paper_broker.update_market(ms)
                 ts = datetime.fromisoformat(tick.ts)
@@ -563,7 +613,15 @@ async def run_shadow_loop(
                 if config.balance_provider is not None:
                     await asyncio.to_thread(snapshot_builder.refresh_balance)
                 snapshot = snapshot_builder.build_snapshot(tick)
+                if _consumer_tick_count == 1:
+                    logger.info("consumer.run_bar_start tick=%d ts=%s", _consumer_tick_count, ts.isoformat())
+                _t0 = time.monotonic() if _consumer_tick_count <= 3 else None
                 intents = await orchestrator.run_bar(ts, snapshot)
+                if _t0 is not None:
+                    logger.info(
+                        "consumer.run_bar_done tick=%d elapsed=%.2fs intents=%d",
+                        _consumer_tick_count, time.monotonic() - _t0, len(intents),
+                    )
                 if intents:
                     # Emit timeline `signal_emitted` events ahead of order
                     # placement so the dashboard / WAL audit trail captures
@@ -693,6 +751,29 @@ async def run_shadow_loop(
                 "binance fill consumer started (broker_mode=%s symbols=%s)",
                 config.broker_mode, config.symbols,
             )
+        elif (
+            config.broker_mode in ("bitget-demo", "bitget-mainnet")
+            and bitget_adapter is not None
+            and config.position_store is not None
+        ):
+            # P4b — Bitget private WS user-data stream → order_filled WAL.
+            from src.live.fill_consumer import run_bitget_fill_consumer
+            def _bg_stream_factory():
+                return bitget_adapter.stream_fills()
+
+            fill_task = asyncio.create_task(
+                run_bitget_fill_consumer(
+                    _bg_stream_factory,
+                    wal=wal,
+                    position_store=config.position_store,
+                    stop_event=stop_event,
+                ),
+                name="bitget-fill-consumer",
+            )
+            logger.info(
+                "bitget fill consumer started (broker_mode=%s symbols=%s)",
+                config.broker_mode, config.symbols,
+            )
 
         # Multi-symbol mark-price consumer (#238 follow-up). Subscribes to
         # `!markPrice@arr@1s` so every USDT-perp symbol's mark price reaches
@@ -725,6 +806,37 @@ async def run_shadow_loop(
             logger.info(
                 "binance mark-price consumer started (broker_mode=%s stream=%s)",
                 config.broker_mode, BinanceMarkPriceFeed.STREAM_PATH,
+            )
+        elif (
+            config.enable_mark_price_feed
+            and config.broker_mode in ("bitget-demo", "bitget-mainnet")
+            and config.position_risk_manager is not None
+        ):
+            # P4b — Bitget ticker channel per universe symbol. universe 가 큰 경우
+            # 50개씩 chunk subscribe (BitgetMarkPriceFeed.connect 내부 처리).
+            from src.live.feed import BitgetMarkPriceFeed
+            _bg_paper = config.broker_mode == "bitget-demo"
+            # universe = config.symbols (live_run.py 가 universe 모두 채워줘야 함).
+            def _bitget_mp_factory():
+                return BitgetMarkPriceFeed(config.symbols, paper=_bg_paper)
+            mark_price_task = asyncio.create_task(
+                _run_mark_price_consumer(
+                    position_risk_manager=config.position_risk_manager,
+                    router=router,
+                    kill_switch=kill_switch,
+                    wal=wal,
+                    metrics=metrics,
+                    position_store=config.position_store,
+                    stop_event=stop_event,
+                    feed_factory=_bitget_mp_factory,
+                    live_price_cache=config.live_price_cache,
+                    tick_queue=tick_queue,
+                ),
+                name="bitget-mark-price-consumer",
+            )
+            logger.info(
+                "bitget mark-price consumer started (broker_mode=%s symbols=%d)",
+                config.broker_mode, len(config.symbols),
             )
 
         try:

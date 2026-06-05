@@ -104,6 +104,61 @@ services:
         limits:
           memory: 1G
 
+  # 2026-06-05 P5/P7 — Bitget USDT-M Futures live daemon. Binance 와 병행
+  # 가동 가능 (다른 컨테이너 / 다른 log+lock 경로). Demo (default) 는 wspap
+  # 서브도메인 + paptrading 헤더로 자동 라우팅. 메인넷 전환은 --broker=
+  # bitget-mainnet + BITGET_API_KEY/SECRET/PASSPHRASE env.
+  #
+  # 가동:
+  #   docker compose -f docker-compose.live.yml build live-daemon-bitget
+  #   docker compose -f docker-compose.live.yml up -d live-daemon-bitget
+  #   docker compose -f docker-compose.live.yml logs -f live-daemon-bitget
+  #
+  # 종목: short-whitelist active 14종 (P0/P5 정리 — RIFUSDT 제외, SHIBUSDT
+  # rename) + kst-hours 의 top-100 dynamic. live_run.py 가 universe-quote
+  # provider 에서 1000* 종목 자동 정규화.
+  live-daemon-bitget:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: qta-phase2:latest
+    container_name: qta-live-daemon-bitget
+    command:
+      - "scripts/live_run.py"
+      - "--broker=${BITGET_BROKER_MODE:-bitget-demo}"
+      - "--symbols=${BITGET_SYMBOLS:-BTCUSDT,ETHUSDT,SOLUSDT}"
+      - "--duration=4w"
+      - "--max-orders=${BITGET_MAX_ORDERS:-30}"
+      - "--auto-fallback"
+      - "--schedule=always"
+      - "--feed=binance"
+      - "--log-dir=/data/logs"
+      - "--no-browser"
+      - "--dashboard-port=0"
+    env_file:
+      - ./.env
+    environment:
+      TZ: Asia/Seoul
+      # Demo creds: BITGET_DEMO_API_KEY / BITGET_DEMO_SECRET / BITGET_DEMO_PASSPHRASE
+      # Mainnet creds (BITGET_BROKER_MODE=bitget-mainnet 시):
+      #   BITGET_API_KEY / BITGET_API_SECRET / BITGET_API_PASSPHRASE
+    volumes:
+      # Binance daemon / KIS daemon 과 별도 log+state 디렉토리 — ProcessLock
+      # 충돌 방지.
+      - ./logs/shadow-bitget:/data/logs
+      - ./data/state-bitget:/app/.omc/state
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "find /data/logs -name '.live_loop.lock' | grep -q ."]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
   report-cron:
     build:
       context: .

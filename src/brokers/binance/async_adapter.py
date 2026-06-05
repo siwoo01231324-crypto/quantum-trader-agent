@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+import time
 from collections.abc import AsyncIterator
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -75,6 +76,12 @@ class AsyncBinanceFuturesAdapter:
         self._hedge_mode: bool | None = None
         self._ws_stream: AsyncBinanceUserDataStream | None = None
         self._inflight: list[asyncio.Task] = []
+        # 2026-06-03 — testnet -2027 "Exceeded max position" 폭주 차단.
+        # VVVUSDT 같은 종목이 maxNotionalValue 한도 닿으면 매 1m tick 발주가
+        # 그대로 거래소까지 가서 6000/min rate-limit → IP ban → 다른 종목까지
+        # 마비. (sym, side) 단위 5분 cooldown 으로 동일 발주를 로컬 차단.
+        self._max_notional_cooldown: dict[tuple[str, str], float] = {}
+        self._MAX_NOTIONAL_COOLDOWN_SEC: float = 300.0
 
     # ── kill switch gate ──────────────────────────────────────────────────────
 
@@ -88,6 +95,31 @@ class AsyncBinanceFuturesAdapter:
 
     async def place_order(self, req: OrderRequest) -> OrderAck:
         self._assert_allow_order(req.emergency_exit)  # KillSwitch gate — must be first
+
+        # 2026-06-03 max-notional cooldown — 같은 (symbol, side) 가 직전
+        # 5분 안에 -2027 받았으면 거래소 안 부르고 로컬 REJECTED 반환.
+        # rate-limit 폭주 + IP ban 1차 차단.
+        cooldown_key = (req.symbol, req.side.value)
+        expiry = self._max_notional_cooldown.get(cooldown_key)
+        if expiry is not None:
+            now = time.monotonic()
+            if now < expiry:
+                log.info(
+                    "place_order skipped — max-notional cooldown %s %s remaining=%.0fs",
+                    req.symbol, req.side.value, expiry - now,
+                )
+                return OrderAck(
+                    broker_order_id="",
+                    client_order_id=req.client_order_id,
+                    symbol=req.symbol,
+                    status="REJECTED",
+                    ts=datetime.now(tz=timezone.utc),
+                    qty=req.qty,
+                    price=None,
+                )
+            else:
+                # expired — clean up
+                self._max_notional_cooldown.pop(cooldown_key, None)
 
         await self._client._rate_limiter.acquire("orders_1m")
         await self._client._rate_limiter.acquire("orders_10s")
@@ -121,7 +153,20 @@ class AsyncBinanceFuturesAdapter:
         # No-op for MARKET orders (req.price is None) → byte-identical legacy.
         req = self._quantize_price_to_tick(req)
 
-        resp = await self._client.place_order(req, cid)
+        try:
+            resp = await self._client.place_order(req, cid)
+        except InvalidOrderError as exc:
+            # 2026-06-03 — -2027 (max notional) 받으면 (sym, side) cooldown 등록.
+            # 동일 발주가 다음 5분 동안 거래소까지 도달 안 하게 차단.
+            if "[-2027]" in str(exc):
+                self._max_notional_cooldown[cooldown_key] = (
+                    time.monotonic() + self._MAX_NOTIONAL_COOLDOWN_SEC
+                )
+                log.warning(
+                    "max_notional_cooldown registered %s %s for %.0fs (cap reached)",
+                    req.symbol, req.side.value, self._MAX_NOTIONAL_COOLDOWN_SEC,
+                )
+            raise
         return OrderAck(
             broker_order_id=str(resp.orderId),
             client_order_id=resp.clientOrderId,
@@ -333,6 +378,40 @@ class AsyncBinanceFuturesAdapter:
         if risks and risks[0].leverage == leverage:
             return
         await self._client.set_leverage(symbol, leverage)
+
+    async def ensure_leverage_minimum(
+        self,
+        symbol: str,
+        fallback_leverage: int = 1,
+    ) -> None:
+        """발주 직전 종목 leverage 가 *어떤 값으로든* 설정돼 있는지만 확인.
+
+        2026-06-03 PR #349 root cause: Binance Futures testnet 의 -1109
+        "Invalid account" 거부는 *해당 종목 leverage 가 한 번도 설정 안 된*
+        계정에서 발주할 때 발생. ``ensure_leverage`` 와 달리 사용자가 web 에서
+        설정한 값을 *override 하지 않음*:
+
+          - get_position_risk → leverage > 0 면 이미 설정됨 (사용자 web 값 보존)
+          - leverage == 0 / 미상 → ``fallback_leverage`` (default 1) 로 1회 set
+
+        사용자 의도: "Binance 웹에서 leverage 설정하면 그대로 작동". 본 함수는
+        그걸 깨지 않으면서 *첫 거래 가능한 상태* 만 보장. 사용자가 그 후 web
+        에서 자유 변경 가능.
+
+        성능: 어댑터 인스턴스 level 캐시 (``_leverage_minimum_done``) 로
+        동일 symbol 두 번째 호출부터 즉시 return — REST 폭주 차단. 캐시는
+        프로세스 단위 — 재시작 시 재확인.
+        """
+        if not hasattr(self, "_leverage_minimum_done"):
+            self._leverage_minimum_done: set[str] = set()
+        if symbol in self._leverage_minimum_done:
+            return
+        risks = await self._client.get_position_risk(symbol)
+        if risks and risks[0].leverage > 0:
+            self._leverage_minimum_done.add(symbol)
+            return
+        await self._client.set_leverage(symbol, fallback_leverage)
+        self._leverage_minimum_done.add(symbol)
 
     async def ensure_margin_type(self, symbol: str, mode: MarginType) -> None:
         risks = await self._client.get_position_risk(symbol)

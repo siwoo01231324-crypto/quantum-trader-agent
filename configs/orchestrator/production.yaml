@@ -138,14 +138,16 @@ strategies:
       rebal_freq: 5
       warmup_bars: 252
       weights_kind: crypto
-      # 사용자 요청 (2026-05-21): 잔고의 50% 배정.
+      # 2026-06-02 capital-allocation-v1: 0.5 → 0.4 (3 전략 동시 운영 safety
+      # margin 20% 확보). 3 전략 합산 80%: cs-tsmom 40% + kst-hours 20% +
+      # short-whitelist 20%. spec: docs/specs/capital-allocation-v1.md
       # 2026-05-27 v0.6.7: top_n 10→30 (universe 전체 양수 score 종목 다 매수)
-      # + min_picks 3 (양수 종목 < 3 이면 hold). "시드 50% 안에서 N종 자유롭게
-      # 비중 분배" 의도. 예: 양수 10종 → 각 5%; 5종 → 각 10%; 3종 → 각 16.7%;
-      # 1~2종 → hold (집중 회피 — ZEC 단독 50% 같은 사고 차단).
-      # ⚠️ 5y bench (top_n=10 기준) PF 1.32 / Sharpe 1.33 보장 깨질 수 있음.
-      # paper 1~2주 모니터링 후 top_n=30 기준 재검증.
-      capital_fraction: 0.5
+      # + min_picks 3 (양수 종목 < 3 이면 hold). "시드 40% 안에서 N종 자유롭게
+      # 비중 분배" 의도. 예: 양수 10종 → 각 4%; 5종 → 각 8%; 3종 → 각 13.3%;
+      # 1~2종 → hold (집중 회피 — ZEC 단독 40% 같은 사고 차단).
+      # ⚠️ 5y bench (top_n=10 / capital_fraction=0.5 기준) PF 1.32 / Sharpe
+      # 1.33 보장 깨질 수 있음 — paper 1~2주 모니터링 후 재검증.
+      capital_fraction: 0.4
       min_picks: 3
       params:
         top_n: 30
@@ -199,12 +201,57 @@ strategies:
   - id: live-airborne-bb-reversal-kst-hours
     class: backtest.strategies.live_airborne_bb_reversal_kst_hours.LiveAirborneBbReversalKstHours
     kwargs:
-      # cs-tsmom (capital_fraction 0.5 × top_n 10 = 종목당 5%) 와 동일 비중.
-      # 4000$ seed → 200$/trade. 더 큰 seed → 비례 스케일.
-      default_size: 0.05
-      stop_loss_pct: 0.03    # -3% price (5y bench 검증값)
-      take_profit_pct: 0.06  # +6% price (R/R 1:2)
+      # 2026-06-02 capital-allocation-v1: 0.05 → 0.04 (시드 20% 비중, 동시
+      # 5 보유 = 20%). spec: docs/specs/capital-allocation-v1.md
+      # 3 전략 합산 80%: cs-tsmom 40% + kst-hours 20% + short-whitelist 20%.
+      # 2026-06-04 — 0.04 → 0.16. 21종 동시 보유 시 1종 비중이 실계좌(1종 12%
+      # 마진) 와 동급이 되도록. 총 마진 ≈ 12% (21 × 0.16 / 20x lev). 백테스트
+      # 알파(PF/Sharpe) 는 size 무관 → 5y 게이트 영향 없음.
+      default_size: 0.16
+      # 2026-06-05: 사용자 결정 — TP/SL 을 +1.0% / -0.5% (R/R 1:2 유지) 로 변경.
+      # 사유: 15분봉 기준 dashboard `/airborne` 시뮬 (TP 1%, SL 0.5%, 4봉 hold)
+      # 결과가 실 거래 환경과 일치 — 라인 잡자마자 빠르게 익절 패턴 다수.
+      # 옛 +6%/-3% 룰 하에서는 +6% 까지 안 가서 다시 떨어져 -3% SL 까지
+      # 끌려가는 케이스 (예: 2026-06-04 SKYAIUSDT) 다수 보고.
+      # caveat: 5y bench (`reports/eval_live_airborne_kst_morning_5y.json`,
+      # KST 6-12 gate 기준)에서는 8개 룰 모두 PF<1 / exp<0 으로 게이트 통과 0.
+      # 0.5%/1.0% 룰의 5y bench PF=0.545 (8개 중 최악), 옛 3.0%/6.0% PF=0.906
+      # (8개 중 최선). 단 사용자 운영 (KST 8/11/16/22 hours gate) 의 실시간
+      # 1h hold 시뮬은 양수 net 보임 → 사용자가 현 시장에 1%/0.5% 적합하다고
+      # 운영 판단. 추세 회귀 가능성 인지하고 모니터링 필요.
+      stop_loss_pct: 0.005   # -0.5% price (R/R 1:2 유지)
+      take_profit_pct: 0.010 # +1.0% price (R/R 1:2 유지)
       # stop 청산 직후 같은 (sid, symbol) 재진입 15분 차단 — churn 방지.
+      cooldown_after_stop_sec: 900
+
+  # ── live-airborne-short-whitelist-v1 (2026-06-02, PR #341+#343 후속) ─────────
+  # SHORT-only airborne + 21종 동적 whitelist + KST 19시간 게이트.
+  # spec: docs/specs/strategies/live-airborne-short-whitelist-v1.md
+  # whitelist: config/airborne_short_whitelist.yaml (weekly refresh)
+  #
+  # Hard OOS 검증 (147종 per-symbol PF + train 2021-2023 / test 2024-2025):
+  #   test PF=1.214, sumR=+1,395%, 5.45 trades/day, win 44%
+  #   펀딩비 SHORT 수익 +1pp PF 추가
+  #
+  # kst-hours 와 *별도 엔트리* — 같은 universe 일부 overlap 하지만:
+  #   - kst-hours 는 4시간 게이트 + bidir, top-100 universe
+  #   - 본 전략은 19시간 게이트 + SHORT only, 21종 whitelist active 만
+  # 두 전략은 동시 발화해도 cooldown_after_stop_sec + max position
+  # cap 으로 자본 보호. 같은 (sid, symbol, side) 중복은 orchestrator
+  # min_order_interval_sec=300 가 backstop.
+  #
+  # 운영 시작: testnet 4주 paper trading. 통과 시 mainnet 별도 PR.
+  - id: live-airborne-short-whitelist-v1
+    class: backtest.strategies.live_airborne_short_whitelist_v1.LiveAirborneShortWhitelistV1
+    kwargs:
+      # 2026-06-02 capital-allocation-v1: 0.05 → 0.04 (시드 20% 비중, 동시 5).
+      # spec: docs/specs/capital-allocation-v1.md
+      # 2026-06-04 — 0.04 → 0.16 (kst-hours 와 동일, 실계좌 1종 비중 매칭).
+      default_size: 0.16         # kst-hours 와 동일 비중
+      stop_loss_pct: 0.03        # -3% (Hard OOS 검증값)
+      take_profit_pct: 0.06      # +6% (R/R 1:2)
+      retrace_ratio: 0.6         # Hard OOS 검증값 (부모 default 0.4)
+      atr_body_mult: 0.3         # Hard OOS 검증값 (부모 default 0.6)
       cooldown_after_stop_sec: 900
 
   # cs-bb-macd-kr 는 5y bench Sharpe -0.32 → status: inactive, production 미등록.

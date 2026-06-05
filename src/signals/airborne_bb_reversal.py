@@ -40,21 +40,29 @@ class AirborneSetup:
     base: float
     extreme: float
 
-    def trigger(self, side: Side, current_extreme: float | None = None) -> float:
+    def trigger(
+        self,
+        side: Side,
+        current_extreme: float | None = None,
+        retrace_ratio: float = RETRACE_RATIO,
+    ) -> float:
         """Return the trigger price using ``current_extreme`` if provided.
 
         Pass the current bar's low (for long) or high (for short) as
         ``current_extreme`` to fold the live bar into extreme tracking. If
         omitted, the dataclass's frozen ``extreme`` is used (post-breakout
         through the most recent CONFIRMED bar).
+
+        ``retrace_ratio`` defaults to module-level ``RETRACE_RATIO`` (0.4).
+        v1.2 callers can override to e.g. 0.6 for deeper-pullback strategies.
         """
         ext = self.extreme if current_extreme is None else (
             min(self.extreme, current_extreme) if side == "long"
             else max(self.extreme, current_extreme)
         )
         if side == "long":
-            return ext + RETRACE_RATIO * (self.base - ext)
-        return ext - RETRACE_RATIO * (ext - self.base)
+            return ext + retrace_ratio * (self.base - ext)
+        return ext - retrace_ratio * (ext - self.base)
 
 
 def find_active_long_setup(
@@ -204,6 +212,7 @@ def find_active_long_setup_v11(
     min_close_margin: float = DEFAULT_MIN_CLOSE_MARGIN_V11,
     atr_period: int = DEFAULT_ATR_PERIOD_V11,
     atr_body_mult: float = DEFAULT_ATR_BODY_MULT_V11,
+    retrace_ratio: float = RETRACE_RATIO,
 ) -> AirborneSetup | None:
     """Find the most recent unterminated v1.2 long setup.
 
@@ -215,12 +224,19 @@ def find_active_long_setup_v11(
     The body gate (v1.2) is ATR-relative — adapts to each symbol's own
     volatility, so low-vol symbols (TRX 등) are no longer entirely filtered.
 
+    ``retrace_ratio`` (default 0.4 = module-level ``RETRACE_RATIO``) controls
+    how deep the price must retrace from the post-breakout extreme back toward
+    base to fire. Higher values (e.g. 0.6) demand a deeper pullback before
+    entry — fewer but higher-confidence setups.
+
     Termination + return rules match ``find_active_long_setup``: scan backwards
     from N-2; setup terminates if any confirmed bar ``j`` (i < j <= N-2) has
     ``close[j] >= trigger(extreme_through_j, base)``; current bar (N-1) is
     excluded — caller evaluates firing against it via ``evaluate_long_fire_v11``.
     """
     _validate_v11_params(min_close_margin, atr_body_mult)
+    if not (0 < retrace_ratio <= 1):
+        raise ValueError(f"retrace_ratio in (0, 1] required, got {retrace_ratio}")
     n = len(history)
     if n < 3:
         return None
@@ -253,7 +269,7 @@ def find_active_long_setup_v11(
         terminated = False
         for j in range(i + 1, n - 1):
             extreme = min(extreme, float(low.iloc[j]))
-            trig_j = extreme + RETRACE_RATIO * (base - extreme)
+            trig_j = extreme + retrace_ratio * (base - extreme)
             if float(close.iloc[j]) >= trig_j:
                 terminated = True
                 break
@@ -272,6 +288,7 @@ def find_active_short_setup_v11(
     min_close_margin: float = DEFAULT_MIN_CLOSE_MARGIN_V11,
     atr_period: int = DEFAULT_ATR_PERIOD_V11,
     atr_body_mult: float = DEFAULT_ATR_BODY_MULT_V11,
+    retrace_ratio: float = RETRACE_RATIO,
 ) -> AirborneSetup | None:
     """Find the most recent unterminated v1.2 short setup (mirror of long).
 
@@ -281,9 +298,12 @@ def find_active_short_setup_v11(
         |close[i] - open[i]| >= atr_body_mult * ATR(atr_period)[i]
 
     Extreme is tracked via running max(high). Setup terminates if any confirmed
-    bar ``j`` has ``close[j] <= trigger`` (trigger = extreme - 0.4 * (extreme - base)).
+    bar ``j`` has ``close[j] <= trigger`` (trigger = extreme - retrace_ratio *
+    (extreme - base)). ``retrace_ratio`` default 0.4 = module ``RETRACE_RATIO``.
     """
     _validate_v11_params(min_close_margin, atr_body_mult)
+    if not (0 < retrace_ratio <= 1):
+        raise ValueError(f"retrace_ratio in (0, 1] required, got {retrace_ratio}")
     n = len(history)
     if n < 3:
         return None
@@ -316,7 +336,7 @@ def find_active_short_setup_v11(
         terminated = False
         for j in range(i + 1, n - 1):
             extreme = max(extreme, float(high.iloc[j]))
-            trig_j = extreme - RETRACE_RATIO * (extreme - base)
+            trig_j = extreme - retrace_ratio * (extreme - base)
             if float(close.iloc[j]) <= trig_j:
                 terminated = True
                 break
@@ -335,11 +355,15 @@ def evaluate_long_fire_v11(
     min_close_margin: float = DEFAULT_MIN_CLOSE_MARGIN_V11,
     atr_period: int = DEFAULT_ATR_PERIOD_V11,
     atr_body_mult: float = DEFAULT_ATR_BODY_MULT_V11,
+    retrace_ratio: float = RETRACE_RATIO,
 ) -> tuple[bool, AirborneSetup | None, float]:
     """Evaluate whether the current bar's confirmed close fires a v1.2 long signal.
 
     Returns ``(fires, setup, trigger_at_current)``. Trigger folds the current
     bar's low into the running extreme (same semantics as v1).
+
+    ``retrace_ratio`` (default 0.4 = module ``RETRACE_RATIO``) propagates to
+    both setup search and trigger computation — they must use the same value.
     """
     setup = find_active_long_setup_v11(
         history=history,
@@ -348,11 +372,13 @@ def evaluate_long_fire_v11(
         min_close_margin=min_close_margin,
         atr_period=atr_period,
         atr_body_mult=atr_body_mult,
+        retrace_ratio=retrace_ratio,
     )
     if setup is None:
         return False, None, float("nan")
     current_low = float(history["low"].iloc[-1])
-    trigger = setup.trigger("long", current_extreme=current_low)
+    trigger = setup.trigger("long", current_extreme=current_low,
+                            retrace_ratio=retrace_ratio)
     current_close = float(history["close"].iloc[-1])
     fires = current_close >= trigger
     return fires, setup, trigger
@@ -366,11 +392,12 @@ def evaluate_short_fire_v11(
     min_close_margin: float = DEFAULT_MIN_CLOSE_MARGIN_V11,
     atr_period: int = DEFAULT_ATR_PERIOD_V11,
     atr_body_mult: float = DEFAULT_ATR_BODY_MULT_V11,
+    retrace_ratio: float = RETRACE_RATIO,
 ) -> tuple[bool, AirborneSetup | None, float]:
     """Evaluate whether the current bar's confirmed close fires a v1.2 short signal.
 
     Mirror of ``evaluate_long_fire_v11``: folds current bar's high into extreme,
-    fires when ``close <= trigger``.
+    fires when ``close <= trigger``. ``retrace_ratio`` default = ``RETRACE_RATIO``.
     """
     setup = find_active_short_setup_v11(
         history=history,
@@ -379,11 +406,13 @@ def evaluate_short_fire_v11(
         min_close_margin=min_close_margin,
         atr_period=atr_period,
         atr_body_mult=atr_body_mult,
+        retrace_ratio=retrace_ratio,
     )
     if setup is None:
         return False, None, float("nan")
     current_high = float(history["high"].iloc[-1])
-    trigger = setup.trigger("short", current_extreme=current_high)
+    trigger = setup.trigger("short", current_extreme=current_high,
+                            retrace_ratio=retrace_ratio)
     current_close = float(history["close"].iloc[-1])
     fires = current_close <= trigger
     return fires, setup, trigger

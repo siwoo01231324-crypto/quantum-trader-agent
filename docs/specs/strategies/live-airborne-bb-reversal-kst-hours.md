@@ -20,13 +20,13 @@ mdd_bt: -0.796
 annual_return_bt: 0.463
 trades_bt: 3270
 backtest_period: 2021-05-20/2026-05-18
-last_updated: 2026-05-27
-stop_loss_pct: 0.03
-take_profit_pct: 0.06
+last_updated: 2026-06-05
+stop_loss_pct: 0.005
+take_profit_pct: 0.010
 trailing_stop_pct: null
-profit_factor_bt: 1.081
-expectancy_bt: 0.001631
-verdict_5y: "PASS: PF 1.081 > 1.0 AND expectancy +0.163%/trade > 0 on 5y · 24 USDT-perp · 1h · cost 10bp. 시간 단일 블록 (06-12 PF 0.906, rejected) 와 달리 5y hour-of-day 분포에서 PF >= 1.0 AND n >= 100 인 4개 시각 (8/11/16/22 KST) 만 골라 진입. PF 1.135 (11시) 최고, 다른 3시각 1.04~1.07 borderline. Sharpe 0.96. 5%×10x 시뮬 5y +569% (1000만→6,690만), MDD -80%."
+profit_factor_bt: 0.545
+expectancy_bt: -0.0022
+verdict_5y: "REJECTED (옛 verdict, 옛 룰 기준). 2026-06-05 — KST gate v2 + BTC trend filter 도입 후 5y bench 재실행 PENDING. v2 변경: (1) kst_entry_hours {8,11,16,22} → {7,8,16,20,22} — 30d sim_cache 데이터 기반 11시 PF 0.69 손실 제거, 07시 PF 4.66 + 20시 PF 2.32 추가. (2) BTC trend filter 활성 — BTC < EMA200(1h) OR 직전 24h < -1% 면 LONG entry 자체 차단 (short 그대로). 6/04 incident (bb-reversal 14 LONG 동시 -3% 청산) 같은 시장 동조 손실 가드. 옛 verdict (5y morning gate PF 0.545) 는 새 set 기준 아님."
 verdict_1y: null
 summary_ko: |
   Pine v1.2 (close-기반 + 0.1% margin + ATR-적응 body) 의 양방향 (long+short)
@@ -124,7 +124,7 @@ Bitcoin buy&hold 대비 비교는 cycle 의존성 큼.
 
 ## 청산
 
-- `stop_loss_pct = 0.03` / `take_profit_pct = 0.06` / `trailing = null`
+- `stop_loss_pct = 0.005` / `take_profit_pct = 0.010` / `trailing = null` (R/R 1:2 유지, 2026-06-05 사용자 결정 — 옛 0.03/0.06 → frontmatter verdict_5y 참조)
 - LivePositionRiskManager (live-scanner 공통) 가 24h 어느 시각이든 stop/TP
   도달 시 즉시 청산.
 - 시간 게이트는 **진입만** 막음 — 12 시 KST 에 stop 닿아도 그대로 청산.

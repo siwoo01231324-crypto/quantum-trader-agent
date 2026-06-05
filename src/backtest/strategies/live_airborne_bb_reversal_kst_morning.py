@@ -91,6 +91,13 @@ class LiveAirborneBbReversalKstMorning(LiveScannerMixin):
     stop_loss_pct: ClassVar[float] = 0.03
     take_profit_pct: ClassVar[float] = 0.06
 
+    # v1.2 부터 bidir (long + short). SELL 시그널이 short 진입일 수 있으므로
+    # orchestrator 가 OrderIntent.reduce_only 를 False 로 stamp 해야 한다 —
+    # 그렇지 않으면 Binance Futures 가 "reduceOnly with no position" -2022 로
+    # 거부 (2026-05-28 ~ 06-01 사이 airborne sell 시그널 13K+ silent REJECTED).
+    # long-only 전략은 본 attr 선언 안 함 → default False → 기존 동작 byte-identical.
+    shorts_allowed: ClassVar[bool] = True
+
     kst_entry_hours: ClassVar[frozenset[int]] = _KST_MORNING_HOURS
 
     def __init__(
@@ -148,14 +155,32 @@ class LiveAirborneBbReversalKstMorning(LiveScannerMixin):
         history: pd.DataFrame | None = snap.get("history")
         if history is None or len(history) < self.MIN_HISTORY:
             return Signal(action="hold", size=0.0, reason="warmup")
+        symbol = snap.get("symbol", "?")
+
+        # 봉 마감 캐시 — 같은 (symbol, last_bar_ts) 면 이전 결과 그대로.
+        # 1h 봉 strategy 인데 orchestrator 가 매 1m tick 마다 on_bar 호출 →
+        # 102종 × BB/ATR pandas 계산 폭주 → CPU 100% → dispatch loop 진입조차
+        # 못 함 (2026-06-03 root cause). instance 단위 캐시 — 테스트 간 격리.
+        if not hasattr(self, "_last_eval_bar_ts"):
+            self._last_eval_bar_ts: dict[str, "pd.Timestamp"] = {}
+            self._last_eval_signal: dict[str, "Signal | None"] = {}
+        last_bar_ts = history.index[-1]
+        cached_ts = self._last_eval_bar_ts.get(symbol)
+        if cached_ts is not None and cached_ts == last_bar_ts:
+            return self._last_eval_signal.get(symbol)
+
+        def _cache_return(sig: "Signal | None") -> "Signal | None":
+            self._last_eval_bar_ts[symbol] = last_bar_ts
+            self._last_eval_signal[symbol] = sig
+            return sig
 
         # ── KST 시간 게이트 (entry only — 청산은 시간 무관) ─────────────
         hour_kst = _bar_hour_kst(history)
         if hour_kst is not None and hour_kst not in self.kst_entry_hours:
-            return Signal(
+            return _cache_return(Signal(
                 action="hold", size=0.0,
                 reason=f"time_filter:kst_hour={hour_kst}_not_in_morning",
-            )
+            ))
 
         # ── v1.2 bidir signal evaluation ────────────────────────────────
         close = history["close"]
@@ -166,7 +191,7 @@ class LiveAirborneBbReversalKstMorning(LiveScannerMixin):
         upper = bb["upper"]
         if (pd.isna(lower.iloc[-1]) or pd.isna(lower.iloc[-2])
                 or pd.isna(upper.iloc[-1]) or pd.isna(upper.iloc[-2])):
-            return Signal(action="hold", size=0.0, reason="bb_warmup")
+            return _cache_return(Signal(action="hold", size=0.0, reason="bb_warmup"))
 
         long_fires, long_setup, long_trig = evaluate_long_fire_v11(
             history=history,
@@ -187,12 +212,17 @@ class LiveAirborneBbReversalKstMorning(LiveScannerMixin):
 
         c_now = float(close.iloc[-1])
 
+        # 2026-06-04 RIFUSDT 폭주 fix — fire 직후 cache 를 hold 로 덮어써서
+        # 같은 봉 안에서의 중복 재발화 차단. fire signal 은 caller 로 반환만 하고
+        # cache 에는 hold 를 저장 → 다음 WS tick (같은 봉) 은 hold 반환.
+        # 진입은 봉당 1회. (cache_return helper 는 fire/hold 양쪽 다 캐싱이라
+        # 여기서는 명시적으로 분리.)
         if long_fires:
             bars_since = (
                 len(history) - 1 - long_setup.breakout_index
                 if long_setup is not None else -1
             )
-            return Signal(
+            fire = Signal(
                 action="buy",
                 size=self.default_size,
                 reason=(
@@ -202,12 +232,18 @@ class LiveAirborneBbReversalKstMorning(LiveScannerMixin):
                     f"ratio={RETRACE_RATIO},kst={hour_kst}"
                 ),
             )
+            self._last_eval_bar_ts[symbol] = last_bar_ts
+            self._last_eval_signal[symbol] = Signal(
+                action="hold", size=0.0,
+                reason="airborne_v12_fired_this_bar",
+            )
+            return fire
         if short_fires:
             bars_since = (
                 len(history) - 1 - short_setup.breakout_index
                 if short_setup is not None else -1
             )
-            return Signal(
+            fire = Signal(
                 action="sell",
                 size=self.default_size,
                 reason=(
@@ -217,16 +253,22 @@ class LiveAirborneBbReversalKstMorning(LiveScannerMixin):
                     f"ratio={RETRACE_RATIO},kst={hour_kst}"
                 ),
             )
+            self._last_eval_bar_ts[symbol] = last_bar_ts
+            self._last_eval_signal[symbol] = Signal(
+                action="hold", size=0.0,
+                reason="airborne_v12_fired_this_bar",
+            )
+            return fire
 
         # 게이트 통과 + 시그널 없음 — 어떤 setup 이 활성인지 reason 에 표시
         if long_setup is not None:
-            return Signal(
+            return _cache_return(Signal(
                 action="hold", size=0.0,
                 reason=f"airborne_v12_long_pending:trig={long_trig:.4f},c={c_now:.4f}",
-            )
+            ))
         if short_setup is not None:
-            return Signal(
+            return _cache_return(Signal(
                 action="hold", size=0.0,
                 reason=f"airborne_v12_short_pending:trig={short_trig:.4f},c={c_now:.4f}",
-            )
-        return Signal(action="hold", size=0.0, reason="no_active_setup")
+            ))
+        return _cache_return(Signal(action="hold", size=0.0, reason="no_active_setup"))
