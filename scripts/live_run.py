@@ -1550,6 +1550,18 @@ async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
     # 안 set 해서 인자 있는 모드에서 dashboard 가 깜깜이던 회귀 fix.
     from src.dashboard.account_info import AccountInfoProvider as _AIP  # noqa: PLC0415
     dashboard_state.account_info_provider = _AIP()
+    # 2026-06-05 — dashboard 의 거래 시작/정지 버튼 컨트롤러. _run_pipeline 은
+    # 이미 trading loop 가 가동 중이므로 controller.start 는 재진입 noop 처럼
+    # 동작하면 OK. 미설정 시 dashboard 가 ``컨트롤러 미주입 (cmd 모드)`` +
+    # ``controller unavailable`` 503 반환 (사용자 보고 결함).
+    from src.dashboard.run_controller import RunController as _RC  # noqa: PLC0415
+    dashboard_state.run_controller = _RC(
+        _build_pipeline_factory(
+            dashboard_state, logger,
+            position_store=position_store, pnl_aggregator=pnl_aggregator,
+            ops_counters=ops_counters,
+        )
+    )
     # #238 follow-up Issue 2 — trade history / 전략별 포지션은 영구·누적이어야
     # 한다. config.wal_path = {log_dir}/{run_id}/wal.jsonl 이므로 log_dir 은
     # 항상 parent.parent. 이 한 줄이 없으면 _resolve_log_dir 이 None →
