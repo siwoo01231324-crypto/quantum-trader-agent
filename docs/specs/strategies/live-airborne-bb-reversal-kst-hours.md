@@ -26,7 +26,7 @@ take_profit_pct: 0.010
 trailing_stop_pct: null
 profit_factor_bt: 0.545
 expectancy_bt: -0.0022
-verdict_5y: "REJECTED (룰 변경 후): PF 0.545 / exp -0.22%/trade on 5y · 24 USDT-perp · 1h · cost 10bp (KST 6-12 morning gate 기준, 8개 룰 sweep 중 최악). 옛 +6%/-3% 룰의 PF 1.081 PASS 는 무효 — 2026-06-05 사용자 결정으로 stop_loss_pct/take_profit_pct 를 0.005/0.010 으로 변경. 사유: 15분봉 dashboard `/airborne` 시뮬 (TP +1%/SL -0.5%/4봉 hold) 결과가 실 거래와 일치, +6% 까지 안 가서 -3% 까지 끌려간 패턴 (2026-06-04 SKYAIUSDT 등) 다수. dashboard 30d net +22.6%, 7d net -4.0% — 5y 추세 (PF<1) 와 단기 결과의 모순 존재. 사용자 운영 판단으로 1%/0.5% 채택, 추세 회귀 가능성 인지 + 모니터링."
+verdict_5y: "REJECTED (옛 verdict, 옛 룰 기준). 2026-06-05 — KST gate v2 + BTC trend filter 도입 후 5y bench 재실행 PENDING. v2 변경: (1) kst_entry_hours {8,11,16,22} → {7,8,16,20,22} — 30d sim_cache 데이터 기반 11시 PF 0.69 손실 제거, 07시 PF 4.66 + 20시 PF 2.32 추가. (2) BTC trend filter 활성 — BTC < EMA200(1h) OR 직전 24h < -1% 면 LONG entry 자체 차단 (short 그대로). 6/04 incident (bb-reversal 14 LONG 동시 -3% 청산) 같은 시장 동조 손실 가드. 옛 verdict (5y morning gate PF 0.545) 는 새 set 기준 아님."
 verdict_1y: null
 summary_ko: |
   Pine v1.2 (close-기반 + 0.1% margin + ATR-적응 body) 의 양방향 (long+short)

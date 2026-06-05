@@ -15,6 +15,35 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.34"
+    date: "2026-06-05"
+    title: "airborne kst-hours v2 — KST gate 재설계 ({7,8,16,20,22}) + BTC trend filter (시장 동조 손실 차단)"
+    tags: [feature, safety]
+    summary: >
+      30d sim_cache 데이터 분석 + 6/04 journal incident 분석 기반 2건 fix.
+      (1) KST entry hours {8,11,16,22} → {7,8,16,20,22} — 11시 PF 0.69 손실시각
+      제거 + 07시 PF 4.66 (n=105) / 20시 PF 2.32 추가. (2) BTC trend filter —
+      BTC < EMA200(1h) OR 직전 24h < -1% 면 LONG entry 자체 차단 (short 그대로).
+      6/04 incident (bb-reversal 14 LONG 종목 새벽~오전 -3% 동시 청산) 같은
+      시장 동조 손실 차단.
+    items:
+      - "src/portfolio/_async_orchestrator.py — per_symbol_snap 에 ``universe_ohlcv`` 키 추가. strategy 가 cross-symbol info (BTC ohlcv 등) lookup 가능. 다른 strategy 는 ignore — backward-compatible."
+      - "src/backtest/strategies/live_airborne_bb_reversal_kst_hours.py — kst_entry_hours ClassVar 갱신 ({7,8,16,20,22}). _btc_is_downtrend helper 신규 (EMA200 cross OR 24h drawdown). on_bar override — super().on_bar buy intent 면 BTC trend check → downtrend 시 hold 변환. ``btc_trend_filter_enabled`` kwarg (default True) — False 시 옛 동작 byte-identical."
+      - "docs/specs/strategies/live-airborne-bb-reversal-kst-hours.md — verdict_5y 갱신, v2 변경 명시. 옛 5y bench (PF 0.545) 는 옛 set 기준이라 무효."
+      - "tests/backtest/test_airborne_kst_hours_btc_trend.py 신규 12건 — KST gate v2 / BTC EMA cross / 24h drawdown / uptrend pass / downtrend block / sell pass / filter disabled byte-identical / universe_ohlcv 없을 때 graceful."
+      - "tests/backtest/test_live_airborne_bb_reversal_kst_hours.py 기존 갱신 — 옛 {8,11,16,22} assertion → 새 {7,8,16,20,22}. 11시 통과 → 차단, 7시 차단 → 통과. parametrize set 다 갱신."
+      - "총 35 tests pass (신규 12 + 갱신 23). 기존 다른 airborne 테스트 영향 0."
+      - "운영 영향: live_run.py 재시작 즉시 적용. 다음 봉 마감부터 (1) 11시 진입 차단 / 7,20시 진입 활성 (2) BTC 하락추세 시 LONG entry 자체 차단. 6/04 같은 동조 손실 자동 차단."
+      - "후속 (별개 PR): 5y bench 재실행 — 새 set + filter 적용한 결과로 spec verdict 갱신. statsmodels Python 3.14 wheel 미지원 환경 회피."
+    refs:
+      - "src/portfolio/_async_orchestrator.py"
+      - "src/backtest/strategies/live_airborne_bb_reversal_kst_hours.py"
+      - "docs/specs/strategies/live-airborne-bb-reversal-kst-hours.md"
+      - "tests/backtest/test_airborne_kst_hours_btc_trend.py"
+      - "tests/backtest/test_live_airborne_bb_reversal_kst_hours.py"
+      - "docs/journal/2026-06-04.md — 14 LONG 동시 -3% 청산 incident"
+      - "logs/airborne_fires/sim_cache.jsonl — 30d KST hour PF 분석 source"
+
   - version: "v0.6.32"
     date: "2026-06-05"
     title: "Bitget go-live 마무리 — whitelist 정리 + get_net_positions + dashboard + docker-compose"
