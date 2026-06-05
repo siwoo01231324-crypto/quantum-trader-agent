@@ -1,9 +1,9 @@
-"""Regression — KST gate v2 (07/20 추가, 11 제거) + BTC trend filter.
+"""Regression — KST gate v3 ({1,2,3,6,7,8,23}) + BTC trend filter.
 
-2026-06-05 사용자 결정 (30d sim_cache 데이터 + journal 6/04 incident 분석).
+2026-06-06 v3 갱신 (13일 1m 실측 기반 새벽~아침+23시 시각).
 
 가드:
-  1. KST gate = {7, 8, 16, 20, 22} (옛 {8, 11, 16, 22} 에서 11 제거, 7/20 추가)
+  1. KST gate = {1, 2, 3, 6, 7, 8, 23} (v3, 13일 1m 기반)
   2. BTC EMA200 아래 close → LONG entry 차단 (short 그대로)
   3. BTC 24h drawdown < -1% → LONG entry 차단 (short 그대로)
   4. BTC uptrend → 진입 정상 통과
@@ -27,25 +27,25 @@ from backtest.strategies.live_airborne_bb_reversal_kst_hours import (
 )
 
 
-# ── KST gate v2 ─────────────────────────────────────────────────────────────
+# ── KST gate v3 ─────────────────────────────────────────────────────────────
 
 def test_kst_gate_v2_is_5_hours():
-    """{7, 8, 16, 20, 22} — 11 제거, 7/20 추가."""
+    """{1, 2, 3, 6, 7, 8, 23} — v3 새벽~아침+23시 7시각 (13일 1m 실측 기반)."""
     assert LiveAirborneBbReversalKstHours.kst_entry_hours == frozenset(
-        {7, 8, 16, 20, 22}
+        {1, 2, 3, 6, 7, 8, 23}
     )
 
 
 def test_kst_gate_v2_excludes_11():
-    """KST 11시는 30d PF 0.69 손실시각 → 게이트 제외."""
+    """KST 11시는 v3 게이트 밖 → 차단."""
     assert 11 not in LiveAirborneBbReversalKstHours.kst_entry_hours
 
 
 def test_kst_gate_v2_includes_7_and_20():
-    """KST 7시 (PF 4.66 압도) + 20시 (PF 2.32) 신규 추가."""
+    """KST 7시 + 8시 v3 포함 확인 (20시는 v3 에서 제외됨)."""
     hours = LiveAirborneBbReversalKstHours.kst_entry_hours
     assert 7 in hours
-    assert 20 in hours
+    assert 8 in hours
 
 
 # ── _btc_is_downtrend helper ────────────────────────────────────────────────

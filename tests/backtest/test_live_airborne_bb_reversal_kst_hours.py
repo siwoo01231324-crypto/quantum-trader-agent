@@ -1,11 +1,11 @@
-"""Unit tests for LiveAirborneBbReversalKstHours (KST 8/11/16/22 hours gate).
+"""Unit tests for LiveAirborneBbReversalKstHours (KST {1,2,3,6,7,8,23} hours gate, v3).
 
 대부분의 v1.2 bidir 동작은 [[test_live_airborne_bb_reversal_kst_morning]] 가
 이미 박제. 본 모듈은 *시각 게이트 차이* 만 검증:
-  - kst_entry_hours = {8, 11, 16, 22}
-  - {8, 11, 16, 22} 만 진입 통과, 다른 시각 차단
-  - 7시 (KST_MORNING 에서는 통과) → 차단 확인 (set 이 다름)
-  - 22시 (KST_MORNING 에서는 차단) → 통과 확인
+  - kst_entry_hours = {1, 2, 3, 6, 7, 8, 23} (v3, 13일 1m 기반)
+  - {1,2,3,6,7,8,23} 만 진입 통과, 다른 시각 차단
+  - 22시 (v2 에서는 통과) → v3 에서 차단 확인 (set 이 다름)
+  - 1시 (KST_MORNING 에서는 차단) → v3 에서 통과 확인
   - 부모 클래스 ClassVar 미오염 (instance shadow 작동)
 """
 from __future__ import annotations
@@ -69,16 +69,16 @@ class TestInheritance:
         assert s.is_live_scanner is True
 
     def test_kst_entry_hours_is_top5(self):
-        """v2 set (2026-06-05) — 30d 데이터 기반 {7, 8, 16, 20, 22}."""
+        """v3 set (2026-06-06) — 13일 1m 실측 기반 새벽~아침+23시 {1,2,3,6,7,8,23}."""
         s = LiveAirborneBbReversalKstHours()
-        assert s.kst_entry_hours == frozenset({7, 8, 16, 20, 22})
+        assert s.kst_entry_hours == frozenset({1, 2, 3, 6, 7, 8, 23})
 
     def test_parent_classvar_not_polluted(self):
         """Subclass override 가 parent ClassVar 를 변경하면 안 됨."""
         # Parent 의 default (morning block) 보존
         assert LiveAirborneBbReversalKstMorning.kst_entry_hours == frozenset({6, 7, 8, 9, 10, 11})
-        # Subclass 만 새 set (v2 — 11 제거, 7/20 추가)
-        assert LiveAirborneBbReversalKstHours.kst_entry_hours == frozenset({7, 8, 16, 20, 22})
+        # Subclass 만 새 set (v3 — 새벽~아침+23시 {1,2,3,6,7,8,23})
+        assert LiveAirborneBbReversalKstHours.kst_entry_hours == frozenset({1, 2, 3, 6, 7, 8, 23})
 
     def test_stop_tp_inherited(self):
         s = LiveAirborneBbReversalKstHours()
@@ -87,14 +87,16 @@ class TestInheritance:
 
 
 class TestTimeGate:
-    """v2 set (2026-06-05) — {7, 8, 16, 20, 22}만 통과. 11 제거 + 7/20 추가."""
+    """v3 set (2026-06-06) — {1,2,3,6,7,8,23}만 통과. 13일 1m 실측 기반."""
 
     @pytest.mark.parametrize("utc_hour, kst_hour", [
-        (22, 7),    # UTC 22 = KST 7 → PASS (신규 추가, 30d PF 4.66)
-        (23, 8),    # UTC 23 = KST 8 → PASS
-        (7,  16),   # UTC 07 = KST 16 → PASS
-        (11, 20),   # UTC 11 = KST 20 → PASS (신규 추가, 30d PF 2.32)
-        (13, 22),   # UTC 13 = KST 22 → PASS
+        (16, 1),    # UTC 16 = KST 1 → PASS (v3 새벽)
+        (17, 2),    # UTC 17 = KST 2 → PASS (v3 새벽)
+        (18, 3),    # UTC 18 = KST 3 → PASS (v3 새벽)
+        (21, 6),    # UTC 21 = KST 6 → PASS (v3 아침)
+        (22, 7),    # UTC 22 = KST 7 → PASS (v3 아침)
+        (23, 8),    # UTC 23 = KST 8 → PASS (v3 아침)
+        (14, 23),   # UTC 14 = KST 23 → PASS (v3 신규, 23시 숏 PF 2.09)
     ])
     def test_passes_top_hours(self, utc_hour, kst_hour):
         s = LiveAirborneBbReversalKstHours()
@@ -105,12 +107,10 @@ class TestTimeGate:
         )
 
     @pytest.mark.parametrize("utc_hour, kst_hour", [
-        (21, 6),    # KST 6 — morning 에선 통과, hours v2 에선 차단
-        (2,  11),   # KST 11 — v1 에선 통과했으나 v2 에서 제거 (30d PF 0.69 손실)
-        (0,  9),    # KST 9 — morning 통과, hours 차단
-        (1,  10),   # KST 10 — morning 통과, hours 차단
-        (3,  12),   # KST 12 — 둘 다 차단
-        (5,  14),   # KST 14 — 둘 다 차단
+        (7,  16),   # KST 16 — v2 에선 통과, v3 에서 차단
+        (11, 20),   # KST 20 — v2 에선 통과, v3 에서 차단
+        (13, 22),   # KST 22 — v2 에선 통과, v3 에서 차단
+        (2,  11),   # KST 11 — 둘 다 차단
         (15, 0),    # KST 0 — 둘 다 차단
     ])
     def test_blocks_other_hours(self, utc_hour, kst_hour):
@@ -125,7 +125,7 @@ class TestTimeGate:
 
 
 class TestDifferenceFromMorning:
-    """v2 set 의 morning 과의 차이 — KST 7 양쪽 통과 + KST 11 hours 만 차단."""
+    """v3 set 의 morning 과의 차이 — KST 7/8 양쪽 통과 + KST 22 hours 만 차단."""
 
     def test_kst7_morning_passes(self):
         s = LiveAirborneBbReversalKstMorning()
@@ -133,8 +133,8 @@ class TestDifferenceFromMorning:
         signal = _run(s, _ctx(history))
         assert signal.action == "buy"
 
-    def test_kst7_hours_passes_v2(self):
-        """v2 (2026-06-05) — KST 7 추가됨 (30d PF 4.66). 옛 v1 에선 차단이었음."""
+    def test_kst7_hours_passes_v3(self):
+        """v3 (2026-06-06) — KST 7 포함. UTC 22 = KST 7."""
         s = LiveAirborneBbReversalKstHours()
         history = _long_fire_frame_at_utc("2026-01-02T22:00:00")  # KST 7
         signal = _run(s, _ctx(history))
@@ -146,8 +146,8 @@ class TestDifferenceFromMorning:
         signal = _run(s, _ctx(history))
         assert signal.action == "buy"
 
-    def test_kst11_hours_blocks_v2(self):
-        """v2 (2026-06-05) — KST 11 제거됨 (30d PF 0.69 손실). v1 에선 통과했음."""
+    def test_kst11_hours_blocks_v3(self):
+        """v3 (2026-06-06) — KST 11 제외 (v2 에서도 제외였음)."""
         s = LiveAirborneBbReversalKstHours()
         history = _long_fire_frame_at_utc("2026-01-02T02:00:00")  # KST 11
         signal = _run(s, _ctx(history))
@@ -160,11 +160,13 @@ class TestDifferenceFromMorning:
         signal = _run(s, _ctx(history))
         assert signal.action == "hold"
 
-    def test_kst22_hours_passes(self):
+    def test_kst22_hours_blocks_v3(self):
+        """v3 (2026-06-06) — KST 22 제외. v2 에선 통과였으나 v3 에서 차단."""
         s = LiveAirborneBbReversalKstHours()
         history = _long_fire_frame_at_utc("2026-01-02T13:00:00")  # KST 22
         signal = _run(s, _ctx(history))
-        assert signal.action == "buy"
+        assert signal.action == "hold"
+        assert "time_filter:kst_hour=22" in signal.reason
 
 
 class TestCtorOverride:

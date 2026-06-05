@@ -8,7 +8,7 @@ PR #336/#337 의 회귀 두 건 (args._orchestrator NameError, _klines_to_datafr
   ① fetch_universe_klines 가 1h 봉의 distinct index 보존 (v0.6.16 fix)
   ② LiveScannerMixin per-symbol dispatch (orchestrator.run_bar)
   ③ get_universe() 필터 (#337 Phase 3) 통과
-  ④ LiveAirborneBbReversalKstHours 의 KST {7,8,16,20,22}시 gate (v2)
+  ④ LiveAirborneBbReversalKstHours 의 KST {1,2,3,6,7,8,23}시 gate (v3)
   ⑤ BB-reversal long signal emit → OrderIntent 생성
 
 KST gate 시각이 아니면 hold, 맞으면 BUY 가 나오는 두 방향 검증.
@@ -115,9 +115,9 @@ def _new_orchestrator() -> AsyncStrategyOrchestrator:
 # Step ④/⑤ — KST gate ON 시각엔 BUY emit, OFF 시각엔 hold
 # ──────────────────────────────────────────────────────────────────────────
 
-# KST 16:00 = UTC 07:00 → gate v2 ∈ {7,8,16,20,22} 에 포함
-_GATE_ON_LAST_UTC = "2026-05-30T07:00:00"
-# KST 13:00 = UTC 04:00 → gate v2 미포함
+# KST 8:00 = UTC 23:00 → gate v3 ∈ {1,2,3,6,7,8,23} 에 포함
+_GATE_ON_LAST_UTC = "2026-05-30T23:00:00"
+# KST 13:00 = UTC 04:00 → gate v3 미포함
 _GATE_OFF_LAST_UTC = "2026-05-30T04:00:00"
 
 # airborne 의 universe 안에 들어있는 symbol — top-30 의 BTCUSDT 는 항상 포함.
@@ -125,8 +125,8 @@ _SYMBOL = "BTCUSDT"
 
 
 @pytest.mark.asyncio
-async def test_e2e_gate_on_kst16_emits_buy():
-    """KST 16시 (gate v2 ON) + BB long fire pattern → BUY 시그널 + OrderIntent."""
+async def test_e2e_gate_on_kst8_emits_buy():
+    """KST 8시 (gate v3 ON) + BB long fire pattern → BUY 시그널 + OrderIntent."""
     strat = LiveAirborneBbReversalKstHours()
     orch = _new_orchestrator()
     orch.register_strategy("live-airborne-bb-reversal-kst-hours", strat)
@@ -137,7 +137,7 @@ async def test_e2e_gate_on_kst16_emits_buy():
 
     # 1) intents 가 비어있지 않아야 (path 가 broker intent 까지 갔다는 증거)
     assert intents, (
-        "KST 16시 BB long fire 인데 OrderIntent 0건. wiring 의 한 노드가 깨짐.\n"
+        "KST 8시 BB long fire 인데 OrderIntent 0건. wiring 의 한 노드가 깨짐.\n"
         "  - strategy 가 hold 반환 (시그널 path 깨짐)\n"
         "  - 또는 orchestrator dispatch 가 universe 필터에서 BTCUSDT 빠짐\n"
         "  - 또는 risk gate (orchestrator 의 quarantine 등) 가 차단\n"

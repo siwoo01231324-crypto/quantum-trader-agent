@@ -327,9 +327,9 @@ def test_kst_hour_from_open_time_returns_korean_time():
 
 
 def test_strategy_notice_long_fires_kst_hours_only_at_gate():
-    # KST 11시 LONG — kst-hours 진입 예정, short-whitelist 는 LONG 미지원
+    # KST 7시 LONG — v3 게이트 내 진입 예정, short-whitelist 는 LONG 미지원
     notice = daemon._format_strategy_notice(
-        side="long", kst_hour=11, symbol="BTCUSDT",
+        side="long", kst_hour=7, symbol="BTCUSDT",
     )
     assert "kst-hours" in notice
     assert "✅ 진입 예정" in notice
@@ -337,11 +337,12 @@ def test_strategy_notice_long_fires_kst_hours_only_at_gate():
 
 
 def test_strategy_notice_long_blocked_outside_gate():
+    # KST 16시 — v3 게이트 밖 (v2 에선 통과, v3 에선 차단)
     notice = daemon._format_strategy_notice(
-        side="long", kst_hour=6, symbol="BTCUSDT",
+        side="long", kst_hour=16, symbol="BTCUSDT",
     )
     assert "❌" in notice
-    assert "8/11/16/22" in notice
+    assert "1/2/3/6/7/8/23" in notice
 
 
 def test_strategy_notice_short_at_kst_8_only_kst_hours_eligible():
