@@ -15,6 +15,31 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.35"
+    date: "2026-06-05"
+    title: "airborne 텔레그램 알림 동기 — v0.6.34 의 KST gate v2 + BTC trend filter 반영"
+    tags: [fix, safety]
+    summary: >
+      사용자 지적 (2026-06-05) — "텔레그램에서 kst-hours 거래 예정 알림 와도
+      실제론 필터링돼서 안 살 수도 있잖아 통일시켜야 될 거 같은데?". v0.6.34
+      (PR #370) 가 strategy 의 KST gate {8,11,16,22} → {7,8,16,20,22} 변경 +
+      BTC trend filter 추가했지만 daemon 의 텔레그램 안내는 옛 set hardcode +
+      BTC 정보 0 상태였음. 알림이 거짓.
+    items:
+      - "scripts/airborne_alert_daemon.py — _KST_HOURS_KSTHOURS / _KST_HOURS_SHORT_WL 을 strategy 모듈에서 직접 import (truth source 단일). 다음에 또 바뀌어도 daemon 코드 수정 불필요."
+      - "_kst_hours_label() 헬퍼 신규 — 안내 문자열 자동 생성. set 변경 시 '8/11/16/22' 같은 옛값 hardcode 0."
+      - "_BTC_DOWNTREND_STATE 모듈 캐시 + _update_btc_trend_state() — BTCUSDT 1h 봉 마감 시 strategy 의 _btc_is_downtrend 그대로 호출. 결과를 다음 fire 알림에 반영."
+      - "WS / polling 두 main loop 모두 BTC 마감 시 _update_btc_trend_state(BTCUSDT history_1h) 호출."
+      - "_format_strategy_notice — KST gate PASS 면 BTC trend 추가 체크. LONG + BTC 하락추세 → '❌ BTC 하락추세 LONG 차단 (reason)'. SHORT 은 그대로 통과 (strategy 와 일관)."
+      - "tests/scripts/test_airborne_daemon_sync_v2.py 신규 13건 — truth source 통일 / KST 11 차단 / KST 7,20 통과 / label 자동 생성 / BTC trend state 갱신 / 하락추세 LONG 차단 / 하락추세 SHORT 통과 / 상승추세 LONG 통과 / state None 시 graceful."
+      - "운영 영향: airborne_alert_daemon 재시작 즉시 적용. 다음 fire 부터 텔레그램 안내가 실제 strategy 진입 결정과 100% 일치. 사용자 혼란 (안내와 실거래 mismatch) 해소."
+    refs:
+      - "scripts/airborne_alert_daemon.py"
+      - "src/backtest/strategies/live_airborne_bb_reversal_kst_hours.py — _KST_TOP_HOURS_V2, _btc_is_downtrend (import 대상)"
+      - "src/backtest/strategies/live_airborne_short_whitelist_v1.py — _KST_HOURS_19 (import 대상)"
+      - "tests/scripts/test_airborne_daemon_sync_v2.py"
+      - "PR #370 v0.6.34 — KST gate v2 + BTC trend filter 의 알림 동기"
+
   - version: "v0.6.34"
     date: "2026-06-05"
     title: "airborne kst-hours v2 — KST gate 재설계 ({7,8,16,20,22}) + BTC trend filter (시장 동조 손실 차단)"
