@@ -266,6 +266,114 @@ async def test_producer_reconnects_on_disconnect(tmp_path, caplog):
 
 
 @pytest.mark.asyncio
+async def test_consumer_survives_tick_exception(tmp_path, caplog):
+    """한 틱 처리 중 예외가 나도 거래 루프가 죽지 않아야 한다 (resilience 회귀).
+
+    이전: consumer 의 per-tick 처리(run_bar 등)가 try 없이 돌아, 틱 하나에서
+    예외가 나면 consumer task 가 종료 → asyncio.wait(FIRST_COMPLETED) 가
+    전체 루프를 조용히 내려버림 (에러 로그조차 없이). 새 동작: 해당 틱만
+    건너뛰고 'consumer.tick_failed' 를 로깅한 뒤 다음 틱을 계속 처리한다.
+    """
+    ticks = [_make_tick(price=str(50000 + i)) for i in range(5)]
+    fake_feed = FakeFeed(ticks)
+
+    call_count = {"n": 0}
+
+    def wire(orch):
+        async def flaky_run_bar(ts, snapshot):
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                raise RuntimeError("boom on first tick")
+            return []
+
+        orch.run_bar = flaky_run_bar
+
+    cfg = ShadowConfig(
+        symbols=["BTCUSDT"],
+        wal_path=tmp_path / "wal.jsonl",
+        lock_path=tmp_path / ".live_loop.lock",
+        max_iterations=3,
+        on_orchestrator_ready=wire,
+    )
+
+    with caplog.at_level(logging.ERROR, logger="src.live.loop"):
+        await run_shadow_loop(cfg, feed=fake_feed)
+
+    # 첫 틱에서 raise 했지만 루프가 계속 돌아 max_iterations(=3 성공) 까지
+    # 도달 → run_bar 최소 4회 호출 (실패 1 + 성공 3).
+    assert call_count["n"] >= 4, (
+        f"loop died after first tick exception; run_bar calls={call_count['n']}"
+    )
+    assert any("tick_failed" in m for m in caplog.messages), (
+        f"expected consumer.tick_failed log, got: {caplog.messages}"
+    )
+
+
+class _CleanCloseFeed:
+    """매 connect() 마다 ticks 를 yield 하고 깨끗하게(예외 없이) 종료.
+
+    graceful WS close 시뮬레이션 — async-for 가 raise 없이 끝나는 상황.
+    """
+
+    def __init__(self, ticks):
+        self._ticks = list(ticks)
+        self.connect_calls = 0
+
+    async def connect(self):
+        self.connect_calls += 1
+
+    async def subscribe(self, symbols):
+        pass
+
+    async def aclose(self):
+        pass
+
+    def __aiter__(self):
+        return self._gen()
+
+    async def _gen(self):
+        for t in self._ticks:
+            yield t
+
+
+@pytest.mark.asyncio
+async def test_producer_reconnects_on_clean_feed_close(tmp_path):
+    """피드가 예외 없이 정상 종료(graceful close)해도 멈추지 말고 재접속해야 한다.
+
+    이전: producer 의 `async for` 가 raise 없이 끝나면 `break` 로 producer
+    task 가 종료 → FIRST_COMPLETED 가 max_iterations 도달 전에 전체 루프를
+    내려버림. 새 동작: clean close 도 disconnect 와 동일하게 재접속.
+
+    피드는 connect 당 2틱만 주므로, max_iterations=5 는 producer 가 최소
+    2회 이상 재접속해야만 도달 가능 → reconnect 안 하면 영영 5 못 채움.
+    """
+    feed = _CleanCloseFeed([_make_tick(price=str(50000 + i)) for i in range(2)])
+
+    cfg = ShadowConfig(
+        symbols=["BTCUSDT"],
+        wal_path=tmp_path / "wal.jsonl",
+        lock_path=tmp_path / ".live_loop.lock",
+        max_iterations=5,
+    )
+
+    import src.live.loop as loop_mod
+    original_backoff = loop_mod.backoff_delay
+    loop_mod.backoff_delay = lambda *a, **k: 0.0
+    try:
+        await feed.connect()
+        await feed.subscribe(cfg.symbols)
+        pre_calls = feed.connect_calls
+        await run_shadow_loop(cfg, feed=feed)
+    finally:
+        loop_mod.backoff_delay = original_backoff
+
+    assert feed.connect_calls > pre_calls, (
+        f"expected reconnect after clean close; connect_calls={feed.connect_calls} "
+        f"pre={pre_calls}"
+    )
+
+
+@pytest.mark.asyncio
 async def test_lock_busy_raises(tmp_path):
     """동일 lock_path 로 ProcessLock 점유 후 run_shadow_loop 호출 → ProcessLockBusy raise."""
     lock_path = tmp_path / ".live_loop.lock"
