@@ -4435,18 +4435,30 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
         return HTMLResponse(content=_render_airborne_page("2pct"))
 
     # ── 수동 거래 입력 (2026-05-21 — Claude Routines 일일 리포트 준비) ────
-    def _manual_trade_log_path() -> Path:
-        """수동 거래 JSONL 위치 — `_resolve_log_dir()` 하위 `manual_trade.jsonl`.
+    # 2026-06-05 — manual_trade 는 venue-무관 단일 경로 (``logs/manual_trade.jsonl``).
+    # 이전엔 _resolve_log_dir() 하위에 두어서 venue 전환 시 (Binance→Bitget)
+    # dashboard 가 다른 디렉토리만 보고 옛 데이터를 못 찾는 사고 발생 (사용자
+    # 보고: 오늘자 수동거래 다 사라졌네). 옛 데이터 (``logs/live/manual_trade.
+    # jsonl``) 는 READ union 으로 흡수.
+    _MANUAL_TRADE_LEGACY_PATHS: tuple[Path, ...] = (
+        Path("logs/live/manual_trade.jsonl"),
+        Path("logs/shadow-bitget/manual_trade.jsonl"),
+        Path("logs/shadow-binance/manual_trade.jsonl"),
+    )
 
-        자동 fill WAL 과는 별도 파일이지만 같은 디렉토리에 두어 cron 분석기 (Claude
-        Routines) 가 한 디렉토리만 보면 모든 거래 데이터를 합칠 수 있게.
-        """
-        log_dir = _resolve_log_dir()
-        if log_dir is None:
-            # fallback — 가장 자주 쓰는 logs/live 에 강제 생성
-            log_dir = Path("logs/live")
-            log_dir.mkdir(parents=True, exist_ok=True)
-        return Path(log_dir) / "manual_trade.jsonl"
+    def _manual_trade_log_path() -> Path:
+        """수동 거래 *WRITE* 경로 — venue 무관 단일 ``logs/manual_trade.jsonl``."""
+        path = Path("logs/manual_trade.jsonl")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        return path
+
+    def _manual_trade_read_paths() -> list[Path]:
+        """수동 거래 *READ* 경로 — 표준 + 모든 legacy union. 중복 ts 는 dedup."""
+        paths = [_manual_trade_log_path()]
+        for legacy in _MANUAL_TRADE_LEGACY_PATHS:
+            if legacy.exists() and legacy not in paths:
+                paths.append(legacy)
+        return paths
 
     @app.post("/api/manual_trade")
     async def api_manual_trade_post(body: dict[str, Any]) -> JSONResponse:
@@ -4567,26 +4579,32 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
     def _read_manual_trades_all() -> list[dict]:
         """log JSONL 전체를 list[{ts, ...payload}] 로 읽음. corruption tolerant.
 
-        시각 내림차순. 디스크 read 1회 — today/recent 양쪽이 재사용.
+        Read paths union (현재 + legacy). 시각 내림차순. (ts, symbol) 로 dedup
+        — venue 전환 직전 이중 기록된 row 안전.
         """
-        path = _manual_trade_log_path()
-        if not path.exists():
-            return []
         out: list[dict] = []
         import json as _json
-        try:
-            for line in path.read_text(encoding="utf-8").splitlines():
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    rec = _json.loads(line)
-                except _json.JSONDecodeError:
-                    continue
-                pl = rec.get("payload") or {}
-                out.append({"ts": rec.get("ts"), **pl})
-        except Exception:  # noqa: BLE001 — never 500
-            return []
+        seen: set[tuple[str, str]] = set()
+        for path in _manual_trade_read_paths():
+            if not path.exists():
+                continue
+            try:
+                for line in path.read_text(encoding="utf-8").splitlines():
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        rec = _json.loads(line)
+                    except _json.JSONDecodeError:
+                        continue
+                    pl = rec.get("payload") or {}
+                    dedup = (str(rec.get("ts")), str(pl.get("symbol", "")))
+                    if dedup in seen:
+                        continue
+                    seen.add(dedup)
+                    out.append({"ts": rec.get("ts"), **pl})
+            except Exception:  # noqa: BLE001 — never 500
+                continue
         out.sort(key=lambda r: str(r.get("ts") or ""), reverse=True)
         return out
 
@@ -4669,19 +4687,35 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
             raise
 
     def _read_manual_trades_raw() -> list[dict]:
-        """log JSONL raw record list (event_type / schema_version / payload 통째)."""
+        """log JSONL raw record list. union 으로 legacy 도 함께 읽어서 edit/delete
+        가 옛 데이터도 다룰 수 있게. (ts, symbol) dedup.
+
+        rewrite 시 standard path 로 통합 — legacy 파일은 그대로 두지만 다음
+        rewrite 가 standard path 에 모든 row 를 다시 쓰므로 source-of-truth 가
+        자동으로 일원화된다.
+        """
         import json as _json
-        path = _manual_trade_log_path()
-        if not path.exists():
-            return []
         out: list[dict] = []
-        for line in path.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line:
+        seen: set[tuple[str, str]] = set()
+        for path in _manual_trade_read_paths():
+            if not path.exists():
                 continue
             try:
-                out.append(_json.loads(line))
-            except _json.JSONDecodeError:
+                for line in path.read_text(encoding="utf-8").splitlines():
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        rec = _json.loads(line)
+                    except _json.JSONDecodeError:
+                        continue
+                    pl = rec.get("payload") or {}
+                    dedup = (str(rec.get("ts")), str(pl.get("symbol", "")))
+                    if dedup in seen:
+                        continue
+                    seen.add(dedup)
+                    out.append(rec)
+            except Exception:  # noqa: BLE001
                 continue
         return out
 
@@ -4840,21 +4874,12 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
 
         # ── 수동 거래 (manual_trade.jsonl) ──
         manual: list[dict] = []
-        mpath = _manual_trade_log_path()
-        if mpath.exists():
-            import json as _json
-            for line in mpath.read_text(encoding="utf-8").splitlines():
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    rec = _json.loads(line)
-                except _json.JSONDecodeError:
-                    continue
-                if not _ts_after_cutoff(rec.get("ts", "")):
-                    continue
-                pl = rec.get("payload") or {}
-                manual.append({"ts": rec.get("ts"), **pl})
+        # 2026-06-05 — venue 무관 union read 사용 (logs/manual_trade.jsonl +
+        # legacy logs/live/manual_trade.jsonl). 옛 데이터 분실 안 됨.
+        for r in _read_manual_trades_all():
+            if not _ts_after_cutoff(r.get("ts", "")):
+                continue
+            manual.append(r)
 
         # ── airborne FIRE 알림 (qta-airborne-daemon docker logs) ──
         # 매일 자정 routine 이 알림 적중 분석 (다음 15분봉 4개 TP/SL 시뮬레이션)
