@@ -89,17 +89,17 @@ BAR_MS_1H = 3_600_000
 # 안내 추가. production.yaml 의 두 airborne 전략과 정확히 일치하는 게이트.
 #
 # 2026-06-05 — strategy 모듈에서 직접 import. truth source 통일. 이전엔 daemon
-# 이 hardcoded set 이라 strategy 가 v2 ({7,8,16,20,22}) 로 바뀌면 텔레그램
-# 안내가 거짓. 사용자 지적: "원래는 텔레그램에서 kst hours 거래 예정 알림
-# 와도 실제론 필터링돼서 안 살 수도 있잖아". 다음에 또 바뀌어도 daemon 코드
-# 안 만져도 자동 동기.
+# 이 hardcoded set 이라 strategy 가 바뀌면 텔레그램 안내가 거짓. 사용자 지적:
+# "원래는 텔레그램에서 kst hours 거래 예정 알림 와도 실제론 필터링돼서 안 살 수도
+# 있잖아". 다음에 또 바뀌어도 daemon 코드 안 만져도 자동 동기.
+# 2026-06-06 — v3 {1,2,3,6,7,8,23} 로 갱신. _KST_TOP_HOURS_V3 import.
 try:
     from backtest.strategies.live_airborne_bb_reversal_kst_hours import (
-        _KST_TOP_HOURS_V2 as _KST_HOURS_KSTHOURS,
+        _KST_TOP_HOURS_V3 as _KST_HOURS_KSTHOURS,
     )
 except ImportError:
-    # daemon-only 환경 (전략 코드 미배포) 안전 fallback. v2 set 그대로.
-    _KST_HOURS_KSTHOURS: frozenset[int] = frozenset({7, 8, 16, 20, 22})
+    # daemon-only 환경 (전략 코드 미배포) 안전 fallback. v3 set.
+    _KST_HOURS_KSTHOURS: frozenset[int] = frozenset({1, 2, 3, 6, 7, 8, 23})
 
 try:
     from backtest.strategies.live_airborne_short_whitelist_v1 import (

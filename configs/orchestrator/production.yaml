@@ -195,7 +195,7 @@ strategies:
   # 의존 X). docker-compose / scripts/airborne_alert_daemon.py 영향 없음.
   #
   # capital_fraction 은 CrossSectional wrapper 전용 — live-scanner 는
-  # default_size × leverage 로 제어. 24 종목 × 4 시각 fire 분산 + 평균 보유
+  # default_size × leverage 로 제어. 24 종목 × 7시간 게이트 v3 {1,2,3,6,7,8,23} fire 분산 + 평균 보유
   # 1~2h 라 일반 동시 보유 3~5 포지션 (= 15~25% equity 노출). 모든 종목 같은
   # 시각 동시 fire 는 5y 내 0 회 관찰 → 50% 한도 자연 충족.
   - id: live-airborne-bb-reversal-kst-hours
@@ -216,7 +216,8 @@ strategies:
       # caveat: 5y bench (`reports/eval_live_airborne_kst_morning_5y.json`,
       # KST 6-12 gate 기준)에서는 8개 룰 모두 PF<1 / exp<0 으로 게이트 통과 0.
       # 0.5%/1.0% 룰의 5y bench PF=0.545 (8개 중 최악), 옛 3.0%/6.0% PF=0.906
-      # (8개 중 최선). 단 사용자 운영 (KST 8/11/16/22 hours gate) 의 실시간
+      # (8개 중 최선). 단 사용자 운영 (KST gate v3 {1,2,3,6,7,8,23} (2026-06-06, 23시 숏 PF 2.09 추가,
+      # 13일 1m 실측 기반 — 5y 미검증)) 의 실시간
       # 1h hold 시뮬은 양수 net 보임 → 사용자가 현 시장에 1%/0.5% 적합하다고
       # 운영 판단. 추세 회귀 가능성 인지하고 모니터링 필요.
       stop_loss_pct: 0.005   # -0.5% price (R/R 1:2 유지)
@@ -234,7 +235,7 @@ strategies:
   #   펀딩비 SHORT 수익 +1pp PF 추가
   #
   # kst-hours 와 *별도 엔트리* — 같은 universe 일부 overlap 하지만:
-  #   - kst-hours 는 4시간 게이트 + bidir, top-100 universe
+  #   - kst-hours 는 7시간 게이트 v3 {1,2,3,6,7,8,23} + bidir, top-100 universe
   #   - 본 전략은 19시간 게이트 + SHORT only, 21종 whitelist active 만
   # 두 전략은 동시 발화해도 cooldown_after_stop_sec + max position
   # cap 으로 자본 보호. 같은 (sid, symbol, side) 중복은 orchestrator

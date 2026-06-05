@@ -15,6 +15,31 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.36"
+    date: "2026-06-06"
+    title: "airborne kst-hours 게이트 v3 {1,2,3,6,7,8,23} (13일 1m 기반, 5y 미검증)"
+    tags: [feature, safety]
+    summary: >
+      13일 1분봉 실측(logs/airborne_fires/sim_cache_1m.jsonl) hour-of-day 분석
+      결과 새벽~아침 {1,2,3,6,7,8} 이 순손익/PF 최상위(net +68%, PF 2.39),
+      옛 v2 의 16시(PF 0.15)·22시(PF 0.61)가 손실 누적 확인. 23시 추가(2026-06-06):
+      숏 PF 2.09, BTC trend filter 로 롱 차단해 숏만 잔존 → 운영자 추가.
+      운영자 직접 판단으로 v3 적용. ⚠️ 13일 in-sample 선정 — 5y bench 미검증이며
+      5y hourly 분석은 다른 시각({8,11,16,22})을 선호. 과적합 위험 인지 하에 모니터링 필요.
+    items:
+      - "src/backtest/strategies/live_airborne_bb_reversal_kst_hours.py — _KST_TOP_HOURS_V3 = frozenset({1,2,3,6,7,8,23}) (23시 추가). kst_entry_hours ClassVar 갱신. 모듈 docstring + 주석블록 + 클래스 docstring v3 근거 및 CAVEAT 명시."
+      - "scripts/airborne_alert_daemon.py — fallback frozenset({1,2,3,6,7,8,23}) 갱신. 관련 주석 v3 반영."
+      - "configs/orchestrator/production.yaml — 게이트 시각 주석 v3 반영 (6시간→7시간, {1,2,3,6,7,8}→{1,2,3,6,7,8,23}, 23시 숏 추가 언급). stop/tp/size 등 다른 설정 무변경."
+      - "docs/specs/strategies/live-airborne-bb-reversal-kst-hours.md — 프론트매터 name/verdict_5y/summary_ko 갱신. 본문 게이트 테이블 23시 행 추가, 7시각으로 카운트 갱신, 과적합 위험성 섹션 갱신."
+      - "tests 5종 갱신 — test_live_airborne_bb_reversal_kst_hours.py / test_airborne_kst_hours_btc_trend.py / test_airborne_daemon_sync_v2.py / test_airborne_alert_daemon.py / test_airborne_path_smoke.py. frozenset/label {1,2,3,6,7,8,23} 갱신, UTC14(KST23) parametrize 추가."
+      - "운영 영향: live_run.py + airborne_alert_daemon.py 재시작 즉시 적용. KST 23시 진입 신규 활성 (숏 위주, BTC trend filter 로 롱 차단)."
+    refs:
+      - "src/backtest/strategies/live_airborne_bb_reversal_kst_hours.py"
+      - "scripts/airborne_alert_daemon.py"
+      - "configs/orchestrator/production.yaml"
+      - "docs/specs/strategies/live-airborne-bb-reversal-kst-hours.md"
+      - "logs/airborne_fires/sim_cache_1m.jsonl — v3 선정 근거 13일 데이터"
+
   - version: "v0.6.35"
     date: "2026-06-05"
     title: "airborne 텔레그램 알림 동기 — v0.6.34 의 KST gate v2 + BTC trend filter 반영"

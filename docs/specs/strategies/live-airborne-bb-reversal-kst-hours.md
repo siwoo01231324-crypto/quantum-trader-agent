@@ -1,7 +1,7 @@
 ---
 type: strategy
 id: live-airborne-bb-reversal-kst-hours
-name: Live Airborne BB Reversal v1.2 Bidir (KST 8/11/16/22 Hours)
+name: Live Airborne BB Reversal v1.2 Bidir (KST {1,2,3,6,7,8,23} Hours, v3)
 status: active
 paradigm: live-scanner
 instruments:
@@ -20,20 +20,19 @@ mdd_bt: -0.796
 annual_return_bt: 0.463
 trades_bt: 3270
 backtest_period: 2021-05-20/2026-05-18
-last_updated: 2026-06-05
+last_updated: 2026-06-06
 stop_loss_pct: 0.005
 take_profit_pct: 0.010
 trailing_stop_pct: null
 profit_factor_bt: 0.545
 expectancy_bt: -0.0022
-verdict_5y: "REJECTED (옛 verdict, 옛 룰 기준). 2026-06-05 — KST gate v2 + BTC trend filter 도입 후 5y bench 재실행 PENDING. v2 변경: (1) kst_entry_hours {8,11,16,22} → {7,8,16,20,22} — 30d sim_cache 데이터 기반 11시 PF 0.69 손실 제거, 07시 PF 4.66 + 20시 PF 2.32 추가. (2) BTC trend filter 활성 — BTC < EMA200(1h) OR 직전 24h < -1% 면 LONG entry 자체 차단 (short 그대로). 6/04 incident (bb-reversal 14 LONG 동시 -3% 청산) 같은 시장 동조 손실 가드. 옛 verdict (5y morning gate PF 0.545) 는 새 set 기준 아님."
+verdict_5y: "REJECTED (옛 verdict, 옛 룰 기준). 2026-06-06 — KST gate v3 {1,2,3,6,7,8,23} 도입. 13일 1분봉 실측(logs/airborne_fires/sim_cache_1m.jsonl) hour-of-day 분석에서 새벽~아침 {1,2,3,6,7,8} 이 순손익/PF 최상위(net +68%, PF 2.39), 옛 v2 의 16시(PF 0.15)·22시(PF 0.61)가 손실 누적. 23시 추가(2026-06-06): 숏 PF 2.09, BTC trend filter 로 롱 차단해 숏만 잔존. ⚠️ CAVEAT: 13일 in-sample 선정 — 5y bench 미검증이며 5y hourly 분석은 다른 시각({8,11,16,22})을 선호. hour-of-day 알파가 윈도우마다 불안정 → 과적합 위험. 운영자 직접 판단으로 적용, 5y walk-forward 검증 전까지 모니터링 필요. BTC trend filter 병행 운영."
 verdict_1y: null
 summary_ko: |
   Pine v1.2 (close-기반 + 0.1% margin + ATR-적응 body) 의 양방향 (long+short)
-  airborne BB-reversal 시그널 + KST {8, 11, 16, 22} 시 진입 게이트. 5y
-  hour-of-day 분포에서 데이터 기반 (cherry-picked, not period-based) 으로
-  PF >= 1.0 시각만 선정. 단일 시간 블록 over-fit 함정 (06-12 PF 3.07 → 0.91)
-  과 달리 분산된 4 시각이라 cycle-dependency 작음. qta-airborne-daemon
+  airborne BB-reversal 시그널 + KST {1,2,3,6,7,8,23} 시 진입 게이트 (v3, 13일 1m 기반).
+  새벽~아침+23시 7시각 선정 — 13일 실측에서 PF 2.39 / net +68%. ⚠️ 5y 미검증,
+  과적합 위험. BTC trend filter 병행 (하락추세 LONG 차단). qta-airborne-daemon
   (Telegram 알림) 은 본 전략과 독립 24h 발화.
 tags:
 - live-scanner
@@ -49,19 +48,42 @@ tags:
 - pattern:live-scanner
 ---
 
-# Live Airborne BB Reversal v1.2 Bidir — KST 8/11/16/22 Hours
+# Live Airborne BB Reversal v1.2 Bidir — KST {1,2,3,6,7,8,23} Hours (v3)
 
 ## 도입 배경
 
 [[live-airborne-bb-reversal-kst-morning]] 가 KST 06-12 시간 블록을 4 일치
 daemon 분석 (PF 3.07) 기반으로 시도했으나 5y 백테스트에서 PF 0.906 → rejected.
 
-본 전략은 **5y 19,924 fire 의 hour-of-day 분포 자체** 에서 PF >= 1.0 AND
-n >= 100 통과한 시각만 *데이터 기반* 으로 선정 → 4개 시각 {8, 11, 16, 22}.
+v2 는 5y 분석 + 30d sim_cache 기반으로 {7,8,16,20,22} 로 설정.
+v3 (2026-06-06) 는 13일 1분봉 실측 분석에서 새벽~아침 {1,2,3,6,7,8} 이
+순손익/PF 최상위 (net +68%, PF 2.39) 로 재설계.
 
-## 5y hour-of-day breakdown
+## v3 게이트 선정 근거 (13일 1m 실측)
 
-`reports/airborne_hourly_pf_5y.json` 의 24-bucket 결과 중 통과 시각:
+`logs/airborne_fires/sim_cache_1m.jsonl` 의 13일 1분봉 hour-of-day 분석:
+
+| KST | PF | 평가 |
+|---:|---:|---|
+| 1   | (최상위 군) | ✅ v3 포함 |
+| 2   | (최상위 군) | ✅ v3 포함 |
+| 3   | (최상위 군) | ✅ v3 포함 |
+| 6   | (최상위 군) | ✅ v3 포함 |
+| 7   | (최상위 군) | ✅ v3 포함 |
+| 8   | (최상위 군) | ✅ v3 포함 |
+| 23  | 숏 PF 2.09 | ✅ v3 포함 (숏 PF 2.09, BTC trend filter 로 롱 차단해 숏만 잔존) |
+| 16  | 0.15 | ❌ v3 제외 (손실) |
+| 22  | 0.61 | ❌ v3 제외 (손실) |
+
+13일 합산 (7 시각): **net +68%, PF 2.39**
+
+⚠️ **CAVEAT**: 13일 in-sample 선정 — 5y bench 미검증. 5y hourly 분석은 다른
+시각 ({8,11,16,22}) 을 선호. hour-of-day 알파가 윈도우마다 불안정 → 과적합 위험.
+운영자 직접 판단으로 적용, 5y walk-forward 검증 전까지 모니터링 필요.
+
+## 5y hour-of-day breakdown (참고 — v2 기준, v3 미검증)
+
+`reports/airborne_hourly_pf_5y.json` 의 24-bucket 결과 중 v2 통과 시각:
 
 | KST | n | 승률 | PF | long PF | short PF | 강한 방향 |
 |---:|---:|---:|---:|---:|---:|---|
@@ -71,46 +93,13 @@ n >= 100 통과한 시각만 *데이터 기반* 으로 선정 → 4개 시각 {8
 | 22  | 897 | 37.2% | 1.075 | 0.853 | **1.307** | short-only |
 | (나머지 20시각) | — | — | < 1.0 | — | — | LOSER |
 
-5y aggregate (4 시각 합산, bidir):
-- **trades 3,270 / 승률 37.4% / PF 1.081 / exp +0.163%/trade**
-- 평균 win +5.80% / 평균 loss −3.20% (R/R 1:1.8)
-- **Sharpe 0.96**
-
-## 5y backtest 게이트 통과 — CLAUDE.md gate
-
-`scripts/bench_airborne_filter_sweep_r2_5y.py` 동등 조건 (5y · 24 USDT-perp ·
-1h · cost 10bp · stop 3% / TP 6%):
-
-| 항목 | 값 |
-|---|---:|
-| PF | **1.081** |
-| expectancy/trade | **+0.163%** |
-| trades | 3,270 (655/년, 월 55건) |
-| Sharpe | **0.96** |
-| 5y CAGR (5%×10x) | **+46.3%** |
-| 5y MDD (5%×10x) | **-79.6%** |
-
-**PF > 1.0 AND expectancy > 0 통과** — CLAUDE.md 5y gate 합격.
-
-## 연도별 분포 (5%×10x 가정)
-
-| 년도 | trades | 승률 | 연수익 |
-|---|---:|---:|---:|
-| 2021 (5월~) | 476 | 31.5% | −62% |
-| **2022** | 627 | 40.2% | **+218%** |
-| **2023** | 499 | 41.5% | **+235%** |
-| **2024** | 713 | 39.3% | **+177%** |
-| 2025 | 693 | 32.6% | −66% |
-| 2026 (~5월) | 262 | 40.8% | +75% |
-
-→ 좋은 해 (2022·2023·2024) +180~235%, 나쁜 해 (2021·2025) −60% 정도.
-Bitcoin buy&hold 대비 비교는 cycle 의존성 큼.
+v3 에서 선정한 {1,2,3,6,7,8} 의 5y 검증은 미실시. 5y 데이터는 다른 시각을 선호함.
 
 ## 진입 규칙
 
 매 봉 확정 close 시:
 
-1. **시간 게이트**: `hour(close_ts_kst) ∈ {8, 11, 16, 22}` 아니면 hold.
+1. **시간 게이트**: `hour(close_ts_kst) ∈ {1,2,3,6,7,8,23}` (v3) 아니면 hold.
 2. **v1.2 long signal** (`evaluate_long_fire_v11`):
    - close[i] < bb_lower[i] × (1 − 0.001)
    - close[i−1] ≥ bb_lower[i−1] × (1 − 0.001)
@@ -169,19 +158,19 @@ orch.register_strategy_returns(
 orch.refresh_portfolio_risk()
 ```
 
-## Cherry-pick over-fit 위험성
+## 과적합 위험성 (v3 강화 경고)
 
-선정한 4 시각 (8/11/16/22) 가 5y 분포에서 *데이터 기반* 으로 뽑힌 것이라
-in-sample selection bias 가 있다. 단:
+v3 에서 선정한 7 시각 {1,2,3,6,7,8,23} 은 **13일 in-sample** 선정이라 과적합
+위험이 v2 보다 훨씬 높다.
 
-- **5y / 19,924 trade sample** — 시각당 평균 800+ trade 라 sample-by-chance
-  보다는 sub-pattern 의 신호로 보임.
-- **분포가 분산** (블록 아닌 4 분산 시각) — 단일 6시간 블록 (06-12 PF 0.91
-  rejected) 같은 cycle-dependency 회피.
-- **walk-forward** (2021-2023 vs 2024-2026) 양쪽에서 PF >= 1.0 유지 확인.
+- **13일 / 소수 sample** — 통계적 신뢰가 낮음. 5y / 19,924 trade 기반 v2 와
+  달리 v3 는 단기 시장 노이즈에 반응한 것일 수 있음.
+- **5y hourly 분석과 불일치** — 5y 데이터는 {8,11,16,22} 를 선호. v3 의 새벽
+  시각 {1,2,3} 은 5y 분석에서 PF < 1.0 일 가능성.
+- **운영자 직접 판단** — 5y walk-forward 검증 전까지 결과를 면밀히 모니터링.
+  성과 악화 시 v2 또는 5y 기반 게이트로 즉시 복구 권장.
 
-다만 *진정한 out-of-sample* 검증은 라이브에서만 가능. live trading
-deployment 전 6개월 paper 모니터링 권장.
+*진정한 out-of-sample* 검증은 라이브에서만 가능. 모니터링 주기: 1주 단위.
 
 ## PR 체크리스트
 
