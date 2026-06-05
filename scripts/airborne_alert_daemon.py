@@ -87,12 +87,28 @@ BAR_MS_1H = 3_600_000
 
 # 2026-06-04 — 텔레그램 알림 본문에 "어떤 production 전략이 이 fire 로 진입할지"
 # 안내 추가. production.yaml 의 두 airborne 전략과 정확히 일치하는 게이트.
-# live_airborne_bb_reversal_kst_hours._KST_TOP_HOURS 와 동일.
-_KST_HOURS_KSTHOURS: frozenset[int] = frozenset({8, 11, 16, 22})
-# live_airborne_short_whitelist_v1._KST_HOURS_19 와 동일 (제외: {4,6,7,8,13}).
-_KST_HOURS_SHORT_WL: frozenset[int] = frozenset(
-    {0, 1, 2, 3, 5, 9, 10, 11, 12, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23}
-)
+#
+# 2026-06-05 — strategy 모듈에서 직접 import. truth source 통일. 이전엔 daemon
+# 이 hardcoded set 이라 strategy 가 v2 ({7,8,16,20,22}) 로 바뀌면 텔레그램
+# 안내가 거짓. 사용자 지적: "원래는 텔레그램에서 kst hours 거래 예정 알림
+# 와도 실제론 필터링돼서 안 살 수도 있잖아". 다음에 또 바뀌어도 daemon 코드
+# 안 만져도 자동 동기.
+try:
+    from backtest.strategies.live_airborne_bb_reversal_kst_hours import (
+        _KST_TOP_HOURS_V2 as _KST_HOURS_KSTHOURS,
+    )
+except ImportError:
+    # daemon-only 환경 (전략 코드 미배포) 안전 fallback. v2 set 그대로.
+    _KST_HOURS_KSTHOURS: frozenset[int] = frozenset({7, 8, 16, 20, 22})
+
+try:
+    from backtest.strategies.live_airborne_short_whitelist_v1 import (
+        _KST_HOURS_19 as _KST_HOURS_SHORT_WL,
+    )
+except ImportError:
+    _KST_HOURS_SHORT_WL: frozenset[int] = frozenset(
+        {0, 1, 2, 3, 5, 9, 10, 11, 12, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23}
+    )
 # whitelist 활성 종목 lazy cache — daemon 수명 동안 1회 로드. weekly refresh
 # 시 daemon 재시작 필요.
 _WHITELIST_ACTIVE_CACHE: frozenset[str] | None = None
@@ -123,17 +139,53 @@ def _kst_hour_from_open_time(open_time_ms: int) -> int:
     return int(ts.hour)
 
 
+def _kst_hours_label(hours: frozenset[int]) -> str:
+    """{7,8,16,20,22} → '7/8/16/20/22' — 안내 문자열 자동 생성."""
+    return "/".join(str(h) for h in sorted(hours))
+
+
+# BTC trend filter status — daemon 내부 캐시. live state 가 들어가면 알림에
+# "BTC 하락추세라 LONG 차단" 표시. None = 데이터 미확보 (안전 fallback,
+# block 표시 안 함).
+_BTC_DOWNTREND_STATE: bool | None = None
+_BTC_DOWNTREND_REASON: str = ""
+
+
+def _update_btc_trend_state(btc_hist) -> None:
+    """daemon main loop 가 매 1h 봉 마감 시 호출. _btc_is_downtrend 그대로 활용
+    (strategy 와 정확히 같은 로직)."""
+    global _BTC_DOWNTREND_STATE, _BTC_DOWNTREND_REASON
+    try:
+        from backtest.strategies.live_airborne_bb_reversal_kst_hours import (
+            _btc_is_downtrend,
+        )
+        is_down, reason = _btc_is_downtrend(btc_hist)
+        _BTC_DOWNTREND_STATE = is_down
+        _BTC_DOWNTREND_REASON = reason
+    except Exception as exc:  # noqa: BLE001
+        log.warning("btc trend state update failed: %s", exc)
+        _BTC_DOWNTREND_STATE = None
+
+
 def _format_strategy_notice(*, side: str, kst_hour: int, symbol: str) -> str:
-    """이 fire 로 어떤 production 전략이 진입할지 안내 (3 줄)."""
+    """이 fire 로 어떤 production 전략이 진입할지 안내 (4 줄).
+
+    kst-hours 는 KST gate + BTC trend filter 두 단계 체크 (사용자 지적 반영
+    2026-06-05). 둘 다 PASS 여야 실제 진입.
+    """
     in_kst4 = kst_hour in _KST_HOURS_KSTHOURS
     in_kst19 = kst_hour in _KST_HOURS_SHORT_WL
     in_wl = symbol in _load_whitelist_active()
+    kst4_label = _kst_hours_label(_KST_HOURS_KSTHOURS)
 
-    # kst-hours: bidir (long + short 둘 다 진입), 게이트 {8,11,16,22}.
-    if in_kst4:
-        kst_line = "✅ 진입 예정"
+    # kst-hours: bidir + KST gate + BTC trend filter (long-only)
+    if not in_kst4:
+        kst_line = f"❌ KST {kst_hour}시 — 게이트 외 ({kst4_label}만)"
+    elif (side.lower() == "long" and _BTC_DOWNTREND_STATE is True):
+        # BTC 하락추세 → LONG entry 차단. strategy 의 on_bar 와 일관.
+        kst_line = f"❌ BTC 하락추세 LONG 차단 ({_BTC_DOWNTREND_REASON or 'downtrend'})"
     else:
-        kst_line = f"❌ KST {kst_hour}시 — 게이트 외 (8/11/16/22만)"
+        kst_line = "✅ 진입 예정"
 
     # short-whitelist: SHORT only + 21종 화이트리스트 + 19시간 게이트.
     if side.lower() == "long":
@@ -141,7 +193,7 @@ def _format_strategy_notice(*, side: str, kst_hour: int, symbol: str) -> str:
     elif not in_wl:
         wl_line = "❌ 화이트리스트 외 종목"
     elif not in_kst19:
-        wl_line = f"❌ KST {kst_hour}시 — 게이트 외 ({{4,6,7,8,13}} 제외)"
+        wl_line = f"❌ KST {kst_hour}시 — 게이트 외"
     else:
         wl_line = "✅ 진입 예정"
 
@@ -388,6 +440,10 @@ async def _consume_stream(
             if not ev.is_closed:
                 continue
             state.history_1h = _append_bar(state.history_1h, ev, max_bars=200)
+            # 2026-06-05 — BTC trend filter 알림 동기. BTCUSDT 1h 마감 시
+            # state 갱신 → 다음 fire 알림이 정확한 BTC trend 상태 반영.
+            if sym == "BTCUSDT":
+                _update_btc_trend_state(state.history_1h)
             evaluate_and_dispatch(symbol=sym, state=state, ev=ev, dry_run=dry_run)
 
 
@@ -625,6 +681,9 @@ async def _run_polling_loop(
             state.history_1h = new_1h
             if new_5m is not None and not new_5m.empty:
                 state.history_5m = new_5m
+            # 2026-06-05 — BTC trend filter 알림 동기 (polling 모드).
+            if sym == "BTCUSDT":
+                _update_btc_trend_state(state.history_1h)
 
             if had_prev and new_last_ts <= prev_last_ts:
                 continue  # 아직 새 봉 없음
