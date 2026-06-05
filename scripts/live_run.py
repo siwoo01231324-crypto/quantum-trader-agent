@@ -1303,19 +1303,19 @@ def _build_pipeline_factory(
         smoke_on = os.environ.get("SMOKE_TEST_ENABLED", "").lower() in ("1", "true", "yes")
         broker = params.get("broker")
         if not broker:
-            # #238 — broker 선택을 smoke 와 분리. 우선순위:
+            # 우선순위:
             #   1. params.broker (dashboard 가 명시 전달 시)
             #   2. QTA_DEFAULT_BROKER env (운영자가 dashboard 버튼 default 지정)
             #   3. SMOKE_TEST_ENABLED=1 → binance-testnet-shadow (smoke 통로검증)
-            #   4. fallback → kis-paper-shadow (legacy #182 default)
-            # 이전엔 SMOKE 끄면 무조건 KIS 라 BTC 전략을 dashboard 로 못 돌렸음.
+            #   4. fallback → bitget-demo (2026-06-05 Bitget 이전 — 이전엔
+            #      kis-paper-shadow 였음)
             env_broker = os.environ.get("QTA_DEFAULT_BROKER", "").strip()
             if env_broker:
                 broker = env_broker
             elif smoke_on:
                 broker = "binance-testnet-shadow"
             else:
-                broker = "kis-paper-shadow"
+                broker = "bitget-demo"
         duration = params.get("duration") or "0"
 
         if broker == "smoke-dual":
@@ -1331,6 +1331,26 @@ def _build_pipeline_factory(
         # 무관 — binance-testnet-shadow 인데 005930 fallback 되면 feed 가 비어 무의미.
         if broker == "binance-testnet-shadow" and not params.get("symbols"):
             symbols = ["BTCUSDT"]
+        # 2026-06-05 — Bitget broker 면 *현재 열린 포지션* + 핵심 10 종목. mark-price
+        # feed 가 그 종목들 구독해야 TP/SL 평가 가능 — 미구독이면 DOT 같은
+        # 보유 포지션의 TP fire 자체 안 됨 (사용자 사고 root cause).
+        if broker in ("bitget-demo", "bitget-mainnet") and not params.get("symbols"):
+            _open: set[str] = set()
+            try:
+                import asyncio as _asyncio  # noqa: PLC0415
+                _bg = _build_bitget_adapter(broker)
+                if _bg is not None:
+                    _ps = await _bg.get_positions()
+                    for _p in _ps:
+                        if getattr(_p, "qty", 0) and float(getattr(_p, "qty", 0)) != 0:
+                            _open.add(_p.symbol)
+                    await _bg.aclose()
+            except Exception:  # noqa: BLE001
+                pass
+            symbols = sorted(_open | {
+                "BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "XRPUSDT",
+                "ADAUSDT", "BNBUSDT", "LINKUSDT", "DOTUSDT", "AVAXUSDT",
+            })
         # 2026-05-21: 거래 시작 시 실제 어디로 가는지 stdout 에 명시 — bars=0
         # 인데 어디 막혔는지 진단 즉시 가능 (.env 미로드 / 한국장 마감 등).
         print(
@@ -1554,27 +1574,14 @@ async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
     # 이미 trading loop 가 가동 중이므로 controller.start 는 재진입 noop 처럼
     # 동작하면 OK. 미설정 시 dashboard 가 ``컨트롤러 미주입 (cmd 모드)`` +
     # ``controller unavailable`` 503 반환 (사용자 보고 결함).
-    from src.dashboard.run_controller import (  # noqa: PLC0415
-        RunController as _RC,
-        STATUS_RUNNING as _STAT_RUN,
-    )
-    from datetime import datetime as _dt, timezone as _tz  # noqa: PLC0415
-    _rc = _RC(
+    from src.dashboard.run_controller import RunController as _RC  # noqa: PLC0415
+    dashboard_state.run_controller = _RC(
         _build_pipeline_factory(
             dashboard_state, logger,
             position_store=position_store, pnl_aggregator=pnl_aggregator,
             ops_counters=ops_counters,
         )
     )
-    # _run_pipeline 은 본 함수 안에서 이미 trading loop 가 도는 모드라
-    # ``state = RUNNING`` 으로 pre-mark. dashboard 의 거래 시작 버튼 클릭은
-    # RunController.start 가 ``already running`` 반환 → 중복 진입 방지.
-    # 사용자가 거래 정지 버튼을 누르면 RunController.stop 이 자기 task 가
-    # None 이라 ``not running`` 반환. trading loop 자체 정지는 Ctrl+C / SIGINT.
-    _rc.state.status = _STAT_RUN
-    _rc.state.started_at = _dt.now(_tz.utc).isoformat()
-    _rc.state.request_params = {"mode": "auto-launched (cmd)", "broker": config.broker_mode}
-    dashboard_state.run_controller = _rc
     # #238 follow-up Issue 2 — trade history / 전략별 포지션은 영구·누적이어야
     # 한다. config.wal_path = {log_dir}/{run_id}/wal.jsonl 이므로 log_dir 은
     # 항상 parent.parent. 이 한 줄이 없으면 _resolve_log_dir 이 None →
@@ -1748,38 +1755,12 @@ def main(argv: list[str] | None = None) -> int:
     if _is_no_args(argv):
         if os.environ.get("QTA_FIRST_RUN_HELP_ONLY", "").lower() == "true":
             return _show_first_run_help()
-        # 2026-06-05 — 인자 없이 띄우면 *자동 거래* 진입 (이전엔 dashboard 만
-        # 띄우고 trading loop 안 돌아서 ``ops_counters: bars_seen=0`` /
-        # LivePositionRiskManager 미가동 / DOT TP +3% 인데 청산 안 됨).
-        # 사용자 보고: '자동매매가 그게 자동매매야' — default 인자 (Bitget
-        # Demo + 핵심 3종목) 주입 후 정상 ``_run_pipeline`` 로 위임.
-        # CLI args 명시 시 그대로 우선.
-        # symbols: 시작 시 broker 의 *열린 포지션 symbols* + 핵심 ticker 합집합.
-        # 미가입 mark-price 가 있으면 그 종목 TP/SL 평가 자체가 안 됨 → 사용자
-        # DOT +3% 보고도 익절 안 되는 사고 root cause.
-        _open_syms: set[str] = set()
-        try:
-            import asyncio as _asyncio  # noqa: PLC0415
-            _bg = _build_bitget_adapter("bitget-demo")
-            if _bg is not None:
-                _open = _asyncio.run(_bg.get_positions())
-                for _p in _open:
-                    if getattr(_p, "qty", 0) and getattr(_p, "qty", 0) != 0:
-                        _open_syms.add(_p.symbol)
-                _asyncio.run(_bg.aclose())
-        except Exception:  # noqa: BLE001
-            pass
-        _default_syms = sorted(_open_syms | {
-            "BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "XRPUSDT",
-            "ADAUSDT", "BNBUSDT", "LINKUSDT", "DOTUSDT", "AVAXUSDT",
-        })
-        argv = [
-            "--broker", "bitget-demo",
-            "--symbols", ",".join(_default_syms),
-            "--feed", "binance",
-            "--log-dir", "logs/shadow-bitget",
-        ]
-        av = argv
+        # 2026-06-05 — 인자 없이 띄우면 standalone (dashboard 만). 사용자가
+        # '거래 시작' 버튼 누르면 그때 RunController.start → pipeline_factory
+        # → _run_pipeline_attached 실행. 옛 시도 (auto-default-args 주입) 는
+        # 사용자가 시작 안 눌렀는데도 RUNNING 으로 표시되어 회피로 분류됨 —
+        # 정상 status machine (IDLE → STARTING → RUNNING → STOPPED) 으로 복원.
+        return _run_dashboard_only_mode()
     args = parse_args(argv)
     logging.basicConfig(
         level=args.log_level,
