@@ -450,12 +450,13 @@ def _build_parser() -> argparse.ArgumentParser:
             "bitget-mainnet",          # P4 — Bitget USDT-M Futures mainnet (real money)
             "smoke-dual",              # smoke test — KIS paper 005930 + Binance testnet BTCUSDT 동시
         ],
-        default="binance-testnet-shadow",
-        help="브로커 모드 (default: binance-testnet-shadow — cs-tsmom-crypto-daily "
-             "자동발주 가능). KIS 모의 가동은 명시적으로 --broker kis-paper-shadow. "
-             "bitget-demo / bitget-mainnet 은 Bitget USDT-M Futures (P4). "
+        default="bitget-demo",
+        help="브로커 모드 (default: bitget-demo — 2026-06-05 부터 Bitget 이전. "
+             "Binance 로 돌리려면 --broker binance-testnet-shadow). KIS 모의 가동은 "
+             "--broker kis-paper-shadow. bitget-mainnet 은 실거래 (1주 demo 검증 후). "
              "smoke-dual 은 KIS + Binance 둘 다 병렬 (SMOKE_TEST_ENABLED=1 필요). "
-             "기본값 변경 2026-05-21 — 직전엔 kis-paper-shadow 였음.",
+             "기본값 변경 이력: 2026-05-21 kis-paper-shadow → binance-testnet-shadow, "
+             "2026-06-05 → bitget-demo.",
     )
     parser.add_argument(
         "--duration", default="0",
@@ -482,8 +483,10 @@ def _build_parser() -> argparse.ArgumentParser:
         help="초기 페이퍼 잔고 (KRW 또는 USDT, default 100000)",
     )
     parser.add_argument(
-        "--log-dir", type=str, default="logs/live",
-        help="로그/WAL 기본 디렉토리 (default logs/live)",
+        "--log-dir", type=str, default="logs/shadow-bitget",
+        help="로그/WAL 기본 디렉토리. 2026-06-05 default 변경: "
+             "logs/live → logs/shadow-bitget (--broker bitget-demo 와 일치). "
+             "Binance 모드로 돌리려면 --log-dir logs/shadow-binance 명시.",
     )
     parser.add_argument(
         "--run-id", type=str, default=None,
