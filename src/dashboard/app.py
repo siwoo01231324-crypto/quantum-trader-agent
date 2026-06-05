@@ -1748,6 +1748,15 @@ function renderBitget(b) {{
     }}
   }}
   set('bg-pos-n', b.ok ? (b.n_positions || 0) + ' 개 포지션' : '포지션 —');
+  // 2026-06-05 — 전략별 포지션 / 거래내역 의 '거래소 청산' 판정에 필요한
+  // Bitget ground-truth 캐시. window._bnbPosBySym 와 같은 패턴.
+  // ``bgApiOk=false`` (Bitget 미연결) 시 fail-safe 로 fallback (renderStratPos
+  // 가 어느 한쪽 API 라도 ok 면 그쪽만 봄 → Bitget down → Binance fallback).
+  window._bgPosBySym = {{}};
+  window._bgApiOk = !!b.ok;
+  for (const p of ((b.ok && b.positions) ? b.positions : [])) {{
+    if (p && p.symbol) window._bgPosBySym[p.symbol] = p;
+  }}
   const posRows = document.getElementById('bg-pos-rows');
   if (posRows) {{
     const ps = (b.ok && b.positions) ? b.positions : [];
@@ -1923,12 +1932,12 @@ async function stratPosRefresh() {{
     }}
     const bnbBySym = window._bnbPosBySym || {{}};
     const bnbApiOk = !!window._bnbApiOk;
-    // 2026-05-21 (v2): Binance ground-truth = 단일 진실. bnbApiOk=true 일 때
-    // USDT 심볼이 Binance positions 에 없으면 = 청산된 것. dust 임계값 무관
-    // 일괄 숨김 (이전엔 net/cum<0.5% 만 숨겨서 net=652 같은 큰 stale 잔량은
-    // 그대로 표시 → 사용자가 청산 발주해도 안 사라지는 사고). API down 시
-    // (bnbApiOk=false) 는 fail-safe 로 모두 표시. realized_pnl 은 closed-summary
-    // 로 보존.
+    // 2026-06-05 — Bitget 도 함께 lookup. 이전엔 Binance 만 ground-truth 로
+    // 봐서 Bitget 시대 TRXUSDT 가 'Binance 에 없음' = 청산 으로 잘못 판단 →
+    // 전략별 포지션에서 TRX 가 filtered out → (closed) summary 만 남던 사고.
+    const bgBySym = window._bgPosBySym || {{}};
+    const bgApiOk = !!window._bgApiOk;
+    const anyApiOk = bnbApiOk || bgApiOk;
     const realizedBySid = {{}};
     const realizedPerSymBySid = {{}};  // sid to map of sym-realized
     const filteredRows = [];
@@ -1940,8 +1949,9 @@ async function stratPosRefresh() {{
         (realizedPerSymBySid[sid] = realizedPerSymBySid[sid] || {{}})[sym] = s.realized_pnl;
       }}
       const isUsdt = sym.endsWith('USDT');
-      const bnbHas = !!bnbBySym[sym];
-      const venueClosed = isUsdt && bnbApiOk && !bnbHas;
+      // 어느 한쪽 venue 라도 sym 보유면 살아있음. 둘 다 API ok 인데 둘 다 없으면 청산.
+      const anyVenueHas = !!bnbBySym[sym] || !!bgBySym[sym];
+      const venueClosed = isUsdt && anyApiOk && !anyVenueHas;
       if (venueClosed) continue;
       filteredRows.push(s);
     }}
@@ -2160,16 +2170,20 @@ async function tradeHistoryRefresh() {{
         note.style.display = 'none';
       }}
     }}
-    // Binance ground-truth: open(보유중) 인데 거래소엔 그 심볼 포지션이
-    // 없으면 = 거래소가 청산한 것 (수동 청산 시 우리 WAL 에 sell fill 못
-    // 받은 케이스 포함). 표시만 "거래소 청산" 으로 정정 — pnl 정확치 모름.
+    // 2026-06-05 — Binance + Bitget ground-truth 둘 다 lookup. 이전엔 Binance
+    // 만 봐서 TRXUSDT (Bitget LONG) 가 'Binance 에 없음' = 거래소 청산 으로
+    // 잘못 표시. 두 venue 어디에도 없을 때만 진짜 거래소 청산.
     const bnbBySymTh = window._bnbPosBySym || {{}};
+    const bgBySymTh  = window._bgPosBySym  || {{}};
     const bnbApiOkTh = !!window._bnbApiOk;
+    const bgApiOkTh  = !!window._bgApiOk;
+    const anyApiOkTh = bnbApiOkTh || bgApiOkTh;
     tb.innerHTML = trades.map(t => {{
       const isOpenRaw = t.status === 'open';
       const symTh = t.symbol || '';
       const isUsdtTh = symTh.endsWith('USDT');
-      const venueClosedTh = isOpenRaw && isUsdtTh && bnbApiOkTh && !bnbBySymTh[symTh];
+      const anyVenueHasTh = !!bnbBySymTh[symTh] || !!bgBySymTh[symTh];
+      const venueClosedTh = isOpenRaw && isUsdtTh && anyApiOkTh && !anyVenueHasTh;
       const isOpen = isOpenRaw && !venueClosedTh;  // 거래소-청산 케이스는 청산됨 취급
       const rowCls = isOpen ? 'th-open' : '';
       const sideCls = t.side === 'long' ? 'side-badge side-long' : 'side-badge side-short';
