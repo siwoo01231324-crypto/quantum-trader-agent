@@ -1544,6 +1544,12 @@ async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
     dashboard_state.position_provider = position_store.get_positions
     dashboard_state.pnl_aggregator = pnl_aggregator
     dashboard_state.ops_counters = ops_counters
+    # 2026-06-05 — 계좌 카드 (Binance + Bitget + KIS) 데이터 소스. 누락 시
+    # ``/api/account/info`` 가 available=False 반환 → dashboard 가 "계좌 연결
+    # 실패" 로 표시. _run_dashboard_only_mode 만 set 하고 _run_pipeline 은
+    # 안 set 해서 인자 있는 모드에서 dashboard 가 깜깜이던 회귀 fix.
+    from src.dashboard.account_info import AccountInfoProvider as _AIP  # noqa: PLC0415
+    dashboard_state.account_info_provider = _AIP()
     # #238 follow-up Issue 2 — trade history / 전략별 포지션은 영구·누적이어야
     # 한다. config.wal_path = {log_dir}/{run_id}/wal.jsonl 이므로 log_dir 은
     # 항상 parent.parent. 이 한 줄이 없으면 _resolve_log_dir 이 None →
