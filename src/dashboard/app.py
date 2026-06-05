@@ -1754,7 +1754,12 @@ function renderBitget(b) {{
       posRows.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text3);padding:14px;font-family:var(--sans);font-size:11px">열린 포지션 없음</td></tr>';
     }} else {{
       posRows.innerHTML = ps.map(p => {{
-        const isLong = p.side === 'LONG';
+        // side 누락 fallback — amt 부호 기반. Bitget API holdSide 가 가끔 빈
+        // 값이거나 net 등 비표준 토큰 반환 → 배지가 안 보였던 회귀 fix.
+        let isLong;
+        if (p.side === 'LONG') isLong = true;
+        else if (p.side === 'SHORT') isLong = false;
+        else isLong = (parseFloat(p.amt) || 0) >= 0;
         const sideCls = isLong ? 'side-long' : 'side-short';
         const sideTxt = isLong ? 'LONG' : 'SHORT';
         const pnlHtml = fmtPnl(p.unrealized_pnl, ' USDT');
