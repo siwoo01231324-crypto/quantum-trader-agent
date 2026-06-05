@@ -114,6 +114,50 @@ async def test_public_feed_skips_non_trade_channel():
     assert ticks[0].price == Decimal("67500")
 
 
+@pytest.mark.asyncio
+async def test_public_feed_connect_resets_closed_after_aclose(monkeypatch):
+    """재접속 회귀 (운영 2026-06-06 거래 stopped 사고): aclose() 후 connect()
+    가 _closed 를 다시 False 로 돌려야 _iter 가 정상 동작한다. 안 돌리면
+    같은 인스턴스 재접속 시 첫 프레임에서 즉시 break → 데이터 0 → producer
+    가 'feed closed cleanly' 무한 재접속 후 100회 소진하고 종료.
+    """
+    import websockets as _ws_mod
+
+    class _FakeWS:
+        async def send(self, *_a, **_kw):
+            pass
+
+        async def close(self):
+            pass
+
+    async def _fake_connect(*_a, **_kw):
+        return _FakeWS()
+
+    monkeypatch.setattr(_ws_mod, "connect", _fake_connect)
+
+    feed = BitgetPublicFeed(["BTCUSDT"], paper=True)
+    await feed.connect()
+    await feed.aclose()
+    assert feed._closed is True  # aclose 후엔 닫힌 상태
+    await feed.connect()
+    assert feed._closed is False, (
+        "connect() must reset _closed so a reconnect actually delivers ticks"
+    )
+
+
+@pytest.mark.asyncio
+async def test_public_feed_subscribe_dedupes_no_symbol_balloon():
+    """재접속마다 loop 가 subscribe(config.symbols) 를 다시 호출해도 심볼이
+    불어나면 안 됨 (운영 로그 430→1010 balloon 회귀)."""
+    feed = BitgetPublicFeed(["BTCUSDT", "ETHUSDT"], paper=True)
+    for _ in range(5):
+        await feed.subscribe(["BTCUSDT", "ETHUSDT"])
+    assert feed._symbols == ["BTCUSDT", "ETHUSDT"], feed._symbols
+    # 신규 심볼은 정상 추가 (순서 보존)
+    await feed.subscribe(["SOLUSDT", "BTCUSDT"])
+    assert feed._symbols == ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
+
+
 # ── BitgetMarkPriceFeed ───────────────────────────────────────────────────────
 
 
