@@ -498,6 +498,7 @@ async def run_shadow_loop(
             # 2026-06-03 debug — producer 가 ticks 받는지 진단용
             _producer_tick_count = 0
             while not stop_event.is_set() and attempt < max_attempts:
+                disconnect_err: BaseException | None = None
                 try:
                     logger.info("producer.iter_start attempt=%d", attempt)
                     async for tick in feed:
@@ -519,40 +520,53 @@ async def run_shadow_loop(
                                 pass
                         await tick_queue.put(tick)
                         attempt = 0  # reset on any successful tick
-                    # async for exited cleanly (e.g., feed closed) — stop.
-                    break
+                    # async for exited WITHOUT raising — finite feed (tests) or a
+                    # graceful server-side WS close (live). A live daemon must
+                    # reconnect, not stop: the previous `break` here silently ended
+                    # the producer → asyncio.wait(FIRST_COMPLETED) tore the whole
+                    # trading loop down even though stop_event was never set (the
+                    # "거래 시작 눌렀는데 좀 지나니까 stopped" 회귀). Fall through to
+                    # the shared reconnect path below; stop_event still ends it.
                 except (asyncio.CancelledError, KeyboardInterrupt):
                     raise
                 except BaseException as err:
-                    if stop_event.is_set():
-                        break
-                    attempt += 1
-                    delay = backoff_delay(attempt - 1, base=1.0, cap=60.0)
+                    disconnect_err = err
+                # Reached on BOTH a clean feed close and a disconnect exception.
+                if stop_event.is_set():
+                    break
+                attempt += 1
+                delay = backoff_delay(attempt - 1, base=1.0, cap=60.0)
+                if disconnect_err is not None:
                     logger.warning(
                         "feed disconnect (attempt=%d/%d, sleep=%.1fs): %s: %s",
                         attempt, max_attempts, delay,
-                        type(err).__name__, err,
+                        type(disconnect_err).__name__, disconnect_err,
                     )
-                    try:
-                        await feed.aclose()
-                    except BaseException:
-                        pass
-                    try:
-                        await asyncio.wait_for(stop_event.wait(), timeout=delay)
-                        break  # stop_event triggered during sleep
-                    except asyncio.TimeoutError:
-                        pass
-                    try:
-                        await feed.connect()
-                        await feed.subscribe(config.symbols)
-                        logger.info("feed reconnected after attempt=%d", attempt)
-                    except BaseException as reconnect_err:
-                        logger.warning(
-                            "feed reconnect failed (attempt=%d): %s: %s",
-                            attempt, type(reconnect_err).__name__, reconnect_err,
-                        )
-                        # loop will retry with longer backoff
-                        continue
+                else:
+                    logger.warning(
+                        "feed closed cleanly; reconnecting (attempt=%d/%d, sleep=%.1fs)",
+                        attempt, max_attempts, delay,
+                    )
+                try:
+                    await feed.aclose()
+                except BaseException:
+                    pass
+                try:
+                    await asyncio.wait_for(stop_event.wait(), timeout=delay)
+                    break  # stop_event triggered during sleep
+                except asyncio.TimeoutError:
+                    pass
+                try:
+                    await feed.connect()
+                    await feed.subscribe(config.symbols)
+                    logger.info("feed reconnected after attempt=%d", attempt)
+                except BaseException as reconnect_err:
+                    logger.warning(
+                        "feed reconnect failed (attempt=%d): %s: %s",
+                        attempt, type(reconnect_err).__name__, reconnect_err,
+                    )
+                    # loop will retry with longer backoff
+                    continue
             if attempt >= max_attempts:
                 logger.error(
                     "feed reconnect exhausted %d attempts; producer exiting",
@@ -596,122 +610,131 @@ async def run_shadow_loop(
                         tick.symbol, tick.price, _consumer_timeout_count,
                     )
                 _consumer_tick_count += 1
-                ms = _tick_to_market_state(tick)
-                paper_broker.update_market(ms)
-                ts = datetime.fromisoformat(tick.ts)
-                # #3 (prior-review MEDIUM) — refresh the (15s-cached) balance
-                # provider OFF the event-loop thread BEFORE the sync
-                # build_snapshot. The provider's cache-miss does KIS+Binance
-                # REST; running it inline in _inject_real_equity blocked the
-                # tick loop (the #18 KIS contention area). asyncio.to_thread
-                # moves only that cache-miss REST off-loop; build_snapshot's
-                # _inject_real_equity then does a pure non-blocking peek.
-                # Guarded on a provider being wired so the default
-                # (balance_provider=None) path is byte-identical — no thread
-                # hop, no extra await point that would perturb the
-                # producer/consumer scheduling (legacy/tests).
-                if config.balance_provider is not None:
-                    await asyncio.to_thread(snapshot_builder.refresh_balance)
-                snapshot = snapshot_builder.build_snapshot(tick)
-                if _consumer_tick_count == 1:
-                    logger.info("consumer.run_bar_start tick=%d ts=%s", _consumer_tick_count, ts.isoformat())
-                _t0 = time.monotonic() if _consumer_tick_count <= 3 else None
-                intents = await orchestrator.run_bar(ts, snapshot)
-                if _t0 is not None:
-                    logger.info(
-                        "consumer.run_bar_done tick=%d elapsed=%.2fs intents=%d",
-                        _consumer_tick_count, time.monotonic() - _t0, len(intents),
-                    )
-                if intents:
-                    # Emit timeline `signal_emitted` events ahead of order
-                    # placement so the dashboard / WAL audit trail captures
-                    # strategy-level decisions even when risk gating later
-                    # blocks the order (#177 + #181).
-                    for intent in intents:
-                        try:
-                            wal.write(WALEvent(
-                                ts=datetime.now(timezone.utc).isoformat(),
-                                event_type="signal_emitted",
-                                payload={
-                                    "strategy_id": intent.strategy_id,
-                                    "symbol": intent.symbol,
-                                    "side": intent.side,
-                                    "qty": str(intent.qty),
-                                    "reason": intent.reason,
-                                },
-                            ))
-                        except Exception as wal_err:
-                            logger.warning(
-                                "wal.signal_emitted_write_failed strategy_id=%s error=%s",
-                                intent.strategy_id, wal_err,
-                            )
-                    await execute_intents(
-                        intents, broker=router, kill_switch=kill_switch,
-                        wal=wal, metrics=metrics, market_state=ms,
-                        position_store=config.position_store,
-                        # post-only Maker fallback 이 완전 미체결 시 호출.
-                        on_entry_unfilled=_release_live_entered,
-                    )
-                # cs-tsmom-crypto-daily universe-scan basket dispatch — see
-                # `src/live/cs_basket_dispatcher.py` for the why (orchestrator
-                # drops basket-symbol intents silently). Default OFF; opt-in
-                # via CS_BASKET_DISPATCH=1.
-                if basket_dispatcher is not None:
-                    try:
-                        # #324 — `snapshot` 자체가 market_snapshot dict
-                        # (`SnapshotBuilder.build_snapshot` 반환). 이전 코드는
-                        # `getattr(snapshot, "market_snapshot", ...)` 로 dict 에
-                        # 없는 속성을 찾아 항상 None → 매 tick `no_prices` skip
-                        # 으로 cs-tsmom-crypto-daily 발주가 silent drop 됐다.
-                        if isinstance(snapshot, dict):
-                            ohlcv = snapshot.get("ohlcv_history")
-                        else:
-                            ohlcv = getattr(snapshot, "ohlcv_history", None)
-                        await basket_dispatcher.dispatch(
-                            orchestrator=orchestrator,
-                            snapshot=snapshot,
-                            broker=router,
-                            position_store=config.position_store,
-                            ohlcv_history=ohlcv,
-                            wal=wal,
+                try:
+                    ms = _tick_to_market_state(tick)
+                    paper_broker.update_market(ms)
+                    ts = datetime.fromisoformat(tick.ts)
+                    # #3 (prior-review MEDIUM) — refresh the (15s-cached) balance
+                    # provider OFF the event-loop thread BEFORE the sync
+                    # build_snapshot. The provider's cache-miss does KIS+Binance
+                    # REST; running it inline in _inject_real_equity blocked the
+                    # tick loop (the #18 KIS contention area). asyncio.to_thread
+                    # moves only that cache-miss REST off-loop; build_snapshot's
+                    # _inject_real_equity then does a pure non-blocking peek.
+                    # Guarded on a provider being wired so the default
+                    # (balance_provider=None) path is byte-identical — no thread
+                    # hop, no extra await point that would perturb the
+                    # producer/consumer scheduling (legacy/tests).
+                    if config.balance_provider is not None:
+                        await asyncio.to_thread(snapshot_builder.refresh_balance)
+                    snapshot = snapshot_builder.build_snapshot(tick)
+                    if _consumer_tick_count == 1:
+                        logger.info("consumer.run_bar_start tick=%d ts=%s", _consumer_tick_count, ts.isoformat())
+                    _t0 = time.monotonic() if _consumer_tick_count <= 3 else None
+                    intents = await orchestrator.run_bar(ts, snapshot)
+                    if _t0 is not None:
+                        logger.info(
+                            "consumer.run_bar_done tick=%d elapsed=%.2fs intents=%d",
+                            _consumer_tick_count, time.monotonic() - _t0, len(intents),
                         )
-                    except Exception as err:  # noqa: BLE001 — never abort live loop
-                        logger.warning(
-                            "basket_dispatcher.consumer_failed err=%s", err,
-                        )
-                # #227 S3: position-level stop/TP evaluation. Runs even when
-                # the strategy dispatch produced no intents (the price tick is
-                # sufficient to cross a stop). Restricted to tick.symbol — the
-                # other symbols update on their own ticks.
-                if config.position_risk_manager is not None:
-                    risk_intents = config.position_risk_manager.evaluate(
-                        tick.symbol, Decimal(str(tick.price)), ts,
-                    )
-                    if risk_intents:
-                        for ri in risk_intents:
+                    if intents:
+                        # Emit timeline `signal_emitted` events ahead of order
+                        # placement so the dashboard / WAL audit trail captures
+                        # strategy-level decisions even when risk gating later
+                        # blocks the order (#177 + #181).
+                        for intent in intents:
                             try:
                                 wal.write(WALEvent(
                                     ts=datetime.now(timezone.utc).isoformat(),
                                     event_type="signal_emitted",
                                     payload={
-                                        "strategy_id": ri.strategy_id,
-                                        "symbol": ri.symbol,
-                                        "side": ri.side,
-                                        "qty": str(ri.qty),
-                                        "reason": ri.reason,
+                                        "strategy_id": intent.strategy_id,
+                                        "symbol": intent.symbol,
+                                        "side": intent.side,
+                                        "qty": str(intent.qty),
+                                        "reason": intent.reason,
                                     },
                                 ))
                             except Exception as wal_err:
                                 logger.warning(
-                                    "wal.signal_emitted_write_failed (live_scanner_exit) "
-                                    "strategy_id=%s error=%s",
-                                    ri.strategy_id, wal_err,
+                                    "wal.signal_emitted_write_failed strategy_id=%s error=%s",
+                                    intent.strategy_id, wal_err,
                                 )
                         await execute_intents(
-                            risk_intents, broker=router, kill_switch=kill_switch,
+                            intents, broker=router, kill_switch=kill_switch,
                             wal=wal, metrics=metrics, market_state=ms,
                             position_store=config.position_store,
+                            # post-only Maker fallback 이 완전 미체결 시 호출.
+                            on_entry_unfilled=_release_live_entered,
                         )
+                    # cs-tsmom-crypto-daily universe-scan basket dispatch — see
+                    # `src/live/cs_basket_dispatcher.py` for the why (orchestrator
+                    # drops basket-symbol intents silently). Default OFF; opt-in
+                    # via CS_BASKET_DISPATCH=1.
+                    if basket_dispatcher is not None:
+                        try:
+                            # #324 — `snapshot` 자체가 market_snapshot dict
+                            # (`SnapshotBuilder.build_snapshot` 반환). 이전 코드는
+                            # `getattr(snapshot, "market_snapshot", ...)` 로 dict 에
+                            # 없는 속성을 찾아 항상 None → 매 tick `no_prices` skip
+                            # 으로 cs-tsmom-crypto-daily 발주가 silent drop 됐다.
+                            if isinstance(snapshot, dict):
+                                ohlcv = snapshot.get("ohlcv_history")
+                            else:
+                                ohlcv = getattr(snapshot, "ohlcv_history", None)
+                            await basket_dispatcher.dispatch(
+                                orchestrator=orchestrator,
+                                snapshot=snapshot,
+                                broker=router,
+                                position_store=config.position_store,
+                                ohlcv_history=ohlcv,
+                                wal=wal,
+                            )
+                        except Exception as err:  # noqa: BLE001 — never abort live loop
+                            logger.warning(
+                                "basket_dispatcher.consumer_failed err=%s", err,
+                            )
+                    # #227 S3: position-level stop/TP evaluation. Runs even when
+                    # the strategy dispatch produced no intents (the price tick is
+                    # sufficient to cross a stop). Restricted to tick.symbol — the
+                    # other symbols update on their own ticks.
+                    if config.position_risk_manager is not None:
+                        risk_intents = config.position_risk_manager.evaluate(
+                            tick.symbol, Decimal(str(tick.price)), ts,
+                        )
+                        if risk_intents:
+                            for ri in risk_intents:
+                                try:
+                                    wal.write(WALEvent(
+                                        ts=datetime.now(timezone.utc).isoformat(),
+                                        event_type="signal_emitted",
+                                        payload={
+                                            "strategy_id": ri.strategy_id,
+                                            "symbol": ri.symbol,
+                                            "side": ri.side,
+                                            "qty": str(ri.qty),
+                                            "reason": ri.reason,
+                                        },
+                                    ))
+                                except Exception as wal_err:
+                                    logger.warning(
+                                        "wal.signal_emitted_write_failed (live_scanner_exit) "
+                                        "strategy_id=%s error=%s",
+                                        ri.strategy_id, wal_err,
+                                    )
+                            await execute_intents(
+                                risk_intents, broker=router, kill_switch=kill_switch,
+                                wal=wal, metrics=metrics, market_state=ms,
+                                position_store=config.position_store,
+                            )
+                except (asyncio.CancelledError, KeyboardInterrupt):
+                    raise
+                except Exception as tick_err:  # noqa: BLE001 — 한 틱 예외가 전체 거래 루프를 죽이면 안 됨
+                    logger.exception(
+                        "consumer.tick_failed symbol=%s tick=%d — 이 틱만 건너뛰고 루프 계속: %s",
+                        getattr(tick, "symbol", "?"), _consumer_tick_count, tick_err,
+                    )
+                    continue
                 iter_count += 1
                 if config.max_iterations is not None and iter_count >= config.max_iterations:
                     stop_event.set()
@@ -846,6 +869,21 @@ async def run_shadow_loop(
             )
         finally:
             stop_event.set()
+            # Surface WHY the loop ended. asyncio.wait(FIRST_COMPLETED) returns
+            # as soon as producer or consumer finishes; the shutdown loop below
+            # only awaits tasks that are NOT yet done, so the *terminating*
+            # task's exception used to be silently discarded — the daemon would
+            # "stop" with zero diagnostics. Log it here before cleanup.
+            for _name, _t in (("producer", producer_task), ("consumer", consumer_task)):
+                if _t.done() and not _t.cancelled():
+                    _exc = _t.exception()
+                    if _exc is not None:
+                        logger.error(
+                            "live loop ending — %s task raised %s: %s",
+                            _name, type(_exc).__name__, _exc, exc_info=_exc,
+                        )
+                    else:
+                        logger.info("live loop ending — %s task finished", _name)
             shutdown_tasks = [producer_task, consumer_task]
             if fill_task is not None:
                 shutdown_tasks.append(fill_task)
