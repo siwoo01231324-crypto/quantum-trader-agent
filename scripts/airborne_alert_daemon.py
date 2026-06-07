@@ -75,6 +75,14 @@ from universe.binance_top import top_n_by_volume  # noqa: E402
 
 log = logging.getLogger("airborne_alert_daemon")
 
+# 2026-06-07 — Bitget venue 지원 (#airborne-bitget-venue). 실거래 트레이더가
+# Bitget top-100 을 거래하는데 알림 데몬은 Binance fapi top-100 을 봐서 알림과
+# 실거래의 유니버스/가격이 어긋나던 문제. --venue bitget 이면 Bitget top-100 +
+# Bitget REST candles 로 fire 를 평가. --venue binance (기본값) 은 기존 경로
+# byte-identical 보존 — 데이터 소스만 swap, fire 평가/게이트/notice 는 동일.
+VENUE_BINANCE = "binance"
+VENUE_BITGET = "bitget"
+
 BB_WINDOW = 20
 BB_STD = 2.0
 MAX_LOOKBACK = 50
@@ -101,14 +109,10 @@ except ImportError:
     # daemon-only 환경 (전략 코드 미배포) 안전 fallback. v3 set.
     _KST_HOURS_KSTHOURS: frozenset[int] = frozenset({1, 2, 3, 6, 7, 8, 23})
 
-try:
-    from backtest.strategies.live_airborne_short_whitelist_v1 import (
-        _KST_HOURS_19 as _KST_HOURS_SHORT_WL,
-    )
-except ImportError:
-    _KST_HOURS_SHORT_WL: frozenset[int] = frozenset(
-        {0, 1, 2, 3, 5, 9, 10, 11, 12, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23}
-    )
+# 2026-06-07 #380 — short-whitelist 게이트 19h → 24h (production.yaml
+# kst_entry_hours override). 알림이 실제 진입과 일치하도록 24h 로 고정.
+# (전략 모듈 _KST_HOURS_19 는 reference 로 남았지만 runtime gate 아님.)
+_KST_HOURS_SHORT_WL: frozenset[int] = frozenset(range(24))
 # whitelist 활성 종목 lazy cache — daemon 수명 동안 1회 로드. weekly refresh
 # 시 daemon 재시작 필요.
 _WHITELIST_ACTIVE_CACHE: frozenset[str] | None = None
@@ -131,6 +135,31 @@ def _load_whitelist_active() -> frozenset[str]:
         log.warning("whitelist load failed (%s) — short-whitelist 안내 disabled", exc)
         _WHITELIST_ACTIVE_CACHE = frozenset()
     return _WHITELIST_ACTIVE_CACHE
+
+
+def _norm_symbol(sym: str) -> str:
+    """Binance 멀티플라이어 프리픽스를 제거해 Bitget/whitelist 단위로 정규화.
+
+    airborne fire 는 Binance 표기('1000SHIBUSDT')로 들어오는데 whitelist 는
+    Bitget 단위('SHIBUSDT')라서 직접 비교 시 영원히 불일치 → "화이트리스트 외
+    종목" 오알림 (2026-06-07 #380 SHIB 사례). 양쪽을 정규화해 비교한다.
+
+    선두 '1000' 한 번만 제거 — '1000SHIBUSDT'→'SHIBUSDT'. whitelist 가
+    '1000LUNCUSDT' 처럼 프리픽스를 유지하는 경우도 양쪽 동일 정규화로 매칭됨.
+    """
+    s = sym.upper()
+    if s.startswith("1000") and len(s) > 4:
+        s = s[4:]
+    return s
+
+
+def _is_whitelisted(symbol: str) -> bool:
+    """fire 심볼이 whitelist active 종목과 (정규화 후) 일치하는지."""
+    actives = _load_whitelist_active()
+    if symbol in actives:  # exact (fast path)
+        return True
+    target = _norm_symbol(symbol)
+    return any(_norm_symbol(a) == target for a in actives)
 
 
 def _kst_hour_from_open_time(open_time_ms: int) -> int:
@@ -175,7 +204,7 @@ def _format_strategy_notice(*, side: str, kst_hour: int, symbol: str) -> str:
     """
     in_kst4 = kst_hour in _KST_HOURS_KSTHOURS
     in_kst19 = kst_hour in _KST_HOURS_SHORT_WL
-    in_wl = symbol in _load_whitelist_active()
+    in_wl = _is_whitelisted(symbol)  # #380 — 1000SHIB↔SHIB 정규화 매칭
     kst4_label = _kst_hours_label(_KST_HOURS_KSTHOURS)
 
     # kst-hours: bidir + KST gate + BTC trend filter (long-only)
@@ -187,7 +216,7 @@ def _format_strategy_notice(*, side: str, kst_hour: int, symbol: str) -> str:
     else:
         kst_line = "✅ 진입 예정"
 
-    # short-whitelist: SHORT only + 21종 화이트리스트 + 19시간 게이트.
+    # short-whitelist: SHORT only + 화이트리스트 + 24시간 게이트 (#380).
     if side.lower() == "long":
         wl_line = "❌ LONG 미지원 (숏 전용 전략)"
     elif not in_wl:
@@ -364,11 +393,87 @@ def compute_universe_diff(
     return added, removed, unchanged
 
 
+# ── Venue 추상화 (Binance / Bitget) ─────────────────────────────────────────
+#
+# 데몬 내부는 항상 ``{symbol: {interval: DataFrame}}`` (Binance bootstrap_history
+# 포맷) 을 기대한다. Bitget bootstrap_history 는 ``{symbol: [KlineEvent]}`` 라
+# 모양이 달라서 아래 어댑터가 동일 포맷으로 변환한다. 이렇게 하면 downstream
+# (_bootstrap_into_states / polling fetch / evaluate) 코드는 venue 무관.
+
+
+def _bitget_bars_to_history(bars: list) -> "pd.DataFrame":
+    """Bitget ``[KlineEvent]`` → 데몬 history DataFrame.
+
+    Bitget KlineEvent: open_time(ms) / Decimal OHLCV / closed. 데몬은 UTC
+    DatetimeIndex + float ``[open,high,low,close,volume]`` 컬럼을 기대한다
+    (Binance ``_klines_to_dataframe`` 와 동일 모양). Bitget candles REST 는
+    최신→과거 순서로 올 수 있어 open_time 기준 오름차순 정렬한다.
+    """
+    cols = ["open", "high", "low", "close", "volume"]
+    if not bars:
+        return pd.DataFrame(columns=cols)
+    rows = sorted(bars, key=lambda b: b.open_time)
+    idx = pd.to_datetime([b.open_time for b in rows], unit="ms", utc=True)
+    return pd.DataFrame(
+        {
+            "open": [float(b.open) for b in rows],
+            "high": [float(b.high) for b in rows],
+            "low": [float(b.low) for b in rows],
+            "close": [float(b.close) for b in rows],
+            "volume": [float(b.volume) for b in rows],
+        },
+        index=idx,
+    )
+
+
+async def _compute_universe(
+    *, venue: str, top_n: int, rest_base_url: str,
+) -> list[str]:
+    """venue 별 top-N 유니버스 계산.
+
+    bitget: ``get_top_n_symbols(top_n)`` (sync, 5분 캐시 + fallback).
+    binance: 기존 ``fetch_futures_24h_snapshot`` + ``top_n_by_volume``.
+    """
+    if venue == VENUE_BITGET:
+        from portfolio.bitget_top_dynamic import get_top_n_symbols
+        # sync 함수 — 짧은 httpx.Client 호출이라 이벤트루프 블로킹 무시 가능.
+        return get_top_n_symbols(top_n)
+    snap = await fetch_futures_24h_snapshot(base_url=rest_base_url)
+    return top_n_by_volume(snap, n=top_n)
+
+
+async def _bootstrap_history_venue(
+    *, venue: str, symbols: list[str], rest_base_url: str,
+) -> dict[str, dict[str, "pd.DataFrame"]]:
+    """venue 별 1h+5m history fetch → ``{symbol: {interval: DataFrame}}``.
+
+    binance: 기존 ``bootstrap_history`` 그대로 (동일 포맷 반환).
+    bitget: ``bitget bootstrap_history`` (interval 당 1회) 를 interval 별로
+    호출해 ``[KlineEvent]`` 를 받고 어댑터로 DataFrame 변환.
+    """
+    if venue != VENUE_BITGET:
+        return await bootstrap_history(
+            symbols=symbols, intervals=("1h", "5m"),
+            limit_per_interval={"1h": 100, "5m": 50},
+            base_url=rest_base_url,
+        )
+    from brokers.bitget.market_ws import bootstrap_history as bitget_bootstrap
+    out: dict[str, dict[str, pd.DataFrame]] = {s: {} for s in symbols}
+    for iv, limit in (("1h", 100), ("5m", 50)):
+        per_sym = await bitget_bootstrap(
+            symbols=symbols, interval=iv, limit=limit, paper=True,
+        )
+        for s in symbols:
+            out[s][iv] = _bitget_bars_to_history(per_sym.get(s, []))
+    return out
+
+
 async def _bootstrap_into_states(
     symbols: list[str],
     states: dict[str, SymbolState],
     *,
     rest_base_url: str,
+    venue: str = VENUE_BINANCE,
 ) -> None:
     """REST-bootstrap ``symbols`` history into ``states`` (in-place).
 
@@ -384,10 +489,8 @@ async def _bootstrap_into_states(
     # batch 실패 시 심볼별 개별 재시도로 강등 — 잘못된 심볼 1개가 나머지
     # 99개 + 데몬 전체를 죽이지 못하게 한다.
     try:
-        boot = await bootstrap_history(
-            symbols=symbols, intervals=("1h", "5m"),
-            limit_per_interval={"1h": 100, "5m": 50},
-            base_url=rest_base_url,
+        boot = await _bootstrap_history_venue(
+            venue=venue, symbols=symbols, rest_base_url=rest_base_url,
         )
     except Exception as err:  # noqa: BLE001 — degrade to per-symbol
         log.warning(
@@ -396,10 +499,8 @@ async def _bootstrap_into_states(
         boot = {}
         for s in symbols:
             try:
-                one = await bootstrap_history(
-                    symbols=[s], intervals=("1h", "5m"),
-                    limit_per_interval={"1h": 100, "5m": 50},
-                    base_url=rest_base_url,
+                one = await _bootstrap_history_venue(
+                    venue=venue, symbols=[s], rest_base_url=rest_base_url,
                 )
                 boot.update(one)
             except Exception as e2:  # noqa: BLE001
@@ -572,6 +673,7 @@ async def _run_polling_loop(
     rest_base_url: str = REST_BASE_LIVE,
     universe_refresh_hours: float = DEFAULT_UNIVERSE_REFRESH_HOURS,
     always_include: list[str] | None = None,
+    venue: str = VENUE_BINANCE,
 ) -> None:
     """REST polling mode — Korean-IP-safe (no WebSocket dependence).
 
@@ -605,14 +707,17 @@ async def _run_polling_loop(
                 and now_loop - last_universe_refresh >= refresh_secs)
         )
         if need_refresh:
-            log.info("fetching 24h snapshot from %s ...", rest_base_url)
-            snap = await fetch_futures_24h_snapshot(base_url=rest_base_url)
-            universe = top_n_by_volume(snap, n=top_n)
+            log.info("fetching universe (venue=%s) ...", venue)
+            universe = await _compute_universe(
+                venue=venue, top_n=top_n, rest_base_url=rest_base_url,
+            )
             if not universe:
                 log.error("empty universe — retrying in 60s")
                 await asyncio.sleep(60)
                 continue
-            # 거래량 순위 무관 강제 포함 — WS loop 와 동일 정책.
+            # 거래량 순위 무관 강제 포함 — WS loop 와 동일 정책. pinned 종목이
+            # 해당 venue 에 없으면 (예: Bitget 에 없는 심볼) bootstrap 단계에서
+            # 빈 history → graceful skip (warmup 으로 자연 누락).
             for sym in pinned:
                 if sym not in universe:
                     universe.append(sym)
@@ -633,7 +738,7 @@ async def _run_polling_loop(
             for sym in removed:
                 states.pop(sym, None)
             await _bootstrap_into_states(
-                added, states, rest_base_url=rest_base_url
+                added, states, rest_base_url=rest_base_url, venue=venue,
             )
             prev_universe = universe
             last_universe_refresh = now_loop
@@ -652,11 +757,8 @@ async def _run_polling_loop(
         # ── REST poll all symbols (1h limit=100, 5m limit=50) ──────────
         log.info("polling cycle start — %d symbols", len(prev_universe))
         try:
-            poll = await bootstrap_history(
-                symbols=prev_universe,
-                intervals=("1h", "5m"),
-                limit_per_interval={"1h": 100, "5m": 50},
-                base_url=rest_base_url,
+            poll = await _bootstrap_history_venue(
+                venue=venue, symbols=prev_universe, rest_base_url=rest_base_url,
             )
         except Exception as exc:  # noqa: BLE001 — retry next cycle
             log.error("polling fetch failed: %s — retrying next cycle", exc)
@@ -716,6 +818,7 @@ async def run_daemon(
     universe_refresh_hours: float = DEFAULT_UNIVERSE_REFRESH_HOURS,
     always_include: list[str] | None = None,
     mode: str = "polling",
+    venue: str = VENUE_BINANCE,
 ) -> None:
     """Top-level entry — dispatches to polling or WS loop based on ``mode``.
 
@@ -724,8 +827,22 @@ async def run_daemon(
         matches the 1h bar grain exactly.
     ``mode='ws'``: legacy WebSocket combined stream — needs an unblocked
         region (cloud / VPN). Higher data density (markPrice, 5m kline).
+
+    ``venue='binance'`` (default): Binance USDM Futures top-N + Binance REST.
+    ``venue='bitget'``: Bitget USDT-FUTURES top-N + Bitget REST candles —
+        실거래 트레이더(broker=bitget-demo)와 동일 유니버스/가격. polling 모드만
+        지원 (Bitget WS 미배선) — ``--venue bitget --mode ws`` 는 명확히 거부.
     """
-    log.info("daemon mode: %s", mode)
+    if venue not in (VENUE_BINANCE, VENUE_BITGET):
+        raise ValueError(
+            f"unknown venue: {venue!r} (expected 'binance' or 'bitget')"
+        )
+    if venue == VENUE_BITGET and mode == "ws":
+        raise ValueError(
+            "venue=bitget 는 mode=polling 만 지원합니다 "
+            "(Bitget WS 경로 미배선) — '--venue bitget --mode polling' 사용."
+        )
+    log.info("daemon mode: %s venue: %s", mode, venue)
     if mode == "polling":
         await _run_polling_loop(
             top_n=top_n,
@@ -733,6 +850,7 @@ async def run_daemon(
             rest_base_url=rest_base_url,
             universe_refresh_hours=universe_refresh_hours,
             always_include=always_include,
+            venue=venue,
         )
     elif mode == "ws":
         await _run_ws_loop(
@@ -784,6 +902,16 @@ def main(argv: list[str] | None = None) -> int:
             "환경변수 AIRBORNE_MODE 로도 지정 가능 (CLI 우선)."
         ),
     )
+    parser.add_argument(
+        "--venue", choices=[VENUE_BINANCE, VENUE_BITGET], default=None,
+        help=(
+            "Data source venue. 'binance' (default): Binance USDM Futures "
+            "top-N + Binance REST. 'bitget': Bitget USDT-FUTURES top-N + "
+            "Bitget REST candles — 실거래 트레이더(broker=bitget-demo)와 동일 "
+            "유니버스/가격으로 알림. bitget 은 polling 모드만 지원. "
+            "환경변수 AIRBORNE_VENUE 로도 지정 가능 (CLI 우선)."
+        ),
+    )
     parser.add_argument("--log-level", default="INFO")
     args = parser.parse_args(argv)
 
@@ -791,6 +919,11 @@ def main(argv: list[str] | None = None) -> int:
     mode = args.mode or os.environ.get("AIRBORNE_MODE") or "polling"
     if mode not in ("polling", "ws"):
         mode = "polling"
+
+    # 우선순위: CLI --venue > 환경변수 AIRBORNE_VENUE > 기본값 binance.
+    venue = args.venue or os.environ.get("AIRBORNE_VENUE") or VENUE_BINANCE
+    if venue not in (VENUE_BINANCE, VENUE_BITGET):
+        venue = VENUE_BINANCE
 
     always_include_raw = args.always_include or os.environ.get(
         "AIRBORNE_ALWAYS_INCLUDE", ""
@@ -816,6 +949,7 @@ def main(argv: list[str] | None = None) -> int:
             universe_refresh_hours=args.universe_refresh_hours,
             always_include=always_include,
             mode=mode,
+            venue=venue,
         ))
     except KeyboardInterrupt:
         log.info("KeyboardInterrupt — shutting down")
