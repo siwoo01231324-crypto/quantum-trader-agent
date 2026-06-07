@@ -33,6 +33,12 @@ from risk.dsl import Policy
 from src.brokers.binance.universe_quote import _klines_to_dataframe
 
 
+@pytest.fixture(autouse=True)
+def _isolate_reentry_dedup(tmp_path, monkeypatch):
+    """재진입 dedup 영속을 테스트별 tmp 로 격리 (테스트 간 오염·실제 logs/ 오염 방지)."""
+    monkeypatch.setenv("AIRBORNE_REENTRY_STATE_DIR", str(tmp_path / "reentry"))
+
+
 # ──────────────────────────────────────────────────────────────────────────
 # Fixtures — 1h kline rows 와 BB-reversal long fire 패턴
 # ──────────────────────────────────────────────────────────────────────────

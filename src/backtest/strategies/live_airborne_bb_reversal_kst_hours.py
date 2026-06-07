@@ -108,6 +108,11 @@ class LiveAirborneBbReversalKstHours(LiveAirborneBbReversalKstMorning):
 
     kst_entry_hours: ClassVar[frozenset[int]] = _KST_TOP_HOURS_V3
 
+    # 재진입 쿨다운(시간) — 같은 종목을 이 시간 안에 또 진입하지 않음.
+    # AIRBORNE_REENTRY_COOLDOWN_HOURS env 로 조정. dedup 은 디스크 영속이라
+    # 재시작해도 유지된다.
+    reentry_cooldown_hours: ClassVar[float] = 12.0
+
     # 새 instance attr — BTC trend filter 토글. default True (활성).
     btc_trend_filter_enabled: bool = True
 
@@ -207,6 +212,64 @@ class LiveAirborneBbReversalKstHours(LiveAirborneBbReversalKstMorning):
         new_ctx["market_snapshot"] = new_snap
         return new_ctx, pd.Timestamp(trimmed.index[-1])
 
+    # ── 재진입 차단 dedup 영속 (live only) ──────────────────────────────────────
+
+    def _cooldown_hours(self) -> float:
+        import os
+        try:
+            return float(
+                os.environ.get(
+                    "AIRBORNE_REENTRY_COOLDOWN_HOURS", self.reentry_cooldown_hours
+                )
+            )
+        except (ValueError, TypeError):
+            return float(self.reentry_cooldown_hours)
+
+    def _within_reentry_cooldown(self, last, closed_ts) -> bool:
+        try:
+            last_ts = pd.Timestamp(last)
+            cur = pd.Timestamp(closed_ts)
+            if last_ts.tzinfo is None:
+                last_ts = last_ts.tz_localize("UTC")
+            if cur.tzinfo is None:
+                cur = cur.tz_localize("UTC")
+            return (cur - last_ts) < pd.Timedelta(hours=self._cooldown_hours())
+        except (ValueError, TypeError):
+            return False
+
+    def _dedup_path(self):
+        from pathlib import Path
+        import os
+        base = os.environ.get("AIRBORNE_REENTRY_STATE_DIR", "logs/airborne_reentry")
+        return Path(base) / f"{type(self).__name__}.json"
+
+    def _ensure_dedup_loaded(self) -> None:
+        if getattr(self, "_dedup_loaded", False):
+            return
+        self._dedup_loaded = True
+        try:
+            import json
+            path = self._dedup_path()
+            if path.exists():
+                data = json.loads(path.read_text(encoding="utf-8"))
+                if isinstance(data, dict):
+                    for k, v in data.items():
+                        self._fired_bar_ts.setdefault(str(k), str(v))
+        except Exception:  # noqa: BLE001 — 영속 실패가 매매를 막으면 안 됨
+            pass
+
+    def _persist_dedup(self) -> None:
+        try:
+            import json
+            path = self._dedup_path()
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(
+                json.dumps({k: str(v) for k, v in self._fired_bar_ts.items()}),
+                encoding="utf-8",
+            )
+        except Exception:  # noqa: BLE001
+            pass
+
     async def on_bar(self, ctx):
         """parent 의 시그널 평가 → buy intent 면 BTC trend filter 적용.
 
@@ -242,15 +305,21 @@ class LiveAirborneBbReversalKstHours(LiveAirborneBbReversalKstMorning):
                             action="hold", size=0.0,
                             reason=f"btc_trend_filter_long_blocked:{reason} ({existing_reason})",
                         )
-        # ── 마감봉 1회 진입 dedup (live) — 같은 마감봉엔 한 번만 진입 ──
+        # ── 재진입 차단 (live) — 같은 종목을 쿨다운 안에 또 사지 않음 ──
+        # dedup 을 디스크에 영속화 → 재시작해도 유지(재시작마다 재매수 방지).
+        # 쿨다운(기본 12h, AIRBORNE_REENTRY_COOLDOWN_HOURS 로 조정) 안이면 같은
+        # 봉이든 다음 봉이든 진입 차단 → 매시간 같은 손실 종목 재매수 방지.
         if closed_ts is not None and getattr(sig, "action", None) in ("buy", "sell"):
             snap = ctx.get("market_snapshot") if isinstance(ctx, dict) else None
             symbol = snap.get("symbol") if isinstance(snap, dict) else None
             if symbol is not None:
-                if self._fired_bar_ts.get(symbol) == closed_ts:
+                self._ensure_dedup_loaded()
+                last = self._fired_bar_ts.get(symbol)
+                if last is not None and self._within_reentry_cooldown(last, closed_ts):
                     return Signal(
                         action="hold", size=0.0,
-                        reason=f"already_entered_bar:{closed_ts}",
+                        reason=f"reentry_cooldown:{symbol} last={last}",
                     )
-                self._fired_bar_ts[symbol] = closed_ts
+                self._fired_bar_ts[symbol] = str(closed_ts)
+                self._persist_dedup()
         return sig
