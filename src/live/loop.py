@@ -859,19 +859,23 @@ async def run_shadow_loop(
             # 50개씩 chunk subscribe (BitgetMarkPriceFeed.connect 내부 처리).
             from src.live.feed import BitgetMarkPriceFeed
             _bg_paper = config.broker_mode == "bitget-demo"
-            # 2026-06-08 — mark-price 피드 = 거래 유니버스 전체 (Bitget top-100
-            # ∪ config.symbols). 옛 코드는 config.symbols(틱 피드용 10종)만 구독해서,
-            # 전략이 top-100 을 거래하는데 그 10종 밖 포지션(예: BSBUSDT)은 mark-price
-            # 가 안 들어와 LivePositionRiskManager 의 stop/TP evaluate 가 *호출조차
-            # 안 됨* → 손절 영원히 미작동 (2026-06-08 BSB ROE -23% 무손절 사고).
-            # get_top_n_symbols 실패해도 config.symbols 로 graceful fallback.
+            # 2026-06-08 — mark-price 피드 = config.symbols ∪ **현재 보유 종목**.
+            # 손절은 *보유 중인* 종목만 평가하면 되므로 top-100 전체 구독은 불필요.
+            # (앞선 시도: top-100 전체 구독 → public feed 와 같은 엔드포인트에
+            # 111 구독 → Bitget WS 가 연결을 반복 차단 → consumer 가 틱을 못 받아
+            # run_bar 정지 → 거래 0. 2026-06-08 BEAT/BTW/SNDK fire 미체결 사고.)
+            # 보유 종목만 구독하면 부하 ↓ + 모든 포지션 stop/TP 커버. 피드는 재접속
+            # /universe refresh 마다 factory 재호출돼 신규 보유분을 반영.
             def _bitget_mp_factory():
                 syms = set(config.symbols)
                 try:
-                    from src.portfolio.bitget_top_dynamic import get_top_n_symbols
-                    syms |= set(get_top_n_symbols(100))
-                except Exception as exc:  # noqa: BLE001 — 유니버스 실패해도 피드는 떠야
-                    logger.warning("bitget mark-price universe fetch failed: %s", exc)
+                    if config.position_store is not None:
+                        for _sid, _pos in config.position_store.all_positions().items():
+                            for _sym, _qty in _pos:
+                                if _qty:
+                                    syms.add(_sym)
+                except Exception as exc:  # noqa: BLE001 — 보유 조회 실패해도 피드는 떠야
+                    logger.warning("bitget mark-price held-symbols fetch failed: %s", exc)
                 return BitgetMarkPriceFeed(sorted(syms), paper=_bg_paper)
             mark_price_task = asyncio.create_task(
                 _run_mark_price_consumer(
