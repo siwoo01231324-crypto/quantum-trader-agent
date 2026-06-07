@@ -114,6 +114,10 @@ class LiveAirborneBbReversalKstHours(LiveAirborneBbReversalKstMorning):
     def __init__(self, *args, btc_trend_filter_enabled: bool = True, **kwargs):
         super().__init__(*args, **kwargs)
         self.btc_trend_filter_enabled = bool(btc_trend_filter_enabled)
+        # 봉마감 게이트 dedup — symbol → 마지막 진입한 마감봉 ts. 같은 마감봉엔
+        # 한 번만 진입(데몬은 봉당 1회 알림 → 트레이더도 봉당 1회 진입, TP/SL
+        # 청산 후 같은 봉 재진입 폭주 방지). live 에서만 채워짐.
+        self._fired_bar_ts: dict[str, object] = {}
 
     # Dynamic Universe Architecture (2026-05-28):
     # - Phase 1: interval = "1h" (이전 1d → 사실상 무용지물이던 문제 해결)
@@ -141,6 +145,68 @@ class LiveAirborneBbReversalKstHours(LiveAirborneBbReversalKstMorning):
         from src.portfolio.binance_top_dynamic import get_top_n_symbols
         return get_top_n_symbols(100)
 
+    def _bar_interval_sec(self) -> int:
+        iv = str(self.get_interval())
+        try:
+            if iv.endswith("h"):
+                return int(iv[:-1]) * 3600
+            if iv.endswith("m"):
+                return int(iv[:-1]) * 60
+            if iv.endswith("d"):
+                return int(iv[:-1]) * 86400
+        except ValueError:
+            pass
+        return 3600
+
+    def _bar_close_gate(self, ctx):
+        """live 에서 형성 중인 마지막 봉을 마감봉으로 치환 (데몬과 정렬).
+
+        데몬(텔레그램 알림)은 마감된 1h봉에서만 발화하는데, base 전략은
+        history 의 iloc[-1](live 에선 진행 중 봉)을 평가해 봉 한가운데서도
+        발화 → 알림에 없는 종목 매수 (2026-06-08 PIPPINUSDT 사고). live
+        (ctx['live_run']=True) 이고 마지막 봉이 아직 형성 중이면 그 봉을 떼고
+        마감봉 기준으로 평가하도록 ctx 를 치환한다.
+
+        backtest(bench_live_scanner)는 on_bar 를 직접 호출하며 ctx 에
+        ``live_run`` 이 없어 그대로 통과 → 기존 동작 byte-identical.
+
+        반환: (평가용 ctx, 마감봉 ts). 마감봉 부족 시 (None, None).
+        """
+        if not (isinstance(ctx, dict) and ctx.get("live_run")):
+            return ctx, None
+        snap = ctx.get("market_snapshot")
+        if not isinstance(snap, dict):
+            return ctx, None
+        hist = snap.get("history")
+        if hist is None or len(hist) < 2:
+            return ctx, None
+        try:
+            now = pd.Timestamp(ctx.get("ts"))
+            last_open = pd.Timestamp(hist.index[-1])
+        except (ValueError, TypeError):
+            return ctx, None
+        if now.tzinfo is None:
+            now = now.tz_localize("UTC")
+        if last_open.tzinfo is None:
+            last_open = last_open.tz_localize("UTC")
+        interval = pd.Timedelta(seconds=self._bar_interval_sec())
+        if now >= last_open + interval:
+            # 마지막 봉이 이미 마감 (종료시각 지남) → 그대로 평가.
+            return ctx, last_open
+        # 형성 중 → 마지막(미완성) 봉 제거, 마감봉으로 평가.
+        trimmed = hist.iloc[:-1]
+        if len(trimmed) < 2:
+            return None, None
+        new_snap = dict(snap)
+        new_snap["history"] = trimmed
+        try:
+            new_snap["price"] = float(trimmed["close"].iloc[-1])
+        except (ValueError, TypeError, KeyError):
+            pass
+        new_ctx = dict(ctx)
+        new_ctx["market_snapshot"] = new_snap
+        return new_ctx, pd.Timestamp(trimmed.index[-1])
+
     async def on_bar(self, ctx):
         """parent 의 시그널 평가 → buy intent 면 BTC trend filter 적용.
 
@@ -151,31 +217,40 @@ class LiveAirborneBbReversalKstHours(LiveAirborneBbReversalKstMorning):
         (2026-06-05 orchestrator 변경). 그 key 없으면 (legacy 환경 / backtest
         구버전) BTC trend check 생략 → 기존 동작 byte-identical.
         """
+        # 2026-06-08 봉마감 게이트 (live) — 미완성 봉 진입 차단, 마감봉만 평가.
+        gated, closed_ts = self._bar_close_gate(ctx)
+        if gated is None:
+            return Signal(action="hold", size=0.0, reason="await_bar_close")
+        ctx = gated
         sig = await super().on_bar(ctx)
-        # short entry / hold 는 통과 — long entry 만 BTC trend gate 적용
-        if not self.btc_trend_filter_enabled:
-            return sig
-        if sig is None:
-            return sig
-        action = getattr(sig, "action", None)
-        if action != "buy":
-            return sig
-        # BTC history lookup
-        snap = ctx.get("market_snapshot") if isinstance(ctx, dict) else None
-        if not isinstance(snap, dict):
-            return sig
-        universe = snap.get("universe_ohlcv")
-        if not isinstance(universe, dict):
-            return sig
-        btc_hist = universe.get(_BTC_SYMBOL)
-        if btc_hist is None or len(btc_hist) == 0:
-            return sig
-        is_down, reason = _btc_is_downtrend(btc_hist)
-        if not is_down:
-            return sig
-        # downtrend 면 long entry 차단. reason 에 BTC trend 정보 명시.
-        existing_reason = getattr(sig, "reason", "") or ""
-        return Signal(
-            action="hold", size=0.0,
-            reason=f"btc_trend_filter_long_blocked:{reason} ({existing_reason})",
-        )
+        # ── BTC trend filter — long entry 만 적용 (short/hold 통과) ──
+        if (
+            self.btc_trend_filter_enabled
+            and sig is not None
+            and getattr(sig, "action", None) == "buy"
+        ):
+            snap = ctx.get("market_snapshot") if isinstance(ctx, dict) else None
+            universe = snap.get("universe_ohlcv") if isinstance(snap, dict) else None
+            if isinstance(universe, dict):
+                btc_hist = universe.get(_BTC_SYMBOL)
+                if btc_hist is not None and len(btc_hist) > 0:
+                    is_down, reason = _btc_is_downtrend(btc_hist)
+                    if is_down:
+                        # downtrend → long entry 차단.
+                        existing_reason = getattr(sig, "reason", "") or ""
+                        sig = Signal(
+                            action="hold", size=0.0,
+                            reason=f"btc_trend_filter_long_blocked:{reason} ({existing_reason})",
+                        )
+        # ── 마감봉 1회 진입 dedup (live) — 같은 마감봉엔 한 번만 진입 ──
+        if closed_ts is not None and getattr(sig, "action", None) in ("buy", "sell"):
+            snap = ctx.get("market_snapshot") if isinstance(ctx, dict) else None
+            symbol = snap.get("symbol") if isinstance(snap, dict) else None
+            if symbol is not None:
+                if self._fired_bar_ts.get(symbol) == closed_ts:
+                    return Signal(
+                        action="hold", size=0.0,
+                        reason=f"already_entered_bar:{closed_ts}",
+                    )
+                self._fired_bar_ts[symbol] = closed_ts
+        return sig

@@ -15,6 +15,24 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.39"
+    date: "2026-06-08"
+    title: "airborne 트레이더 진입을 '마감 1h봉' 으로 게이트 — 알림↔거래 정렬 (PIPPINUSDT 사고)"
+    tags: [fix, safety]
+    summary: >
+      트레이더가 *형성 중인* 1h봉(history.iloc[-1])을 평가해 봉 한가운데서도
+      진입 → 데몬(텔레그램 알림, 마감봉만 평가)에 없는 종목 매수
+      (2026-06-08 PIPPINUSDT). live 에서 미완성 봉을 떼고 마감봉으로 평가 +
+      같은 마감봉 1회만 진입(재진입 방지)하도록 봉마감 게이트 추가. 데몬과
+      동일 시점·종목만 발화 → 모든 거래에 대응 알림 존재.
+    items:
+      - "LiveAirborneBbReversalKstHours.on_bar — live(ctx.live_run) 에서 형성 중 마지막 봉 trim → 마감봉 평가. backtest(bench 직접 on_bar, live_run 없음)는 byte-identical. short-whitelist-v1 도 상속으로 동일 적용."
+      - "마감봉 dedup — symbol 별 마지막 진입 마감봉 ts 기록, 같은 봉 재진입(TP/SL 청산 후) 차단. 데몬 '봉당 1회' 알림 semantics 일치."
+      - "orchestrator live-scanner dispatch ctx 에 live_run=True 표식 추가 (backtest 와 구분)."
+      - "회귀 테스트: 봉마감 게이트 trim/passthrough/dedup 4건 + e2e airborne_path_smoke (형성봉 trim → 마감봉 발화 → 체결). backtest 373 passed 무회귀."
+      - "동반 fix(별도 PR): #388 venue-equity 사이징(bitget 주문이 binance 잔고로 사이징돼 명목 11.6배) + #387 mark-price 100종 WS 과부하 회귀."
+    refs:
+      - "src/backtest/strategies/live_airborne_bb_reversal_kst_hours.py"
   - version: "v0.6.38"
     date: "2026-06-08"
     title: "kst-hours 사이징을 short-whitelist 와 통일 — default_size 0.16→0.50 + max_concurrent 18"
