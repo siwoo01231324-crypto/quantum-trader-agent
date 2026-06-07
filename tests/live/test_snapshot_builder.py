@@ -104,3 +104,47 @@ async def test_warmup_invokes_fetch_for_krx(monkeypatch):
     await builder.warmup()
     assert captured["fetch_args"][0] == "005930"
     assert captured["fetch_args"][2] == "1"
+
+
+class _FakeBalanceProvider:
+    """Minimal balance provider exposing AccountInfoProvider.fetch() shape."""
+
+    def __init__(self, bal: dict) -> None:
+        self._bal = bal
+
+    def fetch(self) -> dict:
+        return self._bal
+
+
+_BAL = {
+    "binance": {"ok": True, "available_usdt": 5596.32},
+    "bitget": {"ok": True, "available_usdt": 483.63},
+    "kis": {"ok": True, "cash_balance": 9734720.0},
+}
+
+
+def test_usdt_equity_venue_bitget_sizes_against_bitget_balance():
+    """bitget 거래는 bitget 잔고로 equity_usdt 를 잡아야 한다.
+
+    회귀: 옛 코드는 항상 binance 잔고($5596)를 equity_usdt 로 써서, bitget
+    주문(잔고 $483)이 11.6배 부풀려졌다 (2026-06-08 BEAT 명목 $2810 사고).
+    """
+    sb = SnapshotBuilder(
+        ["BTCUSDT"], balance_provider=_FakeBalanceProvider(_BAL),
+        usdt_equity_venue="bitget",
+    )
+    snap: dict = {}
+    sb._inject_real_equity(snap)
+    assert snap["equity_usdt"] == pytest.approx(483.63)
+    # 0.50 사이징 → 명목 ≈ $242 (의도값), $2810 (버그값) 아님.
+    assert 0.50 * snap["equity_usdt"] == pytest.approx(241.8, abs=1.0)
+
+
+def test_usdt_equity_venue_defaults_to_binance():
+    """기본값(미지정)은 binance 잔고 — 기존 동작 byte-호환 보존."""
+    sb = SnapshotBuilder(
+        ["BTCUSDT"], balance_provider=_FakeBalanceProvider(_BAL),
+    )
+    snap: dict = {}
+    sb._inject_real_equity(snap)
+    assert snap["equity_usdt"] == pytest.approx(5596.32)

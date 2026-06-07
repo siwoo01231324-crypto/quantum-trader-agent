@@ -466,6 +466,9 @@ async def run_shadow_loop(
             config=config.snapshot_builder_config,
             universe_quote_provider=config.universe_quote_provider,  # #231 S2
             balance_provider=config.balance_provider,  # #238 Item 9
+            # 2026-06-08 — bitget 거래는 bitget 잔고로 사이징 (binance 잔고로
+            # 사이징돼 명목 11.6배 부푼 사고 fix). 그 외 USDT venue 는 binance.
+            usdt_equity_venue=("bitget" if "bitget" in config.broker_mode else "binance"),
         )
         if config.on_snapshot_builder_ready is not None:
             try:
