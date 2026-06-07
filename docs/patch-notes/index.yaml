@@ -15,6 +15,24 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.42"
+    date: "2026-06-08"
+    title: "airborne 트레이더를 데몬 발화에 동기화 — 알림 없으면 매수 안 함 (v0.6.41 쿨다운 대체)"
+    tags: [fix]
+    summary: >
+      트레이더가 자체 평가로 데몬(텔레그램 알림 소스)에 없는 종목·봉을 매수하던
+      문제(XAGUSDT 8시 — 데몬 8시 발화 안 했는데 봇만 매수). v0.6.41 쿨다운은
+      정상 재발화도 막아 오답이었음 → 제거. 대신 *데몬-발화 게이트*: 트레이더
+      진입 직전 AirborneFireStore(history.jsonl, 알림과 동일 소스)에서 이 종목·
+      이 봉 발화 여부 확인 → 있으면 매수, 없으면 hold. 알림==거래 보장.
+    items:
+      - "LiveAirborneBbReversalKstHours._daemon_fired(): floor(데몬 fire ts,1h)==closed_ts+1봉 정확 매칭(데몬 ts=봉마감/트레이더 closed_ts=봉시작). 매칭 종목·봉·방향 발화 있을 때만 진입."
+      - "게이트 차단 시 dedup 미기록 → store 갱신되면 다음 tick 재시도 (데몬→store lag 으로 거래 놓치지 않음)."
+      - "fire 소스 미가용(history.jsonl 부재)이면 fail-open — 알림 인프라 다운에 트레이딩 안 멈춤. AIRBORNE_FIRE_STORE_PATH env 로 경로 조정(테스트 격리)."
+      - "v0.6.41 쿨다운(reentry_cooldown_hours) 제거 — 정상 재발화 차단하던 오답. 같은 봉 1회 dedup(디스크 영속, 재시작 유지)는 유지."
+      - "live 전용(closed_ts None 인 backtest 무동작) → byte-identical 373 passed. 게이트 테스트 4건(차단/허용/lag재시도/backtest무영향)."
+    refs:
+      - "src/backtest/strategies/live_airborne_bb_reversal_kst_hours.py"
   - version: "v0.6.41"
     date: "2026-06-08"
     title: "airborne 재진입 차단 — dedup 디스크 영속 + 쿨다운 (재시작/매시간 재매수 방지)"

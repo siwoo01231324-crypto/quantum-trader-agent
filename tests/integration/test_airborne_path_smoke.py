@@ -35,8 +35,16 @@ from src.brokers.binance.universe_quote import _klines_to_dataframe
 
 @pytest.fixture(autouse=True)
 def _isolate_reentry_dedup(tmp_path, monkeypatch):
-    """재진입 dedup 영속을 테스트별 tmp 로 격리 (테스트 간 오염·실제 logs/ 오염 방지)."""
+    """재진입 dedup 영속 + 데몬 fire store 를 tmp 로 격리.
+
+    - AIRBORNE_REENTRY_STATE_DIR: dedup 영속 tmp.
+    - AIRBORNE_FIRE_STORE_PATH: 존재하지 않는 tmp → 데몬-발화 게이트 fail-open
+      (e2e dispatch 경로 검증이 목적이므로 게이트 무력화).
+    """
     monkeypatch.setenv("AIRBORNE_REENTRY_STATE_DIR", str(tmp_path / "reentry"))
+    monkeypatch.setenv(
+        "AIRBORNE_FIRE_STORE_PATH", str(tmp_path / "nofires" / "history.jsonl"),
+    )
 
 
 # ──────────────────────────────────────────────────────────────────────────

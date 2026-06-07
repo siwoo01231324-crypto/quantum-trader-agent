@@ -108,11 +108,6 @@ class LiveAirborneBbReversalKstHours(LiveAirborneBbReversalKstMorning):
 
     kst_entry_hours: ClassVar[frozenset[int]] = _KST_TOP_HOURS_V3
 
-    # 재진입 쿨다운(시간) — 같은 종목을 이 시간 안에 또 진입하지 않음.
-    # AIRBORNE_REENTRY_COOLDOWN_HOURS env 로 조정. dedup 은 디스크 영속이라
-    # 재시작해도 유지된다.
-    reentry_cooldown_hours: ClassVar[float] = 12.0
-
     # 새 instance attr — BTC trend filter 토글. default True (활성).
     btc_trend_filter_enabled: bool = True
 
@@ -214,29 +209,6 @@ class LiveAirborneBbReversalKstHours(LiveAirborneBbReversalKstMorning):
 
     # ── 재진입 차단 dedup 영속 (live only) ──────────────────────────────────────
 
-    def _cooldown_hours(self) -> float:
-        import os
-        try:
-            return float(
-                os.environ.get(
-                    "AIRBORNE_REENTRY_COOLDOWN_HOURS", self.reentry_cooldown_hours
-                )
-            )
-        except (ValueError, TypeError):
-            return float(self.reentry_cooldown_hours)
-
-    def _within_reentry_cooldown(self, last, closed_ts) -> bool:
-        try:
-            last_ts = pd.Timestamp(last)
-            cur = pd.Timestamp(closed_ts)
-            if last_ts.tzinfo is None:
-                last_ts = last_ts.tz_localize("UTC")
-            if cur.tzinfo is None:
-                cur = cur.tz_localize("UTC")
-            return (cur - last_ts) < pd.Timedelta(hours=self._cooldown_hours())
-        except (ValueError, TypeError):
-            return False
-
     def _dedup_path(self):
         from pathlib import Path
         import os
@@ -269,6 +241,65 @@ class LiveAirborneBbReversalKstHours(LiveAirborneBbReversalKstMorning):
             )
         except Exception:  # noqa: BLE001
             pass
+
+    # ── 데몬-발화 게이트 (live only) ─────────────────────────────────────────────
+
+    def _get_fire_store(self):
+        cached = getattr(self, "_fire_store_cache", "UNSET")
+        if cached != "UNSET":
+            return cached
+        store = None
+        try:
+            import os
+            from src.dashboard.airborne_fire_store import AirborneFireStore
+            path = os.environ.get(
+                "AIRBORNE_FIRE_STORE_PATH", "logs/airborne_fires/history.jsonl",
+            )
+            store = AirborneFireStore(path)
+        except Exception:  # noqa: BLE001
+            store = None
+        self._fire_store_cache = store
+        return store
+
+    def _daemon_fired(self, symbol: str, action: str, closed_ts) -> bool:
+        """데몬(텔레그램 알림 소스)이 *이 종목·이 봉·이 방향* 으로 발화했나.
+
+        데몬 fire ``ts`` = 봉 *마감* 시각, 트레이더 ``closed_ts`` = 봉 *시작* →
+        ``floor(fire_ts, 1h) == closed_ts + 1봉`` 이면 같은 봉. fire 소스
+        미가용(파일 부재)이면 fail-open(True) — 알림 인프라가 죽었다고 트레이딩을
+        멈추지 않음(기존 동작 fallback).
+        """
+        store = self._get_fire_store()
+        if store is None or not store.path.exists():
+            return True  # fire 소스 미가용 → 게이트 무력화 (fail-open)
+        side = "long" if action == "buy" else "short"
+        try:
+            from datetime import timezone as _tz
+            bar_open = pd.Timestamp(closed_ts)
+            if bar_open.tzinfo is None:
+                bar_open = bar_open.tz_localize("UTC")
+            interval = pd.Timedelta(seconds=self._bar_interval_sec())
+            bar_close = (bar_open + interval).floor("1h")
+            since = (bar_open - interval).to_pydatetime()
+            if since.tzinfo is None:
+                since = since.replace(tzinfo=_tz.utc)
+            fires = store.load_since(since)
+        except Exception:  # noqa: BLE001 — 게이트 에러로 거래 막지 않음
+            return True
+        for f in fires:
+            if str(f.get("symbol", "")) != symbol:
+                continue
+            if str(f.get("side", "")).lower() != side:
+                continue
+            try:
+                f_ts = pd.Timestamp(f.get("ts"))
+                if f_ts.tzinfo is None:
+                    f_ts = f_ts.tz_localize("UTC")
+                if f_ts.floor("1h") == bar_close:
+                    return True
+            except (ValueError, TypeError):
+                continue
+        return False
 
     async def on_bar(self, ctx):
         """parent 의 시그널 평가 → buy intent 면 BTC trend filter 적용.
@@ -305,20 +336,26 @@ class LiveAirborneBbReversalKstHours(LiveAirborneBbReversalKstMorning):
                             action="hold", size=0.0,
                             reason=f"btc_trend_filter_long_blocked:{reason} ({existing_reason})",
                         )
-        # ── 재진입 차단 (live) — 같은 종목을 쿨다운 안에 또 사지 않음 ──
-        # dedup 을 디스크에 영속화 → 재시작해도 유지(재시작마다 재매수 방지).
-        # 쿨다운(기본 12h, AIRBORNE_REENTRY_COOLDOWN_HOURS 로 조정) 안이면 같은
-        # 봉이든 다음 봉이든 진입 차단 → 매시간 같은 손실 종목 재매수 방지.
+        # ── 데몬-발화 게이트 (live) — 데몬이 발화한 종목·봉만 진입 ──────────────
+        # 트레이더가 자체 평가로 매수하려 해도, *데몬(텔레그램 알림 소스)이 같은
+        # 봉에 발화하지 않았으면 진입 안 함*. → 알림 없는 매수 원천 차단(XAG 8시
+        # 사고). 게이트 실패 시 dedup 기록 안 함 → store 갱신되면 다음 tick 재시도
+        # (lag 으로 거래 놓치지 않음). fire 소스 미가용(파일 없음)이면 fail-open.
         if closed_ts is not None and getattr(sig, "action", None) in ("buy", "sell"):
             snap = ctx.get("market_snapshot") if isinstance(ctx, dict) else None
             symbol = snap.get("symbol") if isinstance(snap, dict) else None
             if symbol is not None:
-                self._ensure_dedup_loaded()
-                last = self._fired_bar_ts.get(symbol)
-                if last is not None and self._within_reentry_cooldown(last, closed_ts):
+                if not self._daemon_fired(symbol, sig.action, closed_ts):
                     return Signal(
                         action="hold", size=0.0,
-                        reason=f"reentry_cooldown:{symbol} last={last}",
+                        reason=f"no_daemon_fire:{symbol}@{closed_ts}",
+                    )
+                # 같은 봉엔 1회만 진입 (디스크 영속 → 재시작해도 중복매수 방지).
+                self._ensure_dedup_loaded()
+                if self._fired_bar_ts.get(symbol) == str(closed_ts):
+                    return Signal(
+                        action="hold", size=0.0,
+                        reason=f"already_entered_bar:{closed_ts}",
                     )
                 self._fired_bar_ts[symbol] = str(closed_ts)
                 self._persist_dedup()
