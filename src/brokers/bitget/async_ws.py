@@ -57,7 +57,11 @@ WS_PRIVATE_LIVE = "wss://ws.bitget.com/v2/ws/private"
 WS_PRIVATE_DEMO = "wss://wspap.bitget.com/v2/ws/private"
 
 
-def _parse_fill_from_order(o: dict, seen: set[tuple[str, str]]) -> BrokerFill | None:
+def _parse_fill_from_order(
+    o: dict,
+    seen: set[tuple[str, str]],
+    acc: dict[str, Decimal] | None = None,
+) -> BrokerFill | None:
     """Translate one ``orders`` channel data row to a BrokerFill.
 
     Returns None when:
@@ -83,9 +87,24 @@ def _parse_fill_from_order(o: dict, seen: set[tuple[str, str]]) -> BrokerFill | 
     ts_ms = int(o.get("uTime") or o.get("fillTime") or o.get("cTime") or 0)
     ts = datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc) if ts_ms else datetime.now(tz=timezone.utc)
 
-    # Bitget fill fields: ``fillPrice`` / ``fillSize`` for this match.
-    # If only cumulative (size/priceAvg) present, use those.
-    qty = Decimal(str(o.get("fillSize") or o.get("size") or "0"))
+    # 2026-06-08 — Bitget orders 채널은 fill 마다 *누적* 체결량(accBaseVolume /
+    # baseVolume)을 push 한다 (per-fill 증분이 아님). 따라서 push 값을 그대로
+    # 기록하면 partial fill N 회 → N 배 부풀려진다 (BSBUSDT 8× 사고). 누적의
+    # *증분*(이번 push 누적 − 직전 누적)만 이 fill 의 qty 로 기록한다. acc 미전달
+    # (레거시/단위테스트) 시엔 단일 fill 가정으로 옛 동작 보존.
+    cum = Decimal(str(
+        o.get("accBaseVolume") or o.get("baseVolume")
+        or o.get("fillSize") or o.get("size") or "0"
+    ))
+    if acc is not None:
+        prev = acc.get(broker_order_id, Decimal("0"))
+        qty = cum - prev
+        # 누적이 안 늘었으면(증분 0 이하) 이 push 엔 신규 체결 없음 → skip.
+        if qty <= 0:
+            return None
+        acc[broker_order_id] = cum
+    else:
+        qty = cum
     price = Decimal(str(o.get("fillPrice") or o.get("priceAvg") or o.get("price") or "0"))
     fee = Decimal(str(o.get("fee") or "0"))
     fee_asset = str(o.get("feeCcy") or "USDT")
@@ -135,6 +154,11 @@ class AsyncBitgetUserDataStream:
         self._queue: asyncio.Queue[BrokerFill] = asyncio.Queue(maxsize=queue_size)
         self._overflow_policy = overflow_policy
         self._seen: set[tuple[str, str]] = set()
+        # 2026-06-08 — per-order 누적 체결량 추적. Bitget orders 채널은 fill 마다
+        # *누적* baseVolume/accBaseVolume 를 push 하므로, 각 push 를 그대로
+        # qty 로 기록하면 partial fill 이 N 번이면 N 배 부풀려진다 (BSBUSDT
+        # 8× 사고, logical -63856 vs broker -7982). 누적의 *증분* 만 기록한다.
+        self._acc_filled: dict[str, Decimal] = {}
         self._stop = asyncio.Event()
         self._task: asyncio.Task | None = None
 
@@ -212,7 +236,7 @@ class AsyncBitgetUserDataStream:
                 if arg.get("channel") != "orders":
                     continue
                 for row in msg.get("data") or []:
-                    fill = _parse_fill_from_order(row, self._seen)
+                    fill = _parse_fill_from_order(row, self._seen, self._acc_filled)
                     if fill is not None:
                         await self._enqueue(fill)
 

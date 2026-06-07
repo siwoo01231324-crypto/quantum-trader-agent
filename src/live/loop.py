@@ -859,9 +859,20 @@ async def run_shadow_loop(
             # 50개씩 chunk subscribe (BitgetMarkPriceFeed.connect 내부 처리).
             from src.live.feed import BitgetMarkPriceFeed
             _bg_paper = config.broker_mode == "bitget-demo"
-            # universe = config.symbols (live_run.py 가 universe 모두 채워줘야 함).
+            # 2026-06-08 — mark-price 피드 = 거래 유니버스 전체 (Bitget top-100
+            # ∪ config.symbols). 옛 코드는 config.symbols(틱 피드용 10종)만 구독해서,
+            # 전략이 top-100 을 거래하는데 그 10종 밖 포지션(예: BSBUSDT)은 mark-price
+            # 가 안 들어와 LivePositionRiskManager 의 stop/TP evaluate 가 *호출조차
+            # 안 됨* → 손절 영원히 미작동 (2026-06-08 BSB ROE -23% 무손절 사고).
+            # get_top_n_symbols 실패해도 config.symbols 로 graceful fallback.
             def _bitget_mp_factory():
-                return BitgetMarkPriceFeed(config.symbols, paper=_bg_paper)
+                syms = set(config.symbols)
+                try:
+                    from src.portfolio.bitget_top_dynamic import get_top_n_symbols
+                    syms |= set(get_top_n_symbols(100))
+                except Exception as exc:  # noqa: BLE001 — 유니버스 실패해도 피드는 떠야
+                    logger.warning("bitget mark-price universe fetch failed: %s", exc)
+                return BitgetMarkPriceFeed(sorted(syms), paper=_bg_paper)
             mark_price_task = asyncio.create_task(
                 _run_mark_price_consumer(
                     position_risk_manager=config.position_risk_manager,
