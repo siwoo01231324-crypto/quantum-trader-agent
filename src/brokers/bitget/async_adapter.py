@@ -88,6 +88,9 @@ class AsyncBitgetFuturesAdapter:
         self._product_type = DEMO_PRODUCT_TYPE if paper else LIVE_PRODUCT_TYPE
         self._symbol_filters = SymbolFilters(base_url=base_url, paper=paper)
         self._hedge_mode: bool | None = None
+        # #380 — ensure_leverage_target 캐시. symbol→이미 set 한 leverage.
+        # 동일 (symbol, leverage) 재요청은 REST 생략 (발주마다 set-leverage 폭주 방지).
+        self._leverage_forced: dict[str, int] = {}
         # Bitget -2027 equivalent: code 40762 (qty exceeds upper limit).
         # Local cooldown to prevent rate-limit cascade (mirrors Binance fix).
         self._max_notional_cooldown: dict[tuple[str, str], float] = {}
@@ -361,6 +364,31 @@ class AsyncBitgetFuturesAdapter:
         except Exception:  # noqa: BLE001
             pass
         await self.ensure_leverage(symbol, fallback_leverage)
+
+    async def ensure_leverage_target(self, symbol: str, leverage: int) -> None:
+        """leverage 를 *강제로* ``leverage`` 로 설정 (종목당 1회, 캐시).
+
+        ``ensure_leverage_minimum`` 과 차이: minimum 은 "미설정이면 1x" 라
+        브로커 UI/이전값을 override 하지 않는다. 본 메서드는 config 가
+        leverage 를 강제하도록 *현재값과 무관하게* set 한다 (#380 — 데모 UI
+        수동 10x 설정 불가 케이스. 코드가 leverage 의 truth source).
+
+        open position 이 있으면 거래소가 set-leverage 를 거부할 수 있으나
+        (cross margin 은 보통 허용) 예외는 삼켜 발주는 진행한다 — leverage 는
+        다음 청산 후 진입부터 반영. 캐시는 *성공 시에만* 채워 재시도 가능.
+        """
+        if leverage <= 0:
+            return
+        if self._leverage_forced.get(symbol) == leverage:
+            return
+        try:
+            await self.ensure_leverage(symbol, leverage)
+            self._leverage_forced[symbol] = leverage
+        except Exception as exc:  # noqa: BLE001 — leverage 못 set 해도 발주 시도
+            log.warning(
+                "bitget ensure_leverage_target failed sym=%s lev=%d: %s — proceed",
+                symbol, leverage, exc,
+            )
 
     async def ensure_margin_type(self, symbol: str, mode: MarginType) -> None:
         bitget_mode = "crossed" if mode == MarginType.CROSSED else "isolated"

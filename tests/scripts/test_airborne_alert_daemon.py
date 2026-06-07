@@ -377,3 +377,56 @@ def test_dispatch_fire_title_has_short_emoji_and_korean():
     assert "🤖 봇 진입 가능성" in body
     assert "현재가:" in body and "진입가(40% 되돌림):" in body
     assert "최고점:" in body  # short → 최고점 label
+
+
+# ── #380: 심볼 정규화 + 화이트리스트 매칭 ────────────────────────────────────
+def test_norm_symbol_strips_1000_multiplier():
+    """Binance '1000SHIBUSDT' → Bitget/whitelist 단위 'SHIBUSDT'."""
+    assert daemon._norm_symbol("1000SHIBUSDT") == "SHIBUSDT"
+    assert daemon._norm_symbol("SHIBUSDT") == "SHIBUSDT"
+    assert daemon._norm_symbol("1000PEPEUSDT") == "PEPEUSDT"
+    # 프리픽스 유지 종목도 양쪽 정규화로 일관 (1000LUNC↔LUNC)
+    assert daemon._norm_symbol("1000LUNCUSDT") == "LUNCUSDT"
+    # 짧은 심볼 / 정상 심볼은 그대로
+    assert daemon._norm_symbol("BTCUSDT") == "BTCUSDT"
+
+
+def test_in_trading_universe_matches_across_1000_prefix(monkeypatch):
+    """#380 회귀 — fire 가 '1000SHIBUSDT'(Binance)로 와도 top-100 의
+    'SHIBUSDT'(Bitget)와 정규화 매칭. 이전엔 직접 비교라 '외 종목' 오알림."""
+    import portfolio.bitget_top_dynamic as btd
+    monkeypatch.setattr(btd, "get_top_n_symbols", lambda n=100: ["SHIBUSDT", "BTCUSDT", "ETHUSDT"])
+    assert daemon._in_trading_universe("1000SHIBUSDT") is True
+    assert daemon._in_trading_universe("BTCUSDT") is True
+    # top-100 밖 종목은 False
+    assert daemon._in_trading_universe("NOTREALUSDT") is False
+
+
+def test_in_trading_universe_fetch_failure_is_permissive(monkeypatch):
+    """#380 — top-100 조회 실패 시 보수적으로 True (오알림보다 누락-경고 회피)."""
+    import portfolio.bitget_top_dynamic as btd
+
+    def _boom(n=100):
+        raise RuntimeError("net down")
+
+    monkeypatch.setattr(btd, "get_top_n_symbols", _boom)
+    assert daemon._in_trading_universe("ANYUSDT") is True
+
+
+def test_short_wl_gate_is_24h():
+    """#380 — short-whitelist 게이트가 24시간 (제외시간 없음)."""
+    assert len(daemon._KST_HOURS_SHORT_WL) == 24
+    for h in (4, 6, 7, 8, 13):  # 이전 제외시간도 이제 포함
+        assert h in daemon._KST_HOURS_SHORT_WL
+
+
+def test_short_wl_notice_in_top100_shows_enter(monkeypatch):
+    """#380 통합 — top-100 에 든 '1000SHIBUSDT' short fire 안내는 '진입 예정',
+    'TOP100 외 종목' 안 뜸."""
+    import portfolio.bitget_top_dynamic as btd
+    monkeypatch.setattr(btd, "get_top_n_symbols", lambda n=100: ["SHIBUSDT"])
+    notice = daemon._format_strategy_notice(
+        side="short", kst_hour=18, symbol="1000SHIBUSDT",
+    )
+    assert "TOP100 외 종목" not in notice
+    assert "✅ 진입 예정" in notice

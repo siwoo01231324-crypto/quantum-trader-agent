@@ -247,12 +247,28 @@ strategies:
     kwargs:
       # 2026-06-02 capital-allocation-v1: 0.05 → 0.04 (시드 20% 비중, 동시 5).
       # spec: docs/specs/capital-allocation-v1.md
-      # 2026-06-04 — 0.04 → 0.16 (kst-hours 와 동일, 실계좌 1종 비중 매칭).
-      default_size: 0.16         # kst-hours 와 동일 비중
-      stop_loss_pct: 0.03        # -3% (Hard OOS 검증값)
-      take_profit_pct: 0.06      # +6% (R/R 1:2)
-      retrace_ratio: 0.6         # Hard OOS 검증값 (부모 default 0.4)
-      atr_body_mult: 0.3         # Hard OOS 검증값 (부모 default 0.6)
+      # 2026-06-07 사용자 운영 결정 (#380) — 라이브 누적관찰 우선, 5y/Hard-OOS 검증 무시.
+      # "WHITELIST 에어본 신호 다 사자 = 거래량 top-100 + SHORT TP1%/SL0.5% 누적
+      #  승률 우선" 요청. ⚠️ 본 변경들은 레포의 검증과 정면 충돌 — 모니터링 필수:
+      #   1) TP/SL 3%/6% → 1%/0.5% (kst-hours 통일, R/R 1:2). 5y bench 상
+      #      0.5%/1.0% 룰 PF=0.545 (8개 중 최악, 검증상 손실). 사용자 라이브 우선 채택.
+      #   2) retrace_ratio 0.6→0.4 + atr_body_mult 0.3→0.6 = base airborne 기본값.
+      #      텔레그램 airborne 알림이 포착하는 신호와 *동일하게* 진입.
+      #   3) kst_entry_hours 19h → 24h. 4) universe = 거래량 top-100 (전략 get_universe
+      #      override 제거 → 부모 상속). 5) 사이징/노출 제어 ▼
+      # 사이징: 사이즈 공식은 명목 = default_size × 자본 (레버리지 무관).
+      #   사용자 요청 = "종목당 증거금(마진) 5% + 10배" → 명목 50% 가 되어야 함.
+      #   ⇒ default_size 0.50 (명목 50%). 10x 에서 증거금 = 50%/10 = 자본의 5%/종목.
+      # max_concurrent 18: 최악 동시 18종 → 명목 900%, 증거금 90% (버퍼 10% 확보).
+      #   19번째부터 fire 는 hold (orchestrator 캡). 청산은 종목별 stop
+      #   (코인 -0.5% = 포지션 -5% @10x)으로 제한.
+      default_size: 0.50         # 명목 50% = 증거금 5%/종목 @10x (#380 사용자 요청)
+      max_concurrent_positions: 18  # 동시 보유 상한 18종 = 증거금 90% (#380, 버퍼 10%)
+      stop_loss_pct: 0.005       # -0.5% 코인가 (10x 레버리지에서 포지션 -5%)
+      take_profit_pct: 0.01      # +1.0% 코인가 (R/R 1:2, 포지션 +10% at 10x)
+      retrace_ratio: 0.4         # base airborne (RETRACE_RATIO) — 알림과 동일 포착
+      atr_body_mult: 0.6         # base airborne (DEFAULT_ATR_BODY_MULT_V11)
+      kst_entry_hours: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
       cooldown_after_stop_sec: 900
 
   # cs-bb-macd-kr 는 5y bench Sharpe -0.32 → status: inactive, production 미등록.

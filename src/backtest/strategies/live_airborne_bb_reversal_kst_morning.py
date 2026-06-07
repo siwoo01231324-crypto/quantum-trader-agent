@@ -114,6 +114,9 @@ class LiveAirborneBbReversalKstMorning(LiveScannerMixin):
         # LiveScannerMixin ClassVar 와 동일 시맨틱 — production.yaml kwarg 로
         # override 가능하도록 ctor 에 노출. None / 0 = 차단 없음 (기존 동작).
         cooldown_after_stop_sec: float | None = None,
+        # #380 — orchestrator 가 읽는 동시 보유 종목 상한 (전 전략 공통 옵션).
+        # None = 무제한 (legacy). top-100 universe 에서 총 노출 제한용.
+        max_concurrent_positions: int | None = None,
     ) -> None:
         if not 0 < default_size <= 1.0:
             raise ValueError(f"default_size must be in (0, 1], got {default_size}")
@@ -149,6 +152,13 @@ class LiveAirborneBbReversalKstMorning(LiveScannerMixin):
                     f"kst_entry_hours must be in [0,23], got invalid={invalid}",
                 )
             self.kst_entry_hours = frozenset(int(h) for h in kst_entry_hours)
+
+        if max_concurrent_positions is not None:
+            if int(max_concurrent_positions) < 1:
+                raise ValueError(
+                    f"max_concurrent_positions >= 1 required, got {max_concurrent_positions}"
+                )
+            self.max_concurrent_positions = int(max_concurrent_positions)
 
     async def on_bar(self, ctx: object) -> Signal | None:
         snap = ctx["market_snapshot"]  # type: ignore[index]
