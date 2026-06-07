@@ -287,6 +287,79 @@ class AsyncBitgetFuturesClient:
             body["clientOid"] = client_oid
         await self._request("POST", "/api/v2/mix/order/cancel-order", body=body)
 
+    # ── 거래소 네이티브 TP/SL plan order (2026-06-08) ────────────────────────────
+    # 진입 직후 거래소에 익절/손절 trigger 를 직접 등록한다. synthetic(봇이
+    # mark-price 보다가 청산)과 달리 Bitget 매칭엔진이 서버측에서 즉시 청산 →
+    # WS 지연/봇 다운과 무관하게 빠르고 robust. triggerType=mark_price,
+    # executePrice="0"(트리거 시 시장가 청산). planType: profit_plan(TP) /
+    # loss_plan(SL). holdSide 는 *보호 대상 포지션* 방향(long/short).
+
+    async def place_tpsl_order(
+        self,
+        *,
+        symbol: str,
+        plan_type: str,          # "profit_plan" (TP) | "loss_plan" (SL)
+        trigger_price: Decimal,
+        hold_side: str,          # "long" | "short" — 보호 대상 포지션 방향
+        size: Decimal,
+        client_oid: str,
+        trigger_type: str = "mark_price",
+        margin_coin: str = "USDT",
+    ) -> str:
+        """Bitget v2 TPSL plan order 제출 — broker orderId 반환."""
+        body: dict[str, Any] = {
+            "marginCoin": margin_coin,
+            "productType": self._product_type,
+            "symbol": symbol,
+            "planType": plan_type,
+            "triggerPrice": str(trigger_price),
+            "triggerType": trigger_type,
+            "executePrice": "0",   # 0 = 트리거 시 시장가 청산
+            "holdSide": hold_side,
+            "size": str(size),
+            "clientOid": client_oid,
+        }
+        data = await self._request(
+            "POST", "/api/v2/mix/order/place-tpsl-order", body=body
+        )
+        return str((data or {}).get("orderId") or "")
+
+    async def cancel_tpsl_order(
+        self,
+        *,
+        symbol: str,
+        order_id: str,
+        margin_coin: str = "USDT",
+    ) -> None:
+        """TPSL plan order 취소 (orderIdList 1건)."""
+        body: dict[str, Any] = {
+            "marginCoin": margin_coin,
+            "productType": self._product_type,
+            "symbol": symbol,
+            "orderIdList": [{"orderId": order_id}],
+        }
+        await self._request("POST", "/api/v2/mix/order/cancel-plan-order", body=body)
+
+    async def get_pending_tpsl_orders(
+        self,
+        *,
+        symbol: str | None = None,
+    ) -> list[dict]:
+        """현재 거래소 측 살아있는 TPSL plan order 목록 (재기동 동기화용)."""
+        params: dict[str, Any] = {
+            "productType": self._product_type,
+            "planType": "profit_loss",   # TP/SL plan 군
+        }
+        if symbol:
+            params["symbol"] = symbol
+        data = await self._request(
+            "GET", "/api/v2/mix/order/orders-plan-pending", params=params
+        )
+        if isinstance(data, dict):
+            rows = data.get("entrustedList") or data.get("list") or []
+            return list(rows) if rows else []
+        return list(data or [])
+
     async def get_order_detail(
         self,
         *,

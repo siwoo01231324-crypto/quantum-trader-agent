@@ -1,5 +1,6 @@
 from __future__ import annotations
 import sys
+import os
 import asyncio
 # 2026-06-03 — Selector 강제 제거. Python 3.14 + Windows 의 default 는
 # Proactor loop 인데, 코드가 강제로 Selector 로 바꾸면 websockets 라이브러리가
@@ -807,12 +808,36 @@ async def run_shadow_loop(
             def _bg_stream_factory():
                 return bitget_adapter.stream_fills()
 
+            # 거래소 네이티브 TP/SL 코디네이터 (2026-06-08) — 진입 체결 시 거래소에
+            # 보호주문(plan order) 등록 / 청산 시 취소. Bitget 매칭엔진 서버측 즉시
+            # 청산 → synthetic(mark-price watch)보다 빠르고 robust. synthetic
+            # LivePositionRiskManager 는 백업으로 유지 (reduce-only → 무해).
+            # ⚠️ 안전 게이트: BITGET_NATIVE_TPSL=1 일 때만 활성. 데모에서 실제
+            # TPSL 주문 검증 후 마인넷에서 켤 것 (기본 OFF → 머지해도 동작변화 0).
+            _prot_on_fill = None
+            if (
+                os.environ.get("BITGET_NATIVE_TPSL", "0") == "1"
+                and config.position_risk_manager is not None
+                and config.position_store is not None
+            ):
+                from src.live.protective_coordinator import ProtectiveOrderCoordinator
+                _prot_coord = ProtectiveOrderCoordinator(
+                    adapter=bitget_adapter,
+                    position_store=config.position_store,
+                    policy_lookup=config.position_risk_manager.effective_policy,
+                )
+                _prot_on_fill = _prot_coord.on_fill
+                logger.info(
+                    "bitget native TP/SL coordinator ATTACHED (BITGET_NATIVE_TPSL=1)"
+                )
+
             fill_task = asyncio.create_task(
                 run_bitget_fill_consumer(
                     _bg_stream_factory,
                     wal=wal,
                     position_store=config.position_store,
                     stop_event=stop_event,
+                    on_fill=_prot_on_fill,
                 ),
                 name="bitget-fill-consumer",
             )

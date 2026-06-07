@@ -125,6 +125,17 @@ class LivePositionRiskManager:
             trailing_stop_pct=trailing_stop_pct,
         )
 
+    def effective_policy(self, strategy_id: str) -> tuple[float, float] | None:
+        """거래소 네이티브 TP/SL 코디네이터용 — (stop_loss_pct, take_profit_pct).
+
+        정적 정책 기준 *가격* pct (ROI 아님). 미등록 전략(cs-tsmom 등)은 None
+        → 코디네이터가 거래소 보호 대상에서 제외.
+        """
+        pol = self._policies.get(strategy_id)
+        if pol is None:
+            return None
+        return (pol.stop_loss_pct, pol.take_profit_pct)
+
     def register_entry_override(
         self,
         strategy_id: str,
