@@ -1,0 +1,981 @@
+{
+  "date_kst": "2026-06-06",
+  "kst_window_start": "2026-06-06T00:00:00+09:00",
+  "now_kst": "2026-06-07T00:00:00+09:00",
+  "counts": {
+    "auto_fills": 0,
+    "auto_signals": 0,
+    "manual_trades": 17,
+    "airborne_fires": 89
+  },
+  "auto_fills": [],
+  "auto_signals": [],
+  "manual_trades": [
+    {
+      "schema_version": 2,
+      "ts": "2026-06-05T18:37:57.959503+00:00",
+      "event_type": "manual_trade",
+      "payload": {
+        "symbol": "BTCUSDT",
+        "direction": "long",
+        "side": "buy",
+        "kind": "entry",
+        "qty": 0.01,
+        "entry_price": 78000.0,
+        "price": 78000.0,
+        "exit_price": null,
+        "realized_pnl": null,
+        "outcome": null,
+        "venue": "binance",
+        "note": "RSI 28 + BB 하단"
+      }
+    },
+    {
+      "schema_version": 2,
+      "ts": "2026-06-05T18:37:58.083986+00:00",
+      "event_type": "manual_trade",
+      "payload": {
+        "symbol": "BTCUSDT",
+        "direction": "long",
+        "side": "buy",
+        "kind": "roundtrip",
+        "qty": 0.01,
+        "entry_price": 77500.0,
+        "price": 77500.0,
+        "exit_price": 77800.0,
+        "realized_pnl": 3.0,
+        "outcome": "win",
+        "venue": "binance",
+        "note": "BB lower bounce"
+      }
+    },
+    {
+      "schema_version": 2,
+      "ts": "2026-06-05T18:37:58.123076+00:00",
+      "event_type": "manual_trade",
+      "payload": {
+        "symbol": "AVAXUSDT",
+        "direction": "short",
+        "side": "sell",
+        "kind": "entry",
+        "qty": 1.0,
+        "entry_price": 9.5,
+        "price": 9.5,
+        "exit_price": null,
+        "realized_pnl": null,
+        "outcome": null,
+        "venue": "binance",
+        "note": "airborne signal"
+      }
+    },
+    {
+      "schema_version": 2,
+      "ts": "2026-06-05T18:37:58.163140+00:00",
+      "event_type": "manual_trade",
+      "payload": {
+        "symbol": "BTCUSDT",
+        "direction": "long",
+        "side": "buy",
+        "kind": "entry",
+        "qty": 0.01,
+        "entry_price": 78000.0,
+        "price": 78000.0,
+        "exit_price": null,
+        "realized_pnl": null,
+        "outcome": null,
+        "venue": "binance",
+        "note": ""
+      }
+    },
+    {
+      "schema_version": 2,
+      "ts": "2026-06-05T18:37:58.226366+00:00",
+      "event_type": "manual_trade",
+      "payload": {
+        "symbol": "BTCUSDT",
+        "direction": "long",
+        "side": "buy",
+        "kind": "entry",
+        "qty": 0.01,
+        "entry_price": 78000.0,
+        "price": 78000.0,
+        "exit_price": null,
+        "realized_pnl": null,
+        "outcome": null,
+        "venue": "other",
+        "note": ""
+      }
+    },
+    {
+      "schema_version": 2,
+      "ts": "2026-06-05T18:37:58.312516+00:00",
+      "event_type": "manual_trade",
+      "payload": {
+        "symbol": "BTCUSDT",
+        "direction": "long",
+        "side": "buy",
+        "kind": "entry",
+        "qty": 0.1,
+        "entry_price": 100.0,
+        "price": 100.0,
+        "exit_price": null,
+        "realized_pnl": null,
+        "outcome": null,
+        "venue": "binance",
+        "note": "test BTCUSDT"
+      }
+    },
+    {
+      "schema_version": 2,
+      "ts": "2026-06-05T18:37:58.317677+00:00",
+      "event_type": "manual_trade",
+      "payload": {
+        "symbol": "ETHUSDT",
+        "direction": "long",
+        "side": "buy",
+        "kind": "entry",
+        "qty": 0.1,
+        "entry_price": 100.0,
+        "price": 100.0,
+        "exit_price": null,
+        "realized_pnl": null,
+        "outcome": null,
+        "venue": "binance",
+        "note": "test ETHUSDT"
+      }
+    },
+    {
+      "schema_version": 2,
+      "ts": "2026-06-05T18:37:58.480977+00:00",
+      "event_type": "manual_trade",
+      "payload": {
+        "symbol": "ETHUSDT",
+        "direction": "long",
+        "side": "buy",
+        "kind": "entry",
+        "qty": 0.5,
+        "entry_price": 2100.0,
+        "price": 2100.0,
+        "exit_price": null,
+        "realized_pnl": null,
+        "outcome": null,
+        "venue": "binance",
+        "note": "MACD 골든크로스"
+      }
+    },
+    {
+      "schema_version": 2,
+      "ts": "2026-06-06T09:24:32.192662+00:00",
+      "event_type": "manual_trade",
+      "payload": {
+        "symbol": "LABUSDT",
+        "direction": "short",
+        "side": "sell",
+        "kind": "roundtrip",
+        "qty": 51.0,
+        "entry_price": 10.74392,
+        "price": 10.74392,
+        "exit_price": 10.04837,
+        "realized_pnl": 35.0943,
+        "outcome": "win",
+        "venue": "bybit",
+        "note": "강한 상승추세 나오고 VWMA 돌파 했다가 바로 VWMA꺠지면서 하락함"
+      }
+    },
+    {
+      "schema_version": 2,
+      "ts": "2026-06-06T09:25:36.858577+00:00",
+      "event_type": "manual_trade",
+      "payload": {
+        "symbol": "SOXUSDT",
+        "direction": "short",
+        "side": "sell",
+        "kind": "roundtrip",
+        "qty": 104.55,
+        "entry_price": 6.38,
+        "price": 6.38,
+        "exit_price": 6.58,
+        "realized_pnl": -21.3186,
+        "outcome": "loss",
+        "venue": "bybit",
+        "note": "흐 거래량도 별로 없고 상승하다가 하락추세 올거같아서 기다리고 있었는데 계속 쭉 올라가더라 오늘 추세가 상승추세였어서 이거 잘 보고 들어갔어야 함 상승추세에서 숏을 잡다니"
+      }
+    },
+    {
+      "schema_version": 2,
+      "ts": "2026-06-06T09:26:39.634117+00:00",
+      "event_type": "manual_trade",
+      "payload": {
+        "symbol": "ZECUSDT",
+        "direction": "short",
+        "side": "sell",
+        "kind": "roundtrip",
+        "qty": 2.011,
+        "entry_price": 336.89,
+        "price": 336.89,
+        "exit_price": 328.36,
+        "realized_pnl": 16.6311,
+        "outcome": "win",
+        "venue": "bybit",
+        "note": "당일 아주 상승추세인 코인이었음 그때 VWMA 하단에서 계속 노는거 확인하고 뚫으려는 시도 하다가 꺠진거 확인하고 숏 쳤음"
+      }
+    },
+    {
+      "schema_version": 2,
+      "ts": "2026-06-06T09:27:57.152698+00:00",
+      "event_type": "manual_trade",
+      "payload": {
+        "symbol": "BEATUSDT",
+        "direction": "short",
+        "side": "sell",
+        "kind": "roundtrip",
+        "qty": 396.0,
+        "entry_price": 1.69554,
+        "price": 1.69554,
+        "exit_price": 1.7425,
+        "realized_pnl": -19.0009,
+        "outcome": "loss",
+        "venue": "bybit",
+        "note": "상승추세였는데 이제 슬슬 힘 빠지면서 하락추세 나오는거같아서 매수했는데 SL라인에서 걸렸음, 결과적으로 하락봉이 나와서 먹을 순  있었지만 SL라인에 걸린 케이스,"
+      }
+    },
+    {
+      "schema_version": 2,
+      "ts": "2026-06-06T09:29:07.086181+00:00",
+      "event_type": "manual_trade",
+      "payload": {
+        "symbol": "XPRUSDT",
+        "direction": "short",
+        "side": "sell",
+        "kind": "roundtrip",
+        "qty": 366.0,
+        "entry_price": 1.1009,
+        "price": 1.1009,
+        "exit_price": 1.0988,
+        "realized_pnl": 0.5271,
+        "outcome": "win",
+        "venue": "bybit",
+        "note": "당일 하락 추세, VWMA밑에서 놀고있는거 확인하고 깨려는 움직입 보이다가 하락이길래 전략이 맞는지 확인하려고 매수, 하락추세 맞았음 이후 VWMA 터치했지만 뚫지못하고 계속 하방 추세"
+      }
+    },
+    {
+      "schema_version": 2,
+      "ts": "2026-06-06T09:30:44.184841+00:00",
+      "event_type": "manual_trade",
+      "payload": {
+        "symbol": "BABYUSDT",
+        "direction": "short",
+        "side": "sell",
+        "kind": "roundtrip",
+        "qty": 63181.0,
+        "entry_price": 0.0181,
+        "price": 0.0181,
+        "exit_price": 0.01887,
+        "realized_pnl": -57.4373,
+        "outcome": "loss",
+        "venue": "bybit",
+        "note": "이거진짜 백프로 하락 추세였는데 하 알고있었는데 VWMA1분봉 기준으로 뚫어버려가지고 너무 높게올라가서 -50%에서 손절함, 근데 최고점이었음,,, 그리고 계속 하방추세 이어가서 20퍼나 떨어졌음"
+      }
+    },
+    {
+      "schema_version": 2,
+      "ts": "2026-06-06T09:32:13.255179+00:00",
+      "event_type": "manual_trade",
+      "payload": {
+        "symbol": "BEATUSDT",
+        "direction": "short",
+        "side": "sell",
+        "kind": "roundtrip",
+        "qty": 371.0,
+        "entry_price": 1.66745,
+        "price": 1.66745,
+        "exit_price": 1.82419,
+        "realized_pnl": -5.0758,
+        "outcome": "loss",
+        "venue": "bybit",
+        "note": "한번 들어갔떤 놈에서 또 당함,,,근데 -50%에서 손절쳤는데 계속 들고있었으면 100%손절이었을듯, 계속 상승추세는 맞았지만 9시경 갑자기 완전 큰 장대음봉 나온걸 보니 힘이 쫙 빠지긴 한듯 인줄알았으나 그떄부터 다시 쭉 올라가네"
+      }
+    },
+    {
+      "schema_version": 2,
+      "ts": "2026-06-06T09:34:05.895426+00:00",
+      "event_type": "manual_trade",
+      "payload": {
+        "symbol": "ALLOUSDT",
+        "direction": "long",
+        "side": "buy",
+        "kind": "roundtrip",
+        "qty": 8702.0,
+        "entry_price": 0.22435,
+        "price": 0.22435,
+        "exit_price": 0.23522,
+        "realized_pnl": 93.3685,
+        "outcome": "win",
+        "venue": "bybit",
+        "note": "1분봉 기준 삼각수렴이 나오면서 슬슬 거래량이 터질거라고 생각하고 오늘 손실이 너무 커서 메꾸려고 좀 뇌동매매 하였음, 결론적으로 이득보긴 했고 상승추세라고 무조건 판단하고 들어가서 근거는 있긴 했지만 위험한 거래였음. 근데 팔고서 지금 보니까 20퍼 올랐네 가만히 있었으면 450달러 벌었겠다 ㅜ"
+      }
+    },
+    {
+      "schema_version": 2,
+      "ts": "2026-06-06T09:35:42.586900+00:00",
+      "event_type": "manual_trade",
+      "payload": {
+        "symbol": "WLDUSDT",
+        "direction": "short",
+        "side": "sell",
+        "kind": "roundtrip",
+        "qty": 1187.0,
+        "entry_price": 0.4986,
+        "price": 0.4986,
+        "exit_price": 0.5155,
+        "realized_pnl": -20.3011,
+        "outcome": "loss",
+        "venue": "bybit",
+        "note": "이것도 하락추세로 판단하고 VWMA 하단에서 놀고있는거 확인해서 들어갔으나 계속 올가가다가 VWMA 위로 올라타서 손절했음, 그 이후 약 5퍼정도 더 상승했다가 지금 보니까 -20퍼 내다꽂음, 결국 내가 생각한 방향은 또 맞았움,"
+      }
+    }
+  ],
+  "airborne_fires": [
+    {
+      "ts": "2026-06-05T16:01:52+00:00",
+      "symbol": "SNDKUSDT",
+      "side": "long",
+      "fire_close": 1636.8,
+      "trigger": 1630.19
+    },
+    {
+      "ts": "2026-06-05T16:01:53+00:00",
+      "symbol": "SOXLUSDT",
+      "side": "long",
+      "fire_close": 213.04,
+      "trigger": 211.812
+    },
+    {
+      "ts": "2026-06-05T16:01:54+00:00",
+      "symbol": "ONDOUSDT",
+      "side": "long",
+      "fire_close": 0.3291,
+      "trigger": 0.32734
+    },
+    {
+      "ts": "2026-06-05T16:01:55+00:00",
+      "symbol": "PUMPUSDT",
+      "side": "long",
+      "fire_close": 0.001406,
+      "trigger": 0.0013954
+    },
+    {
+      "ts": "2026-06-05T16:01:56+00:00",
+      "symbol": "TRXUSDT",
+      "side": "long",
+      "fire_close": 0.31851,
+      "trigger": 0.318446
+    },
+    {
+      "ts": "2026-06-05T16:01:57+00:00",
+      "symbol": "INTCUSDT",
+      "side": "long",
+      "fire_close": 103.19,
+      "trigger": 103.05
+    },
+    {
+      "ts": "2026-06-05T17:03:41+00:00",
+      "symbol": "MUUSDT",
+      "side": "long",
+      "fire_close": 902.72,
+      "trigger": 893.866
+    },
+    {
+      "ts": "2026-06-05T17:03:42+00:00",
+      "symbol": "OPNUSDT",
+      "side": "long",
+      "fire_close": 0.1688,
+      "trigger": 0.16512
+    },
+    {
+      "ts": "2026-06-05T17:03:43+00:00",
+      "symbol": "MRVLUSDT",
+      "side": "long",
+      "fire_close": 282.92,
+      "trigger": 282.536
+    },
+    {
+      "ts": "2026-06-05T17:03:44+00:00",
+      "symbol": "DRAMUSDT",
+      "side": "long",
+      "fire_close": 57.86,
+      "trigger": 57.496
+    },
+    {
+      "ts": "2026-06-05T18:03:47+00:00",
+      "symbol": "ALLOUSDT",
+      "side": "short",
+      "fire_close": 0.20205,
+      "trigger": 0.204258
+    },
+    {
+      "ts": "2026-06-05T19:03:47+00:00",
+      "symbol": "BTCUSDT",
+      "side": "long",
+      "fire_close": 59556.6,
+      "trigger": 59208.1
+    },
+    {
+      "ts": "2026-06-05T19:03:48+00:00",
+      "symbol": "SOLUSDT",
+      "side": "long",
+      "fire_close": 62.95,
+      "trigger": 62.59
+    },
+    {
+      "ts": "2026-06-05T19:03:49+00:00",
+      "symbol": "BNBUSDT",
+      "side": "long",
+      "fire_close": 562.55,
+      "trigger": 558.848
+    },
+    {
+      "ts": "2026-06-05T19:03:50+00:00",
+      "symbol": "DOGEUSDT",
+      "side": "long",
+      "fire_close": 0.08,
+      "trigger": 0.079576
+    },
+    {
+      "ts": "2026-06-05T19:03:51+00:00",
+      "symbol": "FETUSDT",
+      "side": "long",
+      "fire_close": 0.1866,
+      "trigger": 0.18484
+    },
+    {
+      "ts": "2026-06-05T19:03:52+00:00",
+      "symbol": "DOTUSDT",
+      "side": "long",
+      "fire_close": 0.926,
+      "trigger": 0.9186
+    },
+    {
+      "ts": "2026-06-05T19:03:53+00:00",
+      "symbol": "TRUMPUSDT",
+      "side": "long",
+      "fire_close": 1.544,
+      "trigger": 1.529
+    },
+    {
+      "ts": "2026-06-05T19:03:56+00:00",
+      "symbol": "XPLUSDT",
+      "side": "long",
+      "fire_close": 0.0634,
+      "trigger": 0.06284
+    },
+    {
+      "ts": "2026-06-05T19:03:57+00:00",
+      "symbol": "UNIUSDT",
+      "side": "long",
+      "fire_close": 2.38,
+      "trigger": 2.3656
+    },
+    {
+      "ts": "2026-06-05T19:03:58+00:00",
+      "symbol": "AVGOUSDT",
+      "side": "long",
+      "fire_close": 389.15,
+      "trigger": 387.416
+    },
+    {
+      "ts": "2026-06-05T19:03:59+00:00",
+      "symbol": "PENGUUSDT",
+      "side": "long",
+      "fire_close": 0.006194,
+      "trigger": 0.0061478
+    },
+    {
+      "ts": "2026-06-05T19:04:00+00:00",
+      "symbol": "WIFUSDT",
+      "side": "long",
+      "fire_close": 0.1471,
+      "trigger": 0.14564
+    },
+    {
+      "ts": "2026-06-05T19:04:01+00:00",
+      "symbol": "OPUSDT",
+      "side": "long",
+      "fire_close": 0.0928,
+      "trigger": 0.09202
+    },
+    {
+      "ts": "2026-06-05T19:04:02+00:00",
+      "symbol": "1000SHIBUSDT",
+      "side": "long",
+      "fire_close": 0.00446,
+      "trigger": 0.0044342
+    },
+    {
+      "ts": "2026-06-05T19:04:03+00:00",
+      "symbol": "APTUSDT",
+      "side": "long",
+      "fire_close": 0.6431,
+      "trigger": 0.63934
+    },
+    {
+      "ts": "2026-06-05T19:04:04+00:00",
+      "symbol": "HBARUSDT",
+      "side": "long",
+      "fire_close": 0.07827,
+      "trigger": 0.077834
+    },
+    {
+      "ts": "2026-06-05T19:04:05+00:00",
+      "symbol": "ETCUSDT",
+      "side": "long",
+      "fire_close": 6.604,
+      "trigger": 6.5624
+    },
+    {
+      "ts": "2026-06-05T19:04:06+00:00",
+      "symbol": "JTOUSDT",
+      "side": "long",
+      "fire_close": 0.484,
+      "trigger": 0.48016
+    },
+    {
+      "ts": "2026-06-05T19:04:07+00:00",
+      "symbol": "1000BONKUSDT",
+      "side": "long",
+      "fire_close": 0.004165,
+      "trigger": 0.004127
+    },
+    {
+      "ts": "2026-06-05T19:04:08+00:00",
+      "symbol": "LITEUSDT",
+      "side": "long",
+      "fire_close": 877.3,
+      "trigger": 859.184
+    },
+    {
+      "ts": "2026-06-05T19:04:09+00:00",
+      "symbol": "SEIUSDT",
+      "side": "long",
+      "fire_close": 0.04568,
+      "trigger": 0.045354
+    },
+    {
+      "ts": "2026-06-05T19:04:10+00:00",
+      "symbol": "TIAUSDT",
+      "side": "long",
+      "fire_close": 0.2904,
+      "trigger": 0.2879
+    },
+    {
+      "ts": "2026-06-05T21:00:55+00:00",
+      "symbol": "XLMUSDT",
+      "side": "short",
+      "fire_close": 0.20121,
+      "trigger": 0.201852
+    },
+    {
+      "ts": "2026-06-05T21:00:56+00:00",
+      "symbol": "VVVUSDT",
+      "side": "short",
+      "fire_close": 17.217,
+      "trigger": 17.2452
+    },
+    {
+      "ts": "2026-06-05T22:00:42+00:00",
+      "symbol": "ENAUSDT",
+      "side": "short",
+      "fire_close": 0.0948,
+      "trigger": 0.09623
+    },
+    {
+      "ts": "2026-06-06T02:00:35+00:00",
+      "symbol": "龙虾USDT",
+      "side": "long",
+      "fire_close": 0.009482,
+      "trigger": 0.0094182
+    },
+    {
+      "ts": "2026-06-06T02:00:36+00:00",
+      "symbol": "GOOGLUSDT",
+      "side": "long",
+      "fire_close": 363.08,
+      "trigger": 362.952
+    },
+    {
+      "ts": "2026-06-06T03:00:34+00:00",
+      "symbol": "WLDUSDT",
+      "side": "long",
+      "fire_close": 0.4508,
+      "trigger": 0.4464
+    },
+    {
+      "ts": "2026-06-06T03:00:35+00:00",
+      "symbol": "AVGOUSDT",
+      "side": "long",
+      "fire_close": 364.06,
+      "trigger": 356.73
+    },
+    {
+      "ts": "2026-06-06T03:00:36+00:00",
+      "symbol": "CBRSUSDT",
+      "side": "long",
+      "fire_close": 191.41,
+      "trigger": 191.406
+    },
+    {
+      "ts": "2026-06-06T03:00:37+00:00",
+      "symbol": "OPGUSDT",
+      "side": "long",
+      "fire_close": 0.15,
+      "trigger": 0.1497
+    },
+    {
+      "ts": "2026-06-06T04:00:35+00:00",
+      "symbol": "AVAXUSDT",
+      "side": "long",
+      "fire_close": 6.518,
+      "trigger": 6.5112
+    },
+    {
+      "ts": "2026-06-06T05:00:34+00:00",
+      "symbol": "SOLUSDT",
+      "side": "long",
+      "fire_close": 60.73,
+      "trigger": 60.482
+    },
+    {
+      "ts": "2026-06-06T05:00:35+00:00",
+      "symbol": "XRPUSDT",
+      "side": "long",
+      "fire_close": 1.0572,
+      "trigger": 1.05362
+    },
+    {
+      "ts": "2026-06-06T05:00:36+00:00",
+      "symbol": "DOGEUSDT",
+      "side": "long",
+      "fire_close": 0.07852,
+      "trigger": 0.078086
+    },
+    {
+      "ts": "2026-06-06T05:00:37+00:00",
+      "symbol": "NEARUSDT",
+      "side": "long",
+      "fire_close": 1.867,
+      "trigger": 1.8436
+    },
+    {
+      "ts": "2026-06-06T05:00:38+00:00",
+      "symbol": "ADAUSDT",
+      "side": "long",
+      "fire_close": 0.1498,
+      "trigger": 0.14902
+    },
+    {
+      "ts": "2026-06-06T05:00:39+00:00",
+      "symbol": "1000PEPEUSDT",
+      "side": "long",
+      "fire_close": 0.0025421,
+      "trigger": 0.00253056
+    },
+    {
+      "ts": "2026-06-06T05:00:40+00:00",
+      "symbol": "SUIUSDT",
+      "side": "long",
+      "fire_close": 0.6702,
+      "trigger": 0.6662
+    },
+    {
+      "ts": "2026-06-06T05:00:41+00:00",
+      "symbol": "FILUSDT",
+      "side": "long",
+      "fire_close": 0.681,
+      "trigger": 0.6772
+    },
+    {
+      "ts": "2026-06-06T05:00:42+00:00",
+      "symbol": "LINKUSDT",
+      "side": "long",
+      "fire_close": 7.058,
+      "trigger": 7.0166
+    },
+    {
+      "ts": "2026-06-06T05:00:43+00:00",
+      "symbol": "TAOUSDT",
+      "side": "long",
+      "fire_close": 186.5,
+      "trigger": 184.396
+    },
+    {
+      "ts": "2026-06-06T05:00:44+00:00",
+      "symbol": "BCHUSDT",
+      "side": "long",
+      "fire_close": 203.55,
+      "trigger": 202.66
+    },
+    {
+      "ts": "2026-06-06T05:00:45+00:00",
+      "symbol": "PUMPUSDT",
+      "side": "long",
+      "fire_close": 0.001324,
+      "trigger": 0.0013136
+    },
+    {
+      "ts": "2026-06-06T05:00:46+00:00",
+      "symbol": "ONDOUSDT",
+      "side": "long",
+      "fire_close": 0.3155,
+      "trigger": 0.31472
+    },
+    {
+      "ts": "2026-06-06T05:00:47+00:00",
+      "symbol": "TONUSDT",
+      "side": "long",
+      "fire_close": 1.4549,
+      "trigger": 1.44634
+    },
+    {
+      "ts": "2026-06-06T05:00:48+00:00",
+      "symbol": "LTCUSDT",
+      "side": "long",
+      "fire_close": 40.91,
+      "trigger": 40.824
+    },
+    {
+      "ts": "2026-06-06T05:00:49+00:00",
+      "symbol": "DOTUSDT",
+      "side": "long",
+      "fire_close": 0.895,
+      "trigger": 0.8894
+    },
+    {
+      "ts": "2026-06-06T05:00:50+00:00",
+      "symbol": "TRUMPUSDT",
+      "side": "long",
+      "fire_close": 1.508,
+      "trigger": 1.4988
+    },
+    {
+      "ts": "2026-06-06T05:00:51+00:00",
+      "symbol": "UNIUSDT",
+      "side": "long",
+      "fire_close": 2.333,
+      "trigger": 2.3236
+    },
+    {
+      "ts": "2026-06-06T05:00:52+00:00",
+      "symbol": "FETUSDT",
+      "side": "long",
+      "fire_close": 0.1866,
+      "trigger": 0.18538
+    },
+    {
+      "ts": "2026-06-06T05:00:53+00:00",
+      "symbol": "FARTCOINUSDT",
+      "side": "long",
+      "fire_close": 0.1014,
+      "trigger": 0.10094
+    },
+    {
+      "ts": "2026-06-06T05:00:55+00:00",
+      "symbol": "PENGUUSDT",
+      "side": "long",
+      "fire_close": 0.005889,
+      "trigger": 0.0058582
+    },
+    {
+      "ts": "2026-06-06T05:00:56+00:00",
+      "symbol": "RENDERUSDT",
+      "side": "long",
+      "fire_close": 1.567,
+      "trigger": 1.56
+    },
+    {
+      "ts": "2026-06-06T05:00:57+00:00",
+      "symbol": "OPUSDT",
+      "side": "long",
+      "fire_close": 0.0908,
+      "trigger": 0.09052
+    },
+    {
+      "ts": "2026-06-06T05:00:58+00:00",
+      "symbol": "VIRTUALUSDT",
+      "side": "long",
+      "fire_close": 0.5255,
+      "trigger": 0.52294
+    },
+    {
+      "ts": "2026-06-06T05:00:59+00:00",
+      "symbol": "ARBUSDT",
+      "side": "long",
+      "fire_close": 0.0751,
+      "trigger": 0.07476
+    },
+    {
+      "ts": "2026-06-06T05:01:00+00:00",
+      "symbol": "WIFUSDT",
+      "side": "long",
+      "fire_close": 0.1414,
+      "trigger": 0.14044
+    },
+    {
+      "ts": "2026-06-06T05:01:01+00:00",
+      "symbol": "1000SHIBUSDT",
+      "side": "long",
+      "fire_close": 0.004347,
+      "trigger": 0.0043302
+    },
+    {
+      "ts": "2026-06-06T05:01:02+00:00",
+      "symbol": "DASHUSDT",
+      "side": "long",
+      "fire_close": 29.84,
+      "trigger": 29.684
+    },
+    {
+      "ts": "2026-06-06T05:01:03+00:00",
+      "symbol": "APTUSDT",
+      "side": "long",
+      "fire_close": 0.6223,
+      "trigger": 0.61878
+    },
+    {
+      "ts": "2026-06-06T05:01:04+00:00",
+      "symbol": "HBARUSDT",
+      "side": "long",
+      "fire_close": 0.07698,
+      "trigger": 0.076718
+    },
+    {
+      "ts": "2026-06-06T05:01:05+00:00",
+      "symbol": "ETCUSDT",
+      "side": "long",
+      "fire_close": 6.488,
+      "trigger": 6.448
+    },
+    {
+      "ts": "2026-06-06T05:01:06+00:00",
+      "symbol": "CHZUSDT",
+      "side": "long",
+      "fire_close": 0.02329,
+      "trigger": 0.023062
+    },
+    {
+      "ts": "2026-06-06T05:01:07+00:00",
+      "symbol": "1000BONKUSDT",
+      "side": "long",
+      "fire_close": 0.004042,
+      "trigger": 0.004024
+    },
+    {
+      "ts": "2026-06-06T05:01:08+00:00",
+      "symbol": "TIAUSDT",
+      "side": "long",
+      "fire_close": 0.2822,
+      "trigger": 0.28002
+    },
+    {
+      "ts": "2026-06-06T05:01:09+00:00",
+      "symbol": "PENDLEUSDT",
+      "side": "long",
+      "fire_close": 1.1581,
+      "trigger": 1.15358
+    },
+    {
+      "ts": "2026-06-06T07:00:33+00:00",
+      "symbol": "HEIUSDT",
+      "side": "short",
+      "fire_close": 0.10274,
+      "trigger": 0.10992
+    },
+    {
+      "ts": "2026-06-06T08:00:33+00:00",
+      "symbol": "TAUSDT",
+      "side": "long",
+      "fire_close": 0.07383,
+      "trigger": 0.072012
+    },
+    {
+      "ts": "2026-06-06T08:00:34+00:00",
+      "symbol": "SKYAIUSDT",
+      "side": "short",
+      "fire_close": 0.20229,
+      "trigger": 0.205656
+    },
+    {
+      "ts": "2026-06-06T09:00:33+00:00",
+      "symbol": "TONUSDT",
+      "side": "short",
+      "fire_close": 1.5705,
+      "trigger": 1.57452
+    },
+    {
+      "ts": "2026-06-06T09:00:34+00:00",
+      "symbol": "BEATUSDT",
+      "side": "short",
+      "fire_close": 1.9038,
+      "trigger": 1.92064
+    },
+    {
+      "ts": "2026-06-06T09:00:35+00:00",
+      "symbol": "SIRENUSDT",
+      "side": "short",
+      "fire_close": 0.7963,
+      "trigger": 0.8038
+    },
+    {
+      "ts": "2026-06-06T13:00:34+00:00",
+      "symbol": "OPNUSDT",
+      "side": "long",
+      "fire_close": 0.1744,
+      "trigger": 0.1691
+    },
+    {
+      "ts": "2026-06-06T13:00:35+00:00",
+      "symbol": "币安人生USDT",
+      "side": "short",
+      "fire_close": 0.7277,
+      "trigger": 0.727888
+    },
+    {
+      "ts": "2026-06-06T13:00:36+00:00",
+      "symbol": "HUSDT",
+      "side": "short",
+      "fire_close": 0.61054,
+      "trigger": 0.617284
+    },
+    {
+      "ts": "2026-06-06T14:00:33+00:00",
+      "symbol": "BLUAIUSDT",
+      "side": "short",
+      "fire_close": 0.021498,
+      "trigger": 0.0217148
+    },
+    {
+      "ts": "2026-06-06T14:00:34+00:00",
+      "symbol": "SKYAIUSDT",
+      "side": "short",
+      "fire_close": 0.23617,
+      "trigger": 0.23822
+    }
+  ],
+  "cs_tsmom_top10": {
+    "available": false,
+    "fetched_at": null,
+    "pin_date": "",
+    "top10": [],
+    "note": "Backfill: 6/6 23:50 KST 스냅샷 미포착. 또한 6/6 자동 트레이딩은 airborne_trader(testnet) 만 가동되었고 거래 0건 — cs_tsmom live_loop WAL 은 6/5 07:13Z 이후 미가동."
+  },
+  "_backfill_meta": {
+    "generated_by": "scripts/_tmp_backfill_0606.py (manual reconstruction)",
+    "reason": "사용자가 23:50 KST 'journal git push' 미클릭 → 사후 백필",
+    "sources": {
+      "manual": "logs/manual_trade.jsonl",
+      "airborne_fires": "logs/airborne_fires/history.jsonl",
+      "sims": "logs/airborne_fires/sim_cache.jsonl"
+    },
+    "auto_note": "live_loop WAL(logs/live) 6/5 07:13Z 종료, airborne_trader state.db positions=0 → 6/6 자동 체결 없음",
+    "airborne_daemon_restarted": "2026-06-07T09:52Z (docker logs 6/6분 소실, history.jsonl 영속본으로 복구)"
+  }
+}
