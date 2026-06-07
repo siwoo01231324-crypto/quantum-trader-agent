@@ -153,13 +153,19 @@ def _norm_symbol(sym: str) -> str:
     return s
 
 
-def _is_whitelisted(symbol: str) -> bool:
-    """fire 심볼이 whitelist active 종목과 (정규화 후) 일치하는지."""
-    actives = _load_whitelist_active()
-    if symbol in actives:  # exact (fast path)
+def _in_trading_universe(symbol: str) -> bool:
+    """fire 심볼이 short-whitelist 전략의 매매 대상(거래량 top-100)인지.
+
+    #380 — 전략이 고정 whitelist 대신 거래량 top-100 동적 universe 로 전환됨.
+    따라서 알림도 top-100 기준으로 "진입 예정" 판정 ('1000' 멀티플라이어 정규화
+    후 비교). 조회 실패 시 보수적으로 True (오알림보다 누락-경고 회피)."""
+    try:
+        from portfolio.bitget_top_dynamic import get_top_n_symbols
+        universe = get_top_n_symbols(100)
+    except Exception:  # noqa: BLE001
         return True
     target = _norm_symbol(symbol)
-    return any(_norm_symbol(a) == target for a in actives)
+    return any(_norm_symbol(s) == target for s in universe)
 
 
 def _kst_hour_from_open_time(open_time_ms: int) -> int:
@@ -204,7 +210,7 @@ def _format_strategy_notice(*, side: str, kst_hour: int, symbol: str) -> str:
     """
     in_kst4 = kst_hour in _KST_HOURS_KSTHOURS
     in_kst19 = kst_hour in _KST_HOURS_SHORT_WL
-    in_wl = _is_whitelisted(symbol)  # #380 — 1000SHIB↔SHIB 정규화 매칭
+    in_wl = _in_trading_universe(symbol)  # #380 — 거래량 top-100 (1000SHIB↔SHIB 정규화)
     kst4_label = _kst_hours_label(_KST_HOURS_KSTHOURS)
 
     # kst-hours: bidir + KST gate + BTC trend filter (long-only)
@@ -216,11 +222,11 @@ def _format_strategy_notice(*, side: str, kst_hour: int, symbol: str) -> str:
     else:
         kst_line = "✅ 진입 예정"
 
-    # short-whitelist: SHORT only + 화이트리스트 + 24시간 게이트 (#380).
+    # short-whitelist: SHORT only + 거래량 top-100 + 24시간 게이트 (#380).
     if side.lower() == "long":
         wl_line = "❌ LONG 미지원 (숏 전용 전략)"
     elif not in_wl:
-        wl_line = "❌ 화이트리스트 외 종목"
+        wl_line = "❌ TOP100 외 종목"
     elif not in_kst19:
         wl_line = f"❌ KST {kst_hour}시 — 게이트 외"
     else:

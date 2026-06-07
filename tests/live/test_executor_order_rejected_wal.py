@@ -218,6 +218,105 @@ async def test_executor_continues_when_ensure_leverage_fails(tmp_path):
     )
 
 
+class _BrokerWithTargetLeverage:
+    """Broker stub exposing BOTH ensure_leverage_target and _minimum."""
+
+    name = "bitget_futures_async"
+    paper = False
+
+    def __init__(self):
+        self.target_calls: list[tuple[str, int]] = []
+        self.min_calls: list[str] = []
+
+    async def ensure_leverage_target(self, symbol: str, leverage: int) -> None:
+        self.target_calls.append((symbol, leverage))
+
+    async def ensure_leverage_minimum(self, symbol: str, fallback_leverage: int = 1) -> None:
+        self.min_calls.append(symbol)
+
+    async def place_order(self, req: OrderRequest) -> OrderAck:
+        return OrderAck(
+            broker_order_id="b-1", client_order_id=req.client_order_id,
+            symbol=req.symbol, status="NEW", ts=datetime.now(timezone.utc),
+            qty=req.qty, price=Decimal("1"),
+        )
+
+
+@pytest.mark.asyncio
+async def test_executor_forces_target_leverage_when_env_set(tmp_path, monkeypatch):
+    """#380 — QTA_TARGET_LEVERAGE 설정 시 ensure_leverage_target 으로 강제,
+    ensure_leverage_minimum 은 호출 안 함."""
+    monkeypatch.setenv("QTA_TARGET_LEVERAGE", "10")
+    wal = WAL(tmp_path / "wal.jsonl")
+    broker = _BrokerWithTargetLeverage()
+    await execute_intents(
+        [_intent(side="sell", symbol="SHIBUSDT")], broker=broker,
+        kill_switch=KillSwitch(), wal=wal, metrics=Metrics(),
+    )
+    assert broker.target_calls == [("SHIBUSDT", 10)], (
+        f"target leverage 10 should be forced, got {broker.target_calls}"
+    )
+    assert broker.min_calls == [], "minimum 경로는 타지 않아야 함"
+
+
+@pytest.mark.asyncio
+async def test_executor_uses_minimum_when_no_target_env(tmp_path, monkeypatch):
+    """#380 — env 미설정 시 legacy ensure_leverage_minimum 경로 (byte-identical)."""
+    monkeypatch.delenv("QTA_TARGET_LEVERAGE", raising=False)
+    wal = WAL(tmp_path / "wal.jsonl")
+    broker = _BrokerWithTargetLeverage()
+    await execute_intents(
+        [_intent(side="sell", symbol="SHIBUSDT")], broker=broker,
+        kill_switch=KillSwitch(), wal=wal, metrics=Metrics(),
+    )
+    assert broker.target_calls == [], "env 없으면 target 강제 안 함"
+    assert broker.min_calls == ["SHIBUSDT"], "minimum 안전망 경로 유지"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("bad", ["0", "-5", "abc", ""])
+async def test_executor_invalid_target_leverage_falls_back(tmp_path, monkeypatch, bad):
+    """#380 — 0/음수/비정수/빈값이면 target 무시하고 minimum 경로."""
+    monkeypatch.setenv("QTA_TARGET_LEVERAGE", bad)
+    wal = WAL(tmp_path / "wal.jsonl")
+    broker = _BrokerWithTargetLeverage()
+    await execute_intents(
+        [_intent(side="sell", symbol="SHIBUSDT")], broker=broker,
+        kill_switch=KillSwitch(), wal=wal, metrics=Metrics(),
+    )
+    assert broker.target_calls == []
+    assert broker.min_calls == ["SHIBUSDT"]
+
+
+@pytest.mark.asyncio
+async def test_executor_target_leverage_failure_still_places_order(tmp_path, monkeypatch):
+    """#380 — ensure_leverage_target 이 던져도 place_order 는 시도."""
+    monkeypatch.setenv("QTA_TARGET_LEVERAGE", "10")
+    wal = WAL(tmp_path / "wal.jsonl")
+    placed: list[str] = []
+
+    class _BrokerTargetFails:
+        name = "bitget_futures_async"
+        paper = False
+
+        async def ensure_leverage_target(self, symbol: str, leverage: int) -> None:
+            raise RuntimeError("set-leverage rejected (open position)")
+
+        async def place_order(self, req: OrderRequest) -> OrderAck:
+            placed.append(req.symbol)
+            return OrderAck(
+                broker_order_id="b-1", client_order_id=req.client_order_id,
+                symbol=req.symbol, status="NEW", ts=datetime.now(timezone.utc),
+                qty=req.qty, price=Decimal("1"),
+            )
+
+    await execute_intents(
+        [_intent(side="sell", symbol="SHIBUSDT")], broker=_BrokerTargetFails(),
+        kill_switch=KillSwitch(), wal=wal, metrics=Metrics(),
+    )
+    assert placed == ["SHIBUSDT"], "leverage 강제 실패해도 발주는 진행돼야 함"
+
+
 @pytest.mark.asyncio
 async def test_kill_switch_rejection_logged(tmp_path):
     """KILL_SWITCH 거부도 order_rejected 로 기록 (사유 확인 가능)."""
