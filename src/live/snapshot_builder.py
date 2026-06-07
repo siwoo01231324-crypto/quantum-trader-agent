@@ -76,8 +76,15 @@ class SnapshotBuilder:
         universe_quote_provider: Any | None = None,
         universe_ttl_sec: float = 300.0,
         balance_provider: Any | None = None,
+        usdt_equity_venue: str = "binance",
     ) -> None:
         self._symbols: list[str] = list(symbols)
+        # 2026-06-08 — `equity_usdt` 의 출처 venue. USDT 무기한물 거래소가
+        # binance/bitget 둘 다라서, 활성 거래 venue 의 잔고로 사이징해야 한다.
+        # 옛 코드는 항상 binance 잔고를 썼고, bitget-mainnet 라이브가 binance
+        # 잔고($5596)로 사이징돼 명목이 11.6배 부푼 사고 발생(BEAT $2810,
+        # 의도 $241 = 0.50 × bitget $483). 기본 "binance" → 기존 동작 보존.
+        self._usdt_equity_venue = usdt_equity_venue
         self._kis_client = kis_client
         self._config = config or SnapshotBuilderConfig()
         # #238 Item 9 — real venue balances → snapshot equity. Without this
@@ -314,14 +321,18 @@ class SnapshotBuilder:
                               ok=False, reason=reason, fresh_equity=None)
             return
 
-        binance = bal.get("binance") or {}
-        usdt = binance.get("available_usdt")
-        bn_ok = bool(binance.get("ok") and usdt is not None and float(usdt) > 0)
+        # equity_usdt 출처 = 활성 USDT 거래 venue (binance | bitget). 둘 다
+        # {"ok", "available_usdt"} 형태. bitget-mainnet 라이브는 bitget 잔고로
+        # 사이징해야 명목이 맞는다 (2026-06-08 venue-equity 오사이징 사고).
+        usdt_venue = self._usdt_equity_venue
+        venue_bal = bal.get(usdt_venue) or {}
+        usdt = venue_bal.get("available_usdt")
+        v_ok = bool(venue_bal.get("ok") and usdt is not None and float(usdt) > 0)
         self._apply_venue(
-            snapshot, "binance", "equity_usdt",
-            ok=bn_ok,
-            reason="" if bn_ok else self._inert_reason(binance, usdt),
-            fresh_equity=float(usdt) if bn_ok else None,
+            snapshot, usdt_venue, "equity_usdt",
+            ok=v_ok,
+            reason="" if v_ok else self._inert_reason(venue_bal, usdt),
+            fresh_equity=float(usdt) if v_ok else None,
         )
 
         kis = bal.get("kis") or {}
