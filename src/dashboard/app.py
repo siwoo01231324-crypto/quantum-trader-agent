@@ -121,7 +121,12 @@ def _parse_airborne_fire_line(line: str) -> dict | None:
 AIRBORNE_TP_PCT = 0.010   # +1.0%
 AIRBORNE_SL_PCT = 0.005   # -0.5% (1:2 손익비)
 AIRBORNE_HOLD_BARS = 4    # 다음 15분봉 4개 = 1h
-AIRBORNE_FEE_PCT = 0.08   # 양방향 합산 (taker 0.04% × 2)
+AIRBORNE_FEE_PCT = 0.034  # 양방향 합산 실효율 — 실 체결 fill 역산 기반.
+# 2026-06-07: 기존 0.08 (taker 0.04%×2, 환급 미반영) 은 과대계상이었음.
+# 실측: 6/6 9건 fill 의 charged fee 0.0653% 왕복(maker0.02/taker0.04 혼합) +
+# 테더맥스 54% 페이백(적립 2.29 USDT 확인) → 실부담 (4.749-2.29)/notional =
+# 0.0338% 왕복. round 하여 0.034%. (5y 활성화 게이트의 ≥10bp 보수 가정은 별개 —
+# 페이백은 프로모션이라 게이트엔 미반영.)
 
 # 2026-06-04: 사용자 요청 — 짧은호흡 룰(default 1%/0.5%) 외에 좀 더 넓은
 # 폭(+2%/-1%) 룰의 통계를 같이 보고 싶음. 같은 fires set 을 두 룰로 시뮬해
@@ -3506,7 +3511,7 @@ tbody tr:hover{background:#1c2229}
     </select>
   </label>
   <div class="meta" id="meta">로딩 중…</div>
-  <span class="rule-badge" id="rule-badge">룰: TP +1.0% / SL -0.5% / 4봉(=1h) hold · 양방향 수수료 0.08%</span>
+  <span class="rule-badge" id="rule-badge">룰: TP +1.0% / SL -0.5% / 4봉(=1h) hold · 양방향 수수료 0.034% (테더맥스 54% 페이백 반영)</span>
   <button class="refresh-btn" id="refresh-btn" onclick="forceRefresh()">↻ 캐시 무효화 + 재계산</button>
 </div>
 <div id="content"><div class="empty">데이터를 불러오는 중입니다…</div></div>
@@ -3569,7 +3574,7 @@ function renderStats(d){
     <div class="stat-tile ${heroCls}">
       <div class="stat-label">net (수수료 후)</div>
       <div class="stat-val ${netCls}">${esc(netTxt)}</div>
-      <div class="stat-sub">gross ${fmtPctRaw(d.sum_pct, 2)} − fee ${(0.08 * fires).toFixed(2)}%</div>
+      <div class="stat-sub">gross ${fmtPctRaw(d.sum_pct, 2)} − fee ${((d.rule?.fee_pct ?? 0.034) * fires).toFixed(2)}%</div>
     </div>
     <div class="stat-tile">
       <div class="stat-label">FIRE</div>
@@ -3679,7 +3684,7 @@ function renderFiresTable(sims){
     </tr></thead><tbody>${trs}</tbody></table>
     <div class="note">
       결과 — <b>TP</b>: 시뮬 +1.0% 익절. <b>SL</b>: 시뮬 −0.5% 손절. <b>SL_first</b>: 같은 15m 봉에서 high·low 가 둘 다 닿음 → 보수적으로 SL 부터 체결됐다고 가정. <b>timeout</b>: 4봉(=1h) 동안 TP/SL 둘 다 미도달 → 마지막 close 로 청산. <b>no_bars</b>: Binance fapi 봉 fetch 실패 / 너무 최근 fire 라 봉이 아직 안 닫힘.<br>
-      pct 는 gross (수수료 미반영) — 상단 net 카드는 fee 0.08% × FIRE n 차감.
+      pct 는 gross (수수료 미반영) — 상단 net 카드는 fee 0.034% (테더맥스 54% 페이백 반영 실효율) × FIRE n 차감.
     </div>`;
 }
 
