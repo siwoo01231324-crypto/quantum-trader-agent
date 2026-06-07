@@ -1,0 +1,462 @@
+{
+  "date_kst": "2026-06-07",
+  "kst_window_start": "2026-06-07T00:00:00+09:00",
+  "now_kst": "2026-06-07T23:42:26.102682+09:00",
+  "counts": {
+    "auto_fills": 5,
+    "auto_signals": 27,
+    "manual_trades": 2,
+    "airborne_fires": 13
+  },
+  "auto_fills": [
+    {
+      "ts": "2026-06-07T02:00:58.783000+00:00",
+      "client_order_id": "c15048bcbe1cae261352ef60024bd8430242",
+      "broker_order_id": "1447335771177943041",
+      "symbol": "SHIBUSDT",
+      "side": "SELL",
+      "qty": "192930000",
+      "fill_qty": "192930000",
+      "fill_price": "0.000004626",
+      "fees": "0",
+      "fee_asset": "USDT",
+      "trade_id": "1447335771427287040",
+      "server_ts": null,
+      "strategy_id": "live-airborne-short-whitelist-v1"
+    },
+    {
+      "ts": "2026-06-07T05:01:11.187000+00:00",
+      "client_order_id": "5760b86aa6df1e08dd93524691e2fa332e5c",
+      "broker_order_id": "1447381121691484161",
+      "symbol": "SHIBUSDT",
+      "side": "SELL",
+      "qty": "191400000",
+      "fill_qty": "191400000",
+      "fill_price": "0.000004657",
+      "fees": "0",
+      "fee_asset": "USDT",
+      "trade_id": "1447381121936633856",
+      "server_ts": null,
+      "strategy_id": "live-airborne-short-whitelist-v1"
+    },
+    {
+      "ts": "2026-06-07T07:01:16.065000+00:00",
+      "client_order_id": "87f2c419d2e5534eb6b33ac0c88616fe20b8",
+      "broker_order_id": "1447411341152681985",
+      "symbol": "SHIBUSDT",
+      "side": "SELL",
+      "qty": "190180000",
+      "fill_qty": "190180000",
+      "fill_price": "0.000004695",
+      "fees": "0",
+      "fee_asset": "USDT",
+      "trade_id": "1447411341385248768",
+      "server_ts": null,
+      "strategy_id": "live-airborne-short-whitelist-v1"
+    },
+    {
+      "ts": "2026-06-07T09:01:23.841000+00:00",
+      "client_order_id": "cef2aad0ed5bf1e31f7d72e7b9d6c7ee4254",
+      "broker_order_id": "1447441572748001281",
+      "symbol": "SHIBUSDT",
+      "side": "SELL",
+      "qty": "187790000",
+      "fill_qty": "187790000",
+      "fill_price": "0.000004756",
+      "fees": "0",
+      "fee_asset": "USDT",
+      "trade_id": "1447441572988956672",
+      "server_ts": null,
+      "strategy_id": "live-airborne-short-whitelist-v1"
+    },
+    {
+      "ts": "2026-06-07T14:28:58.988000+00:00",
+      "client_order_id": "5ac562cc23a2d0917401f10bb0cbedef36a6",
+      "broker_order_id": "1447524012439044097",
+      "symbol": "SHIBUSDT",
+      "side": "BUY",
+      "qty": "762300000",
+      "fill_qty": "762300000",
+      "fill_price": "0.000004708",
+      "fees": "0",
+      "fee_asset": "USDT",
+      "trade_id": "1447524012650639360",
+      "server_ts": null,
+      "strategy_id": "live-airborne-short-whitelist-v1"
+    }
+  ],
+  "auto_signals": [
+    {
+      "ts": "2026-06-06T16:00:23.718921+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BGBUSDT",
+      "side": "sell",
+      "qty": "485.606",
+      "reason": "airborne_v12_short_fire:bo@-1,base=1.8439,ext=1.8454,trig=1.8448,c=1.8439,ratio=0.4,kst=1"
+    },
+    {
+      "ts": "2026-06-06T16:00:23.722743+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "VELVETUSDT",
+      "side": "sell",
+      "qty": "4740.883",
+      "reason": "airborne_v12_short_fire:bo@-1,base=0.1897,ext=0.1920,trig=0.1910,c=0.1889,ratio=0.4,kst=1"
+    },
+    {
+      "ts": "2026-06-06T16:00:23.724982+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "XLMUSDT",
+      "side": "sell",
+      "qty": "4286.928",
+      "reason": "airborne_v12_short_fire:bo@-1,base=0.2108,ext=0.2119,trig=0.2115,c=0.2089,ratio=0.4,kst=1"
+    },
+    {
+      "ts": "2026-06-06T16:00:23.727154+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "XLMUSDT",
+      "side": "sell",
+      "qty": "4286.928",
+      "reason": "airborne_short_wl_fire:bo@-1,base=0.2108,ext=0.2119,trig=0.2113,c=0.2089,r=0.6,kst=1"
+    },
+    {
+      "ts": "2026-06-06T18:00:28.015503+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "AAOIUSDT",
+      "side": "sell",
+      "qty": "4.9",
+      "reason": "airborne_v12_short_fire:bo@-1,base=182.7300,ext=182.7300,trig=182.7300,c=182.7000,ratio=0.4,kst=3"
+    },
+    {
+      "ts": "2026-06-06T21:00:41.486027+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BTWUSDT",
+      "side": "sell",
+      "qty": "15192.417",
+      "reason": "airborne_v12_short_fire:bo@-1,base=0.0591,ext=0.0620,trig=0.0608,c=0.0589,ratio=0.4,kst=6"
+    },
+    {
+      "ts": "2026-06-06T21:00:41.488748+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "SNDKUSDT",
+      "side": "sell",
+      "qty": "0.575",
+      "reason": "airborne_v12_short_fire:bo@-1,base=1560.5200,ext=1562.9400,trig=1561.9720,c=1556.3500,ratio=0.4,kst=6"
+    },
+    {
+      "ts": "2026-06-06T22:00:42.463391+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BSBUSDT",
+      "side": "sell",
+      "qty": "4113.048",
+      "reason": "airborne_v12_short_fire:bo@-1,base=0.2185,ext=0.2198,trig=0.2193,c=0.2177,ratio=0.4,kst=7"
+    },
+    {
+      "ts": "2026-06-07T00:00:47.391644+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "DASHUSDT",
+      "side": "sell",
+      "qty": "27.466",
+      "reason": "airborne_short_wl_fire:bo@-1,base=32.6000,ext=32.8100,trig=32.6840,c=32.6000,r=0.6,kst=9"
+    },
+    {
+      "ts": "2026-06-07T00:00:47.394903+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "IDUSDT",
+      "side": "sell",
+      "qty": "35631.145",
+      "reason": "airborne_short_wl_fire:bo@-1,base=0.0252,ext=0.0252,trig=0.0252,c=0.0251,r=0.6,kst=9"
+    },
+    {
+      "ts": "2026-06-07T02:00:57.745516+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "AAVEUSDT",
+      "side": "sell",
+      "qty": "14.388",
+      "reason": "airborne_short_wl_fire:bo@-1,base=62.2800,ext=62.3900,trig=62.3240,c=62.2300,r=0.6,kst=11"
+    },
+    {
+      "ts": "2026-06-07T02:00:57.749351+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "APTUSDT",
+      "side": "sell",
+      "qty": "1327.911",
+      "reason": "airborne_short_wl_fire:bo@-1,base=0.6746,ext=0.6776,trig=0.6758,c=0.6743,r=0.6,kst=11"
+    },
+    {
+      "ts": "2026-06-07T02:00:57.751451+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "ARBUSDT",
+      "side": "sell",
+      "qty": "10932.975",
+      "reason": "airborne_short_wl_fire:bo@-1,base=0.0819,ext=0.0823,trig=0.0821,c=0.0819,r=0.6,kst=11"
+    },
+    {
+      "ts": "2026-06-07T02:00:57.753565+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "AXSUSDT",
+      "side": "sell",
+      "qty": "951.552",
+      "reason": "airborne_short_wl_fire:bo@-1,base=0.9410,ext=0.9450,trig=0.9426,c=0.9410,r=0.6,kst=11"
+    },
+    {
+      "ts": "2026-06-07T02:00:57.755372+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "SHIBUSDT",
+      "side": "sell",
+      "qty": "192934860.59",
+      "reason": "airborne_short_wl_fire:bo@-1,base=0.0000,ext=0.0000,trig=0.0000,c=0.0000,r=0.6,kst=11"
+    },
+    {
+      "ts": "2026-06-07T05:01:10.564572+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "SHIBUSDT",
+      "side": "sell",
+      "qty": "191408868.747",
+      "reason": "airborne_short_wl_fire:bo@-1,base=0.0000,ext=0.0000,trig=0.0000,c=0.0000,r=0.6,kst=14"
+    },
+    {
+      "ts": "2026-06-07T06:01:13.050706+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "DASHUSDT",
+      "side": "sell",
+      "qty": "26.266",
+      "reason": "airborne_short_wl_fire:bo@-1,base=34.0400,ext=34.1000,trig=34.0920,c=34.0900,r=0.6,kst=15"
+    },
+    {
+      "ts": "2026-06-07T06:01:13.054390+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "ZECUSDT",
+      "side": "sell",
+      "qty": "2.218",
+      "reason": "airborne_short_wl_fire:bo@-1,base=404.3500,ext=413.9200,trig=408.1780,c=403.6900,r=0.6,kst=15"
+    },
+    {
+      "ts": "2026-06-07T07:01:15.843965+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "SHIBUSDT",
+      "side": "sell",
+      "qty": "190189186.066",
+      "reason": "airborne_short_wl_fire:bo@-1,base=0.0000,ext=0.0000,trig=0.0000,c=0.0000,r=0.6,kst=16"
+    },
+    {
+      "ts": "2026-06-07T09:01:23.085990+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "AAVEUSDT",
+      "side": "sell",
+      "qty": "14.019",
+      "reason": "airborne_short_wl_fire:bo@-1,base=63.9300,ext=64.2500,trig=64.0580,c=63.8700,r=0.6,kst=18"
+    },
+    {
+      "ts": "2026-06-07T09:01:23.089229+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "ATOMUSDT",
+      "side": "sell",
+      "qty": "521.557",
+      "reason": "airborne_short_wl_fire:bo@-1,base=1.7191,ext=1.7191,trig=1.7191,c=1.7168,r=0.6,kst=18"
+    },
+    {
+      "ts": "2026-06-07T09:01:23.091173+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "AXSUSDT",
+      "side": "sell",
+      "qty": "936.622",
+      "reason": "airborne_short_wl_fire:bo@-1,base=0.9560,ext=0.9560,trig=0.9560,c=0.9560,r=0.6,kst=18"
+    },
+    {
+      "ts": "2026-06-07T09:01:23.093305+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "SHIBUSDT",
+      "side": "sell",
+      "qty": "187795865.771",
+      "reason": "airborne_short_wl_fire:bo@-1,base=0.0000,ext=0.0000,trig=0.0000,c=0.0000,r=0.6,kst=18"
+    },
+    {
+      "ts": "2026-06-07T12:01:43.542405+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "IDUSDT",
+      "side": "sell",
+      "qty": "33485.814",
+      "reason": "airborne_short_wl_fire:bo@-1,base=0.0268,ext=0.0271,trig=0.0269,c=0.0267,r=0.6,kst=21"
+    },
+    {
+      "ts": "2026-06-07T14:01:48.095846+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BSBUSDT",
+      "side": "sell",
+      "qty": "3098.521",
+      "reason": "airborne_v12_short_fire:bo@-1,base=0.2850,ext=0.2895,trig=0.2891,c=0.2890,ratio=0.4,kst=23"
+    },
+    {
+      "ts": "2026-06-07T14:01:48.100122+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "EPICUSDT",
+      "side": "buy",
+      "qty": "1504.639",
+      "reason": "airborne_v12_long_fire:bo@-1,base=0.5959,ext=0.5561,trig=0.5720,c=0.5951,ratio=0.4,kst=23"
+    },
+    {
+      "ts": "2026-06-07T14:28:58.762152+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "SHIBUSDT",
+      "side": "buy",
+      "qty": "762300000.0",
+      "reason": "live_stop_loss:entry=0.000004683022851895579168306441034,last=0.000004707,pct=+0.0051"
+    }
+  ],
+  "manual_trades": [
+    {
+      "ts": "2026-06-07T14:41:24.617538+00:00",
+      "symbol": "EPICUSDT",
+      "direction": "long",
+      "side": "buy",
+      "kind": "roundtrip",
+      "qty": 997.2,
+      "entry_price": 0.6084,
+      "price": 0.6084,
+      "exit_price": 0.6166,
+      "realized_pnl": 7.8643,
+      "outcome": "win",
+      "venue": "bybit",
+      "note": "에어본 지표 포착 후 상승추세로 확인되어 익절"
+    },
+    {
+      "ts": "2026-06-07T14:42:04.806404+00:00",
+      "symbol": "SOXSUSDT",
+      "direction": "long",
+      "side": "buy",
+      "kind": "roundtrip",
+      "qty": 44.65,
+      "entry_price": 7.07,
+      "price": 7.07,
+      "exit_price": 6.61,
+      "realized_pnl": -20.9123,
+      "outcome": "loss",
+      "venue": "bybit",
+      "note": "우씨 올라갈걸로 파악해서 들어갔는데 손절함"
+    }
+  ],
+  "airborne_fires": [
+    {
+      "ts": "2026-06-07T10:00:33+00:00",
+      "symbol": "HOMEUSDT",
+      "side": "long",
+      "fire_close": 0.04189,
+      "trigger": 0.041606
+    },
+    {
+      "ts": "2026-06-07T10:00:34+00:00",
+      "symbol": "EDENUSDT",
+      "side": "short",
+      "fire_close": 0.05539,
+      "trigger": 0.056166
+    },
+    {
+      "ts": "2026-06-07T11:00:33+00:00",
+      "symbol": "SIRENUSDT",
+      "side": "short",
+      "fire_close": 0.9588,
+      "trigger": 0.95962
+    },
+    {
+      "ts": "2026-06-07T11:00:34+00:00",
+      "symbol": "BANKUSDT",
+      "side": "short",
+      "fire_close": 0.03489,
+      "trigger": 0.035298
+    },
+    {
+      "ts": "2026-06-07T12:00:33+00:00",
+      "symbol": "MUUSDT",
+      "side": "short",
+      "fire_close": 897.52,
+      "trigger": 898.616
+    },
+    {
+      "ts": "2026-06-07T12:00:34+00:00",
+      "symbol": "DASHUSDT",
+      "side": "short",
+      "fire_close": 37.79,
+      "trigger": 37.928
+    },
+    {
+      "ts": "2026-06-07T12:00:35+00:00",
+      "symbol": "SOXLUSDT",
+      "side": "short",
+      "fire_close": 188.38,
+      "trigger": 189.608
+    },
+    {
+      "ts": "2026-06-07T12:00:36+00:00",
+      "symbol": "DRAMUSDT",
+      "side": "short",
+      "fire_close": 58.28,
+      "trigger": 59.218
+    },
+    {
+      "ts": "2026-06-07T12:00:37+00:00",
+      "symbol": "SKHYNIXUSDT",
+      "side": "short",
+      "fire_close": 1284.3,
+      "trigger": 1296.25
+    },
+    {
+      "ts": "2026-06-07T13:00:33+00:00",
+      "symbol": "HIGHUSDT",
+      "side": "long",
+      "fire_close": 0.0741,
+      "trigger": 0.07352
+    },
+    {
+      "ts": "2026-06-07T14:00:42+00:00",
+      "symbol": "BSBUSDT",
+      "side": "short",
+      "fire_close": 0.28762,
+      "trigger": 0.287878
+    },
+    {
+      "ts": "2026-06-07T14:00:43+00:00",
+      "symbol": "PHAROSUSDT",
+      "side": "long",
+      "fire_close": 0.6216,
+      "trigger": 0.62096
+    },
+    {
+      "ts": "2026-06-07T14:00:44+00:00",
+      "symbol": "EPICUSDT",
+      "side": "long",
+      "fire_close": 0.5904,
+      "trigger": 0.5718
+    }
+  ],
+  "cs_tsmom_top10": {
+    "fetched_at": "2026-06-07T14:42:06.100931+00:00",
+    "pin_date": "2026-05-21",
+    "available": true,
+    "top10": [
+      {
+        "symbol": "ZECUSDT",
+        "last_close": 427.55,
+        "last_ts": "2026-06-07T00:00:00",
+        "score": 2.171856392787097,
+        "rank": 1,
+        "in_top_today": true,
+        "in_top_yday": true,
+        "liquid": true,
+        "signal": "HOLD",
+        "reason": "ok"
+      },
+      {
+        "symbol": "TRXUSDT",
+        "last_close": 0.3284,
+        "last_ts": "2026-06-07T00:00:00",
+        "score": 0.056744599040992105,
+        "rank": 2,
+        "in_top_today": true,
+        "in_top_yday": true,
+        "liquid": true,
+        "signal": "HOLD",
+        "reason": "ok"
+      }
+    ]
+  }
+}
