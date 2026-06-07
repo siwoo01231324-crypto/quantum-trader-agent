@@ -235,72 +235,98 @@ async def _fake_buy(self, ctx):
     return _Signal(action="buy", size=0.5, reason="airborne_long_fire")
 
 
-def _isolated(st, tmp_path):
-    """dedup 영속 파일을 tmp 로 격리 (테스트 간 오염 방지)."""
-    p = tmp_path / "dedup.json"
-    st._dedup_path = lambda: p
-    return p
+class _FakeFireStore:
+    """데몬 fire store stub. path.exists()=True, load_since 가 fires 반환."""
+    def __init__(self, fires):
+        self._fires = fires
+        self.path = type("_P", (), {"exists": staticmethod(lambda: True)})()
+    def load_since(self, since):
+        return self._fires
+
+
+def _isolated(st, tmp_path, *, fires=None):
+    """dedup 영속 tmp 격리 + 데몬 fire store stub.
+
+    fires=None → store None(fail-open, 게이트 무력화). fires 지정 시 그 fire 목록.
+    """
+    st._dedup_path = lambda: tmp_path / "dedup.json"
+    st._get_fire_store = (lambda: None) if fires is None else (lambda: _FakeFireStore(fires))
+
+
+# _HIST: index 17..22:00Z, ts=22:27 → 22:00봉 형성중 trim → 마감봉 closed=21:00Z.
+# 데몬 fire 매칭 = floor(fire_ts)==closed+1h==22:00Z, side=long(buy).
+_LIVE_CTX = {
+    "ts": _pd.Timestamp("2026-06-07T22:27:00Z"),
+    "live_run": True,
+    "market_snapshot": {"symbol": "X", "history": _HIST},
+}
+_MATCHING_FIRE = {"symbol": "X", "side": "long", "ts": "2026-06-07T22:00:30+00:00"}
 
 
 @_pytest.mark.asyncio
 async def test_on_bar_dedup_one_entry_per_closed_bar(tmp_path):
-    """같은 마감봉엔 한 번만 진입 (TP/SL 청산 후 재진입 폭주 방지)."""
+    """같은 마감봉엔 한 번만 진입 (재진입 폭주 방지). 게이트 fail-open."""
     st = _S(btc_trend_filter_enabled=False)
-    _isolated(st, tmp_path)
-    ctx = {
-        "ts": _pd.Timestamp("2026-06-07T22:27:00Z"),
-        "live_run": True,
-        "market_snapshot": {"symbol": "X", "history": _HIST},
-    }
+    _isolated(st, tmp_path)  # fail-open
     with _mock.patch.object(_Parent, "on_bar", _fake_buy):
-        sig1 = await st.on_bar(ctx)
-        sig2 = await st.on_bar(ctx)  # 같은 마감봉 재평가
+        sig1 = await st.on_bar(_LIVE_CTX)
+        sig2 = await st.on_bar(_LIVE_CTX)
     assert sig1.action == "buy"
-    assert sig2.action == "hold"
-    assert "reentry_cooldown" in sig2.reason
+    assert sig2.action == "hold" and "already_entered_bar" in sig2.reason
 
 
 @_pytest.mark.asyncio
-async def test_reentry_cooldown_blocks_next_bar(tmp_path):
-    """쿨다운(12h) 안의 *다음* 봉도 재진입 차단 (매시간 재매수 방지)."""
+async def test_daemon_fire_gate_suppresses_without_alert(tmp_path):
+    """데몬이 발화 안 한 종목·봉 → 진입 차단 (XAG 8시 사고 = 알림없는 매수)."""
     st = _S(btc_trend_filter_enabled=False)
-    _isolated(st, tmp_path)
-    # 22:00봉 진입 → 23:00봉(1h 뒤, 쿨다운 12h 안) 차단
-    ctx1 = {"ts": _pd.Timestamp("2026-06-07T22:27:00Z"), "live_run": True,
-            "market_snapshot": {"symbol": "X", "history": _HIST}}
-    hist2 = _pd.DataFrame(
-        {"open": 1.0, "high": 1.0, "low": 1.0, "close": [1, 2, 3, 4, 5, 6, 7]},
-        index=_pd.date_range("2026-06-07T17:00:00Z", periods=7, freq="1h"),
-    )
-    ctx2 = {"ts": _pd.Timestamp("2026-06-07T23:27:00Z"), "live_run": True,
-            "market_snapshot": {"symbol": "X", "history": hist2}}
+    # store 에 다른 봉(21:00 close) fire 만 있음 → 현재 봉(22:00 close) 매칭 X
+    _isolated(st, tmp_path, fires=[
+        {"symbol": "X", "side": "long", "ts": "2026-06-07T21:00:30+00:00"},
+    ])
     with _mock.patch.object(_Parent, "on_bar", _fake_buy):
-        sig1 = await st.on_bar(ctx1)   # 22:00봉(closed 21:00) 진입
-        sig2 = await st.on_bar(ctx2)   # 23:00봉(closed 22:00) — 1h 뒤
-    assert sig1.action == "buy"
-    assert sig2.action == "hold" and "reentry_cooldown" in sig2.reason
+        sig = await st.on_bar(_LIVE_CTX)
+    assert sig.action == "hold" and "no_daemon_fire" in sig.reason
+
+
+@_pytest.mark.asyncio
+async def test_daemon_fire_gate_allows_with_matching_alert(tmp_path):
+    """데몬이 이 종목·이 봉 발화함 → 진입 허용 (알림==거래)."""
+    st = _S(btc_trend_filter_enabled=False)
+    _isolated(st, tmp_path, fires=[_MATCHING_FIRE])
+    with _mock.patch.object(_Parent, "on_bar", _fake_buy):
+        sig = await st.on_bar(_LIVE_CTX)
+    assert sig.action == "buy"
+
+
+@_pytest.mark.asyncio
+async def test_gate_suppress_does_not_record_dedup_retries(tmp_path):
+    """게이트 차단 시 dedup 기록 안 함 → store 갱신되면 다음 tick 진입(lag 안전)."""
+    st = _S(btc_trend_filter_enabled=False)
+    _isolated(st, tmp_path)  # 처음엔 fail-open... 아니라 차단 케이스로
+    st._get_fire_store = lambda: _FakeFireStore([])  # fire 없음 → 차단
+    with _mock.patch.object(_Parent, "on_bar", _fake_buy):
+        sig1 = await st.on_bar(_LIVE_CTX)              # 차단 (no_daemon_fire)
+        assert sig1.action == "hold"
+        st._get_fire_store = lambda: _FakeFireStore([_MATCHING_FIRE])  # store 갱신
+        sig2 = await st.on_bar(_LIVE_CTX)             # 이제 진입
+    assert sig2.action == "buy"
 
 
 @_pytest.mark.asyncio
 async def test_reentry_persists_across_restart(tmp_path):
-    """재시작(새 인스턴스)해도 dedup 디스크에서 복원 → 재매수 안 함."""
-    p = tmp_path / "dedup.json"
-    ctx = {"ts": _pd.Timestamp("2026-06-07T22:27:00Z"), "live_run": True,
-           "market_snapshot": {"symbol": "X", "history": _HIST}}
+    """재시작(새 인스턴스)해도 dedup 디스크 복원 → 같은 봉 재매수 안 함."""
     with _mock.patch.object(_Parent, "on_bar", _fake_buy):
-        st1 = _S(btc_trend_filter_enabled=False); st1._dedup_path = lambda: p
-        sig1 = await st1.on_bar(ctx)
-        # 새 인스턴스(재시작 시뮬) — 같은 dedup 파일 로드
-        st2 = _S(btc_trend_filter_enabled=False); st2._dedup_path = lambda: p
-        sig2 = await st2.on_bar(ctx)
+        st1 = _S(btc_trend_filter_enabled=False); _isolated(st1, tmp_path)
+        sig1 = await st1.on_bar(_LIVE_CTX)
+        st2 = _S(btc_trend_filter_enabled=False); _isolated(st2, tmp_path)
+        sig2 = await st2.on_bar(_LIVE_CTX)
     assert sig1.action == "buy"
-    assert sig2.action == "hold"  # 재시작해도 차단됨
-    assert p.exists()
+    assert sig2.action == "hold"  # 재시작해도 같은 봉은 차단
 
 
 @_pytest.mark.asyncio
-async def test_backtest_no_live_run_unaffected_by_dedup(tmp_path):
-    """backtest(live_run 없음)는 dedup 영속 무관 — 매 봉 평가 (byte-identical)."""
+async def test_backtest_no_live_run_unaffected(tmp_path):
+    """backtest(live_run 없음)는 게이트·dedup 무관 — 매 봉 평가 (byte-identical)."""
     st = _S(btc_trend_filter_enabled=False)
     _isolated(st, tmp_path)
     ctx = {"ts": _HIST.index[-1],  # backtest 컨벤션, live_run 없음
@@ -308,4 +334,4 @@ async def test_backtest_no_live_run_unaffected_by_dedup(tmp_path):
     with _mock.patch.object(_Parent, "on_bar", _fake_buy):
         sig1 = await st.on_bar(ctx)
         sig2 = await st.on_bar(ctx)
-    assert sig1.action == "buy" and sig2.action == "buy"  # dedup 안 걸림
+    assert sig1.action == "buy" and sig2.action == "buy"  # 게이트·dedup 안 걸림
