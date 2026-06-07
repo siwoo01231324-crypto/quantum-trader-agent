@@ -243,6 +243,67 @@ class AsyncBitgetFuturesAdapter:
         log.info("bitget quantized %s price %s → %s", req.symbol, req.price, quantized)
         return replace(req, price=quantized)
 
+    # ── 거래소 네이티브 보호주문 (TP/SL plan order, 2026-06-08) ─────────────────
+    # 진입 직후 거래소에 익절/손절을 직접 등록 → Bitget 매칭엔진이 서버측에서
+    # 즉시 청산. synthetic(LivePositionRiskManager 가 mark-price 보다가 청산)보다
+    # 빠르고(WS 지연 0) robust(봇 다운/WS 끊김에도 작동). ProtectiveBrokerProtocol
+    # 의 async 변형 — bitget 어댑터가 전부 async 라 동기 ProtectiveOrderManager
+    # 대신 wiring 에서 직접 await 한다.
+    #
+    # ⚠️ trigger price 는 *코인가격* 기준 (entry × (1 ± 가격pct)). ROI 가 아님 —
+    # ROI = 가격변동% × leverage. stop_loss_pct=0.005(가격-0.5%)는 10x 에서
+    # ROI -5%, take_profit_pct=0.01(가격+1%)는 ROI +10%. 호출자가 가격pct 를
+    # 넘긴다 (전략 take_profit_pct/stop_loss_pct = 이미 가격pct).
+
+    async def place_protective_order(
+        self,
+        *,
+        symbol: str,
+        side: str,           # close_side: "BUY"(숏 청산) | "SELL"(롱 청산)
+        qty: Decimal,
+        stop_price: Decimal,
+        kind: str,           # "STOP_MARKET"(SL) | "TAKE_PROFIT_MARKET"(TP)
+    ) -> str:
+        plan_type = "profit_plan" if kind == "TAKE_PROFIT_MARKET" else "loss_plan"
+        # close_side BUY = 숏 포지션 청산 → 보호 대상 holdSide=short.
+        # close_side SELL = 롱 포지션 청산 → holdSide=long.
+        side_str = (side.value if hasattr(side, "value") else str(side)).upper()
+        hold_side = "short" if side_str == "BUY" else "long"
+        try:
+            trigger = self._symbol_filters.quantize_price(symbol, stop_price)
+        except Exception:  # noqa: BLE001 — 필터 없으면 un-quantized 제출
+            trigger = stop_price
+        cid = client_id_mod.generate(
+            strategy="prot", symbol=symbol, side=plan_type,
+            ts_ms=int(time.time() * 1000),
+        )
+        order_id = await self._client.place_tpsl_order(
+            symbol=symbol, plan_type=plan_type, trigger_price=trigger,
+            hold_side=hold_side, size=qty, client_oid=cid,
+        )
+        log.info(
+            "bitget protective placed %s %s trigger=%s holdSide=%s size=%s oid=%s",
+            symbol, plan_type, trigger, hold_side, qty, order_id,
+        )
+        return order_id
+
+    async def cancel_protective_order(
+        self,
+        *,
+        symbol: str,
+        broker_order_id: str,
+    ) -> None:
+        await self._client.cancel_tpsl_order(
+            symbol=symbol, order_id=broker_order_id,
+        )
+
+    async def list_open_protective_orders(
+        self,
+        *,
+        symbol: str | None = None,
+    ) -> list[dict]:
+        return await self._client.get_pending_tpsl_orders(symbol=symbol)
+
     # ── cancel / get_order ───────────────────────────────────────────────────
 
     async def cancel_order(
