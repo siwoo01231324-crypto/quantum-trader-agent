@@ -846,6 +846,30 @@ async def run_shadow_loop(
                 config.broker_mode, config.symbols,
             )
 
+            # OrphanGuard (2026-06-08) — WS 가 체결을 흘려 store↔broker 가 어긋날
+            # 때 REST 로 복구. phantom(store 엔 있는데 broker 0) 청소 → synthetic
+            # 22002 무한루프 멈춤. orphan(broker 엔 있는데 store 모름, 무보호) →
+            # broker entry/mark 로 ROE 평가해 TP/SL 넘으면 청산. *봇 주문분만*
+            # (수동 ORDI 등 미청산). WS 독립. BITGET_ORPHAN_GUARD=0 으로 끔.
+            if (
+                os.environ.get("BITGET_ORPHAN_GUARD", "1") == "1"
+                and config.position_store is not None
+            ):
+                from src.live.orphan_guard import OrphanGuard
+                _orphan_guard = OrphanGuard(
+                    adapter=bitget_adapter,
+                    position_store=config.position_store,
+                    take_profit_roi=0.10, stop_loss_roi=0.05,
+                    default_leverage=10.0, interval_sec=20.0,
+                )
+                asyncio.create_task(
+                    _orphan_guard.run_loop(stop_event), name="orphan-guard",
+                )
+                logger.info(
+                    "OrphanGuard ATTACHED (broker-truth orphan/phantom recovery, "
+                    "20s, TP+10%%/SL-5%% ROE, 봇 주문분만)"
+                )
+
         # Multi-symbol mark-price consumer (#238 follow-up). Subscribes to
         # `!markPrice@arr@1s` so every USDT-perp symbol's mark price reaches
         # ``position_risk_manager.evaluate`` once per second. Without this the

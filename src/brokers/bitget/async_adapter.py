@@ -376,6 +376,30 @@ class AsyncBitgetFuturesAdapter:
             )
         return positions
 
+    async def get_protective_positions(self) -> list[dict]:
+        """orphan/phantom 가드용 — 거래소 실포지션 상세 (entry/mark/leverage).
+
+        broker truth 기반 TP/SL 평가에 쓴다. WS 가 체결을 흘려 store 가
+        어긋나도(orphan), 거래소엔 멀쩡히 있는 포지션을 이걸로 직접 본다.
+        반환: [{symbol, hold_side, qty(signed), entry, mark, leverage, upl}]
+        """
+        raw = await self._client.get_all_positions()
+        out: list[dict] = []
+        for p in raw:
+            if p.total == Decimal("0"):
+                continue
+            signed = p.total if p.holdSide == "long" else -p.total
+            out.append({
+                "symbol": p.symbol,
+                "hold_side": p.holdSide,          # "long" | "short"
+                "qty": signed,                    # +long / -short
+                "entry": p.averageOpenPrice,
+                "mark": p.markPrice,
+                "leverage": Decimal(str(p.leverage or 1)),
+                "upl": p.unrealizedPL,
+            })
+        return out
+
     async def get_net_positions(self) -> dict[str, Decimal]:
         """SIGNED net qty per symbol — mirrors Binance adapter.
 

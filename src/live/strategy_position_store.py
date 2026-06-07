@@ -76,6 +76,20 @@ class StrategyPositionStore:
         """
         return self._order_context.get(client_order_id)
 
+    def bot_ordered_symbols(self) -> dict[str, str]:
+        """OrphanGuard 안전장치 — *봇이 주문한* symbol → strategy_id.
+
+        orphan(체결 유실로 store 가 모르는 broker 포지션)을 보호할 때, 봇이
+        실제로 주문한 종목인지 확인하는 용도. 사용자 수동 포지션(ORDI 등 —
+        order-context 없음)은 여기 안 들어와 OrphanGuard 가 절대 안 건드린다.
+        같은 symbol 을 여러 전략이 주문했으면 마지막 등록 전략. in-memory 라
+        재시작 시 비워짐(그땐 보호 못 하지만 수동분도 안 건드림 = 안전 우선).
+        """
+        out: dict[str, str] = {}
+        for (sym, _side, sid) in self._order_context.values():
+            out[sym] = sid
+        return out
+
     def record_fill(
         self,
         *,
