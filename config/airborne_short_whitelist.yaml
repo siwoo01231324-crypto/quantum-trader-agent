@@ -14,15 +14,20 @@ train_window: "2021-01-01..2023-12-31"
 test_window: "2024-01-01..2025-12-31"
 min_train_pf: 1.00
 min_train_n: 50
+# 2026-06-07 #380 — 사용자 운영 결정. entry_params 를 base airborne 기본값으로
+# 되돌려 텔레그램 airborne 알림이 잡는 신호와 동일하게 포착 ("다 사자").
+# exit 는 TP1%/SL0.5% (kst-hours 통일). ⚠️ Hard-OOS(retrace0.6/atr0.3, 3%/6%)
+# 검증과 충돌 — 라이브 누적 우선. 본 block 은 standalone daemon 용; orchestrator
+# 는 configs/orchestrator/production.yaml kwargs 가 authoritative.
 entry_params:
-  retrace_ratio: 0.6
+  retrace_ratio: 0.4         # base airborne (was 0.6 Hard-OOS)
   bb_window: 20
   bb_std: 2.0
   min_close_margin: 0.001
-  atr_body_mult: 0.3
+  atr_body_mult: 0.6         # base airborne (was 0.3 Hard-OOS)
 exit_params:
-  stop_loss_pct: 0.03
-  take_profit_pct: 0.06
+  stop_loss_pct: 0.005       # -0.5% (was 0.03)
+  take_profit_pct: 0.01      # +1.0% (was 0.06)
 
 # KST 시간 게이트 — train(2021-2023)에서 PF>=1 + n>=30 통과한 19개 시간만 진입.
 # 기존 airborne_trader 의 legacy {8,11,16,22} 는 SHORT-only + 21종 조합에서
@@ -30,8 +35,9 @@ exit_params:
 # (scripts/airborne_short_whitelist_hour_sweep.py 결과).
 # 본 list 채택 시 te_PF=1.214 (24h baseline 1.180 보다 ↑), te_sumR=+1395%,
 # trades/day=5.45.
-# 제외된 시간 = {4, 6, 7, 8, 13} (train PF<1).
-kst_entry_hours: [0, 1, 2, 3, 5, 9, 10, 11, 12, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
+# 2026-06-07 #380 — 19h → 24h. 사용자 "에어본 신호 다 사자" 요청으로 제외시간
+# (4,6,7,8,13) 도 진입. ⚠️ 24h 는 Hard OOS 미검증 (19h te_PF=1.214 기준).
+kst_entry_hours: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
 
 # state 머신 ─ 매 weekly refresh 마다 갱신됨
 #   status:
@@ -42,6 +48,11 @@ kst_entry_hours: [0, 1, 2, 3, 5, 9, 10, 11, 12, 14, 15, 16, 17, 18, 19, 20, 21, 
 #   consecutive_pass / consecutive_fail — anti-churn 지속성 카운터
 #
 # 초기 21종 — Hard OOS train selection (2026-06-01)
+#
+# ⚠️ 2026-06-07 #380 — orchestrator(`LiveAirborneShortWhitelistV1`)는 더 이상
+# 본 active 집합을 universe 로 쓰지 않는다. 사용자 결정으로 거래량 **top-100**
+# 동적 universe(부모 get_universe, `QTA_BROKER_VENUE=bitget`)로 전환됨.
+# 아래 status 는 deprecated standalone daemon / refresh 스크립트 용 잔존 기록.
 state:
   1000LUNCUSDT:
     status: candidate

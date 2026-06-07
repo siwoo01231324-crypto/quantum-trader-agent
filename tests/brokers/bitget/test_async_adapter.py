@@ -40,6 +40,7 @@ def _make_adapter(*, paper: bool = True) -> AsyncBitgetFuturesAdapter:
     ad._max_notional_cooldown = {}
     ad._MAX_NOTIONAL_COOLDOWN_SEC = 300.0
     ad._hedge_mode = None
+    ad._leverage_forced = {}  # #380 ensure_leverage_target 캐시
     cli = MagicMock()
     cli.place_order = AsyncMock()
     cli.cancel_order = AsyncMock()
@@ -291,3 +292,54 @@ async def test_stream_fills_returns_async_iterator():
     assert hasattr(it, "__anext__"), "stream_fills must return AsyncIterator"
     # Cleanup the lazy WS stream (no connection was made yet).
     ad._ws_stream._stop.set()
+
+
+# ── #380: ensure_leverage_target — 강제 leverage + 캐시 ──────────────────────
+@pytest.mark.asyncio
+async def test_ensure_leverage_target_sets_and_caches():
+    ad = _make_adapter()
+    await ad.ensure_leverage_target("SHIBUSDT", 10)
+    ad._client.set_leverage.assert_awaited_once_with(symbol="SHIBUSDT", leverage=10)
+    # 동일 (symbol, leverage) 재요청은 캐시로 REST 생략
+    ad._client.set_leverage.reset_mock()
+    await ad.ensure_leverage_target("SHIBUSDT", 10)
+    ad._client.set_leverage.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_ensure_leverage_target_overrides_existing_unlike_minimum():
+    """minimum 과 달리 현재 leverage 와 무관하게 강제 set (override)."""
+    ad = _make_adapter()
+    # 이미 1x 포지션이 있어도 ensure_leverage_target 은 set 을 호출
+    ad._client.get_single_position = AsyncMock(return_value=[MagicMock(leverage=1)])
+    await ad.ensure_leverage_target("SHIBUSDT", 10)
+    ad._client.set_leverage.assert_awaited_once_with(symbol="SHIBUSDT", leverage=10)
+
+
+@pytest.mark.asyncio
+async def test_ensure_leverage_target_new_value_re_sets():
+    ad = _make_adapter()
+    await ad.ensure_leverage_target("SHIBUSDT", 10)
+    ad._client.set_leverage.reset_mock()
+    await ad.ensure_leverage_target("SHIBUSDT", 20)  # 다른 값 → 재설정
+    ad._client.set_leverage.assert_awaited_once_with(symbol="SHIBUSDT", leverage=20)
+
+
+@pytest.mark.asyncio
+async def test_ensure_leverage_target_failure_not_cached():
+    """set 실패 시 캐시 안 채움 → 다음 발주에서 재시도 가능, 예외는 삼킴."""
+    ad = _make_adapter()
+    ad._client.set_leverage = AsyncMock(side_effect=InvalidOrderError("[xxxx] open position"))
+    await ad.ensure_leverage_target("SHIBUSDT", 10)  # 예외 삼켜야 함
+    assert "SHIBUSDT" not in ad._leverage_forced
+    # 재시도
+    ad._client.set_leverage = AsyncMock()
+    await ad.ensure_leverage_target("SHIBUSDT", 10)
+    ad._client.set_leverage.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_ensure_leverage_target_zero_is_noop():
+    ad = _make_adapter()
+    await ad.ensure_leverage_target("SHIBUSDT", 0)
+    ad._client.set_leverage.assert_not_awaited()

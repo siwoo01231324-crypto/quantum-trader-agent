@@ -1,28 +1,26 @@
-"""Live-scanner: SHORT-only airborne + 21-symbol whitelist + 19시간 게이트.
+"""Live-scanner: SHORT-only airborne (Bitget/Binance 거래량 top-100 유니버스).
 
-기존 ``LiveAirborneBbReversalKstHours`` (bidir, 4시간 게이트) 를 상속하고
-**세 가지 차이** 만 적용:
+기존 ``LiveAirborneBbReversalKstHours`` (bidir) 를 상속하고 **SHORT 방향만**
+발주하도록 ``on_bar`` 에서 short fire 만 평가한다. universe·게이트·진입 파라미터는
+부모/production.yaml 을 따른다.
 
-  1. **kst_entry_hours**: 4 → 19 시간 (Hard OOS 검증된 train_PF>1 시간)
-  2. **get_universe**: dynamic top-100 → ``config/airborne_short_whitelist.yaml``
-     의 status=active 인 종목만 (현재 15종)
-  3. **side filter**: LONG fire 는 hold 로 변환 — SHORT 만 발주
-  4. **retrace_ratio**: 0.4 → 0.6 (Hard OOS 검증값, signals 모듈의 신규 kwarg)
-  5. **atr_body_mult**: 0.6 → 0.3 (Hard OOS 검증값)
+2026-06-07 #380 — 사용자 운영 결정으로 "고정 whitelist → 거래량 top-100 동적
+universe" 로 전환. 텔레그램 airborne 알림이 잡는 종목(= 거래량 상위)을 그대로
+숏 진입 ("다 사자"). get_universe override 제거 → 부모의 venue-routing top-100
+(``QTA_BROKER_VENUE=bitget`` 이면 Bitget, 아니면 Binance) 상속. 진입 파라미터도
+base airborne(retrace 0.4/atr 0.6) + TP1%/SL0.5% + 24h 게이트로 production.yaml
+에서 override (검증 충돌 — spec 참조).
 
-청산·warmup·BB·ATR 로직은 부모 100% 재사용. 데몬 없이 orchestrator 안에서
-direct dispatch.
+청산·warmup·BB·ATR·universe 로직은 부모 100% 재사용. 데몬 없이 orchestrator
+안에서 direct dispatch.
 
-5y Hard OOS:
+원본 Hard OOS (19-symbol whitelist + 19h gate, **현재는 미사용**):
   test PF = 1.214, sumR = +1,395%, 5.45 trades/day
-  vs legacy {8,11,16,22} 4-hour gate 게이트 te_PF=1.086 (알파 92% 손실)
 
 Spec: ``docs/specs/strategies/live-airborne-short-whitelist-v1.md``
-Whitelist: ``config/airborne_short_whitelist.yaml`` (weekly refresh)
 """
 from __future__ import annotations
 
-from pathlib import Path
 from typing import ClassVar
 
 import pandas as pd
@@ -37,55 +35,25 @@ from signals.airborne_bb_reversal import (
     evaluate_short_fire_v11,
 )
 
-# 19-hour gate — Hard OOS 의 train_PF>1 + n>=30 통과한 시간만.
-# 제외: {4, 6, 7, 8, 13} (train PF<1). legacy 의 {8,11,16,22} 와 다름.
-# 자세한 sweep 결과: ``scripts/airborne_short_whitelist_hour_sweep.py``.
+# 원본 Hard OOS 19시간 게이트 — 현재 production.yaml 이 24h 로 override 하므로
+# 참고용으로만 보존. 제외: {4, 6, 7, 8, 13} (train PF<1).
 _KST_HOURS_19: frozenset[int] = frozenset(
     {0, 1, 2, 3, 5, 9, 10, 11, 12, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23}
 )
 
-# Hard OOS 검증값. 부모 default 0.4 보다 깊은 되돌림 요구.
+# 원본 Hard OOS 진입 파라미터 — production.yaml 이 base airborne(0.4/0.6)으로
+# override. ctor default 로만 잔존 (production.yaml 미지정 시 fallback).
 _RETRACE_RATIO_HARD_OOS: float = 0.6
 _ATR_BODY_MULT_HARD_OOS: float = 0.3
 
-# Whitelist yaml 경로 — repo root 기준.
-_WHITELIST_YAML: Path = (
-    Path(__file__).resolve().parents[3] / "config" / "airborne_short_whitelist.yaml"
-)
-
-# 임포트 시점 (orchestrator 시작) 의 fallback universe — yaml 로드 실패 대비.
-# Hard OOS active 15종.
-_FALLBACK_UNIVERSE: tuple[str, ...] = (
-    # 2026-06-05 — Bitget 호환성: 1000SHIBUSDT→SHIBUSDT (Bitget 단일 unit),
-    # RIFUSDT 제외 (Bitget 미상장). 알파 영향 없음 (price 비율 동일).
-    "SHIBUSDT", "AAVEUSDT", "APTUSDT", "ARBUSDT", "ATOMUSDT",
-    "AXSUSDT", "DASHUSDT", "FETUSDT", "IDUSDT", "LTCUSDT",
-    "UNIUSDT", "XLMUSDT", "XRPUSDT", "ZECUSDT",
-)
-
-
-def _load_active_universe() -> list[str]:
-    """yaml 로드 시도 → active 종목 정렬 list. 실패 시 fallback."""
-    try:
-        from src.live.airborne_short_whitelist.whitelist_loader import (
-            active_symbols,
-            load_whitelist,
-        )
-        cfg = load_whitelist(_WHITELIST_YAML)
-        actives = sorted(active_symbols(cfg))
-        if actives:
-            return actives
-    except Exception:  # noqa: BLE001
-        pass
-    return list(_FALLBACK_UNIVERSE)
-
 
 class LiveAirborneShortWhitelistV1(LiveAirborneBbReversalKstHours):
-    """SHORT-only airborne + 21-symbol whitelist + KST 19-hour 게이트.
+    """SHORT-only airborne — 거래량 top-100 유니버스 (#380 부터).
 
-    Hard OOS 검증 (train 2021-2023 / test 2024-2025):
-        test PF = 1.214, sumR = +1,395%, 5.45 trades/day
+    get_universe 는 부모(``LiveAirborneBbReversalKstHours``)의 venue-routing
+    top-100 을 상속. on_bar 은 short fire 만 평가해 SHORT-only 보장.
 
+    원본 Hard OOS (19종 whitelist + 19h, 현재 미사용): test PF=1.214.
     Spec: docs/specs/strategies/live-airborne-short-whitelist-v1.md
     """
 
@@ -111,6 +79,7 @@ class LiveAirborneShortWhitelistV1(LiveAirborneBbReversalKstHours):
         trailing_stop_pct: float | None = None,
         kst_entry_hours: tuple[int, ...] | list[int] | None = None,
         cooldown_after_stop_sec: float | None = None,
+        max_concurrent_positions: int | None = None,
     ) -> None:
         # 부모 ctor 호출 (min_close_margin / atr_period 는 None 이면 부모 default 사용)
         parent_kwargs: dict = {
@@ -121,6 +90,7 @@ class LiveAirborneShortWhitelistV1(LiveAirborneBbReversalKstHours):
             "trailing_stop_pct": trailing_stop_pct,
             "kst_entry_hours": kst_entry_hours,
             "cooldown_after_stop_sec": cooldown_after_stop_sec,
+            "max_concurrent_positions": max_concurrent_positions,
         }
         if min_close_margin is not None:
             parent_kwargs["min_close_margin"] = min_close_margin
@@ -134,12 +104,9 @@ class LiveAirborneShortWhitelistV1(LiveAirborneBbReversalKstHours):
             )
         self.retrace_ratio = float(retrace_ratio)
 
-    @classmethod
-    def get_universe(cls) -> list[str]:
-        """yaml 의 status=active 종목만. 호출 시점에 yaml 재로드 — weekly
-        refresh 후 다음 ``get_universe()`` 호출부터 새 list 반영.
-        """
-        return _load_active_universe()
+    # get_universe 는 부모 상속 — venue-routing 거래량 top-100
+    # (QTA_BROKER_VENUE=bitget → Bitget, 아니면 Binance). #380 부터 고정
+    # whitelist yaml 미사용 (텔레그램 알림이 잡는 top-100 종목 = 숏 진입 대상).
 
     @classmethod
     def get_interval(cls) -> str:

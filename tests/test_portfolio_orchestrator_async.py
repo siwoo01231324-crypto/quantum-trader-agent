@@ -345,3 +345,64 @@ def test_run_bar_latency_p99(policy):
         assert p99 < 50.0, f"p99 latency {p99:.2f}ms exceeds 50ms ceiling"
     finally:
         loop.close()
+
+
+# ── #380: live-scanner max_concurrent_positions 캡 + sell-side dedup ──────────
+import pandas as _pd  # noqa: E402
+
+
+def _live_scanner(sid, *, action="sell", size=0.05, max_concurrent=None, universe=None):
+    uni = universe or ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT"]
+
+    class _LS:
+        is_live_scanner = True
+        strategy_id = sid
+        max_concurrent_positions = max_concurrent
+
+        @classmethod
+        def get_universe(cls):
+            return list(uni)
+
+        async def on_bar(self, ctx):
+            return Signal(action=action, size=size, reason=f"{sid}-fire")
+
+    return _LS()
+
+
+def _universe_snap(symbols, price=100.0):
+    hist = _pd.DataFrame({"close": [price, price, price]})
+    return {
+        "ohlcv_history": {s: hist.copy() for s in symbols},
+        "equity_usdt": 1_000_000.0,
+        "equity_krw": 1_000_000.0,
+    }
+
+
+def test_live_scanner_max_concurrent_caps_entries(loop, policy):
+    """#380 — max_concurrent_positions 가 동시 진입 종목 수를 상한."""
+    orch = AsyncStrategyOrchestrator(policy)
+    uni = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT"]
+    _register(orch, _live_scanner("ls-cap", action="sell", max_concurrent=2, universe=uni))
+    intents = _run_in_loop(loop, orch.run_bar(ts=None, market_snapshot=_universe_snap(uni)))
+    assert len(intents) == 2, f"cap=2 라 2종만 진입해야 함, got {len(intents)}"
+
+
+def test_live_scanner_sell_dedup_no_restack(loop, policy):
+    """#380 — 숏(sell) 진입도 (sid,symbol) dedup → 같은 종목 재진입 차단 (4중진입 fix)."""
+    orch = AsyncStrategyOrchestrator(policy)
+    uni = ["BTCUSDT", "ETHUSDT"]
+    _register(orch, _live_scanner("ls-dedup", action="sell", universe=uni))
+    snap = _universe_snap(uni)
+    first = _run_in_loop(loop, orch.run_bar(ts=None, market_snapshot=snap))
+    assert len(first) == 2
+    second = _run_in_loop(loop, orch.run_bar(ts=None, market_snapshot=snap))
+    assert len(second) == 0, "이미 보유 중인 종목 sell 재진입 차단"
+
+
+def test_live_scanner_no_cap_when_unset(loop, policy):
+    """max_concurrent 미설정 → 무제한 (legacy 동작)."""
+    orch = AsyncStrategyOrchestrator(policy)
+    uni = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT"]
+    _register(orch, _live_scanner("ls-nocap", action="sell", universe=uni))
+    intents = _run_in_loop(loop, orch.run_bar(ts=None, market_snapshot=_universe_snap(uni)))
+    assert len(intents) == 4

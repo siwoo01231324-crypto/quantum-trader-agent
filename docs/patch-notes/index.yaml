@@ -15,6 +15,42 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.37"
+    date: "2026-06-07"
+    title: "short-whitelist 운영 재설정 (#380) — 레버리지 10x 강제 + TP1%/SL0.5% + 24h + base airborne + 거래량 top-100"
+    tags: [feature, fix, safety]
+    summary: >
+      사용자 운영 보고 (2026-06-07) 4건 대응: (1) 텔레그램이 '1000SHIBUSDT'를
+      '화이트리스트 외 종목'으로 오알림 — Binance(1000SHIB) vs Bitget(SHIB) 심볼
+      불일치. (2) orchestrator(Bitget)가 11/14/16/18시 4회 진입했으나 알림은
+      11/18시만 — 알림 데몬(Binance 피드)과 거래 엔진(Bitget 피드) 분리. (3) 5000$ 중
+      3500$(70%) 사용 + (4) 레버리지 1x. (3)+(4)는 동일 원인 — leverage 가 1x 라
+      notional=margin. + 사용자 추가요청으로 universe 를 고정 19종 whitelist →
+      거래량 top-100 동적(=텔레그램 알림 universe)으로 전환. ⚠️ TP/SL 1%/0.5%,
+      24h, base airborne, top-100 모두 5y/Hard-OOS 검증과 충돌 — 라이브 우선 결정.
+    items:
+      - "src/live/executor.py — QTA_TARGET_LEVERAGE env 설정 시 발주 직전 broker.ensure_leverage_target(symbol, N) 으로 leverage 강제. 미설정/0/비정수면 기존 ensure_leverage_minimum(1x) 경로 byte-identical. _target_leverage() 헬퍼 추가."
+      - "src/brokers/bitget/async_adapter.py — ensure_leverage_target(symbol, leverage) 추가. 현재값과 무관하게 강제 set (minimum 과 차이), symbol→leverage 캐시로 발주마다 REST 폭주 방지, 실패 시 캐시 미적용+예외 삼킴(발주 진행). _leverage_forced dict 필드."
+      - "src/brokers/async_router.py — ensure_leverage_target forward (getattr graceful skip, KIS/Paper 미지원)."
+      - ".env / .env.example — QTA_TARGET_LEVERAGE=10 (bitget 어댑터만 적용). 브로커 UI 수동 leverage 설정 의존 제거."
+      - "src/backtest/strategies/live_airborne_short_whitelist_v1.py — get_universe override 제거 → 부모(LiveAirborneBbReversalKstHours)의 venue-routing 거래량 top-100 상속. _load_active_universe/_FALLBACK_UNIVERSE/_WHITELIST_YAML 삭제. max_concurrent_positions kwarg 추가. on_bar(SHORT-only)·진입파라미터 ctor 유지."
+      - "src/portfolio/_async_orchestrator.py — live-scanner 진입 dedup+캡을 buy 뿐 아니라 sell(숏)도 적용 (이전 buy-only → 숏 전략 무한 stack, SHIB 4중진입 버그 동시 수정). max_concurrent_positions(전 전략 공통, getattr) 캡: 보유 ≥ N 이면 신규종목 진입 hold."
+      - "src/backtest/strategies/live_airborne_bb_reversal_kst_morning.py — base ctor 에 max_concurrent_positions kwarg 추가 (airborne 패밀리 공통, production.yaml override)."
+      - "scripts/airborne_alert_daemon.py — _norm_symbol() + _in_trading_universe() : fire 심볼을 '1000' 정규화 후 거래량 top-100(get_top_n_symbols) 과 비교 → 1000SHIB↔SHIB 매칭, top-100 종목이면 '진입 예정'. _KST_HOURS_SHORT_WL 19h→24h. 안내 문구 '화이트리스트 외'→'TOP100 외'."
+      - "configs/orchestrator/production.yaml — short-whitelist kwargs: default_size 0.16→0.50(명목 50% = 증거금 5%/종목 @10x, 사용자 '마진 5%+10배' 요청), max_concurrent_positions 18 추가(증거금 90%/버퍼 10%), stop_loss_pct 0.03→0.005, take_profit_pct 0.06→0.01, retrace_ratio 0.6→0.4, atr_body_mult 0.3→0.6(=base airborne), kst_entry_hours 19h→24h."
+      - "docker-compose.live.yml — bitget 데몬 --max-orders 기본 30→1000 (top-100+20동시 일일 주문수 ↑, 조기 HALT 방지. BITGET_MAX_ORDERS env override)."
+      - "config/airborne_short_whitelist.yaml — entry/exit params + kst_entry_hours 24h 동기 (standalone daemon 용). state active/candidate 는 deprecated (orchestrator 는 top-100 사용). 헤더에 deprecation 명시."
+      - "tests — executor 4종, bitget adapter 5종, alert daemon 5종(정규화/top-100매칭/조회실패/24h/통합), strategy universe 3종+kwarg 2종, orchestrator 3종(max_concurrent 캡/sell dedup/무캡), loader 갱신."
+      - "⚠️ 검증 충돌: 0.5%/1.0% 룰 5y bench PF=0.545(8개중 최악), Hard-OOS te_PF=1.214 는 19h+retrace0.6/atr0.3+19종 기준 — 24h+base+top100 전부 미검증. 사용자 '실 테스트 우선' 결정. 노출: 명목 50%×18종 = 명목 900%/증거금 90%(버퍼 10%)."
+      - "운영 영향: live_run.py + airborne_alert_daemon 재시작 필요. 기존 SHIB 숏 4건(1x)은 다음 청산 후 진입부터 10x 반영."
+    refs:
+      - "src/live/executor.py"
+      - "src/brokers/bitget/async_adapter.py"
+      - "scripts/airborne_alert_daemon.py"
+      - "configs/orchestrator/production.yaml"
+      - "config/airborne_short_whitelist.yaml"
+      - "docs/specs/strategies/live-airborne-short-whitelist-v1.md"
+
   - version: "v0.6.36"
     date: "2026-06-06"
     title: "airborne kst-hours 게이트 v3 {1,2,3,6,7,8,23} (13일 1m 기반, 5y 미검증)"
