@@ -177,3 +177,76 @@ class TestCtorOverride:
         history = _long_fire_frame_at_utc("2026-01-02T02:00:00")  # KST 11
         signal = _run(s, _ctx(history))
         assert signal.action == "hold"  # 11 ∉ {20, 21}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 2026-06-08 봉마감 게이트 회귀 테스트 (PIPPINUSDT 미완성봉 발화 사고)
+# ─────────────────────────────────────────────────────────────────────────────
+import pandas as _pd
+import pytest as _pytest
+from unittest import mock as _mock
+from backtest.protocol import Signal as _Signal
+from backtest.strategies.live_airborne_bb_reversal_kst_hours import (
+    LiveAirborneBbReversalKstHours as _S,
+)
+from backtest.strategies.live_airborne_bb_reversal_kst_morning import (
+    LiveAirborneBbReversalKstMorning as _Parent,
+)
+
+_IDX = _pd.date_range("2026-06-07T17:00:00Z", periods=6, freq="1h")
+_HIST = _pd.DataFrame(
+    {"open": 1.0, "high": 1.0, "low": 1.0, "close": [1, 2, 3, 4, 5, 6]}, index=_IDX
+)
+
+
+def test_gate_backtest_no_live_run_is_unchanged():
+    st = _S()
+    ctx = {"ts": _IDX[-1], "market_snapshot": {"symbol": "X", "history": _HIST}}
+    gated, closed_ts = st._bar_close_gate(ctx)
+    assert gated is ctx and closed_ts is None  # byte-identical backtest path
+    assert len(gated["market_snapshot"]["history"]) == 6
+
+
+def test_gate_live_forming_bar_trims_to_closed():
+    st = _S()
+    ctx = {
+        "ts": _pd.Timestamp("2026-06-07T22:27:00Z"),  # 22:00봉 형성 중
+        "live_run": True,
+        "market_snapshot": {"symbol": "X", "history": _HIST},
+    }
+    gated, closed_ts = st._bar_close_gate(ctx)
+    assert len(gated["market_snapshot"]["history"]) == 5  # 미완성봉 제거
+    assert closed_ts == _pd.Timestamp("2026-06-07T21:00:00Z")  # 마감봉
+
+
+def test_gate_live_closed_bar_no_trim():
+    st = _S()
+    ctx = {
+        "ts": _pd.Timestamp("2026-06-07T23:05:00Z"),  # 22:00봉 이미 마감
+        "live_run": True,
+        "market_snapshot": {"symbol": "X", "history": _HIST},
+    }
+    gated, closed_ts = st._bar_close_gate(ctx)
+    assert len(gated["market_snapshot"]["history"]) == 6
+    assert closed_ts == _pd.Timestamp("2026-06-07T22:00:00Z")
+
+
+@_pytest.mark.asyncio
+async def test_on_bar_dedup_one_entry_per_closed_bar():
+    """같은 마감봉엔 한 번만 진입 (TP/SL 청산 후 재진입 폭주 방지)."""
+    st = _S(btc_trend_filter_enabled=False)
+
+    async def _fake_buy(self, ctx):
+        return _Signal(action="buy", size=0.5, reason="airborne_long_fire")
+
+    ctx = {
+        "ts": _pd.Timestamp("2026-06-07T22:27:00Z"),
+        "live_run": True,
+        "market_snapshot": {"symbol": "X", "history": _HIST},
+    }
+    with _mock.patch.object(_Parent, "on_bar", _fake_buy):
+        sig1 = await st.on_bar(ctx)
+        sig2 = await st.on_bar(ctx)  # 같은 마감봉 재평가
+    assert sig1.action == "buy"
+    assert sig2.action == "hold"  # 두 번째는 dedup
+    assert "already_entered_bar" in sig2.reason

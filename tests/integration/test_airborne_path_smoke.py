@@ -98,6 +98,19 @@ def _build_snapshot(symbol: str, last_utc: str, equity_usdt: float = 1000.0) -> 
     """live SnapshotBuilder 가 만들어주던 형태와 동등한 minimal market_snapshot."""
     rows = _binance_1h_rows(last_utc, n_bars=60)
     history = _klines_to_dataframe(rows, interval="1h")
+    # 2026-06-08 — live SnapshotBuilder 는 Bitget kline 의 *형성 중* 봉을 마지막
+    # 원소로 포함한다. orchestrator 봉마감 게이트가 이 미완성 봉을 떼고 마감된
+    # 발화봉을 평가하므로, live 표현과 동등하게 발화봉(마감) 뒤에 형성봉 1개를
+    # 덧붙인다 (발화봉 close 를 이어받아 새 신호 없음). 테스트 ts 는 이 형성봉
+    # 안(_forming_ts)을 가리켜야 게이트가 발화봉을 평가한다.
+    forming_open = history.index[-1] + pd.Timedelta(hours=1)
+    last_close = float(history["close"].iloc[-1])
+    forming_vals = {
+        col: (1.0 if col == "volume" else last_close) for col in history.columns
+    }
+    history = pd.concat(
+        [history, pd.DataFrame([forming_vals], index=[forming_open])]
+    )
     return {
         "ohlcv_history": {symbol: history},
         "equity_usdt": equity_usdt,
@@ -124,6 +137,16 @@ _GATE_OFF_LAST_UTC = "2026-05-30T04:00:00"
 _SYMBOL = "BTCUSDT"
 
 
+def _forming_ts(last_utc: str) -> pd.Timestamp:
+    """발화봉(last_utc) 다음 형성봉 안의 시각.
+
+    봉마감 게이트(2026-06-08)는 live 에서 형성 중 봉을 떼고 직전 마감봉을
+    평가한다. live tick 시각은 형성봉 안에 있으므로 ts 를 발화봉 +1h30m 으로
+    둔다 → 게이트가 형성봉을 떼고 마감된 발화봉을 평가.
+    """
+    return pd.Timestamp(last_utc, tz="UTC") + pd.Timedelta(hours=1, minutes=30)
+
+
 @pytest.mark.asyncio
 async def test_e2e_gate_on_kst8_emits_buy():
     """KST 8시 (gate v3 ON) + BB long fire pattern → BUY 시그널 + OrderIntent."""
@@ -132,7 +155,7 @@ async def test_e2e_gate_on_kst8_emits_buy():
     orch.register_strategy("live-airborne-bb-reversal-kst-hours", strat)
 
     snap = _build_snapshot(_SYMBOL, _GATE_ON_LAST_UTC)
-    ts = pd.Timestamp(_GATE_ON_LAST_UTC, tz="UTC")
+    ts = _forming_ts(_GATE_ON_LAST_UTC)
     intents = await orch.run_bar(ts=ts, market_snapshot=snap)
 
     # 1) intents 가 비어있지 않아야 (path 가 broker intent 까지 갔다는 증거)
@@ -166,7 +189,7 @@ async def test_e2e_gate_off_kst13_returns_hold():
     orch.register_strategy("live-airborne-bb-reversal-kst-hours", strat)
 
     snap = _build_snapshot(_SYMBOL, _GATE_OFF_LAST_UTC)
-    ts = pd.Timestamp(_GATE_OFF_LAST_UTC, tz="UTC")
+    ts = _forming_ts(_GATE_OFF_LAST_UTC)
     intents = await orch.run_bar(ts=ts, market_snapshot=snap)
 
     # 같은 패턴이지만 KST 13시 — gate 차단. 본 strategy 의 intent 0개.
@@ -190,7 +213,7 @@ async def test_e2e_universe_filter_excludes_unlisted_symbol():
     # 가짜 symbol — top-100 에 절대 없는 종목. dispatch 가 필터하면 intent 0.
     fake = "NOTREALUSDT__"
     snap = _build_snapshot(fake, _GATE_ON_LAST_UTC)
-    ts = pd.Timestamp(_GATE_ON_LAST_UTC, tz="UTC")
+    ts = _forming_ts(_GATE_ON_LAST_UTC)
     intents = await orch.run_bar(ts=ts, market_snapshot=snap)
 
     airborne_intents = [
@@ -235,7 +258,7 @@ async def test_e2e_intent_to_broker_filled(tmp_path):
     orch = _new_orchestrator()
     orch.register_strategy("live-airborne-bb-reversal-kst-hours", strat)
     snap = _build_snapshot(_SYMBOL, _GATE_ON_LAST_UTC)
-    ts = pd.Timestamp(_GATE_ON_LAST_UTC, tz="UTC")
+    ts = _forming_ts(_GATE_ON_LAST_UTC)
     intents = await orch.run_bar(ts=ts, market_snapshot=snap)
     assert intents, "step 1 — orchestrator intent 생성 단계가 비어있음"
 

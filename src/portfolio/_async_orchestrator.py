@@ -408,6 +408,10 @@ class AsyncStrategyOrchestrator:
                         "ts": ts,
                         "market_snapshot": per_symbol_snap,
                         "factors": per_symbol_factors,
+                        # 2026-06-08 — live 디스패치 표식. airborne 봉마감 게이트가
+                        # 이 플래그로 live(미완성봉 치환) vs backtest(bench 는 직접
+                        # on_bar 호출, 본 플래그 없음 → 무변경)를 구분한다.
+                        "live_run": True,
                     }
                     tasks.append(_spawn(strategy, ctx))
                     sids.append(sid)
