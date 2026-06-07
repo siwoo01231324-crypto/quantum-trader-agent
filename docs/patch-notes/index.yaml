@@ -15,6 +15,22 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.38"
+    date: "2026-06-08"
+    title: "kst-hours 사이징을 short-whitelist 와 통일 — default_size 0.16→0.50 + max_concurrent 18"
+    tags: [chore]
+    summary: >
+      사용자 결정 (2026-06-08) — live-airborne-bb-reversal-kst-hours 의 사이징을
+      short-whitelist-v1 과 동일하게: default_size 0.16 → 0.50 (명목 50%/종목,
+      10x 에서 증거금 5%/종목), max_concurrent_positions 18 신규 (최악 명목 900%/
+      증거금 90%, 19번째 fire 부터 hold). TP/SL(0.5%/1%)·게이트(v3 {1,2,3,6,7,8,23})
+      는 무변경.
+    items:
+      - "configs/orchestrator/production.yaml — kst-hours default_size 0.16→0.50, max_concurrent_positions: 18 추가. 전략 코드/게이트 무변경 (부모 ctor 가 이미 두 kwarg 수용)."
+      - "⚠️ 두 airborne 전략 모두 0.50/max18 → 같은 종목 동시 숏이면 합산 명목 100%/종목. 익절손절(@10x 포지션 ±5%/±10%) 로 포지션 수명 짧아 합산 증거금 초과 위험 낮다는 운영 판단. 장기 미청산 timeout 청산은 후속 과제."
+      - "⚠️ 알파 무검증 — 5y bench 상 +1%/-0.5% airborne 은 PF~0.5 (전 시각·방향 손실). 사이징은 알파와 무관하나, 라이브 우선 운영 결정."
+    refs:
+      - "configs/orchestrator/production.yaml"
   - version: "v0.6.37"
     date: "2026-06-07"
     title: "short-whitelist 운영 재설정 (#380) — 레버리지 10x 강제 + TP1%/SL0.5% + 24h + base airborne + 거래량 top-100"
