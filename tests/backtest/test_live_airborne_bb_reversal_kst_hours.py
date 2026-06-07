@@ -231,14 +231,22 @@ def test_gate_live_closed_bar_no_trim():
     assert closed_ts == _pd.Timestamp("2026-06-07T22:00:00Z")
 
 
+async def _fake_buy(self, ctx):
+    return _Signal(action="buy", size=0.5, reason="airborne_long_fire")
+
+
+def _isolated(st, tmp_path):
+    """dedup 영속 파일을 tmp 로 격리 (테스트 간 오염 방지)."""
+    p = tmp_path / "dedup.json"
+    st._dedup_path = lambda: p
+    return p
+
+
 @_pytest.mark.asyncio
-async def test_on_bar_dedup_one_entry_per_closed_bar():
+async def test_on_bar_dedup_one_entry_per_closed_bar(tmp_path):
     """같은 마감봉엔 한 번만 진입 (TP/SL 청산 후 재진입 폭주 방지)."""
     st = _S(btc_trend_filter_enabled=False)
-
-    async def _fake_buy(self, ctx):
-        return _Signal(action="buy", size=0.5, reason="airborne_long_fire")
-
+    _isolated(st, tmp_path)
     ctx = {
         "ts": _pd.Timestamp("2026-06-07T22:27:00Z"),
         "live_run": True,
@@ -248,5 +256,56 @@ async def test_on_bar_dedup_one_entry_per_closed_bar():
         sig1 = await st.on_bar(ctx)
         sig2 = await st.on_bar(ctx)  # 같은 마감봉 재평가
     assert sig1.action == "buy"
-    assert sig2.action == "hold"  # 두 번째는 dedup
-    assert "already_entered_bar" in sig2.reason
+    assert sig2.action == "hold"
+    assert "reentry_cooldown" in sig2.reason
+
+
+@_pytest.mark.asyncio
+async def test_reentry_cooldown_blocks_next_bar(tmp_path):
+    """쿨다운(12h) 안의 *다음* 봉도 재진입 차단 (매시간 재매수 방지)."""
+    st = _S(btc_trend_filter_enabled=False)
+    _isolated(st, tmp_path)
+    # 22:00봉 진입 → 23:00봉(1h 뒤, 쿨다운 12h 안) 차단
+    ctx1 = {"ts": _pd.Timestamp("2026-06-07T22:27:00Z"), "live_run": True,
+            "market_snapshot": {"symbol": "X", "history": _HIST}}
+    hist2 = _pd.DataFrame(
+        {"open": 1.0, "high": 1.0, "low": 1.0, "close": [1, 2, 3, 4, 5, 6, 7]},
+        index=_pd.date_range("2026-06-07T17:00:00Z", periods=7, freq="1h"),
+    )
+    ctx2 = {"ts": _pd.Timestamp("2026-06-07T23:27:00Z"), "live_run": True,
+            "market_snapshot": {"symbol": "X", "history": hist2}}
+    with _mock.patch.object(_Parent, "on_bar", _fake_buy):
+        sig1 = await st.on_bar(ctx1)   # 22:00봉(closed 21:00) 진입
+        sig2 = await st.on_bar(ctx2)   # 23:00봉(closed 22:00) — 1h 뒤
+    assert sig1.action == "buy"
+    assert sig2.action == "hold" and "reentry_cooldown" in sig2.reason
+
+
+@_pytest.mark.asyncio
+async def test_reentry_persists_across_restart(tmp_path):
+    """재시작(새 인스턴스)해도 dedup 디스크에서 복원 → 재매수 안 함."""
+    p = tmp_path / "dedup.json"
+    ctx = {"ts": _pd.Timestamp("2026-06-07T22:27:00Z"), "live_run": True,
+           "market_snapshot": {"symbol": "X", "history": _HIST}}
+    with _mock.patch.object(_Parent, "on_bar", _fake_buy):
+        st1 = _S(btc_trend_filter_enabled=False); st1._dedup_path = lambda: p
+        sig1 = await st1.on_bar(ctx)
+        # 새 인스턴스(재시작 시뮬) — 같은 dedup 파일 로드
+        st2 = _S(btc_trend_filter_enabled=False); st2._dedup_path = lambda: p
+        sig2 = await st2.on_bar(ctx)
+    assert sig1.action == "buy"
+    assert sig2.action == "hold"  # 재시작해도 차단됨
+    assert p.exists()
+
+
+@_pytest.mark.asyncio
+async def test_backtest_no_live_run_unaffected_by_dedup(tmp_path):
+    """backtest(live_run 없음)는 dedup 영속 무관 — 매 봉 평가 (byte-identical)."""
+    st = _S(btc_trend_filter_enabled=False)
+    _isolated(st, tmp_path)
+    ctx = {"ts": _HIST.index[-1],  # backtest 컨벤션, live_run 없음
+           "market_snapshot": {"symbol": "X", "history": _HIST}}
+    with _mock.patch.object(_Parent, "on_bar", _fake_buy):
+        sig1 = await st.on_bar(ctx)
+        sig2 = await st.on_bar(ctx)
+    assert sig1.action == "buy" and sig2.action == "buy"  # dedup 안 걸림

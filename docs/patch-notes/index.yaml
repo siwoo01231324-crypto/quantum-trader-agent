@@ -15,6 +15,22 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.41"
+    date: "2026-06-08"
+    title: "airborne 재진입 차단 — dedup 디스크 영속 + 쿨다운 (재시작/매시간 재매수 방지)"
+    tags: [fix]
+    summary: >
+      봉마감 dedup 이 메모리에만 있어 재시작마다 리셋 → 같은 손실 종목을 재시작·
+      매시간 재매수 (2026-06-08 BEAT·BTW·XAG). dedup 을 디스크에 영속화(재시작
+      유지) + 같은 종목 쿨다운(기본 12h, AIRBORNE_REENTRY_COOLDOWN_HOURS) 안엔
+      재진입 차단. live 전용 — backtest 무영향.
+    items:
+      - "LiveAirborneBbReversalKstHours: _fired_bar_ts 를 logs/airborne_reentry/<class>.json 에 영속, on_bar 진입 시 로드·갱신. 재시작해도 최근 진입 종목 재매수 안 함."
+      - "쿨다운: 같은 종목을 reentry_cooldown_hours(기본 12h) 안에 또 진입 안 함 — 매시간 같은 신호 재매수 방지. AIRBORNE_REENTRY_COOLDOWN_HOURS env 로 조정."
+      - "backtest(bench, live_run 없음)는 closed_ts None → dedup 미동작 → byte-identical (371 passed). 영속 경로는 AIRBORNE_REENTRY_STATE_DIR 로 테스트 격리."
+      - "short-whitelist-v1 도 상속으로 동일 적용."
+    refs:
+      - "src/backtest/strategies/live_airborne_bb_reversal_kst_hours.py"
   - version: "v0.6.40"
     date: "2026-06-08"
     title: "거래소 네이티브 TP/SL plan order — 진입 시 거래소에 익절/손절 직접 등록 (게이트 OFF)"
