@@ -779,6 +779,26 @@ async def run_shadow_loop(
             and bitget_adapter is not None
             and config.position_store is not None
         ):
+            # 2026-06-08 — Bitget 계좌를 단방향(one-way) 포지션 모드로 강제.
+            # 어댑터는 단방향 주문(position_side=BOTH, tradeSide 미전송)을 보내므로
+            # 계좌가 헤지(양방향) 모드면 place-order 가 [40774] "order type for
+            # unilateral position must also be the unilateral position type" 로
+            # 전량 거부된다 (2026-06-08 마인넷 전환 시 신호 8건 전량 거부 사고 —
+            # 데모 계좌는 단방향이라 안 드러났음). ensure_position_mode 가 정의만
+            # 돼있고 호출되지 않던 것을 startup 에 연결. 포지션 보유 중(0포지션
+            # 아님)이면 Bitget 이 모드변경 거부 → graceful skip (기존 모드 유지).
+            try:
+                await bitget_adapter.ensure_position_mode(hedge=False)
+                logger.info(
+                    "bitget position mode ensured: one-way (broker_mode=%s)",
+                    config.broker_mode,
+                )
+            except Exception as exc:  # noqa: BLE001 — defensive, 거래 계속
+                logger.warning(
+                    "bitget ensure_position_mode(one-way) skipped: %s "
+                    "(포지션 보유 중이거나 이미 설정됨 — 계좌 모드 수동 확인 권장)",
+                    exc,
+                )
             # P4b — Bitget private WS user-data stream → order_filled WAL.
             from src.live.fill_consumer import run_bitget_fill_consumer
             def _bg_stream_factory():
