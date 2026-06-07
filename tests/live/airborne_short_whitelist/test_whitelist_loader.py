@@ -145,20 +145,20 @@ def test_real_config_loads() -> None:
     assert "FETUSDT" in actives
     assert "APTUSDT" in actives
     assert "ARBUSDT" in actives
-    # drift 의심 종목은 candidate
+    # drift 의심 종목은 candidate (yaml 자체는 원형 유지 — #380 부터 orchestrator
+    # 는 yaml active 집합 대신 거래량 top-100 사용하므로 이 status 는 standalone
+    # daemon/refresh 용 잔존 기록).
     cands = candidate_symbols(cfg)
     assert "BNBUSDT" in cands
     assert "ETHUSDT" in cands
-    # kst_entry_hours override — Hard OOS hour sweep 결과 19시간
+    assert "1000LUNCUSDT" in cands
+    # #380 — kst_entry_hours 19h → 24h (전 시간 진입)
     assert cfg.kst_entry_hours is not None
-    assert len(cfg.kst_entry_hours) == 19
-    # 알파 음수 시간 제외 확인
-    assert 4 not in cfg.kst_entry_hours
-    assert 6 not in cfg.kst_entry_hours
-    assert 7 not in cfg.kst_entry_hours
-    assert 8 not in cfg.kst_entry_hours  # legacy default 포함했었음
-    assert 13 not in cfg.kst_entry_hours
-    # 알파 양수 시간 포함 확인 (대표)
+    assert len(cfg.kst_entry_hours) == 24
+    # 이전 제외 시간(4,6,7,8,13)도 이제 포함
+    for h in (4, 6, 7, 8, 13):
+        assert h in cfg.kst_entry_hours
+    # 대표 시간 포함 확인
     assert 0 in cfg.kst_entry_hours
     assert 12 in cfg.kst_entry_hours
     assert 18 in cfg.kst_entry_hours

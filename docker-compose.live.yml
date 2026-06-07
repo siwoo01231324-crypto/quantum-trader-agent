@@ -128,7 +128,10 @@ services:
       - "--broker=${BITGET_BROKER_MODE:-bitget-demo}"
       - "--symbols=${BITGET_SYMBOLS:-BTCUSDT,ETHUSDT,SOLUSDT}"
       - "--duration=4w"
-      - "--max-orders=${BITGET_MAX_ORDERS:-30}"
+      # #380 — top-100 universe + 20 동시보유 → 일일 주문수 ↑ (진입+청산 round-trip
+      # + airborne 100+ fire). 기존 30 은 너무 낮아 조기 HALT. 1000 으로 상향
+      # (BITGET_MAX_ORDERS env 로 추가 override / 무제한 원하면 매우 큰 값).
+      - "--max-orders=${BITGET_MAX_ORDERS:-1000}"
       - "--auto-fallback"
       - "--schedule=always"
       - "--feed=binance"

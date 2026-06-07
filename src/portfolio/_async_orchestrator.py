@@ -476,12 +476,17 @@ class AsyncStrategyOrchestrator:
                 continue
 
             # #238 — live-scanner 포지션 중복 진입 차단. 조건(ATR breakout 등)이
-            # 지속되면 매 tick buy 신호가 나오는데, 이미 (sid, symbol) 포지션을
-            # 보유 중이면 추가 매수하지 않는다 (1 position per strategy-symbol).
+            # 지속되면 매 tick 진입 신호가 나오는데, 이미 (sid, symbol) 포지션을
+            # 보유 중이면 추가 진입하지 않는다 (1 position per strategy-symbol).
             # 청산은 LivePositionRiskManager 가 stop/TP 로 수행 →
             # release_live_position() 호출 시 재진입 가능.
+            #
+            # #380 — buy 뿐 아니라 sell(숏 진입)도 동일 적용. 이전엔 buy 만
+            # 차단해 SHORT-only/bidir live-scanner 의 숏 진입이 무방비로 매 게이트
+            # 마다 stack 됐다 (2026-06-07 SHIB 4중진입 사고). live-scanner 의
+            # buy=롱진입 / sell=숏진입 둘 다 entry 이며 청산은 risk manager 담당.
             is_live = getattr(self._strategies.get(sid), "is_live_scanner", False)
-            if is_live and signal.action == "buy":
+            if is_live and signal.action in ("buy", "sell"):
                 key = (sid, order_symbol)
                 # 2026-05-21 — stop 직후 cooldown 차단. release_live_position()
                 # 에서 기록한 만료 시각이 지났는지 확인. 만료된 entry 는 여기서
@@ -496,6 +501,27 @@ class AsyncStrategyOrchestrator:
                         continue
                     # cooldown 만료 → cleanup
                     self._stop_cooldown_until.pop(key, None)
+                # #380 — max_concurrent_positions 캡 (전 전략 공통 옵션).
+                # 신규 종목 진입 직전, 해당 strategy 의 현재 보유 포지션 수가
+                # 캡 이상이면 진입 hold. top-100 universe 에서 동시에 수십 종목이
+                # 발화해도 총 노출을 N 종목으로 제한한다. 미설정(None) 이면 무제한
+                # (legacy 동작 보존). 이미 보유 중인 종목 재진입은 카운트에 무관
+                # (아래 live_entered dedup 이 별도 처리).
+                if key not in self._live_entered:
+                    cap = getattr(
+                        self._strategies.get(sid), "max_concurrent_positions", None
+                    )
+                    if cap is not None:
+                        open_count = sum(
+                            1 for (s, _sym) in self._live_entered if s == sid
+                        )
+                        if open_count >= int(cap):
+                            self._emit_strategy_evaluated(
+                                sid, symbol=order_symbol, decision="hold",
+                                reason=f"max_concurrent_reached:{open_count}>={int(cap)}",
+                                ts=ts,
+                            )
+                            continue
                 if key in self._live_entered:
                     self._emit_strategy_evaluated(
                         sid, symbol=order_symbol, decision="hold",

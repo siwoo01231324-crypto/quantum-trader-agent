@@ -140,6 +140,16 @@ class AsyncOrderRouter:
             return
         await m(symbol, fallback_leverage)
 
+    # ── ensure_leverage_target forward (#380) ────────────────────────────────
+    # executor 가 QTA_TARGET_LEVERAGE 설정 시 발주 직전 호출 — leverage 를
+    # config 값으로 *강제* (minimum 과 달리 현재값 override). active adapter
+    # 미지원(KIS/Paper)이면 graceful skip.
+    async def ensure_leverage_target(self, symbol: str, leverage: int) -> None:
+        m = getattr(self.active, "ensure_leverage_target", None)
+        if m is None:
+            return
+        await m(symbol, leverage)
+
     # ── health ────────────────────────────────────────────────────────────────
 
     async def health_check(self) -> HealthStatus:

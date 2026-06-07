@@ -1,5 +1,6 @@
 from __future__ import annotations
 import logging
+import os
 import time
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -34,6 +35,24 @@ logger = logging.getLogger(__name__)
 # buy 는 기준가보다 0.05% 아래, sell 은 0.05% 위로 발주해 taker 가 되지 않도록
 # (= maker 보장) 한다. tick-size 정렬은 broker adapter 가 담당.
 _POST_ONLY_OFFSET = Decimal("0.0005")
+
+
+def _target_leverage() -> int | None:
+    """``QTA_TARGET_LEVERAGE`` env → 양의 int 면 그 값, 아니면 None.
+
+    #380 — 설정 시 executor 가 발주 직전 ``broker.ensure_leverage_target(symbol,
+    N)`` 으로 leverage 를 *강제* (브로커 UI 수동설정 의존 제거. 데모+실계좌
+    동시 운영 시 UI 동기화가 어려워 코드가 leverage 의 truth source). 미설정 /
+    0 / 비정수면 None → 기존 ``ensure_leverage_minimum`` (1x 안전망) 경로 그대로.
+    """
+    raw = os.environ.get("QTA_TARGET_LEVERAGE", "").strip()
+    if not raw:
+        return None
+    try:
+        v = int(raw)
+    except ValueError:
+        return None
+    return v if v > 0 else None
 
 
 async def execute_intents(
@@ -180,15 +199,31 @@ async def execute_intents(
         # 에서 설정한 값은 *override 하지 않음* (leverage > 0 면 no-op).
         # 어댑터 내부 캐시 (``_leverage_minimum_done``) 가 재호출 폭주 차단.
         # KIS / PaperBroker 는 본 메서드 미지원 → getattr fallback 으로 skip.
-        ensure_min = getattr(broker, "ensure_leverage_minimum", None)
-        if ensure_min is not None:
+        # #380 — QTA_TARGET_LEVERAGE 설정 시 leverage 를 그 값으로 *강제*
+        # (ensure_leverage_target). 미설정이면 기존 ensure_leverage_minimum
+        # (1x 안전망) 경로 — legacy 동작 byte-identical.
+        target_lev = _target_leverage()
+        ensure_target = (
+            getattr(broker, "ensure_leverage_target", None) if target_lev else None
+        )
+        if ensure_target is not None:
             try:
-                await ensure_min(req.symbol)
+                await ensure_target(req.symbol, target_lev)
             except Exception as err:  # noqa: BLE001 — leverage 못 set 해도 발주 시도
                 logger.debug(
-                    "ensure_leverage_minimum failed for %s: %s — proceed",
-                    req.symbol, err,
+                    "ensure_leverage_target failed for %s lev=%s: %s — proceed",
+                    req.symbol, target_lev, err,
                 )
+        else:
+            ensure_min = getattr(broker, "ensure_leverage_minimum", None)
+            if ensure_min is not None:
+                try:
+                    await ensure_min(req.symbol)
+                except Exception as err:  # noqa: BLE001 — leverage 못 set 해도 발주 시도
+                    logger.debug(
+                        "ensure_leverage_minimum failed for %s: %s — proceed",
+                        req.symbol, err,
+                    )
 
         t0 = time.monotonic()
         try:

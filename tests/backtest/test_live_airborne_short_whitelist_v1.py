@@ -119,9 +119,10 @@ class TestInheritance:
             assert excluded not in s.kst_entry_hours
 
     def test_parent_classvars_not_polluted(self) -> None:
-        # 부모 4-hour gate 보존
+        # 부모 kst-hours gate v3 보존 (#375 이후 {1,2,3,6,7,8,23}).
+        # 이전엔 {8,11,16,22} 단정 → #375 부터 stale, #380 에서 정정.
         assert LiveAirborneBbReversalKstHours.kst_entry_hours == frozenset(
-            {8, 11, 16, 22}
+            {1, 2, 3, 6, 7, 8, 23}
         )
         # 부모 morning 6-hour gate 보존
         assert LiveAirborneBbReversalKstMorning.kst_entry_hours == frozenset(
@@ -147,19 +148,37 @@ class TestInheritance:
 
 
 class TestUniverse:
-    def test_get_universe_loads_active_from_yaml(self) -> None:
-        u = LiveAirborneShortWhitelistV1.get_universe()
-        assert isinstance(u, list)
-        assert len(u) >= 1
-        # Hard OOS core 종목들이 active 로 등록되어 있어야 함
-        for sym in ("FETUSDT", "APTUSDT", "ARBUSDT", "ATOMUSDT", "AXSUSDT"):
-            assert sym in u
-        # candidate 종목은 active 아니라 universe 에서 제외
-        assert "BNBUSDT" not in u
+    """#380 — 고정 whitelist 제거. get_universe 는 부모의 거래량 top-100 상속
+    (venue-routing). yaml active 집합 미사용."""
 
-    def test_universe_alphabetical(self) -> None:
+    def test_get_universe_inherits_binance_top100_by_default(self, monkeypatch) -> None:
+        monkeypatch.delenv("QTA_BROKER_VENUE", raising=False)
+        import src.portfolio.binance_top_dynamic as btd
+        monkeypatch.setattr(
+            btd, "get_top_n_symbols",
+            lambda n=100: [f"SYM{i}USDT" for i in range(n)],
+        )
         u = LiveAirborneShortWhitelistV1.get_universe()
-        assert u == sorted(u)
+        assert len(u) == 100
+        assert u[0] == "SYM0USDT"
+
+    def test_get_universe_routes_to_bitget_when_venue_set(self, monkeypatch) -> None:
+        monkeypatch.setenv("QTA_BROKER_VENUE", "bitget")
+        import src.portfolio.bitget_top_dynamic as btd
+        monkeypatch.setattr(
+            btd, "get_top_n_symbols",
+            lambda n=100: ["BTCUSDT", "ETHUSDT", "SOLUSDT"],
+        )
+        u = LiveAirborneShortWhitelistV1.get_universe()
+        assert u == ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
+
+    def test_get_universe_no_longer_reads_whitelist_yaml(self, monkeypatch) -> None:
+        """yaml active 집합과 무관 — top-100 provider 만 호출."""
+        monkeypatch.delenv("QTA_BROKER_VENUE", raising=False)
+        import src.portfolio.binance_top_dynamic as btd
+        monkeypatch.setattr(btd, "get_top_n_symbols", lambda n=100: ["ONLYUSDT"])
+        u = LiveAirborneShortWhitelistV1.get_universe()
+        assert u == ["ONLYUSDT"]  # whitelist 의 FET/APT 등이 섞이지 않음
 
 
 # ── on_bar — SHORT only ──────────────────────────────────────────────────────
@@ -285,3 +304,15 @@ class TestNoReFireWithinSameBar:
         assert second is not None
         assert second.action == "hold", f"re-eval should be hold, got {second.action}"
         assert "fired_this_bar" in second.reason
+
+
+def test_max_concurrent_positions_kwarg():
+    """#380 — production.yaml kwarg 로 max_concurrent_positions 설정 가능."""
+    s = LiveAirborneShortWhitelistV1(max_concurrent_positions=20)
+    assert s.max_concurrent_positions == 20
+
+
+def test_max_concurrent_positions_default_absent():
+    """미설정 시 속성 없음 → orchestrator getattr 가 None (무제한)."""
+    s = LiveAirborneShortWhitelistV1()
+    assert getattr(s, "max_concurrent_positions", None) is None
