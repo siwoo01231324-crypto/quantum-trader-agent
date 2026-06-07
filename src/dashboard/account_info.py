@@ -276,23 +276,42 @@ class AccountInfoProvider:
     def _resolve_bitget_creds(self) -> tuple[str, str, str, bool] | None:
         """Bitget 자격증명 해석 → (api_key, secret, passphrase, paper).
 
-        Demo 우선 (BITGET_DEMO_*). 없으면 mainnet (BITGET_API_*). 둘 다
-        없으면 None — 카드는 ``ok=False`` 로 표시되어 다른 거래소 영향 없음.
+        활성 broker(QTA_DEFAULT_BROKER)에 맞춰 선택 — 트레이더와 계좌카드의
+        거래소(demo/mainnet)를 일치시킨다 (2026-06-08 수정). 옛 동작은 무조건
+        "demo 우선" 이라, mainnet 운영 중에도 카드가 demo 잔고(가짜)를 보여
+        실잔고와 어긋나던 문제(사용자 보고). broker=bitget-mainnet → 라이브
+        우선, 그 외 → demo 우선. 선호 creds 불완전 시 다른 쪽으로 fallback.
+        둘 다 없으면 None — 카드는 ``ok=False``.
         """
         def _strip(v: str | None) -> str:
             return (v or "").strip().strip('"').strip("'")
 
-        demo_key = _strip(os.environ.get("BITGET_DEMO_API_KEY"))
-        demo_sec = _strip(os.environ.get("BITGET_DEMO_SECRET"))
-        demo_pass = _strip(os.environ.get("BITGET_DEMO_PASSPHRASE"))
-        if demo_key and demo_sec and demo_pass:
-            return demo_key, demo_sec, demo_pass, True
+        demo = (
+            _strip(os.environ.get("BITGET_DEMO_API_KEY")),
+            _strip(os.environ.get("BITGET_DEMO_SECRET")),
+            _strip(os.environ.get("BITGET_DEMO_PASSPHRASE")),
+        )
+        live = (
+            _strip(os.environ.get("BITGET_API_KEY")),
+            _strip(os.environ.get("BITGET_API_SECRET")),
+            _strip(os.environ.get("BITGET_API_PASSPHRASE")),
+        )
+        demo_ok = all(demo)
+        live_ok = all(live)
 
-        live_key = _strip(os.environ.get("BITGET_API_KEY"))
-        live_sec = _strip(os.environ.get("BITGET_API_SECRET"))
-        live_pass = _strip(os.environ.get("BITGET_API_PASSPHRASE"))
-        if live_key and live_sec and live_pass:
-            return live_key, live_sec, live_pass, False
+        broker = _strip(os.environ.get("QTA_DEFAULT_BROKER")).lower()
+        prefer_live = broker == "bitget-mainnet"
+
+        if prefer_live:
+            if live_ok:
+                return (*live, False)
+            if demo_ok:
+                return (*demo, True)
+        else:
+            if demo_ok:
+                return (*demo, True)
+            if live_ok:
+                return (*live, False)
         return None
 
     def _fetch_bitget(self) -> dict[str, Any]:
