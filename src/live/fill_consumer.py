@@ -250,8 +250,15 @@ async def run_bitget_fill_consumer(
     stop_event: asyncio.Event,
     max_attempts: int = _DEFAULT_MAX_ATTEMPTS,
     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+    on_fill: Callable[..., Awaitable[None]] | None = None,
 ) -> None:
     """Bitget v2 private WS user-data fill consumer (P4b).
+
+    ``on_fill`` (옵션) — 매 체결 WAL 기록 후 await 호출되는 콜백
+    ``(symbol, side, strategy_id, fill)``. 거래소 네이티브 TP/SL 코디네이터가
+    진입 시 보호주문 등록 / 청산 시 취소하는 데 쓴다. store 가 WAL fanout 으로
+    갱신된 *후* 호출되므로 콜백이 net 을 정확히 읽는다. 콜백 예외는 삼켜
+    fill 처리를 깨지 않는다.
 
     Same contract as :func:`run_binance_fill_consumer` — only the logger
     labels and the WSConfigError remediation message differ (env-vars are
@@ -304,6 +311,18 @@ async def run_bitget_fill_consumer(
                         "coid=%r trade_id=%s: %s",
                         fill.client_order_id, fill.trade_id, exc,
                     )
+                # 거래소 네이티브 TP/SL 코디네이터 hook — store 갱신 후 호출.
+                if on_fill is not None:
+                    try:
+                        await on_fill(
+                            symbol=symbol, side=side,
+                            strategy_id=strategy_id, fill=fill,
+                        )
+                    except Exception as exc:  # noqa: BLE001 — fill 경로 보호
+                        logger.error(
+                            "bitget_fill_consumer: on_fill(protective) error "
+                            "coid=%r: %s", fill.client_order_id, exc,
+                        )
             return
         except asyncio.CancelledError:
             raise

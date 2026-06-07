@@ -15,6 +15,25 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.40"
+    date: "2026-06-08"
+    title: "거래소 네이티브 TP/SL plan order — 진입 시 거래소에 익절/손절 직접 등록 (게이트 OFF)"
+    tags: [feature, safety]
+    summary: >
+      synthetic(봇이 mark-price 보다가 청산)은 WS 지연·봇 다운에 취약 — SNDK
+      +10% ROI 순간 스파이크 익절 놓침 + WS 끊김 손절 지연 사고. 진입 체결 시
+      거래소에 TP/SL plan order 를 직접 등록 → Bitget 매칭엔진 서버측 즉시 청산.
+      synthetic 은 백업 유지. 안전 게이트 BITGET_NATIVE_TPSL=1 (기본 OFF —
+      데모 검증 후 마인넷에서 켤 것).
+    items:
+      - "async_http: place_tpsl_order / cancel_tpsl_order / get_pending_tpsl_orders (Bitget v2 place-tpsl-order, planType profit_plan/loss_plan, triggerType=mark_price, executePrice=0=시장청산)."
+      - "async_adapter: place/cancel/list_open_protective_order — STOP_MARKET→loss_plan, TAKE_PROFIT_MARKET→profit_plan, close_side→holdSide(BUY=short/SELL=long)."
+      - "ProtectiveOrderCoordinator (src/live/protective_coordinator.py): fill consumer on_fill hook → 진입(net≠0) 시 체결가 기준 SL+TP 등록, 청산(net=0) 시 취소. orphan/무정책 전략 skip, 실패 시 fill 경로 안 깸."
+      - "⚠️ trigger=*코인가격*pct (entry×(1±pct)), ROI 아님. stop_loss_pct=0.005(가격-0.5%)=ROI-5%@10x, take_profit_pct=0.01(가격+1%)=ROI+10%@10x. 숏 E100→SL100.5/TP99.0 (단위테스트 박제)."
+      - "안전 게이트: loop.py 가 BITGET_NATIVE_TPSL=1 일 때만 코디네이터 attach. 기본 OFF → 머지해도 동작변화 0. 데모 실증 후 마인넷."
+      - "테스트: 코디네이터 6 + 어댑터/http 6 + fill_consumer/risk 무회귀. v1 한계: partial-fill 재등록 안 함, 재기동 시 거래소 보호 재동기화 미구현(synthetic 백업이 커버)."
+    refs:
+      - "src/live/protective_coordinator.py"
   - version: "v0.6.39"
     date: "2026-06-08"
     title: "airborne 트레이더 진입을 '마감 1h봉' 으로 게이트 — 알림↔거래 정렬 (PIPPINUSDT 사고)"
