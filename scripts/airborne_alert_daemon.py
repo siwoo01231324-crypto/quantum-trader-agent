@@ -174,6 +174,19 @@ def _kst_hour_from_open_time(open_time_ms: int) -> int:
     return int(ts.hour)
 
 
+def _fire_bar_kst_hour(ev_open_time_ms: int) -> int:
+    """fire 봉의 *시작시각* KST hour — 전략 게이트(_bar_hour_kst)와 일치.
+
+    2026-06-09 검증: 데몬 데이터 소스의 ``ev.open_time`` 은 fire 봉을 *마감* 시각
+    으로 라벨한다 (23:00-00:00 KST 봉을 데몬은 KST 0, 트레이더/백테스트는 봉 *시작*
+    인 KST 23 으로 판정). 이 1봉 차이로 kst-hours 게이트가 "❌ 게이트 외(0시)" 로
+    표시되는데 실제 트레이더는 KST 23 으로 진입 → 알림↔거래 불일치 (사용자 MRVL/
+    ARM 사례). 1봉(1h) 빼서 시작시각 기준으로 보정 → 게이트 판정이 트레이더와 일치.
+    *알림 표시 전용* — cooldown/history.jsonl/매매 로직과 무관.
+    """
+    return _kst_hour_from_open_time(ev_open_time_ms - BAR_MS_1H)
+
+
 def _kst_hours_label(hours: frozenset[int]) -> str:
     """{7,8,16,20,22} → '7/8/16/20/22' — 안내 문자열 자동 생성."""
     return "/".join(str(h) for h in sorted(hours))
@@ -326,7 +339,7 @@ def dispatch_fire(
     else:
         title = f"🔴⬇️ 숏 진입 신호 — {symbol} (1시간봉)"
         extreme_label = "최고점"
-    kst_hour = _kst_hour_from_open_time(ev.open_time)
+    kst_hour = _fire_bar_kst_hour(ev.open_time)
     notice = _format_strategy_notice(side=side, kst_hour=kst_hour, symbol=symbol)
     body = (
         "✨ 40% 되돌림 발화 (Airborne v1.1)\n"

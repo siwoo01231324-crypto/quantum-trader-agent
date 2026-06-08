@@ -15,6 +15,24 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.50"
+    date: "2026-06-09"
+    title: "데몬 알림 KST hour 보정 — 마감라벨→시작라벨 (kst-hours 알림↔거래 일치)"
+    tags: [fix]
+    summary: >
+      데몬의 fire 봉 ``ev.open_time`` 은 봉 *마감* 시각으로 라벨되어, 전략 게이트
+      (_bar_hour_kst = 봉 *시작* 시각)보다 1봉 앞섰다. 23:00-00:00 KST 봉을 데몬은
+      KST 0(마감), 트레이더는 KST 23(시작)으로 판정 → kst-hours 게이트가 알림은
+      "❌ 게이트 외(0시)" 인데 트레이더는 KST 23 으로 실제 진입 (사용자 MRVL/ARM
+      사례). 자정 등 게이트 경계 봉에서만 어긋남.
+    items:
+      - "_fire_bar_kst_hour() 신설 — ev.open_time 에서 1봉(BAR_MS_1H) 빼 시작시각 KST hour 산출. dispatch_fire 의 notice kst_hour 를 이걸로 교체."
+      - "*알림 표시 전용* — cooldown(last_fire_open_time)·history.jsonl·consume·매매 로직 전부 무관, byte-identical. 트레이더/백테스트 게이트는 손대지 않음(시작시각 그대로)."
+      - "이제 알림의 'kst-hours 진입 예정' 표시가 트레이더 실제 진입과 일치 (게이트 차원). 잔고/체결/한도에 의한 미체결은 별개로 로그에 남음."
+      - "테스트 2건(경계 봉 23시 보정 + 비경계 봉 일관). 데몬 sync 45 passed."
+    refs:
+      - "scripts/airborne_alert_daemon.py"
+      - "tests/scripts/test_airborne_daemon_sync_v2.py"
   - version: "v0.6.49"
     date: "2026-06-09"
     title: "preset TP/SL 가격 거부(40836) 시 진입 통째 손실 — preset 없이 재시도 fallback"
