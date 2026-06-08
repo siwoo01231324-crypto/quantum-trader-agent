@@ -4526,17 +4526,34 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
     )
 
     def _manual_trade_log_path() -> Path:
-        """수동 거래 *WRITE* 경로 — venue 무관 단일 ``logs/manual_trade.jsonl``."""
-        path = Path("logs/manual_trade.jsonl")
+        """수동 거래 *WRITE* 경로 — venue 무관 단일 ``logs/manual_trade.jsonl``.
+
+        기본 base 는 ``logs/`` 고정 (venue 전환·standalone/pipeline 모드 무관하게
+        한 파일 — 2026-06-05 venue 데이터 유실 fix). ``QTA_MANUAL_TRADE_DIR`` env
+        로 base 오버라이드 가능 — 테스트가 실데이터를 오염시키던 버그 차단
+        (2026-06-09: 핸들러가 state.log_dir 을 무시하고 실 logs/ 에 써서
+        test_dashboard_manual_trade 가 실행마다 실파일에 샘플 8건 주입). 레포의
+        AIRBORNE_FIRE_STORE_PATH / AIRBORNE_REENTRY_STATE_DIR 와 동일 idiom.
+        """
+        import os
+        base_override = os.environ.get("QTA_MANUAL_TRADE_DIR")
+        base = Path(base_override) if base_override else Path("logs")
+        path = base / "manual_trade.jsonl"
         path.parent.mkdir(parents=True, exist_ok=True)
         return path
 
     def _manual_trade_read_paths() -> list[Path]:
-        """수동 거래 *READ* 경로 — 표준 + 모든 legacy union. 중복 ts 는 dedup."""
+        """수동 거래 *READ* 경로 — 표준 + 모든 legacy union. 중복 ts 는 dedup.
+
+        legacy union 은 *프로덕션 기본 base* (logs/) 일 때만 — QTA_MANUAL_TRADE_DIR
+        로 격리(테스트)된 경우엔 실 legacy 파일을 끌어오지 않아 완전 격리.
+        """
+        import os
         paths = [_manual_trade_log_path()]
-        for legacy in _MANUAL_TRADE_LEGACY_PATHS:
-            if legacy.exists() and legacy not in paths:
-                paths.append(legacy)
+        if not os.environ.get("QTA_MANUAL_TRADE_DIR"):
+            for legacy in _MANUAL_TRADE_LEGACY_PATHS:
+                if legacy.exists() and legacy not in paths:
+                    paths.append(legacy)
         return paths
 
     @app.post("/api/manual_trade")
