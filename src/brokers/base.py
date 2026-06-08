@@ -52,6 +52,12 @@ class OrderRequest:
     # without parsing the (now strategy-opaque post-#238) client_order_id.
     # Default None → payload key absent → byte-identical legacy behavior.
     strategy_id: str | None = None
+    # 2026-06-08 — 거래소 네이티브 TP/SL: 진입 주문에 같이 거는 익절/손절 트리거
+    # *가격*. bitget 어댑터가 place-order body 의 presetStopSurplusPrice /
+    # presetStopLossPrice 로 전달 → 체결 시 거래소가 서버측 TP/SL 자동 생성.
+    # None → 미첨부(기존 동작). holdSide 불필요(진입 주문 side 가 방향 결정).
+    preset_tp_price: Decimal | None = None
+    preset_sl_price: Decimal | None = None
 
 
 @dataclass

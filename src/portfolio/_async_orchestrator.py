@@ -641,12 +641,35 @@ class AsyncStrategyOrchestrator:
                     declared = getattr(strat, "entry_order_type", "market")
                     if declared in ("market", "post_only"):
                         entry_order_type = declared
+                # 2026-06-08 — 진입 주문에 거래소 네이티브 TP/SL 가격 첨부.
+                # 청산(reduce_only)이 아닌 진입에만, 전략의 stop_loss_pct/
+                # take_profit_pct(가격 pct)로 trigger 가격 계산해 meta 에 stamp.
+                # 숏(sell) 진입: SL=가격↑, TP=가격↓ / 롱(buy): 반대.
+                _ro = (
+                    signal.action == "sell"
+                    and not getattr(strat, "shorts_allowed", False)
+                )
+                _preset_meta = None
+                if not _ro and order_price and order_price > 0:
+                    _slp = getattr(strat, "stop_loss_pct", None)
+                    _tpp = getattr(strat, "take_profit_pct", None)
+                    if _slp and _tpp:
+                        if signal.action == "sell":   # short entry
+                            _sl = order_price * (1 + float(_slp))
+                            _tp = order_price * (1 - float(_tpp))
+                        else:                          # long entry
+                            _sl = order_price * (1 - float(_slp))
+                            _tp = order_price * (1 + float(_tpp))
+                        _preset_meta = {
+                            "preset_tp_price": _tp, "preset_sl_price": _sl,
+                        }
                 order_intents.append(OrderIntent(
                     strategy_id=sid,
                     symbol=order.symbol,
                     side=signal.action,
                     qty=qty,
                     reason=signal.reason,
+                    meta=_preset_meta,
                     # #238 Item 7 — default: long-only 전략의 SELL 은 항상 청산
                     # 이라 reduceOnly stamp (보유 0 에서 sell 이 naked short 되는
                     # 사고 차단). 단, ``shorts_allowed=True`` 를 선언한 bidir
@@ -654,10 +677,7 @@ class AsyncStrategyOrchestrator:
                     # reduceOnly 해제 — testnet 가 -2022 로 거부하던 사고 회복
                     # (2026-05-28 ~ 06-01: airborne sell 시그널 13K+ 전량 silent
                     # REJECTED). long-only 전략 (default) 은 byte-identical.
-                    reduce_only=(
-                        signal.action == "sell"
-                        and not getattr(strat, "shorts_allowed", False)
-                    ),
+                    reduce_only=_ro,
                     entry_order_type=entry_order_type,
                     ref_price=(
                         order_price if entry_order_type == "post_only" else None

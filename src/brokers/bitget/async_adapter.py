@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 from collections.abc import AsyncIterator
 from datetime import datetime, timezone
@@ -154,6 +155,28 @@ class AsyncBitgetFuturesAdapter:
 
         cid = self._normalize_cid(req.client_order_id, req)
 
+        # 2026-06-08 — 진입 주문에 거래소 네이티브 TP/SL 가격 첨부 (BITGET_NATIVE_TPSL=1).
+        # reduce_only(청산)엔 안 붙임. 트리거 가격은 거래소 tick 으로 양자화.
+        _ptp = _psl = None
+        if (
+            os.environ.get("BITGET_NATIVE_TPSL", "0") == "1"
+            and not req.reduce_only
+        ):
+            def _q(p):
+                if p is None:
+                    return None
+                try:
+                    return self._symbol_filters.quantize_price(req.symbol, p)
+                except Exception:  # noqa: BLE001
+                    return p
+            _ptp = _q(req.preset_tp_price)
+            _psl = _q(req.preset_sl_price)
+            if _ptp is not None or _psl is not None:
+                log.info(
+                    "bitget preset TP/SL %s %s TP=%s SL=%s",
+                    req.symbol, side_str, _ptp, _psl,
+                )
+
         try:
             resp = await self._client.place_order(
                 symbol=req.symbol,
@@ -164,6 +187,8 @@ class AsyncBitgetFuturesAdapter:
                 client_oid=cid,
                 trade_side=trade_side,
                 reduce_only=req.reduce_only,
+                preset_tp_price=_ptp,
+                preset_sl_price=_psl,
             )
         except InvalidOrderError as exc:
             # 40762 = order qty exceeds upper limit (= Binance -2027 equivalent).
