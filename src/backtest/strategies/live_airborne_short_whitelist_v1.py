@@ -125,9 +125,21 @@ class LiveAirborneShortWhitelistV1(LiveAirborneBbReversalKstHours):
         ctx = gated
         snap = ctx["market_snapshot"]  # type: ignore[index]
         history: pd.DataFrame | None = snap.get("history")
+        symbol = snap.get("symbol", "?")
+
+        # consume 모드 — 자체평가 대신 데몬 발화(short)를 그대로 따라 진입
+        # (거래 = 알림 100%, 입력데이터 차이로 인한 종목 불일치 제거). KstHours 공유.
+        # 자체 BB 계산 안 하므로 warmup(MIN_HISTORY) 무관 — 마지막 봉 ts 만 필요.
+        if (
+            self._consume_enabled() and closed_ts is not None
+            and history is not None and len(history) >= 1
+        ):
+            return self._consume_daemon_fire_on_bar(
+                ctx, closed_ts, history, symbol, {"short"},
+            )
+
         if history is None or len(history) < self.MIN_HISTORY:
             return Signal(action="hold", size=0.0, reason="warmup")
-        symbol = snap.get("symbol", "?")
 
         # 봉 마감 캐시 (부모와 동일 정책) — instance 단위 dict
         if not hasattr(self, "_last_eval_bar_ts"):

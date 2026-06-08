@@ -327,6 +327,80 @@ class LiveAirborneBbReversalKstHours(LiveAirborneBbReversalKstMorning):
         self._persist_dedup()
         return sig
 
+    # ── consume 모드 — 데몬 발화를 그대로 따라 진입 (자체평가 대신) ──────────────
+
+    def _daemon_fire_side(self, symbol: str, closed_ts) -> str | None:
+        """데몬이 이 종목·이 봉에 발화한 side ("long"/"short") 또는 None.
+
+        매칭은 _daemon_fired 와 동일 (floor(fire ts,1h)==closed_ts+1봉). store
+        미가용이면 None (consume 은 fail-closed — 발화 데이터 없으면 진입 안 함).
+        """
+        store = self._get_fire_store()
+        if store is None or not store.path.exists():
+            return None
+        try:
+            from datetime import timezone as _tz
+            bar_open = pd.Timestamp(closed_ts)
+            if bar_open.tzinfo is None:
+                bar_open = bar_open.tz_localize("UTC")
+            interval = pd.Timedelta(seconds=self._bar_interval_sec())
+            bar_close = (bar_open + interval).floor("1h")
+            since = (bar_open - interval).to_pydatetime()
+            if since.tzinfo is None:
+                since = since.replace(tzinfo=_tz.utc)
+            fires = store.load_since(since)
+        except Exception:  # noqa: BLE001
+            return None
+        for f in fires:
+            if str(f.get("symbol", "")) != symbol:
+                continue
+            try:
+                f_ts = pd.Timestamp(f.get("ts"))
+                if f_ts.tzinfo is None:
+                    f_ts = f_ts.tz_localize("UTC")
+                if f_ts.floor("1h") == bar_close:
+                    s = str(f.get("side", "")).lower()
+                    if s in ("long", "short"):
+                        return s
+            except (ValueError, TypeError):
+                continue
+        return None
+
+    @staticmethod
+    def _consume_enabled() -> bool:
+        import os
+        return os.environ.get("AIRBORNE_CONSUME_DAEMON_FIRES", "0") == "1"
+
+    def _consume_daemon_fire_on_bar(self, ctx, closed_ts, history, symbol, allowed_sides):
+        """consume — 데몬 발화를 그대로 진입. KST 게이트 + side 필터 + 같은봉 dedup.
+
+        자체 airborne 평가를 *완전히 대체* → 거래 = 데몬 알림 100% (입력 데이터
+        차이로 인한 종목 불일치 제거). allowed_sides: kst-hours={long,short},
+        short-whitelist={short}.
+        """
+        from backtest.strategies.live_airborne_bb_reversal_kst_morning import (
+            _bar_hour_kst,
+        )
+        # KST 시간 게이트 (자체평가 path 와 동일)
+        hour = _bar_hour_kst(history)
+        if hour is not None and hour not in self.kst_entry_hours:
+            return Signal(action="hold", size=0.0,
+                          reason=f"time_filter:kst_hour={hour}")
+        side = self._daemon_fire_side(symbol, closed_ts)
+        if side is None or side not in allowed_sides:
+            return Signal(action="hold", size=0.0,
+                          reason=f"no_daemon_fire:{symbol}@{closed_ts}")
+        action = "buy" if side == "long" else "sell"
+        # 같은봉 dedup (영속 — 재시작/봉당 1회)
+        self._ensure_dedup_loaded()
+        if self._fired_bar_ts.get(symbol) == str(closed_ts):
+            return Signal(action="hold", size=0.0,
+                          reason=f"already_entered_bar:{closed_ts}")
+        self._fired_bar_ts[symbol] = str(closed_ts)
+        self._persist_dedup()
+        return Signal(action=action, size=self.default_size,
+                      reason=f"consume_daemon_fire:{side}@{closed_ts}")
+
     async def on_bar(self, ctx):
         """parent 의 시그널 평가 → buy intent 면 BTC trend filter 적용.
 
@@ -342,6 +416,30 @@ class LiveAirborneBbReversalKstHours(LiveAirborneBbReversalKstMorning):
         if gated is None:
             return Signal(action="hold", size=0.0, reason="await_bar_close")
         ctx = gated
+        # consume 모드 — 자체평가 대신 데몬 발화를 그대로 따라 진입 (거래=알림 100%).
+        if self._consume_enabled() and closed_ts is not None:
+            _snap = ctx.get("market_snapshot") if isinstance(ctx, dict) else None
+            _hist = _snap.get("history") if isinstance(_snap, dict) else None
+            _sym = _snap.get("symbol") if isinstance(_snap, dict) else None
+            if _hist is None or _sym is None:
+                return Signal(action="hold", size=0.0, reason="consume_no_data")
+            sig = self._consume_daemon_fire_on_bar(
+                ctx, closed_ts, _hist, _sym, {"long", "short"},
+            )
+            if (self.btc_trend_filter_enabled
+                    and getattr(sig, "action", None) == "buy"
+                    and isinstance(_snap, dict)):
+                universe = _snap.get("universe_ohlcv")
+                if isinstance(universe, dict):
+                    btc_hist = universe.get(_BTC_SYMBOL)
+                    if btc_hist is not None and len(btc_hist) > 0:
+                        is_down, reason = _btc_is_downtrend(btc_hist)
+                        if is_down:
+                            return Signal(
+                                action="hold", size=0.0,
+                                reason=f"btc_trend_filter_long_blocked:{reason}",
+                            )
+            return sig
         sig = await super().on_bar(ctx)
         # ── BTC trend filter — long entry 만 적용 (short/hold 통과) ──
         if (
