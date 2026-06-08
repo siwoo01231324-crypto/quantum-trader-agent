@@ -81,7 +81,7 @@ class TestDashboardRoot:
         서버 렌더 HTML 엔 venue 카드 컨테이너가 존재해야 한다."""
         body = client.get("/").text
         assert "손익 (PnL)" in body
-        assert 'id="pnl-venue-binance"' in body
+        assert 'id="pnl-venue-bitget"' in body  # #395 — 주 운영 venue Bitget
         assert 'id="pnl-venue-kis"' in body
 
     def test_root_shows_limit_gauges(self, client: TestClient) -> None:

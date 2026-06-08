@@ -32,7 +32,7 @@ def test_concurrent_cold_miss_calls_underlying_at_most_once(
     the underlying KIS/Binance fetch runs at most once (check-then-act atomic),
     and every caller observes the identical consistent result dict."""
     provider = AccountInfoProvider(ttl_sec=30.0)
-    calls = {"kis": 0, "binance": 0}
+    calls = {"kis": 0, "binance": 0, "bitget": 0}
     barrier = threading.Barrier(8)
 
     def _kis(self) -> dict:
@@ -45,8 +45,14 @@ def test_concurrent_cold_miss_calls_underlying_at_most_once(
         time.sleep(0.15)
         return {"ok": True, "api_key_masked": "ab****cd"}
 
+    def _bg(self) -> dict:
+        calls["bitget"] += 1
+        time.sleep(0.15)
+        return {"ok": True, "api_key_masked": "bg****ef"}
+
     monkeypatch.setattr(AccountInfoProvider, "_fetch_kis", _kis)
     monkeypatch.setattr(AccountInfoProvider, "_fetch_binance", _bnb)
+    monkeypatch.setattr(AccountInfoProvider, "_fetch_bitget", _bg)
 
     def _worker() -> dict:
         barrier.wait()  # release all 8 threads at once → maximize the race
@@ -58,9 +64,10 @@ def test_concurrent_cold_miss_calls_underlying_at_most_once(
     # Atomicity: the slow underlying must not be stampeded.
     assert calls["kis"] == 1, f"underlying KIS fetched {calls['kis']}x (stampede)"
     assert calls["binance"] == 1, f"underlying Binance fetched {calls['binance']}x"
+    assert calls["bitget"] == 1, f"underlying Bitget fetched {calls['bitget']}x"
     # No torn/partial dict — every caller gets a complete consistent result.
     for r in results:
-        assert set(r.keys()) == {"kis", "binance"}
+        assert set(r.keys()) == {"kis", "binance", "bitget"}
         assert r["kis"] == {"ok": True, "cano_masked": "1234****-01"}
         assert r["binance"] == {"ok": True, "api_key_masked": "ab****cd"}
     # All callers observe the SAME cached object (consistency).
