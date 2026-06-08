@@ -15,6 +15,23 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.46"
+    date: "2026-06-08"
+    title: "consume 모드 — 트레이더가 데몬 발화를 그대로 따라 진입 (거래=알림 100%)"
+    tags: [feature]
+    summary: >
+      트레이더와 데몬이 같은 함수(evaluate_short_fire_v11)·같은 파라미터(retrace
+      0.4/atr_body 0.6/...)를 쓰지만 *입력 OHLCV 가 다름*(데몬=스트림 kline 누적,
+      트레이더=주기 REST universe_cache) → 경계선 종목이 한쪽만 발화 = 알림↔거래
+      종목 불일치. 사용자 결정 — 전략적 일관성을 위해 트레이더가 자체평가 대신
+      데몬 발화(history.jsonl)를 그대로 소비. 거래 = 텔레그램 알림 100%.
+    items:
+      - "KstHours._consume_daemon_fire_on_bar() / _daemon_fire_side() — history.jsonl 에서 이 종목·이 봉 데몬 발화 side 를 읽어 그 방향 진입. 자체 BB/ATR 평가 완전 대체. KstHours{long,short} / short-whitelist{short}."
+      - "각 전략의 KST 시간 게이트·whitelist·side 필터·BTC trend filter(long)·같은봉 영속 dedup 은 그대로 적용 → 텔레그램 '봇 진입 가능성' 표기와 일치."
+      - "AIRBORNE_CONSUME_DAEMON_FIRES=1 게이트(기본 OFF, .env 에서 ON). OFF 면 기존 자체평가+게이트 path. live 전용(closed_ts None backtest 무동작) → byte-identical."
+      - "⚠️ consume 은 fail-closed (fire 소스 미가용 시 진입 안 함). 거래 늘 수 있음(알림 다 잡음) — 전략 5y 손실이라 일관성 위한 선택. 테스트 6건."
+    refs:
+      - "src/backtest/strategies/live_airborne_bb_reversal_kst_hours.py"
   - version: "v0.6.45"
     date: "2026-06-08"
     title: "short-whitelist 에 봉마감·데몬게이트·dedup 적용 — 실제 거래 전략이 #389/#392/#393 우회하던 버그"
