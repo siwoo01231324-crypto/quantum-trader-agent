@@ -301,6 +301,32 @@ class LiveAirborneBbReversalKstHours(LiveAirborneBbReversalKstMorning):
                 continue
         return False
 
+    def _apply_daemon_gate_and_dedup(self, ctx, sig, closed_ts):
+        """진입(buy/sell)에 데몬-발화 게이트 + 같은봉 dedup(영속) 적용.
+
+        두 airborne 전략(KstHours·ShortWhitelist)이 공유. closed_ts None
+        (backtest)이거나 진입 아니면 sig 그대로. 게이트 차단 시 hold 반환
+        (dedup 미기록 → store 갱신되면 다음 평가에 재시도). 같은 봉 재진입은
+        디스크 영속 dedup 으로 차단 (재시작해도 유지 → 재시작 재매수 방지).
+        """
+        if closed_ts is None or getattr(sig, "action", None) not in ("buy", "sell"):
+            return sig
+        snap = ctx.get("market_snapshot") if isinstance(ctx, dict) else None
+        symbol = snap.get("symbol") if isinstance(snap, dict) else None
+        if symbol is None:
+            return sig
+        from backtest.protocol import Signal as _Sig
+        if not self._daemon_fired(symbol, sig.action, closed_ts):
+            return _Sig(action="hold", size=0.0,
+                        reason=f"no_daemon_fire:{symbol}@{closed_ts}")
+        self._ensure_dedup_loaded()
+        if self._fired_bar_ts.get(symbol) == str(closed_ts):
+            return _Sig(action="hold", size=0.0,
+                        reason=f"already_entered_bar:{closed_ts}")
+        self._fired_bar_ts[symbol] = str(closed_ts)
+        self._persist_dedup()
+        return sig
+
     async def on_bar(self, ctx):
         """parent 의 시그널 평가 → buy intent 면 BTC trend filter 적용.
 
@@ -336,27 +362,7 @@ class LiveAirborneBbReversalKstHours(LiveAirborneBbReversalKstMorning):
                             action="hold", size=0.0,
                             reason=f"btc_trend_filter_long_blocked:{reason} ({existing_reason})",
                         )
-        # ── 데몬-발화 게이트 (live) — 데몬이 발화한 종목·봉만 진입 ──────────────
-        # 트레이더가 자체 평가로 매수하려 해도, *데몬(텔레그램 알림 소스)이 같은
-        # 봉에 발화하지 않았으면 진입 안 함*. → 알림 없는 매수 원천 차단(XAG 8시
-        # 사고). 게이트 실패 시 dedup 기록 안 함 → store 갱신되면 다음 tick 재시도
-        # (lag 으로 거래 놓치지 않음). fire 소스 미가용(파일 없음)이면 fail-open.
-        if closed_ts is not None and getattr(sig, "action", None) in ("buy", "sell"):
-            snap = ctx.get("market_snapshot") if isinstance(ctx, dict) else None
-            symbol = snap.get("symbol") if isinstance(snap, dict) else None
-            if symbol is not None:
-                if not self._daemon_fired(symbol, sig.action, closed_ts):
-                    return Signal(
-                        action="hold", size=0.0,
-                        reason=f"no_daemon_fire:{symbol}@{closed_ts}",
-                    )
-                # 같은 봉엔 1회만 진입 (디스크 영속 → 재시작해도 중복매수 방지).
-                self._ensure_dedup_loaded()
-                if self._fired_bar_ts.get(symbol) == str(closed_ts):
-                    return Signal(
-                        action="hold", size=0.0,
-                        reason=f"already_entered_bar:{closed_ts}",
-                    )
-                self._fired_bar_ts[symbol] = str(closed_ts)
-                self._persist_dedup()
-        return sig
+        # ── 데몬-발화 게이트 + 같은봉 dedup (live, 공유 헬퍼) ──
+        # 데몬 발화한 종목·봉만 진입(알림없는 매수 차단) + 같은봉 1회(영속 → 재시작
+        # 재매수 방지). short-whitelist 도 동일 헬퍼 사용.
+        return self._apply_daemon_gate_and_dedup(ctx, sig, closed_ts)
