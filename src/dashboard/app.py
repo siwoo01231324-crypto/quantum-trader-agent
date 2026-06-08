@@ -77,9 +77,13 @@ from src.observability.metrics import Metrics
 # 데이터를 dashboard WAL 에 안 남긴다. 매일 자정에 routine 이 알림 적중
 # 분석 (다음 15분봉 4개 검증) 하려면 raw FIRE 라인이 journal_today 에
 # 같이 export 되어야 한다. 가장 단순한 경로 — docker logs 파싱.
+# close/trigger 는 과학적표기(예: 6.896e-05, LUNC 등 초저가 코인)도 허용해야
+# 한다 — [\d.]+ 만 쓰면 e-05 가 안 잡혀 해당 FIRE 가 통째로 누락된다 (2026-06-08
+# LUNCUSDT: 텔레그램엔 왔으나 history.jsonl 미수록 → 데몬-게이트가 거래 못 시킴
+# + 대시보드 PF 메트릭 왜곡). float() 로 파싱되는 형식을 그대로 수용.
 _AIRBORNE_FIRE_RE = re.compile(
     r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}),\d+ .*FIRE (\S+) (long|short) "
-    r"@ close=([\d.]+) trigger=([\d.]+)"
+    r"@ close=([0-9.eE+-]+) trigger=([0-9.eE+-]+)"
 )
 
 
