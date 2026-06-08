@@ -1072,14 +1072,14 @@ body{{
          Binance = 거래소 income 원장 NET, KIS = round-trip 재구성(추정).
          "통합" 카드는 제거 — KRW·USDT 는 별개 통화라 합산 불가. -->
     <div class="pnl-venue-grid">
-      <!-- Binance USDT — 거래소 income 원장 (실제 실현손익) -->
+      <!-- Bitget USDT — 청산 포지션 netProfit 원장 (실제 실현손익, #395) -->
       <div class="pnl-venue-card">
         <div class="pnl-venue-header">
           <span class="pnl-venue-flag">&#9651;</span>
-          <span class="pnl-venue-name">Binance Futures</span>
+          <span class="pnl-venue-name">Bitget Futures</span>
           <span class="pnl-venue-currency">USDT</span>
         </div>
-        <div class="pnl-venue-rows" id="pnl-venue-binance">
+        <div class="pnl-venue-rows" id="pnl-venue-bitget">
           <div class="pnl-venue-row"><span class="pnl-venue-period">일간</span><span class="pnl-venue-val zero">조회중…</span></div>
           <div class="pnl-venue-row"><span class="pnl-venue-period">월간</span><span class="pnl-venue-val zero">조회중…</span></div>
         </div>
@@ -1097,7 +1097,7 @@ body{{
         </div>
       </div>
     </div>
-    <div class="pnl-no-sum-note">Binance = 거래소 income 원장 NET (실현손익 + 수수료 + 펀딩) — 거래소 화면과 일치. KIS = 거래 재구성 추정치 (income TR 연동 후속). KRW·USDT 는 별개 통화 — 합산 불가.</div>
+    <div class="pnl-no-sum-note">Bitget = 청산 포지션 netProfit NET (실현손익 + 펀딩 − 수수료) — 거래소 화면과 일치. KIS = 거래 재구성 추정치 (income TR 연동 후속). KRW·USDT 는 별개 통화 — 합산 불가.</div>
   </div>
 
   <!-- ── 섹션 2: Binance 계좌 + KIS 계좌 나란히 ── -->
@@ -2110,7 +2110,8 @@ function renderVenueRows(containerId, data, currency) {{
   if (!el) return;
   const periods = [['일간','daily_by_venue'],['월간','monthly_by_venue']];
   el.innerHTML = periods.map(([label, key]) => {{
-    const venueKey = containerId.includes('kis') ? 'kis' : 'binance';
+    const venueKey = containerId.includes('kis') ? 'kis'
+                   : containerId.includes('bitget') ? 'bitget' : 'binance';
     const val = (data[key] || {{}})[venueKey];
     return '<div class="pnl-venue-row"><span class="pnl-venue-period">' + label + '</span>'
          + '<span>' + fmtPnlVenue(val != null ? val : null, currency) + '</span></div>';
@@ -2120,9 +2121,9 @@ async function pnlVenueRefresh() {{
   try {{
     const r = await fetch('/api/pnl');
     const d = await r.json();
-    // venue 별 일간/월간 — Binance(거래소 income 원장) + KIS(재구성 추정).
-    renderVenueRows('pnl-venue-binance', d, 'USDT');
-    renderVenueRows('pnl-venue-kis',     d, 'KRW');
+    // venue 별 일간/월간 — Bitget(청산 netProfit 원장) + KIS(재구성 추정).
+    renderVenueRows('pnl-venue-bitget', d, 'USDT');
+    renderVenueRows('pnl-venue-kis',    d, 'KRW');
   }} catch(err) {{ console.warn('pnlVenue', err); }}
 }}
 pnlVenueRefresh();
@@ -3893,6 +3894,17 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
             except Exception:  # noqa: BLE001 — never 500 the dashboard
                 pass
 
+        # ── Bitget: 청산 포지션 netProfit 원장 (#395 — 주 운영 venue) ──────
+        bg_daily = bg_monthly = None
+        if provider is not None and hasattr(provider, "fetch_bitget_pnl"):
+            try:
+                bg = await _asyncio.to_thread(provider.fetch_bitget_pnl)
+                if bg.get("ok"):
+                    bg_daily = bg.get("daily")
+                    bg_monthly = bg.get("monthly")
+            except Exception:  # noqa: BLE001 — never 500 the dashboard
+                pass
+
         # ── KIS: round-trip 재구성 (추정치 — income TR 연동은 후속) ──────
         kis_daily = kis_monthly = None
         by_strategy: dict = {}
@@ -3910,14 +3922,15 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
                 pass
 
         return JSONResponse({
-            # top-level 스칼라 = Binance(주 운영 venue) 값. telegram /today 등
-            # "한 숫자" 요약용 — KRW·USDT cross-sum 이 아니라 USDT 단일 venue.
+            # top-level 스칼라 = Bitget(주 운영 venue, #395) 값. telegram /today
+            # 등 "한 숫자" 요약용 — KRW·USDT cross-sum 이 아니라 USDT 단일 venue.
             # 대시보드 카드는 daily_by_venue/monthly_by_venue 만 쓴다.
-            "daily": bn_daily if bn_daily is not None else 0.0,
-            "monthly": bn_monthly if bn_monthly is not None else 0.0,
-            "daily_by_venue": {"binance": bn_daily, "kis": kis_daily},
-            "monthly_by_venue": {"binance": bn_monthly, "kis": kis_monthly},
+            "daily": bg_daily if bg_daily is not None else 0.0,
+            "monthly": bg_monthly if bg_monthly is not None else 0.0,
+            "daily_by_venue": {"bitget": bg_daily, "binance": bn_daily, "kis": kis_daily},
+            "monthly_by_venue": {"bitget": bg_monthly, "binance": bn_monthly, "kis": kis_monthly},
             "by_strategy": by_strategy,
+            "bitget_source": "history_position_netprofit",
             "binance_source": "exchange_income",
             "kis_source": "reconstructed",
         })

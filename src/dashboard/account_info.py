@@ -586,6 +586,94 @@ class AccountInfoProvider:
             "n_records": len(incomes),
         }
 
+    def fetch_bitget_pnl(self) -> dict[str, Any]:
+        """Bitget 일간/월간 NET 실현손익 — 청산 포지션 ``netProfit`` 기준 (30s 캐시).
+
+        ``/api/v2/mix/position/history-position`` 의 ``netProfit`` (= 실현 pnl +
+        펀딩 - 수수료, Bitget 화면 실현손익) 를 청산시각(``utime``) 기준 일/월
+        집계. ``fetch_binance_pnl`` 의 Bitget 평행. ``_safe`` 로 감싸 절대 raise X.
+        """
+        now = datetime.now(timezone.utc)
+        cache = getattr(self, "_bitget_pnl_cache", None)
+        at = getattr(self, "_bitget_pnl_cache_at", None)
+        if cache is not None and at is not None and (now - at).total_seconds() < self._pnl_ttl:
+            return cache
+        data = self._safe(self._fetch_bitget_pnl, "Bitget PnL")
+        self._bitget_pnl_cache = data
+        self._bitget_pnl_cache_at = now
+        return data
+
+    def _fetch_bitget_pnl(self) -> dict[str, Any]:
+        creds = self._resolve_bitget_creds()
+        if creds is None:
+            return {"ok": False, "error": "Bitget 자격증명 누락"}
+        api_key, api_secret, passphrase, paper = creds
+
+        import base64  # noqa: PLC0415
+        import hashlib  # noqa: PLC0415
+        import hmac  # noqa: PLC0415
+        import time as _time  # noqa: PLC0415
+        import urllib.parse  # noqa: PLC0415
+        from decimal import Decimal  # noqa: PLC0415
+        from zoneinfo import ZoneInfo  # noqa: PLC0415
+
+        import httpx  # noqa: PLC0415
+
+        base_url = "https://api.bitget.com"
+        product_type = "USDT-FUTURES"
+
+        def _signed_get(path: str, params: dict) -> dict:
+            ts = str(int(_time.time() * 1000))
+            qs = "?" + urllib.parse.urlencode(params)
+            sig = base64.b64encode(
+                hmac.new(api_secret.encode(),
+                         f"{ts}GET{path}{qs}".encode(), hashlib.sha256).digest()
+            ).decode()
+            headers = {
+                "ACCESS-KEY": api_key, "ACCESS-SIGN": sig,
+                "ACCESS-TIMESTAMP": ts, "ACCESS-PASSPHRASE": passphrase,
+                "Content-Type": "application/json",
+            }
+            if paper:
+                headers["paptrading"] = "1"
+            with httpx.Client(timeout=10.0) as c:
+                return c.get(f"{base_url}{path}{qs}", headers=headers).json()
+
+        kst = ZoneInfo("Asia/Seoul")
+        now_kst = datetime.now(kst)
+        today_start = now_kst.replace(hour=0, minute=0, second=0, microsecond=0)
+        month_start = today_start.replace(day=1)
+        today_ms = int(today_start.timestamp() * 1000)
+        month_ms = int(month_start.timestamp() * 1000)
+
+        # 이달 청산 포지션 (limit 100 — 데모 월 청산 수 충분). netProfit 합산.
+        resp = _signed_get("/api/v2/mix/position/history-position", {
+            "productType": product_type, "startTime": str(month_ms), "limit": "100",
+        })
+        if str(resp.get("code")) != "00000":
+            return {"ok": False,
+                    "error": f"bitget {resp.get('code')}:{resp.get('msg')}"}
+        data = resp.get("data") or {}
+        lst = data.get("list") or []
+        daily = Decimal("0")
+        monthly = Decimal("0")
+        for p in lst:
+            try:
+                ut = int(p.get("utime") or 0)
+                npf = Decimal(str(p.get("netProfit") or "0"))
+            except (TypeError, ValueError):
+                continue
+            monthly += npf
+            if ut >= today_ms:
+                daily += npf
+        return {
+            "ok": True,
+            "daily": float(daily),
+            "monthly": float(monthly),
+            "asset": "USDT",
+            "n_records": len(lst),
+        }
+
 
 def _safe_int(value: Any) -> int:
     try:

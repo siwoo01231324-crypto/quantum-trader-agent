@@ -106,14 +106,24 @@ def test_api_pnl_binance_from_exchange_income(specs_dir, monkeypatch):
     monkeypatch.setattr("src.dashboard.app.discover_wal_files", lambda _d: [])
     s = DashboardState()
     s.specs_dir = specs_dir
-    s.account_info_provider = _FakeBinancePnLProvider(
-        {"ok": True, "daily": 9.3, "monthly": 14.3, "asset": "USDT"}
-    )
+    # #395 — Bitget = 주 운영 venue (top-level 스칼라). Binance 는 by_venue 보존.
+    class _FakeBnBgPnLProvider:
+        def fetch_binance_pnl(self):
+            return {"ok": True, "daily": 9.3, "monthly": 14.3, "asset": "USDT"}
+
+        def fetch_bitget_pnl(self):
+            return {"ok": True, "daily": -5.0, "monthly": -8.0, "asset": "USDT"}
+
+    s.account_info_provider = _FakeBnBgPnLProvider()
     body = TestClient(create_app(s)).get("/api/pnl").json()
+    # top-level 스칼라 = Bitget(청산 netProfit 원장)
+    assert body["daily"] == pytest.approx(-5.0)
+    assert body["monthly"] == pytest.approx(-8.0)
+    assert body["daily_by_venue"]["bitget"] == pytest.approx(-5.0)
+    assert body["monthly_by_venue"]["bitget"] == pytest.approx(-8.0)
+    assert body["bitget_source"] == "history_position_netprofit"
+    # Binance 도 by_venue 에 보존 (참고용)
     assert body["daily_by_venue"]["binance"] == pytest.approx(9.3)
-    assert body["monthly_by_venue"]["binance"] == pytest.approx(14.3)
-    assert body["daily"] == pytest.approx(9.3)
-    assert body["monthly"] == pytest.approx(14.3)
     assert body["binance_source"] == "exchange_income"
 
 
