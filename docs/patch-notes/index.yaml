@@ -15,6 +15,23 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.49"
+    date: "2026-06-09"
+    title: "preset TP/SL 가격 거부(40836) 시 진입 통째 손실 — preset 없이 재시도 fallback"
+    tags: [fix, safety]
+    summary: >
+      진입가 대비 시장이 0.5%+ 움직이면 숏 preset SL(진입가×1.005)이 현재가보다
+      낮아져 거래소가 주문 전체를 거부(40836) → 진입을 통째로 잃음. consume 모드가
+      변동성 큰 소형주까지 잡으며 빈발(PIPPINUSDT 등 "안 사는데"). 게다가 40836 이
+      error_map 에 없어 UnknownError 로 빠져 adapter except 가 못 잡던 이중 버그.
+    items:
+      - "error_map: 40836 → InvalidOrderError 등록 (진단 grep + 분류)."
+      - "async_adapter.place_order: except 를 BrokerError 로 확장 + preset 가격거부(_is_preset_price_error: 40836 코드 + 'stop loss/profit price ... should be greater/less than' 메시지) 시 preset 없이 1회 재시도 → 진입 보존. 체결 후 synthetic TP/SL(LivePositionRiskManager, 실 체결가 기준)이 보호."
+      - "max-notional cooldown(40762/40774) 분기는 isinstance(InvalidOrderError) 가드로 보존 — 기존 동작 byte-identical."
+      - "테스트 2건(40836 재시도 성공 / 비-preset 에러 전파). bitget 85 passed 회귀 없음."
+    refs:
+      - "src/brokers/bitget/async_adapter.py"
+      - "src/brokers/bitget/error_map.py"
   - version: "v0.6.48"
     date: "2026-06-09"
     title: "수동거래 테스트가 실데이터 오염 — WRITE 경로 격리 (대시보드 '오늘 입력' 에 안 한 거래)"

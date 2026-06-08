@@ -49,6 +49,7 @@ from src.brokers.bitget.async_ws import AsyncBitgetUserDataStream, OverflowPolic
 from src.brokers.bitget.symbol_filters import SymbolFilters
 from src.brokers.errors import (
     BrokerClosedError,
+    BrokerError,
     BrokerStartupError,
     InvalidOrderError,
 )
@@ -190,12 +191,15 @@ class AsyncBitgetFuturesAdapter:
                 preset_tp_price=_ptp,
                 preset_sl_price=_psl,
             )
-        except InvalidOrderError as exc:
+        except BrokerError as exc:
             # 40762 = order qty exceeds upper limit (= Binance -2027 equivalent).
             # 40774 looks like a max-notional error by name but Bitget actually
             # uses it for "order type / position mode mismatch" — NOT cooldown.
             err_str = str(exc)
-            if "[40762]" in err_str or "[40774]" in err_str and "exceeds" in err_str.lower():
+            if isinstance(exc, InvalidOrderError) and (
+                "[40762]" in err_str
+                or ("[40774]" in err_str and "exceeds" in err_str.lower())
+            ):
                 self._max_notional_cooldown[cooldown_key] = (
                     time.monotonic() + self._MAX_NOTIONAL_COOLDOWN_SEC
                 )
@@ -203,7 +207,34 @@ class AsyncBitgetFuturesAdapter:
                     "bitget max_notional_cooldown registered %s %s for %.0fs",
                     req.symbol, req.side.value, self._MAX_NOTIONAL_COOLDOWN_SEC,
                 )
-            raise
+                raise
+
+            # 2026-06-09 — 거래소 preset TP/SL 가격 거부(40836 등): 진입가 대비
+            # 시장이 움직여 SL/TP 가 즉시 트리거 조건이 되면 *주문 전체가 거부*돼
+            # 진입을 통째로 잃는다 (consume 모드가 변동성 큰 소형주까지 잡으며
+            # 빈발). 진입을 살리기 위해 preset 없이 1회 재시도 — 체결 후 synthetic
+            # TP/SL (LivePositionRiskManager, 실 체결가 기준) 이 보호한다.
+            preset_attached = _ptp is not None or _psl is not None
+            if preset_attached and self._is_preset_price_error(err_str):
+                log.warning(
+                    "bitget preset TP/SL rejected (%s) — retrying %s %s "
+                    "WITHOUT preset (synthetic TP/SL covers)",
+                    err_str[:90], req.symbol, side_str,
+                )
+                resp = await self._client.place_order(
+                    symbol=req.symbol,
+                    side=side_str,
+                    order_type=order_type_str,
+                    size=req.qty,
+                    price=req.price if req.order_type == OrderType.LIMIT else None,
+                    client_oid=cid,
+                    trade_side=trade_side,
+                    reduce_only=req.reduce_only,
+                    preset_tp_price=None,
+                    preset_sl_price=None,
+                )
+            else:
+                raise
 
         # Bitget place-order response is minimal — fetch detail for status.
         return OrderAck(
@@ -215,6 +246,27 @@ class AsyncBitgetFuturesAdapter:
             qty=req.qty,
             price=req.price if req.order_type == OrderType.LIMIT else None,
         )
+
+    @staticmethod
+    def _is_preset_price_error(err_str: str) -> bool:
+        """주문 거부가 *preset TP/SL 가격* 검증 실패인가 (진입가 대비 시장 이동).
+
+        확정: 40836 (숏 SL 가격이 현재가보다 커야 함). long/TP variant 도
+        메시지 키워드로 포괄 — 코드 추측 없이 견고하게.
+        """
+        if "[40836]" in err_str:
+            return True
+        s = err_str.lower()
+        mentions_preset = (
+            "stop loss price" in s
+            or "take profit price" in s
+            or "stop surplus" in s
+            or "preset" in s
+        )
+        relational = (
+            "greater than" in s or "less than" in s or "should be" in s
+        )
+        return mentions_preset and relational
 
     def _normalize_cid(self, raw_cid: str, req: OrderRequest) -> str:
         # Bitget v2 클라이언트 OID 는 1~36자, 영숫자+_-. 패턴 외엔 fallback.
