@@ -107,3 +107,60 @@ async def test_adapter_no_preset_on_reduce_only(monkeypatch):
     await a.place_order(_req(reduce_only=True))  # 청산엔 preset 안 붙임
     assert a._client.kw["preset_tp_price"] is None
     assert a._client.kw["preset_sl_price"] is None
+
+
+# ── preset 가격 거부(40836) → preset 없이 재시도 (진입 보존) ─────────────────
+
+
+@pytest.mark.asyncio
+async def test_adapter_retries_without_preset_on_40836(monkeypatch):
+    """진입가 대비 시장이 움직여 preset SL 이 즉시 트리거 조건 → 40836 으로
+    주문 전체가 거부될 때, preset 없이 1회 재시도해 *진입을 보존* (synthetic 백업).
+    """
+    monkeypatch.setenv("BITGET_NATIVE_TPSL", "1")
+    from src.brokers.errors import UnknownError  # 40836 은 map 에 없으면 UnknownError
+    from src.brokers.bitget.schemas import PlaceOrderResponse
+
+    class _RejectThenAccept:
+        def __init__(self):
+            self.calls = []
+
+        async def place_order(self, **kw):
+            self.calls.append(kw)
+            if len(self.calls) == 1:
+                raise UnknownError(
+                    "[40836] The stop loss price of the short position "
+                    "should be greater than the current price"
+                )
+            return PlaceOrderResponse.from_json({"orderId": "9", "clientOid": "c"})
+
+    a = _adapter()
+    a._client = _RejectThenAccept()
+    ack = await a.place_order(_req())
+
+    assert len(a._client.calls) == 2  # 1차 preset 부착, 2차 preset 제거
+    assert a._client.calls[0]["preset_sl_price"] == Decimal("100.5")
+    assert a._client.calls[1]["preset_tp_price"] is None
+    assert a._client.calls[1]["preset_sl_price"] is None
+    assert ack.broker_order_id == "9"  # 진입 성공
+
+
+@pytest.mark.asyncio
+async def test_adapter_non_preset_error_propagates(monkeypatch):
+    """preset 무관 에러(잔고부족)는 재시도 없이 그대로 전파."""
+    monkeypatch.setenv("BITGET_NATIVE_TPSL", "1")
+    from src.brokers.errors import InsufficientFundsError
+
+    class _Reject:
+        def __init__(self):
+            self.calls = 0
+
+        async def place_order(self, **kw):
+            self.calls += 1
+            raise InsufficientFundsError("[43012] insufficient balance")
+
+    a = _adapter()
+    a._client = _Reject()
+    with pytest.raises(InsufficientFundsError):
+        await a.place_order(_req())
+    assert a._client.calls == 1  # 재시도 없음

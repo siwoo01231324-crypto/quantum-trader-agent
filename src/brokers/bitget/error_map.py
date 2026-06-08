@@ -43,6 +43,7 @@ _MAP: dict[str, type[BrokerError]] = {
     "40774": InvalidOrderError,          # order type / position mode mismatch (NOT max notional)
     "40786": InvalidOrderError,          # duplicate clientOid (24h dedup)
     "40808": InvalidOrderError,          # parameter verification exception
+    "40836": InvalidOrderError,          # preset SL price of short must be > current price (진입가 대비 시장 이동)
     "41114": RateLimitError,             # rate limit exceeded
     "42001": InvalidOrderError,          # cannot place order (general)
     "43001": InvalidOrderError,          # order does not exist
