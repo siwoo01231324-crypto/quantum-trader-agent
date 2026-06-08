@@ -15,6 +15,20 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.44"
+    date: "2026-06-08"
+    title: "airborne TP 10%→11% ROE — preset 슬리피지 보정 (사용자 결정)"
+    tags: [chore]
+    summary: >
+      preset-on-entry(#394) TP/SL 트리거가 신호가 기준이라 체결가 슬리피지만큼
+      실현 TP 가 깎임 (NEAR +8.79%, 목표 +10%). 사용자 결정 — TP 목표를 +11%
+      ROE(코인가격 +1.1%)로 올려 슬리피지 먹어도 ~+10% 실현. SL 은 -5% 유지.
+    items:
+      - "configs/orchestrator/production.yaml — live-airborne-bb-reversal-kst-hours + short-whitelist-v1 의 take_profit_pct 0.01→0.011 (가격 +1.1% = ROE +11% @10x). stop_loss_pct 0.005 유지 → R/R 1:2.2."
+      - "preset(거래소 네이티브)·synthetic·OrphanGuard 모두 이 값을 공유 → 일관 적용."
+      - "⚠️ 5y backtest 는 TP 10% 기준 — 11% 는 라이브 튜닝(R/R↑·승률 약간↓ 가능). 전략 자체는 5y PF~0.5 손실이라 흑자 보장 아님."
+    refs:
+      - "configs/orchestrator/production.yaml"
   - version: "v0.6.43"
     date: "2026-06-08"
     title: "거래소 네이티브 TP/SL — 진입 주문에 preset 첨부 (holdSide 우회, SL 지연 해결)"
