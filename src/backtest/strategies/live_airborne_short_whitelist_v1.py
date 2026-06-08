@@ -118,6 +118,11 @@ class LiveAirborneShortWhitelistV1(LiveAirborneBbReversalKstHours):
         매 tick 평가 대신 *봉 마감 1회만* evaluate → 102종 × BB/ATR pandas
         계산 폭주 차단. 같은 봉 안에서는 캐시된 결과 즉시 반환.
         """
+        # 봉마감 게이트 (live) — 형성봉 trim → 마감봉 평가 (KstHours 공유, #389).
+        gated, closed_ts = self._bar_close_gate(ctx)
+        if gated is None:
+            return Signal(action="hold", size=0.0, reason="await_bar_close")
+        ctx = gated
         snap = ctx["market_snapshot"]  # type: ignore[index]
         history: pd.DataFrame | None = snap.get("history")
         if history is None or len(history) < self.MIN_HISTORY:
@@ -192,7 +197,9 @@ class LiveAirborneShortWhitelistV1(LiveAirborneBbReversalKstHours):
                 action="hold", size=0.0,
                 reason="airborne_short_wl_fired_this_bar",
             )
-            return result
+            # 데몬-발화 게이트 + 같은봉 dedup(영속) — 알림없는 매수·재시작 재매수
+            # 차단 (#393/#392, KstHours 공유 헬퍼). closed_ts None(backtest)이면 무동작.
+            return self._apply_daemon_gate_and_dedup(ctx, result, closed_ts)
 
         if short_setup is not None:
             result = Signal(

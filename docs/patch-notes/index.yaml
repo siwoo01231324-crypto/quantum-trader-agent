@@ -15,6 +15,23 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.45"
+    date: "2026-06-08"
+    title: "short-whitelist 에 봉마감·데몬게이트·dedup 적용 — 실제 거래 전략이 #389/#392/#393 우회하던 버그"
+    tags: [fix]
+    summary: >
+      봉마감 게이트(#389)·데몬-발화 게이트(#393)·영속 dedup(#392)을 모두
+      KstHours.on_bar 에만 넣었는데, short-whitelist 가 on_bar 을 자체
+      오버라이드해 전부 우회 → *실제 거래는 거의 다 short-whitelist* 라 그 fix
+      들이 거래에 하나도 안 먹힘 (재시작 재매수 + 알림없는 매수 지속,
+      logs/airborne_reentry/ 가 비어있던 게 증거). 게이트+dedup 을 공유 헬퍼로
+      추출해 두 전략 모두 적용.
+    items:
+      - "KstHours._apply_daemon_gate_and_dedup() 공유 헬퍼 추출 (데몬-발화 게이트 + 같은봉 영속 dedup). KstHours.on_bar 간소화."
+      - "short-whitelist.on_bar 에 _bar_close_gate(형성봉 trim) + _apply_daemon_gate_and_dedup 적용. 이제 재시작해도 같은봉 재매수 안 하고, 데몬 발화한 종목만 진입."
+      - "live 전용(closed_ts None 인 backtest 무동작) → byte-identical 375 passed. short-whitelist 게이트 상속 테스트 2건."
+    refs:
+      - "src/backtest/strategies/live_airborne_short_whitelist_v1.py"
   - version: "v0.6.44"
     date: "2026-06-08"
     title: "airborne TP 10%→11% ROE — preset 슬리피지 보정 (사용자 결정)"

@@ -316,3 +316,54 @@ def test_max_concurrent_positions_default_absent():
     """미설정 시 속성 없음 → orchestrator getattr 가 None (무제한)."""
     s = LiveAirborneShortWhitelistV1()
     assert getattr(s, "max_concurrent_positions", None) is None
+
+
+# 2026-06-08 — short-whitelist 가 게이트·dedup 공유 헬퍼를 상속·적용하는지.
+# (이전: short-whitelist 가 on_bar 오버라이드로 #389/#392/#393 전부 우회 →
+#  실제 거래 전략에 게이트·dedup 미적용 = 재진입·알림없는매수 사고.)
+import pytest as _pytest2
+import pandas as _pd2
+from decimal import Decimal as _D
+from backtest.protocol import Signal as _Sig2
+from backtest.strategies.live_airborne_short_whitelist_v1 import (
+    LiveAirborneShortWhitelistV1 as _WL,
+)
+
+
+class _FireStoreWL:
+    def __init__(self, fires): self._f = fires
+    @property
+    def path(self): return type("P", (), {"exists": staticmethod(lambda: True)})()
+    def load_since(self, since): return self._f
+
+
+def test_short_whitelist_inherits_gate_dedup_helper(tmp_path):
+    """short-whitelist 가 _apply_daemon_gate_and_dedup(공유) 를 갖고 작동."""
+    wl = _WL()
+    wl._dedup_path = lambda: tmp_path / "wl.json"
+    closed = _pd2.Timestamp("2026-06-07T21:00:00Z")
+    sell = _Sig2(action="sell", size=0.5, reason="airborne_short_wl_fire")
+    ctx = {"market_snapshot": {"symbol": "X"}}
+
+    # 데몬 발화 없음 → 차단
+    wl._get_fire_store = lambda: _FireStoreWL([])
+    r = wl._apply_daemon_gate_and_dedup(ctx, sell, closed)
+    assert r.action == "hold" and "no_daemon_fire" in r.reason
+
+    # 데몬 발화 있음(floor(ts)==closed+1h=22:00) → 통과, 그 다음 같은봉 dedup
+    wl._get_fire_store = lambda: _FireStoreWL(
+        [{"symbol": "X", "side": "short", "ts": "2026-06-07T22:00:30+00:00"}]
+    )
+    r1 = wl._apply_daemon_gate_and_dedup(ctx, sell, closed)
+    r2 = wl._apply_daemon_gate_and_dedup(ctx, sell, closed)
+    assert r1.action == "sell"
+    assert r2.action == "hold" and "already_entered_bar" in r2.reason
+
+
+def test_short_whitelist_backtest_no_gate(tmp_path):
+    """backtest(closed_ts None) → 게이트 무동작 (sell 그대로)."""
+    wl = _WL()
+    wl._dedup_path = lambda: tmp_path / "wl.json"
+    sell = _Sig2(action="sell", size=0.5, reason="x")
+    r = wl._apply_daemon_gate_and_dedup({"market_snapshot": {"symbol": "X"}}, sell, None)
+    assert r.action == "sell"
