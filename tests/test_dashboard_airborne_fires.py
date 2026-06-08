@@ -64,6 +64,22 @@ class TestParseAirborneFireLine:
         assert rec["ts"].startswith("2026-05-23T02:00:33")
         assert rec["ts"].endswith("+00:00")
 
+    def test_scientific_notation_price_parsed(self):
+        """초저가 코인(LUNC 등)의 과학적표기 가격도 파싱돼야 한다.
+
+        회귀: close=([\\d.]+) 는 6.896e-05 의 'e-' 를 못 잡아 FIRE 통째로 누락
+        → 데몬-게이트가 거래 못 시킴 + 대시보드 PF 왜곡 (2026-06-08 LUNCUSDT).
+        """
+        line = (
+            "2026-06-08 13:00:33,327 INFO airborne_alert_daemon — "
+            "FIRE LUNCUSDT short @ close=6.896e-05 trigger=6.8978e-05"
+        )
+        rec = _parse_airborne_fire_line(line)
+        assert rec is not None
+        assert rec["symbol"] == "LUNCUSDT"
+        assert rec["fire_close"] == 6.896e-05
+        assert rec["trigger"] == 6.8978e-05
+
     def test_non_fire_line_returns_none(self):
         assert _parse_airborne_fire_line(
             "2026-05-23 02:00:00,000 INFO airborne_alert_daemon — initial universe"
