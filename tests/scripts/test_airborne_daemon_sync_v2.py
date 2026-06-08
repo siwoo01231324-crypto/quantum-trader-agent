@@ -44,6 +44,35 @@ def test_daemon_kst_hours_imported_from_strategy():
     assert _KST_HOURS_KSTHOURS == _KST_TOP_HOURS_V3 == frozenset({1, 2, 3, 6, 7, 8, 23})
 
 
+# ── (7) fire 봉 KST hour 보정 — 마감라벨→시작라벨 (2026-06-09, 알림↔거래 일치) ──
+
+def test_fire_bar_kst_hour_corrects_close_label_to_open():
+    """데몬 ev.open_time 은 봉 *마감* 라벨 → 1봉 빼 *시작시각* KST hour 로 보정.
+
+    사용자 MRVL/ARM 사례 회귀: 23:00-00:00 KST 봉을 데몬이 KST 0(마감)으로
+    판정해 kst-hours '❌ 게이트 외(0시)' 표시했으나, 트레이더는 KST 23(시작)으로
+    실제 진입 → 불일치. 보정 후 데몬도 KST 23 → 게이트({...,23}) 통과 표시.
+    """
+    from scripts.airborne_alert_daemon import _fire_bar_kst_hour
+    # 데몬이 마감으로 라벨한 시각 = 00:00 KST = 15:00 UTC
+    ev_open_ms = int(pd.Timestamp("2026-06-08T15:00:00Z").timestamp() * 1000)
+    assert _fire_bar_kst_hour(ev_open_ms) == 23  # 시작시각 23:00 KST (게이트 안)
+    msg = _format_strategy_notice(
+        side="short", kst_hour=_fire_bar_kst_hour(ev_open_ms), symbol="MRVLUSDT",
+    )
+    kst_seg = msg.split("kst-hours")[1].split("short-whitelist")[0]
+    assert "✅ 진입 예정" in kst_seg
+    assert "게이트 외" not in kst_seg
+
+
+def test_fire_bar_kst_hour_consistent_offset_non_boundary():
+    """경계 아닌 봉도 동일 1h 보정 — 03:00-04:00 KST 봉(데몬 마감라벨 04:00=
+    19:00 UTC) → 시작 KST 3 (게이트 안). 자정 안 걸친 봉도 일관."""
+    from scripts.airborne_alert_daemon import _fire_bar_kst_hour
+    ev_open_ms = int(pd.Timestamp("2026-06-08T19:00:00Z").timestamp() * 1000)
+    assert _fire_bar_kst_hour(ev_open_ms) == 3  # 시작 03:00 KST
+
+
 def test_daemon_kst_hours_excludes_11():
     """11시 v3 밖 검증 (v1/v2 회귀 차단)."""
     assert 11 not in _KST_HOURS_KSTHOURS
