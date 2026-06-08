@@ -3862,6 +3862,49 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
 
     app = FastAPI(title="QTA Dashboard", docs_url=None, redoc_url=None)
 
+    # ── airborne fire store 백그라운드 갱신 (브라우저 무관) ──────────────────────
+    # history.jsonl 은 본래 /api/airborne_metrics (대시보드 airborne 페이지 폴링)
+    # 에서만 `docker logs` 파싱→append 되었다. 즉 store 신선도가 *브라우저를
+    # 열어둔 동안만* 유지됨 → 대시보드 탭을 닫으면 store 가 얼어붙고 consume
+    # 모드/데몬 게이트가 굶어 트레이더가 매수를 0 건 하던 사고 (2026-06-09:
+    # 22:03 store freeze → 00:00 KST 발화 미수록 → 거래 정지). 페이지 의존을
+    # 끊고 dashboard 프로세스(= live_run) 가 떠 있는 동안 주기적으로 store 를
+    # 채운다. 끄려면 AIRBORNE_FIRE_STORE_REFRESH=0, 주기는 AIRBORNE_FIRE_REFRESH_SEC.
+    @app.on_event("startup")
+    async def _start_airborne_fire_refresher() -> None:
+        import os as _os
+        if _os.environ.get("AIRBORNE_FIRE_STORE_REFRESH", "1") == "0":
+            return
+        interval = max(10.0, float(_os.environ.get("AIRBORNE_FIRE_REFRESH_SEC", "45")))
+
+        async def _refresh_loop() -> None:
+            import logging as _lg
+            log = _lg.getLogger(__name__)
+            log.info("[airborne_fire_refresher] started (every %.0fs, docker logs)", interval)
+            while True:
+                try:
+                    since = (
+                        datetime.now(timezone.utc) - timedelta(hours=6)
+                    ).strftime("%Y-%m-%dT%H:%M:%SZ")
+                    fires = await asyncio.to_thread(
+                        _parse_airborne_fires_from_docker_logs, since,
+                    )
+                    if fires:
+                        store = _get_airborne_fire_store()
+                        added = store.append_many(fires)
+                        if added:
+                            log.info(
+                                "[airborne_fire_refresher] +%d new fires (total=%d)",
+                                added, store.count(),
+                            )
+                except Exception:  # noqa: BLE001 — 갱신 실패가 대시보드/트레이딩을 죽이면 안 됨
+                    _lg.getLogger(__name__).warning(
+                        "[airborne_fire_refresher] tick failed", exc_info=True,
+                    )
+                await asyncio.sleep(interval)
+
+        asyncio.create_task(_refresh_loop(), name="airborne-fire-refresher")
+
     @app.get("/", response_class=HTMLResponse)
     async def root() -> HTMLResponse:
         return HTMLResponse(content=_render_dashboard(state, _enriched_catalog()))
