@@ -15,6 +15,22 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.48"
+    date: "2026-06-09"
+    title: "수동거래 테스트가 실데이터 오염 — WRITE 경로 격리 (대시보드 '오늘 입력' 에 안 한 거래)"
+    tags: [fix]
+    summary: >
+      _manual_trade_log_path() 가 state.log_dir 을 무시하고 logs/manual_trade.jsonl
+      을 하드코딩 → test_dashboard_manual_trade 실행마다 실데이터 파일에 샘플 8건이
+      now() 타임스탬프로 주입됨. 사용자 대시보드 '오늘 입력' 에 한 적 없는 거래가
+      뜨고, 해당 테스트 8개는 count 단언이 깨져 FAIL 중이었음.
+    items:
+      - "app.py — QTA_MANUAL_TRADE_DIR env 로 WRITE base 오버라이드 (레포의 AIRBORNE_FIRE_STORE_PATH / AIRBORNE_REENTRY_STATE_DIR 동일 idiom). 미설정=프로덕션은 logs/ 고정 → venue 전환·standalone/pipeline 모드 불변성 유지(2026-06-05 fix 보존). legacy union 도 프로덕션에서만."
+      - "tests/conftest.py — autouse fixture 가 모든 테스트에 고유 tmp QTA_MANUAL_TRADE_DIR 주입 → 현재+미래 테스트 자동 격리(opt-in 불필요)."
+      - "검증: 수동거래 테스트 8 fail→35 passed, 실파일 줄수 불변(무오염). 오염분 16건은 로컬 정리(logs/ gitignored 라 코드 PR 대상 아님)."
+    refs:
+      - "src/dashboard/app.py"
+      - "tests/conftest.py"
   - version: "v0.6.47"
     date: "2026-06-09"
     title: "airborne fire store 백그라운드 갱신 — consume 굶어 0매수 사고 (브라우저 의존 제거)"
