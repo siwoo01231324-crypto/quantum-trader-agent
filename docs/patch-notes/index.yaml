@@ -15,6 +15,24 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.43"
+    date: "2026-06-08"
+    title: "거래소 네이티브 TP/SL — 진입 주문에 preset 첨부 (holdSide 우회, SL 지연 해결)"
+    tags: [feature, safety]
+    summary: >
+      synthetic TP/SL 이 mark-price/WS 지연으로 늦게 발동 (ALLO SL 이 -5% 대신
+      -15%에 걸려 -20% 손실, 실거래 확인). 진입 place-order 에
+      presetStopSurplusPrice/presetStopLossPrice(트리거 가격)를 같이 붙여 체결
+      시 Bitget 이 서버측 TP/SL 을 자동 생성 → 지연 0, 정확히 ±1%/0.5% 가격.
+      별도 place-tpsl-order(#390)의 one-way holdSide 43011 문제 우회.
+    items:
+      - "OrderRequest.preset_tp_price/preset_sl_price 추가. orchestrator 가 진입(비-reduce_only)에 전략 take_profit_pct/stop_loss_pct(가격 pct)로 trigger 가격 계산 → OrderIntent.meta → conversion → OrderRequest."
+      - "async_http.place_order: presetStopSurplusPrice/presetStopLossPrice body 첨부. async_adapter: BITGET_NATIVE_TPSL=1 + 비-reduce_only 일 때만, 트리거 가격 tick 양자화."
+      - "숏 진입: SL=진입가×(1+sl_pct), TP=진입가×(1-tp_pct) / 롱: 반대. = 코인가격 pct (ROE=가격×leverage)."
+      - "post-fill coordinator(#390, holdSide 43011)는 BITGET_NATIVE_TPSL_POSTFILL 로 분리(기본 OFF). synthetic·OrphanGuard(#391) 백업 유지."
+      - "테스트 5건(http body preset 유무 / 어댑터 게이트 on·off·reduce_only). backtest 무영향(meta 는 PaperBroker 무시)."
+    refs:
+      - "src/brokers/bitget/async_adapter.py"
   - version: "v0.6.42"
     date: "2026-06-08"
     title: "airborne 트레이더를 데몬 발화에 동기화 — 알림 없으면 매수 안 함 (v0.6.41 쿨다운 대체)"

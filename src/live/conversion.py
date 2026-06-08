@@ -74,6 +74,11 @@ def intent_to_order_request(
         )
     qty = Decimal(str(intent.qty)).quantize(step, rounding=ROUND_DOWN)
     side = Side.BUY if intent.side == "buy" else Side.SELL
+    # 2026-06-08 — 진입 주문에 붙일 거래소 네이티브 TP/SL 가격 (orchestrator 가
+    # intent.meta 에 stamp). 없으면 None → 미첨부.
+    _meta = intent.meta or {}
+    _tp = _meta.get("preset_tp_price")
+    _sl = _meta.get("preset_sl_price")
     return OrderRequest(
         client_order_id=idempotency_key,
         symbol=intent.symbol,
@@ -82,6 +87,8 @@ def intent_to_order_request(
         order_type=order_type,
         price=price,
         tif=tif,
+        preset_tp_price=Decimal(str(_tp)) if _tp is not None else None,
+        preset_sl_price=Decimal(str(_sl)) if _sl is not None else None,
         # #238 Item 7 — carry the long-only-exit guard to the broker so a
         # "sell with no long" is no-opped, not turned into a naked short.
         reduce_only=intent.reduce_only,

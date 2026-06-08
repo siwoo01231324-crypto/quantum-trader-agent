@@ -248,6 +248,8 @@ class AsyncBitgetFuturesClient:
         margin_mode: str = "crossed",
         trade_side: str | None = None,  # hedge mode 시 "open"/"close"
         reduce_only: bool = False,
+        preset_tp_price: Decimal | None = None,
+        preset_sl_price: Decimal | None = None,
     ) -> PlaceOrderResponse:
         body: dict[str, Any] = {
             "symbol": symbol,
@@ -265,6 +267,12 @@ class AsyncBitgetFuturesClient:
             body["tradeSide"] = trade_side
         if reduce_only:
             body["reduceOnly"] = "YES"
+        # 2026-06-08 — 진입과 함께 거는 거래소 네이티브 TP/SL 트리거 가격.
+        # 체결 시 Bitget 이 서버측에서 익절/손절 plan 자동 생성 (holdSide 불필요).
+        if preset_tp_price is not None:
+            body["presetStopSurplusPrice"] = str(preset_tp_price)
+        if preset_sl_price is not None:
+            body["presetStopLossPrice"] = str(preset_sl_price)
         data = await self._request("POST", "/api/v2/mix/order/place-order", body=body)
         return PlaceOrderResponse.from_json(data)
 

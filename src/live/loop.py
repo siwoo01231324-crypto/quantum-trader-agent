@@ -814,9 +814,12 @@ async def run_shadow_loop(
             # LivePositionRiskManager 는 백업으로 유지 (reduce-only → 무해).
             # ⚠️ 안전 게이트: BITGET_NATIVE_TPSL=1 일 때만 활성. 데모에서 실제
             # TPSL 주문 검증 후 마인넷에서 켤 것 (기본 OFF → 머지해도 동작변화 0).
+            # 2026-06-08 — post-fill place-tpsl-order coordinator 는 one-way
+            # holdSide(43011) 미해결. preset-on-entry(BITGET_NATIVE_TPSL, place-order
+            # 에 presetStop* 첨부)로 대체. coordinator 는 별도 플래그로 분리해 OFF 유지.
             _prot_on_fill = None
             if (
-                os.environ.get("BITGET_NATIVE_TPSL", "0") == "1"
+                os.environ.get("BITGET_NATIVE_TPSL_POSTFILL", "0") == "1"
                 and config.position_risk_manager is not None
                 and config.position_store is not None
             ):
