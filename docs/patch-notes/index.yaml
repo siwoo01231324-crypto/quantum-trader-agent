@@ -15,6 +15,24 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.51"
+    date: "2026-06-09"
+    title: "데몬 알림 KST hour 를 '매수 시각' 으로 표시 — 판정은 봉 시작시각 그대로 (사용자 요청)"
+    tags: [fix]
+    summary: >
+      v0.6.50 이 알림 KST hour 를 봉 *시작시각* 으로 표시했으나, 사용자는 알람·매수가
+      일어나는 *마감 시각* 으로 보길 원함 (알람 12시·매수 12시인데 'KST 11시' 라 헷갈림).
+      게이트 ✅/❌ 판정과 실제 거래는 봉 시작시각 그대로(트레이더와 일치, 불변) 두고,
+      *텔레그램 표시 숫자만* 매수시각(시작+1h)으로 +1. 게이트 set 도 표시상 매수시각
+      환산({1,2,3,6,7,8,23} 시작 → {0,2,3,4,7,8,9} 매수).
+    items:
+      - "_format_strategy_notice: 판정 in_kst4/in_kst19 는 kst_hour(시작시각) 그대로, 표시만 buy_hour=(kst_hour+1)%24 + buy_label(set+1). ✅/❌ 결과는 byte-identical (멤버십 보존)."
+      - "거래 게이트(_KST_HOURS_KSTHOURS={1,2,3,6,7,8,23})·트레이더·백테스트 전혀 안 건드림 — 표시 전용. 같은 봉 매매."
+      - "예: XPL 11시 시작봉(12시 매수) long → 'kst-hours ❌ KST 12시 게이트 외 (매수 0/2/3/4/7/8/9시만)'. MRVL 23시 시작봉 short → '✅ 진입 예정' (실제 진입과 일치)."
+      - "테스트 갱신/추가(매수시각 표시 + 판정 불변). 데몬 sync/alert 183 passed."
+    refs:
+      - "scripts/airborne_alert_daemon.py"
+      - "tests/scripts/test_airborne_daemon_sync_v2.py"
   - version: "v0.6.50"
     date: "2026-06-09"
     title: "데몬 알림 KST hour 보정 — 마감라벨→시작라벨 (kst-hours 알림↔거래 일치)"

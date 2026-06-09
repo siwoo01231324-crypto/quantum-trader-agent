@@ -220,15 +220,27 @@ def _format_strategy_notice(*, side: str, kst_hour: int, symbol: str) -> str:
 
     kst-hours 는 KST gate + BTC trend filter 두 단계 체크 (사용자 지적 반영
     2026-06-05). 둘 다 PASS 여야 실제 진입.
+
+    시각 표기 (2026-06-09 사용자 요청): ``kst_hour`` 는 fire 봉의 *시작시각* KST
+    (= 전략 _bar_hour_kst 게이트 판정 기준). 게이트 ✅/❌ 판정과 실제 거래는 이
+    시작시각으로 (불변). 단 **텔레그램에 보여주는 숫자**는 *실제 매수 시각*
+    (= 봉 마감 = 시작+1h)으로 표기 — 알람이 10시에 오고 매수도 10시에 일어나므로
+    "KST 10시" 로 보여야 직관적. 게이트 set 도 표시상 매수시각으로 +1 환산
+    ({1,2,3,6,7,8,23} 시작 → {0,2,3,4,7,8,9} 매수). *거래 게이트는 안 건드림 —
+    표시만 +1.*
     """
-    in_kst4 = kst_hour in _KST_HOURS_KSTHOURS
+    in_kst4 = kst_hour in _KST_HOURS_KSTHOURS  # 판정 = 봉 시작시각 (불변, 트레이더와 동일)
     in_kst19 = kst_hour in _KST_HOURS_SHORT_WL
     in_wl = _in_trading_universe(symbol)  # #380 — 거래량 top-100 (1000SHIB↔SHIB 정규화)
-    kst4_label = _kst_hours_label(_KST_HOURS_KSTHOURS)
+    # 표시 전용 — 매수 시각 (봉 마감 = 시작+1h) 으로 환산.
+    buy_hour = (kst_hour + 1) % 24
+    buy_label = _kst_hours_label(
+        frozenset((h + 1) % 24 for h in _KST_HOURS_KSTHOURS)
+    )
 
     # kst-hours: bidir + KST gate + BTC trend filter (long-only)
     if not in_kst4:
-        kst_line = f"❌ KST {kst_hour}시 — 게이트 외 ({kst4_label}만)"
+        kst_line = f"❌ KST {buy_hour}시 — 게이트 외 (매수 {buy_label}시만)"
     elif (side.lower() == "long" and _BTC_DOWNTREND_STATE is True):
         # BTC 하락추세 → LONG entry 차단. strategy 의 on_bar 와 일관.
         kst_line = f"❌ BTC 하락추세 LONG 차단 ({_BTC_DOWNTREND_REASON or 'downtrend'})"
@@ -241,7 +253,7 @@ def _format_strategy_notice(*, side: str, kst_hour: int, symbol: str) -> str:
     elif not in_wl:
         wl_line = "❌ TOP100 외 종목"
     elif not in_kst19:
-        wl_line = f"❌ KST {kst_hour}시 — 게이트 외"
+        wl_line = f"❌ KST {buy_hour}시 — 게이트 외"
     else:
         wl_line = "✅ 진입 예정"
 
