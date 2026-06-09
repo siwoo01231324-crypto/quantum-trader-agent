@@ -2,12 +2,12 @@
 type: spec-architecture
 id: cs-tsmom-daily-report
 name: 일일 거래 리포트 (자동 + 수동 대조 분석)
-status: setup-required
+status: active
 target: Claude Code Routines
 schedule: "daily 23:55 KST"
 owner: siwoo
 created: 2026-05-21
-last_updated: 2026-05-21
+last_updated: 2026-06-09
 tags:
 - routine
 - daily-report
