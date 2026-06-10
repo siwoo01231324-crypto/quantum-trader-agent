@@ -100,6 +100,10 @@ class BinancePublicFeed:
 
     async def aclose(self) -> None:
         self._closed = True
+        hb = getattr(self, "_hb_task", None)
+        if hb is not None:
+            hb.cancel()
+            self._hb_task = None
         if self._ws is not None:
             try:
                 await self._ws.close()
@@ -142,7 +146,9 @@ class BitgetPublicFeed:
         self._closed = False
 
     async def connect(self) -> None:
+        import asyncio
         import websockets
+        from src.live.ws_keepalive import app_level_heartbeat
         if not self._symbols:
             raise RuntimeError("BitgetPublicFeed: no symbols subscribed")
         # 재접속 회귀 fix: aclose() 가 켠 _closed=True 를 여기서 다시 끈다.
@@ -152,7 +158,13 @@ class BitgetPublicFeed:
         self._closed = False
         logger.info("BitgetPublicFeed connecting to %s (%d symbols)",
                     self._base_url, len(self._symbols))
-        self._ws = await websockets.connect(self._base_url, ping_interval=20)
+        # 2026-06-10 keepalive: Bitget 은 *앱레벨* "ping" 을 요구. 라이브러리
+        # 프로토콜 ping(ping_interval=20)은 Bitget 이 pong 안 줘서 멀쩡한 연결을
+        # 20초마다 false-close → 30~60초 churn. ping_interval=None + app heartbeat.
+        self._ws = await websockets.connect(self._base_url, ping_interval=None)
+        self._hb_task = asyncio.create_task(
+            app_level_heartbeat(self._ws, stop_check=lambda: self._closed)
+        )
         # Subscribe (chunked at 50 per frame — Bitget recommendation).
         CHUNK = 50
         for i in range(0, len(self._symbols), CHUNK):
@@ -175,11 +187,14 @@ class BitgetPublicFeed:
 
     async def _iter(self) -> AsyncIterator:
         from src.live.types import Tick
+        from src.live.ws_keepalive import is_keepalive_frame
         if self._ws is None:
             raise RuntimeError("Feed not connected")
         async for raw in self._ws:
             if self._closed:
                 break
+            if is_keepalive_frame(raw):
+                continue  # Bitget app-level "pong" — JSON 아님, skip
             try:
                 msg = json.loads(raw)
             except json.JSONDecodeError as err:
@@ -222,6 +237,10 @@ class BitgetPublicFeed:
 
     async def aclose(self) -> None:
         self._closed = True
+        hb = getattr(self, "_hb_task", None)
+        if hb is not None:
+            hb.cancel()
+            self._hb_task = None
         if self._ws is not None:
             try:
                 await self._ws.close()
@@ -327,6 +346,10 @@ class BinanceMarkPriceFeed:
 
     async def aclose(self) -> None:
         self._closed = True
+        hb = getattr(self, "_hb_task", None)
+        if hb is not None:
+            hb.cancel()
+            self._hb_task = None
         if self._ws is not None:
             try:
                 await self._ws.close()
@@ -362,14 +385,21 @@ class BitgetMarkPriceFeed:
         self._closed = False
 
     async def connect(self) -> None:
+        import asyncio
         import websockets
+        from src.live.ws_keepalive import app_level_heartbeat
         if not self._symbols:
             raise RuntimeError("BitgetMarkPriceFeed: no symbols subscribed")
         # 재접속 회귀 fix (BitgetPublicFeed 와 동일) — aclose() 후 _closed 리셋.
         self._closed = False
         logger.info("BitgetMarkPriceFeed connecting to %s (%d symbols)",
                     self._base_url, len(self._symbols))
-        self._ws = await websockets.connect(self._base_url, ping_interval=20)
+        # 2026-06-10 keepalive (BitgetPublicFeed 와 동일) — 앱레벨 "ping" 으로
+        # 30~60초 false-disconnect 제거. synthetic SL 이 mark-price 못 보던 근본.
+        self._ws = await websockets.connect(self._base_url, ping_interval=None)
+        self._hb_task = asyncio.create_task(
+            app_level_heartbeat(self._ws, stop_check=lambda: self._closed)
+        )
         CHUNK = 50
         for i in range(0, len(self._symbols), CHUNK):
             args = [
@@ -382,11 +412,14 @@ class BitgetMarkPriceFeed:
         return self._iter()
 
     async def _iter(self) -> AsyncIterator:
+        from src.live.ws_keepalive import is_keepalive_frame
         if self._ws is None:
             raise RuntimeError("Feed not connected")
         async for raw in self._ws:
             if self._closed:
                 break
+            if is_keepalive_frame(raw):
+                continue  # Bitget app-level "pong" — JSON 아님, skip
             try:
                 msg = json.loads(raw)
             except json.JSONDecodeError as err:
@@ -419,6 +452,10 @@ class BitgetMarkPriceFeed:
 
     async def aclose(self) -> None:
         self._closed = True
+        hb = getattr(self, "_hb_task", None)
+        if hb is not None:
+            hb.cancel()
+            self._hb_task = None
         if self._ws is not None:
             try:
                 await self._ws.close()

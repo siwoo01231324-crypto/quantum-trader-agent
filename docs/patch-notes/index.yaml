@@ -15,6 +15,24 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.52"
+    date: "2026-06-10"
+    title: "실시간 데이터 안정화 Phase 1 — Bitget WS 앱레벨 keepalive (30~60초 끊김 제거)"
+    tags: [fix, safety]
+    summary: >
+      Bitget WS 3종(public trade / mark-price / orders)이 30~60초마다
+      "no close frame"으로 false-disconnect → 봉처리 정지(거래 0) + synthetic SL
+      장님(−22% 방치)의 근본. 원인: websockets ping_interval(프로토콜 ping)을
+      Bitget 이 pong 안 줘서 멀쩡한 연결을 ping_timeout 마다 라이브러리가 끊음.
+      Bitget 은 앱레벨 텍스트 "ping"/"pong" heartbeat 요구.
+    items:
+      - "src/live/ws_keepalive.py 신설 — app_level_heartbeat(25초 'ping') + is_keepalive_frame('pong' skip)."
+      - "BitgetPublicFeed / BitgetMarkPriceFeed (feed.py) + BitgetOrderWS (async_ws.py): ping_interval=None + heartbeat task + 'pong' 프레임 skip."
+      - "효과: false-disconnect 제거 → 봉처리·mark-price 흐름 정상화 (synthetic SL 가 가격 받음). 트레이더 재시작 시 적용."
+      - "테스트 tests/live/test_ws_keepalive.py(12). feed 21 + bitget 85 회귀 무. 설계: docs/specs/realtime-data-stability.md."
+    refs:
+      - "src/live/ws_keepalive.py"
+      - "docs/specs/realtime-data-stability.md"
   - version: "v0.6.51"
     date: "2026-06-09"
     title: "데몬 알림 KST hour 를 '매수 시각' 으로 표시 — 판정은 봉 시작시각 그대로 (사용자 요청)"
