@@ -15,6 +15,19 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.55"
+    date: "2026-06-11"
+    title: "콘솔 로그 자동 회전파일 기록 — logs/live_run.log (붙여넣기 불편 해소)"
+    tags: [chore]
+    summary: >
+      트레이더 콘솔 stdout(WS/reconciler/order 로그)이 휘발돼 매번 복사해야 하던
+      불편 해소. python scripts/live_run.py 만 치면 모든 logging 출력이 회전
+      파일에 자동 누적된다.
+    items:
+      - "live_run.py _attach_rotating_file_log(): root logger 에 RotatingFileHandler(logs/live_run.log, 20MB×5) 부착. dashboard-only·CLI 두 모드 basicConfig 뒤 호출."
+      - "중복 부착 가드(_qta_file_log 마커). 파일 로그 실패는 graceful(거래 안 막음). logs/ gitignore 라 커밋 안 됨."
+    refs:
+      - "scripts/live_run.py"
   - version: "v0.6.54"
     date: "2026-06-11"
     title: "데이터안정화 P2.5 — multi-holder phantom 포지션 자동정리 (22002 폭주·재진입 차단 해소)"
