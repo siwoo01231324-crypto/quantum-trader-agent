@@ -37,10 +37,10 @@ created: 2026-06-10
   종목 추적 → `LivePositionRiskManager` 가 그 종목은 stand-down(거래소가 라인 청산),
   naked(40836/40832)·청산분만 백업. loop 에서 BITGET_NATIVE_TPSL=1 시 wiring.
 
-### Phase 2.5 — 포지션 진실원천 = 거래소 (예정)
-- store↔broker 드리프트(22002 폭주 + holders=2 유령). 유령이 재진입을 막아
-  발화한 종목 미진입(SNDK 등). reconciler 가 broker truth 로 holders=2 유령도
-  정리 + 재진입 가드를 거래소 실보유 기준으로.
+### Phase 2.5 — multi-holder phantom 자동정리 (✅ 2026-06-11, v0.6.54)
+- reconciler 가 holders>=2 + broker=0 phantom 을 ALERT-ONLY→**AUTO-FIX-PHANTOM**
+  (전원 store 0). 유령이 재진입 차단(SNDK)·22002 폭주 유발하던 것 해소. broker 에
+  실포지션 있는 multi-holder 만 ALERT-ONLY 유지(attribution 안전).
 
 ### Phase 3 — last-value cache + staleness (예정)
 - WS push → in-memory {symbol: (price, ts)} 캐시. 거래루프는 캐시 read(논블로킹).

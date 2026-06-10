@@ -15,6 +15,23 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.54"
+    date: "2026-06-11"
+    title: "데이터안정화 P2.5 — multi-holder phantom 포지션 자동정리 (22002 폭주·재진입 차단 해소)"
+    tags: [fix, safety]
+    summary: >
+      reconciler 가 holders>=2(2개 전략이 같은 종목 보유) phantom 을 ALERT-ONLY 로만
+      두어 유령이 영구 잔존 → (a) SNDK 등 발화했는데 "이미 보유" 로 오인해 재진입
+      차단 (b) risk manager 가 30초마다 없는 포지션 닫으려다 22002 폭주. broker=0 이면
+      나눌 실포지션이 없어 attribution 불확실 우려가 없으므로 전원 정리.
+    items:
+      - "PositionReconciler.reconcile_once: holders>=2 + broker_net==0 → AUTO-FIX-PHANTOM(전원 store 0 + on_position_synced 콜백). broker 에 실포지션 있는 multi-holder 만 ALERT-ONLY 유지(기존 안전)."
+      - "효과: 유령 정리 → 발화 종목 재진입 허용(SNDK), risk manager 가 held=0 으로 보고 close 시도 중단 → 22002 폭주 종료."
+      - "orphan(broker≠0, store 모름; ORDI 등)은 그대로 ALERT-ONLY — 본 변경 무관."
+      - "테스트: phantom multi-holder auto-fix 신규 + multi-holder 실포지션 ALERT-ONLY 유지. reconciler 12 passed."
+    refs:
+      - "src/live/position_reconciler.py"
+      - "docs/specs/realtime-data-stability.md"
   - version: "v0.6.53"
     date: "2026-06-11"
     title: "데이터안정화 P2 — synthetic SL/TP stand-down (조기청산 차단)"

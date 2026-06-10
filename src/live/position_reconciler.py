@@ -137,7 +137,31 @@ class PositionReconciler:
                             "PositionReconciler: on_position_synced failed "
                             "sid=%s sym=%s: %s", sid, m.symbol, err,
                         )
+            elif m.broker_net == 0:
+                # P2.5 (2026-06-11) — holders>=2 이지만 broker=0 = 전원 phantom.
+                # 나눌 실포지션이 없으므로 multi-holder attribution 불확실 우려가
+                # 없음 → 전원 0 정합. 안 지우면 유령이 (a) 재진입 차단(SNDK 발화
+                # 인데 미진입) (b) risk manager 가 30초마다 닫으려다 22002 폭주.
+                for sid, before in holders.items():
+                    self._store.force_sync_position(
+                        strategy_id=sid, symbol=m.symbol, qty=Decimal("0"),
+                    )
+                    auto_fixed.append((sid, m.symbol, before, Decimal("0")))
+                    if self._on_position_synced is not None:
+                        try:
+                            self._on_position_synced(sid, m.symbol, Decimal("0"))
+                        except Exception as err:  # noqa: BLE001 — defensive
+                            logger.warning(
+                                "PositionReconciler: on_position_synced failed "
+                                "sid=%s sym=%s: %s", sid, m.symbol, err,
+                            )
+                logger.warning(
+                    "PositionReconciler: AUTO-FIX-PHANTOM %s holders=%d → 0 "
+                    "(broker 없음 — 전원 유령 정리)",
+                    m.symbol, len(holders),
+                )
             else:
+                # broker 에 실포지션 있고 multi-holder → 자동 추정 위험 → 알림만.
                 alerted_only.append(m)
                 logger.warning(
                     "PositionReconciler: ALERT-ONLY %s holders=%d store=%s broker=%s delta=%s",
