@@ -803,6 +803,21 @@ async def run_shadow_loop(
                     "(포지션 보유 중이거나 이미 설정됨 — 계좌 모드 수동 확인 권장)",
                     exc,
                 )
+            # 2026-06-10 P2 — synthetic SL/TP stand-down. 거래소 네이티브 preset
+            # TP/SL(BITGET_NATIVE_TPSL=1)이 활성인 종목은 LivePositionRiskManager
+            # 가 손 뗀다(거래소가 라인 청산) → 노이즈성 mark-price 틱에 라인 도달
+            # 전 조기청산하던 사고 차단. OFF 면 미연결(기존 동작 그대로).
+            if (
+                os.environ.get("BITGET_NATIVE_TPSL", "0") == "1"
+                and config.position_risk_manager is not None
+            ):
+                config.position_risk_manager.set_native_tpsl_check(
+                    bitget_adapter.has_native_tpsl
+                )
+                logger.info(
+                    "synthetic SL/TP stand-down wired — preset-active 종목은 "
+                    "거래소 TP/SL 담당, synthetic 은 naked/청산분 백업"
+                )
             # P4b — Bitget private WS user-data stream → order_filled WAL.
             from src.live.fill_consumer import run_bitget_fill_consumer
             def _bg_stream_factory():
