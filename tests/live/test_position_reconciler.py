@@ -113,12 +113,13 @@ async def test_phantom_broker_position_alerts_only():
 
 
 @pytest.mark.asyncio
-async def test_multi_holder_alerts_only_no_fix():
-    """Symbol 을 strategy 2개 이상이 들고 있으면 attribution 불확실 → 알림만."""
+async def test_multi_holder_real_position_alerts_only_no_fix():
+    """multi-holder + broker 에 *실포지션 존재* → attribution 불확실 → 알림만.
+    (broker=0 phantom 케이스는 P2.5 에서 auto-fix — 아래 별도 테스트.)"""
     store = StrategyPositionStore()
     store.force_sync_position(strategy_id="a", symbol="NEARUSDT", qty=Decimal("100"))
     store.force_sync_position(strategy_id="b", symbol="NEARUSDT", qty=Decimal("50"))
-    broker = _FakeBroker({"NEARUSDT": Decimal("0")})  # broker close
+    broker = _FakeBroker({"NEARUSDT": Decimal("200")})  # 실포지션 — 나눌 수 없음
     rec, wal_events, timeline = _make_reconciler(broker, store)
 
     outcome = await rec.reconcile_once()
@@ -130,6 +131,23 @@ async def test_multi_holder_alerts_only_no_fix():
     assert store.all_positions() == {
         "a": [("NEARUSDT", 100.0)], "b": [("NEARUSDT", 50.0)],
     }
+
+
+@pytest.mark.asyncio
+async def test_multi_holder_phantom_broker_zero_auto_fixes_all():
+    """★ P2.5 (2026-06-11) — multi-holder 인데 broker=0 = 전원 phantom.
+    나눌 실포지션이 없으므로 전원 0 정합 (유령이 재진입 차단·22002 폭주 유발했음).
+    """
+    store = StrategyPositionStore()
+    store.force_sync_position(strategy_id="a", symbol="SNDKUSDT", qty=Decimal("-0.226"))
+    store.force_sync_position(strategy_id="b", symbol="SNDKUSDT", qty=Decimal("-0.226"))
+    broker = _FakeBroker({"SNDKUSDT": Decimal("0")})  # 거래소엔 없음 = 전원 유령
+    rec, wal_events, timeline = _make_reconciler(broker, store)
+
+    outcome = await rec.reconcile_once()
+    assert len(outcome.auto_fixed) == 2          # a, b 둘 다 정리
+    assert outcome.alerted_only == ()
+    assert store.all_positions() == {}           # 전원 0 → 보유 없음 (재진입 허용)
 
 
 @pytest.mark.asyncio
@@ -239,11 +257,12 @@ async def test_on_position_synced_skipped_for_phantom_and_multi_holder():
     await rec.reconcile_once()
     assert synced == []
 
-    # multi-holder: 2 strategy 가 같은 symbol 보유
+    # multi-holder + broker 실포지션: attribution 불확실 → ALERT-ONLY → 콜백 skip.
+    # (broker=0 phantom 은 P2.5 에서 auto-fix 되어 콜백 호출됨 — 별도 테스트.)
     store2 = StrategyPositionStore()
     store2.force_sync_position(strategy_id="a", symbol="NEARUSDT", qty=Decimal("100"))
     store2.force_sync_position(strategy_id="b", symbol="NEARUSDT", qty=Decimal("50"))
-    broker2 = _FakeBroker({"NEARUSDT": Decimal("0")})
+    broker2 = _FakeBroker({"NEARUSDT": Decimal("200")})
     synced2: list = []
     rec2 = PositionReconciler(
         position_store=store2, broker=broker2,
