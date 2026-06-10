@@ -198,7 +198,9 @@ class AsyncBitgetUserDataStream:
 
     async def _consume(self) -> None:
         """Single connect/login/subscribe/read cycle. Returns on disconnect or stop."""
-        async with websockets.connect(self._url, ping_interval=_PING_INTERVAL_SEC) as ws:
+        # 2026-06-10 keepalive — Bitget 은 앱레벨 "ping" 요구. 라이브러리 프로토콜
+        # ping 은 pong 안 받아 false-disconnect → ping_interval=None + app heartbeat.
+        async with websockets.connect(self._url, ping_interval=None) as ws:
             # 1. login
             await ws.send(json.dumps({"op": "login", "args": [self._build_login_args()]}))
             raw = await asyncio.wait_for(ws.recv(), timeout=10)
@@ -223,22 +225,36 @@ class AsyncBitgetUserDataStream:
                 raise WSConfigError(f"bitget subscribe failed: {ev}")
             log.info("bitget WS subscribed to orders channel")
 
-            # 3. read loop
-            while not self._stop.is_set():
-                try:
-                    raw = await asyncio.wait_for(ws.recv(), timeout=_PING_INTERVAL_SEC * 2)
-                except asyncio.TimeoutError:
-                    # No message in 40s — ping is handled by library, just continue.
-                    continue
-                msg = json.loads(raw)
-                # ``arg.channel == "orders"`` rows → fills.
-                arg = msg.get("arg") or {}
-                if arg.get("channel") != "orders":
-                    continue
-                for row in msg.get("data") or []:
-                    fill = _parse_fill_from_order(row, self._seen, self._acc_filled)
-                    if fill is not None:
-                        await self._enqueue(fill)
+            # 3. app-level keepalive + read loop (2026-06-10)
+            from src.live.ws_keepalive import (
+                app_level_heartbeat,
+                is_keepalive_frame,
+            )
+            hb = asyncio.create_task(
+                app_level_heartbeat(ws, stop_check=self._stop.is_set)
+            )
+            try:
+                while not self._stop.is_set():
+                    try:
+                        raw = await asyncio.wait_for(
+                            ws.recv(), timeout=_PING_INTERVAL_SEC * 2,
+                        )
+                    except asyncio.TimeoutError:
+                        # 무메시지 — app heartbeat 가 연결 유지, 계속.
+                        continue
+                    if is_keepalive_frame(raw):
+                        continue  # Bitget "pong" — JSON 아님, skip
+                    msg = json.loads(raw)
+                    # ``arg.channel == "orders"`` rows → fills.
+                    arg = msg.get("arg") or {}
+                    if arg.get("channel") != "orders":
+                        continue
+                    for row in msg.get("data") or []:
+                        fill = _parse_fill_from_order(row, self._seen, self._acc_filled)
+                        if fill is not None:
+                            await self._enqueue(fill)
+            finally:
+                hb.cancel()
 
     async def _run(self) -> None:
         """Outer loop with exponential backoff on disconnect."""
