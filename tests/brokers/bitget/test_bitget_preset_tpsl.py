@@ -70,6 +70,7 @@ def _adapter():
     a._max_notional_cooldown = {}
     a._closing = False
     a._kill_switch = None
+    a._native_tpsl_symbols = set()  # P2 — has_native_tpsl 추적
     return a
 
 
@@ -164,3 +165,61 @@ async def test_adapter_non_preset_error_propagates(monkeypatch):
     with pytest.raises(InsufficientFundsError):
         await a.place_order(_req())
     assert a._client.calls == 1  # 재시도 없음
+
+
+# ── P2: native TP/SL 활성 종목 추적 (synthetic stand-down 용) ─────────────────
+
+
+@pytest.mark.asyncio
+async def test_adapter_tracks_native_tpsl_on_preset_entry(monkeypatch):
+    """preset 부착 진입 성공 → has_native_tpsl True (synthetic 손 뗌)."""
+    monkeypatch.setenv("BITGET_NATIVE_TPSL", "1")
+    a = _adapter()
+    await a.place_order(_req())
+    assert a.has_native_tpsl("BTCUSDT") is True
+
+
+@pytest.mark.asyncio
+async def test_adapter_native_tpsl_false_on_naked_retry(monkeypatch):
+    """40836 → preset 없이 재시도(naked) → has_native_tpsl False (synthetic 백업)."""
+    monkeypatch.setenv("BITGET_NATIVE_TPSL", "1")
+    from src.brokers.errors import UnknownError
+    from src.brokers.bitget.schemas import PlaceOrderResponse
+
+    class _RejectThenAccept:
+        def __init__(self):
+            self.calls = []
+
+        async def place_order(self, **kw):
+            self.calls.append(kw)
+            if len(self.calls) == 1:
+                raise UnknownError(
+                    "[40836] The stop loss price of the short position "
+                    "should be greater than the current price"
+                )
+            return PlaceOrderResponse.from_json({"orderId": "9", "clientOid": "c"})
+
+    a = _adapter()
+    a._client = _RejectThenAccept()
+    await a.place_order(_req())
+    assert a.has_native_tpsl("BTCUSDT") is False
+
+
+@pytest.mark.asyncio
+async def test_adapter_native_tpsl_discarded_on_reduce_only(monkeypatch):
+    """청산(reduce_only) → 추적 해제 (포지션 없어짐)."""
+    monkeypatch.setenv("BITGET_NATIVE_TPSL", "1")
+    a = _adapter()
+    await a.place_order(_req())
+    assert a.has_native_tpsl("BTCUSDT") is True
+    await a.place_order(_req(reduce_only=True))
+    assert a.has_native_tpsl("BTCUSDT") is False
+
+
+@pytest.mark.asyncio
+async def test_adapter_native_tpsl_false_when_gate_off(monkeypatch):
+    """BITGET_NATIVE_TPSL=0 → preset 미부착 → has_native_tpsl False."""
+    monkeypatch.setenv("BITGET_NATIVE_TPSL", "0")
+    a = _adapter()
+    await a.place_order(_req())
+    assert a.has_native_tpsl("BTCUSDT") is False
