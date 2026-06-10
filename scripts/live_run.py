@@ -288,6 +288,38 @@ def _show_first_run_help() -> int:
     return 0
 
 
+def _attach_rotating_file_log() -> None:
+    """모든 logging 출력을 회전 파일(``logs/live_run.log``)에도 기록 (2026-06-11).
+
+    콘솔 stdout 이 휘발돼 매번 붙여넣어야 하던 불편 해소 — 사용자는 그냥
+    ``python scripts/live_run.py`` 만 치면 되고 로그가 자동 누적·회전된다.
+    20MB×5 (=최대 ~100MB) 회전. ``logs/`` 는 gitignore. 파일 로그 실패가
+    거래를 막지 않도록 전부 graceful.
+    """
+    import logging  # noqa: PLC0415
+    from logging.handlers import RotatingFileHandler  # noqa: PLC0415
+    from pathlib import Path  # noqa: PLC0415
+    try:
+        root = logging.getLogger()
+        if any(getattr(h, "_qta_file_log", False) for h in root.handlers):
+            return  # 중복 부착 방지 (두 모드/재진입)
+        Path("logs").mkdir(parents=True, exist_ok=True)
+        fh = RotatingFileHandler(
+            "logs/live_run.log", maxBytes=20_000_000, backupCount=5,
+            encoding="utf-8",
+        )
+        fh.setFormatter(
+            logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
+        )
+        fh._qta_file_log = True  # type: ignore[attr-defined]  # 중복 가드 마커
+        root.addHandler(fh)
+        logging.getLogger("live_run").info(
+            "rotating file log → logs/live_run.log (20MB×5, 자동 회전)"
+        )
+    except Exception:  # noqa: BLE001 — 파일 로그 실패가 거래를 막으면 안 됨
+        pass
+
+
 def _run_dashboard_only_mode(port: int = 8000) -> int:
     """qta.exe 더블클릭(인자 없음) → 대시보드만 자동 기동 + 자동 브라우저 (#182 B 안).
 
@@ -311,6 +343,7 @@ def _run_dashboard_only_mode(port: int = 8000) -> int:
     )
     # 2026-06-05 — httpx INFO 폭주 차단 (universe-quote refresh 100+ REST).
     logging.getLogger("httpx").setLevel(logging.WARNING)
+    _attach_rotating_file_log()  # 2026-06-11 — 콘솔 로그 → logs/live_run.log 자동 누적
     # 거래 시작 시 실제로 어느 broker 로 갈지 미리 알려준다 (#$$$).
     _env_broker = os.environ.get("QTA_DEFAULT_BROKER", "").strip()
     if _env_broker:
@@ -1770,6 +1803,7 @@ def main(argv: list[str] | None = None) -> int:
     # 종목 REST) 마다 폭주. 운영 운영 가시성 0 (실 distractor) + 디스크 IO 낭비.
     # 에러는 WARNING 이상이라 유지.
     logging.getLogger("httpx").setLevel(logging.WARNING)
+    _attach_rotating_file_log()  # 2026-06-11 — 콘솔 로그 → logs/live_run.log 자동 누적
     logger = logging.getLogger("live_run")
     yaml_path = Path(args.production_yaml)
     if not yaml_path.is_absolute():
