@@ -31,9 +31,16 @@ created: 2026-06-10
   — 모두 `ping_interval=None` + heartbeat + pong skip.
 - 효과: 30~60초 false-disconnect 제거 → 봉처리·mark-price 흐름 정상화.
 
-### Phase 2 — 서버측 SL 등록 + 검증 (예정)
-- 진입 체결 직후 거래소에 **실제 stop 주문 등록 + REST 로 존재 검증**(preset
-  silent-drop 방어). 봇/WS 죽어도 거래소가 −5% 청산. synthetic 은 2차 백업.
+### Phase 2 — synthetic SL/TP stand-down (✅ 2026-06-11, v0.6.53)
+- 백업 synthetic 이 노이즈성 mark 틱에 거래소 preset 라인 도달 전 조기청산하던
+  사고(CRDO +1.30% live_stop_loss 등). `adapter.has_native_tpsl` 로 preset-active
+  종목 추적 → `LivePositionRiskManager` 가 그 종목은 stand-down(거래소가 라인 청산),
+  naked(40836/40832)·청산분만 백업. loop 에서 BITGET_NATIVE_TPSL=1 시 wiring.
+
+### Phase 2.5 — 포지션 진실원천 = 거래소 (예정)
+- store↔broker 드리프트(22002 폭주 + holders=2 유령). 유령이 재진입을 막아
+  발화한 종목 미진입(SNDK 등). reconciler 가 broker truth 로 holders=2 유령도
+  정리 + 재진입 가드를 거래소 실보유 기준으로.
 
 ### Phase 3 — last-value cache + staleness (예정)
 - WS push → in-memory {symbol: (price, ts)} 캐시. 거래루프는 캐시 read(논블로킹).

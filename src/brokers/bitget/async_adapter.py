@@ -83,6 +83,11 @@ class AsyncBitgetFuturesAdapter:
         self.paper = paper
         self._kill_switch = kill_switch
         self._closing = False
+        # 2026-06-10 데이터안정화 P2 — 진입에 거래소 네이티브 preset TP/SL 이
+        # *실제로 등록된* 종목 집합. synthetic SL(LivePositionRiskManager)이
+        # 이 종목은 손 떼고(거래소가 라인에서 청산) preset 실패(40836/40832
+        # naked)·청산된 종목만 백업하도록 — 노이즈성 조기청산(+0.83% 등) 차단.
+        self._native_tpsl_symbols: set[str] = set()
         self._client = AsyncBitgetFuturesClient(
             api_key=api_key, secret=secret, passphrase=passphrase,
             base_url=base_url, paper=paper,
@@ -178,6 +183,10 @@ class AsyncBitgetFuturesAdapter:
                     req.symbol, side_str, _ptp, _psl,
                 )
 
+        # P2 — 거래소 preset TP/SL 이 *실제 등록되는* 진입인가 (naked 면 False).
+        _native_tpsl_active = (
+            (_ptp is not None or _psl is not None) and not req.reduce_only
+        )
         try:
             resp = await self._client.place_order(
                 symbol=req.symbol,
@@ -233,8 +242,17 @@ class AsyncBitgetFuturesAdapter:
                     preset_tp_price=None,
                     preset_sl_price=None,
                 )
+                _native_tpsl_active = False  # naked 진입 → synthetic 이 보호
             else:
                 raise
+
+        # P2 — 거래소 preset TP/SL 활성 종목 추적 (synthetic stand-down).
+        #   진입+preset 성공 → add (synthetic 손 뗌, 거래소가 라인 청산)
+        #   naked(40836/40832) 또는 청산(reduce_only) → discard (synthetic 백업)
+        if req.reduce_only or not _native_tpsl_active:
+            self._native_tpsl_symbols.discard(req.symbol)
+        else:
+            self._native_tpsl_symbols.add(req.symbol)
 
         # Bitget place-order response is minimal — fetch detail for status.
         return OrderAck(
@@ -246,6 +264,15 @@ class AsyncBitgetFuturesAdapter:
             qty=req.qty,
             price=req.price if req.order_type == OrderType.LIMIT else None,
         )
+
+    def has_native_tpsl(self, symbol: str) -> bool:
+        """이 종목에 거래소 네이티브 preset TP/SL 이 활성 등록돼 있나 (P2).
+
+        LivePositionRiskManager 가 evaluate 시 콜백으로 조회 — True 면 synthetic
+        SL/TP 를 *발동 안 함*(거래소가 라인에서 청산). preset 실패(naked)·청산된
+        종목은 False → synthetic 이 백업으로 보호.
+        """
+        return symbol in self._native_tpsl_symbols
 
     @staticmethod
     def _is_preset_price_error(err_str: str) -> bool:

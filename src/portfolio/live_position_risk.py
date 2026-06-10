@@ -76,10 +76,17 @@ class LivePositionRiskManager:
         wal_observer: Callable[[WALEvent], None] | None = None,
         on_exit: Callable[[str, str], None] | None = None,
         pending_exit_timeout_sec: float | None = None,
+        native_tpsl_check: Callable[[str], bool] | None = None,
     ) -> None:
         self._position_store = position_store
         self._pnl = pnl_aggregator
         self._wal_observer = wal_observer
+        # 2026-06-10 데이터안정화 P2 — symbol 에 거래소 네이티브 preset TP/SL 이
+        # 활성이면 True 반환하는 콜백(broker adapter.has_native_tpsl). True 인
+        # 종목은 evaluate 에서 synthetic SL/TP 를 *발동 안 함* — 거래소가 라인에서
+        # 청산을 담당하고 synthetic 은 백업(preset 실패/naked·청산분)만. 노이즈성
+        # 조기청산(+0.83% 등, 거래소 TP/SL 라인 도달 전 self-exit) 차단.
+        self._native_tpsl_check = native_tpsl_check
         # #238 — 청산 시 (strategy_id, symbol) 콜백. orchestrator.release_live_position
         # 에 연결되어 live-scanner 재진입을 허용 (미연결 시 1회 진입 fail-safe 유지).
         self._on_exit = on_exit
@@ -110,6 +117,14 @@ class LivePositionRiskManager:
             if pending_exit_timeout_sec is not None
             else self.PENDING_EXIT_TIMEOUT_SEC
         )
+
+    def set_native_tpsl_check(self, check: Callable[[str], bool] | None) -> None:
+        """P2 (2026-06-10) — broker adapter.has_native_tpsl 를 생성 *후* 주입.
+
+        adapter 가 risk_mgr 보다 늦게 생성되므로 loop wiring 시점에 연결. True
+        반환 종목은 evaluate 가 synthetic SL/TP 를 발동 안 함(거래소 preset 담당).
+        """
+        self._native_tpsl_check = check
 
     def register_strategy_policy(
         self,
@@ -214,6 +229,14 @@ class LivePositionRiskManager:
                 # 마크 해제. 다음 진입은 처음부터 가드 없이 정상 평가.
                 self._high_water.pop((strategy_id, symbol), None)
                 self._pending_exit.pop((strategy_id, symbol), None)
+                continue
+
+            # 2026-06-10 P2 — 거래소 네이티브 preset TP/SL 이 활성인 종목은
+            # synthetic 이 손 뗀다 (거래소가 라인에서 청산). 노이즈성 mark-price
+            # 틱에 synthetic 이 거래소 TP/SL 라인 도달 전 조기청산하던 사고 차단
+            # (CRDO +1.30% 에 live_stop_loss 오발동 등). preset 실패(naked)·청산된
+            # 종목은 check False → synthetic 백업 정상 작동.
+            if self._native_tpsl_check is not None and self._native_tpsl_check(symbol):
                 continue
 
             # 2026-05-21 in-flight exit guard — 이전 evaluate 에서 stop/TP

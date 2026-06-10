@@ -15,6 +15,23 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.53"
+    date: "2026-06-11"
+    title: "데이터안정화 P2 — synthetic SL/TP stand-down (조기청산 차단)"
+    tags: [fix, safety]
+    summary: >
+      백업 synthetic SL/TP(LivePositionRiskManager)가 노이즈성 mark-price 틱에
+      거래소 preset TP/SL 라인 도달 전 조기청산(예: CRDO +1.30% 에 live_stop_loss
+      오발동, +0.83% 등). 거래소 네이티브 preset 이 활성인 종목은 synthetic 이
+      손 떼고(거래소가 라인 청산) preset 실패(naked)·청산분만 백업하도록.
+    items:
+      - "adapter.has_native_tpsl(symbol): 진입+preset 성공 종목 추적(set). naked(40836/40832)·reduce_only 청산 시 discard."
+      - "LivePositionRiskManager.evaluate: native_tpsl_check True 종목은 SL/TP 평가 skip(stand-down). set_native_tpsl_check 로 생성 후 주입."
+      - "loop.py: BITGET_NATIVE_TPSL=1 일 때 risk_mgr 에 adapter.has_native_tpsl 연결 (OFF 면 미연결=기존 동작)."
+      - "효과: 거래소 TP/SL 라인에서만 청산, +0.83% 류 조기청산 제거. 테스트 standdown 5 + adapter native 4."
+    refs:
+      - "src/portfolio/live_position_risk.py"
+      - "src/brokers/bitget/async_adapter.py"
   - version: "v0.6.52"
     date: "2026-06-10"
     title: "실시간 데이터 안정화 Phase 1 — Bitget WS 앱레벨 keepalive (30~60초 끊김 제거)"
