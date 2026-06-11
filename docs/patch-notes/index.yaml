@@ -15,6 +15,22 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.58"
+    date: "2026-06-11"
+    title: "Bitget post-fill TP/SL 43023 settle-race — backoff 재시도"
+    tags: [fix, safety]
+    summary: >
+      43011(holdSide) 수정 후 마인넷 라이브에서 새로 관측: post-fill stop 을 진입
+      체결 WS 이벤트 직후 즉시 걸면 거래소가 포지션을 아직 등록하기 전이라 [43023]
+      "Insufficient position, can not set profit or stop loss". 데모는 진입 후 2초
+      대기 시 정상 → coordinator 의 즉시 호출이 settlement race. place_protective_order
+      가 43023 시 backoff(0.4/0.8/1.2/1.6s) 재시도로 포지션 정착 대기.
+    items:
+      - "async_adapter._place_tpsl_with_settle_retry: 43023 만 backoff 재시도(최대 ~4s, client_oid 재발급), 그 외 에러 즉시 raise. 끝까지 실패면 raise → coordinator 로그+synthetic 백업(기존)."
+      - "단위테스트: 43023 2회→성공(2회 backoff), 40836→즉시 raise(재시도 안 함)."
+      - "데모: 정상경로 SL/TP ACCEPTED 회귀 무. 라이브 HUSDT 16:30 43023 관측이 계기."
+    refs:
+      - "docs/specs/realtime-data-stability.md"
   - version: "v0.6.57"
     date: "2026-06-11"
     title: "Bitget post-fill 거래소 손절/익절 43011 해결 — one-way holdSide=buy/sell"
