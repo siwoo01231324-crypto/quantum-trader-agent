@@ -107,6 +107,54 @@ async def test_hedge_mode_maps_long_short_holdside():
     assert a2._client.calls[0]["hold_side"] == "long"  # hedge: SELL 청산 = 롱
 
 
+@pytest.mark.asyncio
+async def test_protective_43023_settle_retry_then_succeeds(monkeypatch):
+    # 43023(포지션 미정착) 2회 후 성공 — backoff 재시도 검증 (2026-06-11 라이브).
+    import src.brokers.bitget.async_adapter as mod
+    sleeps: list[float] = []
+    async def _fake_sleep(d):
+        sleeps.append(d)
+    monkeypatch.setattr(mod.asyncio, "sleep", _fake_sleep)
+    a = _adapter()
+    n = {"c": 0}
+    async def _flaky(**kw):
+        n["c"] += 1
+        if n["c"] <= 2:
+            raise RuntimeError(
+                "[43023] Insufficient position, can not set profit or stop loss"
+            )
+        return f"oid-{kw['plan_type']}"
+    a._client.place_tpsl_order = _flaky
+    oid = await a.place_protective_order(
+        symbol="BTCUSDT", side="BUY", qty=Decimal("3"),
+        stop_price=Decimal("100.5"), kind="STOP_MARKET",
+    )
+    assert oid == "oid-loss_plan"
+    assert n["c"] == 3           # 2 실패 + 1 성공
+    assert len(sleeps) == 2      # 성공 전 2회 backoff
+
+
+@pytest.mark.asyncio
+async def test_protective_non_43023_raises_immediately(monkeypatch):
+    # 43023 외 에러(40836 등)는 재시도 없이 즉시 raise.
+    import src.brokers.bitget.async_adapter as mod
+    async def _fake_sleep(d):
+        pass
+    monkeypatch.setattr(mod.asyncio, "sleep", _fake_sleep)
+    a = _adapter()
+    n = {"c": 0}
+    async def _bad(**kw):
+        n["c"] += 1
+        raise RuntimeError("[40836] preset price error")
+    a._client.place_tpsl_order = _bad
+    with pytest.raises(RuntimeError):
+        await a.place_protective_order(
+            symbol="BTCUSDT", side="BUY", qty=Decimal("3"),
+            stop_price=Decimal("100.5"), kind="STOP_MARKET",
+        )
+    assert n["c"] == 1           # 재시도 안 함
+
+
 def test_roi_vs_price_short_trigger_prices():
     """숏 진입 E=100, 가격pct SL 0.005 / TP 0.01 → SL=100.5, TP=99.0.
 
