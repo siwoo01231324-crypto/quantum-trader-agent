@@ -636,52 +636,14 @@ class AsyncStrategyOrchestrator:
                 # 정확하므로 executor 가 market_state.tick.last (단일 심볼만
                 # 정확) 대신 이 값을 limit 가격 기준가로 쓴다 (gap A).
                 strat = self._strategies.get(sid)
-                entry_order_type = "market"
-                if signal.action == "buy":
-                    declared = getattr(strat, "entry_order_type", "market")
-                    if declared in ("market", "post_only"):
-                        entry_order_type = declared
-                # 2026-06-08 — 진입 주문에 거래소 네이티브 TP/SL 가격 첨부.
-                # 청산(reduce_only)이 아닌 진입에만, 전략의 stop_loss_pct/
-                # take_profit_pct(가격 pct)로 trigger 가격 계산해 meta 에 stamp.
-                # 숏(sell) 진입: SL=가격↑, TP=가격↓ / 롱(buy): 반대.
-                _ro = (
-                    signal.action == "sell"
-                    and not getattr(strat, "shorts_allowed", False)
-                )
-                _preset_meta = None
-                if not _ro and order_price and order_price > 0:
-                    _slp = getattr(strat, "stop_loss_pct", None)
-                    _tpp = getattr(strat, "take_profit_pct", None)
-                    if _slp and _tpp:
-                        if signal.action == "sell":   # short entry
-                            _sl = order_price * (1 + float(_slp))
-                            _tp = order_price * (1 - float(_tpp))
-                        else:                          # long entry
-                            _sl = order_price * (1 - float(_slp))
-                            _tp = order_price * (1 + float(_tpp))
-                        _preset_meta = {
-                            "preset_tp_price": _tp, "preset_sl_price": _sl,
-                        }
-                order_intents.append(OrderIntent(
+                order_intents.append(self._build_entry_intent(
                     strategy_id=sid,
+                    strategy=strat,
                     symbol=order.symbol,
-                    side=signal.action,
+                    action=signal.action,
                     qty=qty,
+                    price=order_price,
                     reason=signal.reason,
-                    meta=_preset_meta,
-                    # #238 Item 7 — default: long-only 전략의 SELL 은 항상 청산
-                    # 이라 reduceOnly stamp (보유 0 에서 sell 이 naked short 되는
-                    # 사고 차단). 단, ``shorts_allowed=True`` 를 선언한 bidir
-                    # 전략 (airborne v1.2 등) 은 SELL 이 short 진입일 수 있으므로
-                    # reduceOnly 해제 — testnet 가 -2022 로 거부하던 사고 회복
-                    # (2026-05-28 ~ 06-01: airborne sell 시그널 13K+ 전량 silent
-                    # REJECTED). long-only 전략 (default) 은 byte-identical.
-                    reduce_only=_ro,
-                    entry_order_type=entry_order_type,
-                    ref_price=(
-                        order_price if entry_order_type == "post_only" else None
-                    ),
                 ))
             else:
                 logger.info(
@@ -697,6 +659,220 @@ class AsyncStrategyOrchestrator:
             await self.refresh_portfolio_risk_async(ts)
 
         return order_intents
+
+    # ---- shared entry tail (run_bar + dispatch_fire_entry) ------------------
+
+    def _build_entry_intent(
+        self,
+        *,
+        strategy_id: str,
+        strategy: object,
+        symbol: str,
+        action: str,
+        qty: float,
+        price: float,
+        reason: str,
+    ) -> OrderIntent:
+        """진입 OrderIntent 빌드 — entry_order_type stamp + preset TP/SL meta
+        + reduce_only 판정. ``run_bar`` 의 ALLOW 분기와 ``dispatch_fire_entry``
+        가 공유하는 꼬리 로직. 추출 전 ``run_bar`` 인라인 코드와 byte-identical
+        (회귀 박제: tests/integration/test_airborne_path_smoke.py).
+
+        2026-05-22 post-only Maker 진입 — BUY 진입에 한해 strategy 의
+        ``entry_order_type`` 속성을 읽어 stamp. SELL(청산/숏진입)은 항상 market.
+
+        2026-06-08 — 진입 주문에 거래소 네이티브 TP/SL 가격 첨부. 청산
+        (reduce_only)이 아닌 진입에만, 전략의 stop_loss_pct/take_profit_pct
+        (가격 pct)로 trigger 가격 계산해 meta 에 stamp. 숏(sell) 진입: SL=가격↑,
+        TP=가격↓ / 롱(buy): 반대.
+        """
+        entry_order_type = "market"
+        if action == "buy":
+            declared = getattr(strategy, "entry_order_type", "market")
+            if declared in ("market", "post_only"):
+                entry_order_type = declared
+        # #238 Item 7 — long-only 전략의 SELL 은 항상 청산이라 reduceOnly stamp
+        # (보유 0 에서 sell 이 naked short 되는 사고 차단). shorts_allowed=True
+        # 를 선언한 bidir 전략 (airborne v1.2 등) 은 SELL 이 short 진입일 수
+        # 있으므로 reduceOnly 해제. long-only 전략 (default) 은 byte-identical.
+        _ro = (
+            action == "sell"
+            and not getattr(strategy, "shorts_allowed", False)
+        )
+        _preset_meta = None
+        if not _ro and price and price > 0:
+            _slp = getattr(strategy, "stop_loss_pct", None)
+            _tpp = getattr(strategy, "take_profit_pct", None)
+            if _slp and _tpp:
+                if action == "sell":   # short entry
+                    _sl = price * (1 + float(_slp))
+                    _tp = price * (1 - float(_tpp))
+                else:                  # long entry
+                    _sl = price * (1 - float(_slp))
+                    _tp = price * (1 + float(_tpp))
+                _preset_meta = {
+                    "preset_tp_price": _tp, "preset_sl_price": _sl,
+                }
+        return OrderIntent(
+            strategy_id=strategy_id,
+            symbol=symbol,
+            side=action,
+            qty=qty,
+            reason=reason,
+            meta=_preset_meta,
+            reduce_only=_ro,
+            entry_order_type=entry_order_type,
+            ref_price=(price if entry_order_type == "post_only" else None),
+        )
+
+    # ---- fire-driven entry (봉루프 decouple — airborne consume) -------------
+
+    def dispatch_fire_entry(
+        self,
+        strategy_id: str,
+        symbol: str,
+        side: str,
+        *,
+        price: float,
+        ts,
+        equity_usdt: float,
+    ) -> OrderIntent | None:
+        """단일 발화(fire) 직접 진입 — ``run_bar`` 봉루프와 무관.
+
+        airborne consume 의 ``history.jsonl`` 발화를 트레이더 OHLCV 봉루프와
+        decouple 해 직접 구동한다 (봉 스냅샷 랙이 발화를 떨어뜨리지 못함, 2026-
+        06-11 "7시 롱 미매수" 사고 fix — docs/specs/airborne-fire-driven-
+        consume.md). ``run_bar`` 의 진입 로직(_live_entered dedup → stop
+        cooldown → max_concurrent cap → _on_entry → sizing → policy → preset
+        meta → OrderIntent)을 그대로 재사용하되 Signal 자체평가 대신 발화의
+        side/price 를 사용한다.
+
+        Args:
+            strategy_id: 등록된 전략 id.
+            symbol: 발화 종목 (예: "SOLUSDT").
+            side: "long" | "short" — 'buy'/'sell' 로 매핑.
+            price: 진입 기준가 (발화 close).
+            ts: 발화 시각 (reason/WAL 표기용).
+            equity_usdt: USDT venue 가용 자본 (사이징 기준).
+
+        Returns:
+            진입 OrderIntent 또는 진입 불가 시 None (dedup/cooldown/cap/sizing/
+            risk gate 차단). None 이면 호출자는 발주하지 않고 dedup 도 안 찍는다.
+        """
+        # 1) 등록/quarantine/disabled 게이트.
+        strat = self._strategies.get(strategy_id)
+        if strat is None:
+            return None
+        if strategy_id in self._quarantined or strategy_id in self._disabled:
+            return None
+
+        action = "buy" if side == "long" else "sell"
+        key = (strategy_id, symbol)
+
+        # 2) live_entered dedup — (sid, symbol) 당 1 포지션.
+        if key in self._live_entered:
+            self._emit_strategy_evaluated(
+                strategy_id, symbol=symbol, decision="hold",
+                reason="live_position_open", ts=ts,
+            )
+            return None
+
+        # 3) stop cooldown — 청산 직후 재진입 차단 (run_bar 와 동일).
+        cooldown_until = self._stop_cooldown_until.get(key, 0.0)
+        if cooldown_until > 0.0:
+            if time.monotonic() < cooldown_until:
+                self._emit_strategy_evaluated(
+                    strategy_id, symbol=symbol, decision="hold",
+                    reason="stop_cooldown_active", ts=ts,
+                )
+                return None
+            self._stop_cooldown_until.pop(key, None)
+
+        # 4) max_concurrent_positions 캡 (run_bar 와 동일).
+        cap = getattr(strat, "max_concurrent_positions", None)
+        if cap is not None:
+            open_count = sum(
+                1 for (s, _sym) in self._live_entered if s == strategy_id
+            )
+            if open_count >= int(cap):
+                self._emit_strategy_evaluated(
+                    strategy_id, symbol=symbol, decision="hold",
+                    reason=f"max_concurrent_reached:{open_count}>={int(cap)}",
+                    ts=ts,
+                )
+                return None
+
+        # 5) 진입 기록 + _on_entry 동적 stop/TP 콜백. run_bar 은 Signal override
+        # 를 쓰지만 fire 진입은 Signal 이 없으므로 전략 클래스 속성의 stop_loss_pct
+        # /take_profit_pct/trailing_stop_pct 를 dynamic policy 로 등록한다 (정적
+        # policy fallback 과 동일 값이지만 risk mgr 의 per-(sid,sym) 등록을 보장).
+        self._live_entered.add(key)
+        if self._on_entry is not None:
+            _slp = getattr(strat, "stop_loss_pct", None)
+            _tpp = getattr(strat, "take_profit_pct", None)
+            _trl = getattr(strat, "trailing_stop_pct", None)
+            if _slp is not None or _tpp is not None or _trl is not None:
+                try:
+                    self._on_entry(
+                        strategy_id, symbol,
+                        stop_loss_pct=_slp,
+                        take_profit_pct=_tpp,
+                        trailing_stop_pct=_trl,
+                    )
+                except Exception as err:  # noqa: BLE001 — defensive
+                    logger.warning(
+                        "_on_entry callback failed (fire) sid=%s sym=%s err=%s",
+                        strategy_id, symbol, err,
+                    )
+
+        # 6) sizing — Signal-like 로 fraction 산출 → qty 변환.
+        from backtest.protocol import Signal as _Signal
+        signal = _Signal(
+            action=action,
+            size=getattr(strat, "default_size", 0.05),
+            reason=f"fire_consume:{side}@{ts}",
+        )
+        self._emit_strategy_evaluated(
+            strategy_id, symbol=symbol, decision=action,
+            reason=signal.reason, ts=ts,
+        )
+        fraction = resolve_size(signal, self._recent_returns.get(strategy_id))
+        qty = size_to_qty(
+            fraction, equity=equity_usdt, price=price, symbol=symbol,
+        )
+        if qty is None:
+            logger.info(
+                "portfolio.orchestrator.fire_size_drop strategy_id=%s symbol=%s "
+                "fraction=%s equity=%s price=%s",
+                strategy_id, symbol, fraction, equity_usdt, price,
+            )
+            # 사이징 드롭 시 진입 기록 해제 — 미발주이므로 다음 발화에 재시도 허용.
+            self._live_entered.discard(key)
+            return None
+
+        # 7) policy evaluate (run_bar 와 동일 Order/Snapshot 빌드).
+        order = Order(symbol=symbol, side=action, qty=qty, price=price)
+        snap = Snapshot(
+            intent=order,
+            equity_krw=equity_usdt,
+            portfolio_risk=self._sync.current_report,
+        )
+        decision = evaluate(self._policy, snap)
+        if decision.action != Action.ALLOW:
+            logger.info("risk.breach (fire) rule_id=%s", decision.rule_id)
+            self._live_entered.discard(key)
+            return None
+
+        # 8) preset TP/SL meta + OrderIntent (run_bar 와 공유 헬퍼).
+        return self._build_entry_intent(
+            strategy_id=strategy_id,
+            strategy=strat,
+            symbol=symbol,
+            action=action,
+            qty=qty,
+            price=price,
+            reason=signal.reason,
+        )
 
     async def refresh_portfolio_risk_async(self, ts=None) -> Optional[PortfolioRiskReport]:
         t0 = time.monotonic()
