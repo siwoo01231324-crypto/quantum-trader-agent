@@ -1,8 +1,9 @@
 ---
-type: spec
+type: spec-architecture
 id: airborne-fire-driven-consume
-title: 에어본 발화 직접구동 consume (봉루프 decouple + 도착시각 게이트)
+name: 에어본 발화 직접구동 consume (봉루프 decouple + 도착시각 게이트)
 status: in-progress
+owner: siwoo
 created: 2026-06-11
 ---
 
