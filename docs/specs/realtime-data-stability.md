@@ -1,8 +1,9 @@
 ---
-type: spec
+type: spec-architecture
 id: realtime-data-stability
-title: 실시간 마켓데이터 수집·리스크 실행 안정화
+name: 실시간 마켓데이터 수집·리스크 실행 안정화
 status: in-progress
+owner: siwoo
 created: 2026-06-10
 ---
 

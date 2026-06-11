@@ -15,6 +15,22 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.56"
+    date: "2026-06-11"
+    title: "에어본 발화 직접구동 consume + 데몬 도착시각 게이트 (봉루프 decouple)"
+    tags: [fix, safety]
+    summary: >
+      consume 이 history.jsonl 발화를 트레이더 OHLCV 봉루프에 종속돼 평가하던 탓에
+      universe refresh 랙으로 발화 종목이 스냅샷에 없으면 영영 미진입("7시 롱 미매수"
+      사고)했다. AirborneFireConsumer 가 발화를 직접 구동(봉루프 decouple), 데몬은
+      buy-time(+1) 시프트를 되돌려 도착시각(=알림시각) 게이트로 통일.
+    items:
+      - "AsyncStrategyOrchestrator.dispatch_fire_entry(): run_bar 진입 로직(_live_entered/cooldown/cap/_on_entry/sizing/policy/preset meta) 재사용한 단일 발화 직접진입. run_bar 와 공유 _build_entry_intent 추출(byte-identical)."
+      - "src/live/airborne_fire_consumer.py: fire store 직접 polling → 도착시각 KST hour/side/universe/freshness/BTC trend 게이트 → dispatch_fire_entry. dedup 은 logs/airborne_reentry/{ClassName}.json 영속 파일 공유(on_bar consume 과 동일 키)."
+      - "loop.py: AIRBORNE_FIRE_CONSUMER=1 시 consumer task 시작 + on_bar consume 분기 no-op(이중경로 차단). 미설정 시 byte-identical."
+      - "데몬 v0.6.56: 게이트·표시 모두 floor(fire_ts,1h).KST.hour(도착시각) 기준 {1,2,3,6,7,8,23} verbatim. v0.6.51 +1 시프트 제거."
+    refs:
+      - "docs/specs/airborne-fire-driven-consume.md"
   - version: "v0.6.55"
     date: "2026-06-11"
     title: "콘솔 로그 자동 회전파일 기록 — logs/live_run.log (붙여넣기 불편 해소)"

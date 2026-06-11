@@ -75,6 +75,11 @@ from universe.binance_top import top_n_by_volume  # noqa: E402
 
 log = logging.getLogger("airborne_alert_daemon")
 
+# 데몬 버전 — 게이트/표시 시각 의미가 바뀔 때 patch 증가 + patch-notes 추가.
+# v0.6.56 (2026-06-11): buy-time(+1) 시프트 되돌림 → 도착시각(=알림시각) 기준
+# 게이트·표시 통일 (트레이더 봉루프 decouple 게이트와 일치).
+DAEMON_VERSION = "v0.6.56"
+
 # 2026-06-07 — Bitget venue 지원 (#airborne-bitget-venue). 실거래 트레이더가
 # Bitget top-100 을 거래하는데 알림 데몬은 Binance fapi top-100 을 봐서 알림과
 # 실거래의 유니버스/가격이 어긋나던 문제. --venue bitget 이면 Bitget top-100 +
@@ -174,17 +179,20 @@ def _kst_hour_from_open_time(open_time_ms: int) -> int:
     return int(ts.hour)
 
 
-def _fire_bar_kst_hour(ev_open_time_ms: int) -> int:
-    """fire 봉의 *시작시각* KST hour — 전략 게이트(_bar_hour_kst)와 일치.
+def _fire_arrival_kst_hour(ev_open_time_ms: int) -> int:
+    """fire 의 *도착시각*(= 봉 마감 = 알림 시각) KST hour.
 
-    2026-06-09 검증: 데몬 데이터 소스의 ``ev.open_time`` 은 fire 봉을 *마감* 시각
-    으로 라벨한다 (23:00-00:00 KST 봉을 데몬은 KST 0, 트레이더/백테스트는 봉 *시작*
-    인 KST 23 으로 판정). 이 1봉 차이로 kst-hours 게이트가 "❌ 게이트 외(0시)" 로
-    표시되는데 실제 트레이더는 KST 23 으로 진입 → 알림↔거래 불일치 (사용자 MRVL/
-    ARM 사례). 1봉(1h) 빼서 시작시각 기준으로 보정 → 게이트 판정이 트레이더와 일치.
-    *알림 표시 전용* — cooldown/history.jsonl/매매 로직과 무관.
+    2026-06-11 — 봉루프 decouple 한 트레이더의 신규 게이트(도착시각 기반)와
+    일치. 트레이더는 ``floor(fire_ts,1h).KST.hour`` 를 게이트 집합에 대조하는데
+    (docs/specs/airborne-fire-driven-consume.md), 데몬 데이터 소스의
+    ``ev.open_time`` 은 fire 봉을 *마감* 시각으로 라벨하므로 그 KST hour 가 곧
+    도착시각이다. **발화가 7시에 오면 7 ∈ {1,2,3,6,7,8,23} → 매수, 매수가 정확히
+    게이트 시각에 일어난다.**
+
+    v0.6.51 의 buy-time(+1) 시프트 및 "봉 시작시각 보정(-1h)" 을 모두 되돌려
+    혼선을 제거 — 게이트 판정·표시 모두 도착시각(알림시각) 하나로 통일.
     """
-    return _kst_hour_from_open_time(ev_open_time_ms - BAR_MS_1H)
+    return _kst_hour_from_open_time(ev_open_time_ms)
 
 
 def _kst_hours_label(hours: frozenset[int]) -> str:
@@ -221,26 +229,22 @@ def _format_strategy_notice(*, side: str, kst_hour: int, symbol: str) -> str:
     kst-hours 는 KST gate + BTC trend filter 두 단계 체크 (사용자 지적 반영
     2026-06-05). 둘 다 PASS 여야 실제 진입.
 
-    시각 표기 (2026-06-09 사용자 요청): ``kst_hour`` 는 fire 봉의 *시작시각* KST
-    (= 전략 _bar_hour_kst 게이트 판정 기준). 게이트 ✅/❌ 판정과 실제 거래는 이
-    시작시각으로 (불변). 단 **텔레그램에 보여주는 숫자**는 *실제 매수 시각*
-    (= 봉 마감 = 시작+1h)으로 표기 — 알람이 10시에 오고 매수도 10시에 일어나므로
-    "KST 10시" 로 보여야 직관적. 게이트 set 도 표시상 매수시각으로 +1 환산
-    ({1,2,3,6,7,8,23} 시작 → {0,2,3,4,7,8,9} 매수). *거래 게이트는 안 건드림 —
-    표시만 +1.*
+    시각 표기 (2026-06-11 — 봉루프 decouple): ``kst_hour`` 는 fire 의 *도착시각*
+    (= 봉 마감 = 알림시각) KST. 트레이더의 신규 게이트가 이 도착시각을 집합에
+    대조하므로 (docs/specs/airborne-fire-driven-consume.md), 게이트 판정·표시
+    모두 도착시각(= 알림시각) 하나로 통일한다. v0.6.51 의 buy-time(+1) 시프트
+    표기 ({0,2,3,4,7,8,9}) 는 되돌려 제거 — 알람이 7시에 오면 매수도 7시,
+    표시도 ``{1,2,3,6,7,8,23}`` 그대로.
     """
-    in_kst4 = kst_hour in _KST_HOURS_KSTHOURS  # 판정 = 봉 시작시각 (불변, 트레이더와 동일)
+    in_kst4 = kst_hour in _KST_HOURS_KSTHOURS  # 판정 = 도착시각 (트레이더와 동일)
     in_kst19 = kst_hour in _KST_HOURS_SHORT_WL
     in_wl = _in_trading_universe(symbol)  # #380 — 거래량 top-100 (1000SHIB↔SHIB 정규화)
-    # 표시 전용 — 매수 시각 (봉 마감 = 시작+1h) 으로 환산.
-    buy_hour = (kst_hour + 1) % 24
-    buy_label = _kst_hours_label(
-        frozenset((h + 1) % 24 for h in _KST_HOURS_KSTHOURS)
-    )
+    # 표시 = 도착시각(= 알림시각) + 게이트 집합 그대로 (시프트 제거).
+    hours_label = _kst_hours_label(_KST_HOURS_KSTHOURS)
 
     # kst-hours: bidir + KST gate + BTC trend filter (long-only)
     if not in_kst4:
-        kst_line = f"❌ KST {buy_hour}시 — 게이트 외 (매수 {buy_label}시만)"
+        kst_line = f"❌ KST {kst_hour}시 — 게이트 외 (매수 {hours_label}시만)"
     elif (side.lower() == "long" and _BTC_DOWNTREND_STATE is True):
         # BTC 하락추세 → LONG entry 차단. strategy 의 on_bar 와 일관.
         kst_line = f"❌ BTC 하락추세 LONG 차단 ({_BTC_DOWNTREND_REASON or 'downtrend'})"
@@ -253,7 +257,7 @@ def _format_strategy_notice(*, side: str, kst_hour: int, symbol: str) -> str:
     elif not in_wl:
         wl_line = "❌ TOP100 외 종목"
     elif not in_kst19:
-        wl_line = f"❌ KST {buy_hour}시 — 게이트 외"
+        wl_line = f"❌ KST {kst_hour}시 — 게이트 외"
     else:
         wl_line = "✅ 진입 예정"
 
@@ -351,7 +355,7 @@ def dispatch_fire(
     else:
         title = f"🔴⬇️ 숏 진입 신호 — {symbol} (1시간봉)"
         extreme_label = "최고점"
-    kst_hour = _fire_bar_kst_hour(ev.open_time)
+    kst_hour = _fire_arrival_kst_hour(ev.open_time)
     notice = _format_strategy_notice(side=side, kst_hour=kst_hour, symbol=symbol)
     body = (
         "✨ 40% 되돌림 발화 (Airborne v1.1)\n"
@@ -967,6 +971,8 @@ def main(argv: list[str] | None = None) -> int:
         level=args.log_level.upper(),
         format="%(asctime)s %(levelname)s %(name)s — %(message)s",
     )
+
+    log.info("airborne alert daemon %s", DAEMON_VERSION)
 
     ws_base = WS_BASE_TESTNET if args.testnet else WS_BASE_LIVE
     rest_base = REST_BASE_TESTNET if args.testnet else REST_BASE_LIVE
