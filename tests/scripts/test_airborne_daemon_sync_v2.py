@@ -44,40 +44,43 @@ def test_daemon_kst_hours_imported_from_strategy():
     assert _KST_HOURS_KSTHOURS == _KST_TOP_HOURS_V3 == frozenset({1, 2, 3, 6, 7, 8, 23})
 
 
-# ── (7) 게이트 판정=봉 시작시각 / 텔레그램 표시=매수시각 (2026-06-09 사용자 요청) ──
+# ── (7) 게이트 판정·표시 = 도착시각(=알림시각) 통일 (2026-06-11 봉루프 decouple) ──
 
-def test_gate_hour_is_bar_start_for_trader_match():
-    """게이트 판정 기준 = fire 봉 *시작시각* (트레이더 _bar_hour_kst 와 동일).
+def test_arrival_hour_is_bar_close_for_trader_match():
+    """게이트 판정 기준 = fire *도착시각*(= 봉 마감 = 알림시각).
 
-    데몬 ev.open_time 은 봉 *마감* 라벨 → 1봉 빼 시작시각으로 판정해야 트레이더와
-    일치 (MRVL/ARM 사례: 트레이더가 KST 23 시작봉으로 실제 진입). _fire_bar_kst_hour
-    가 시작시각 반환.
+    봉루프 decouple 한 트레이더의 신규 게이트가 floor(fire_ts,1h).KST.hour 를
+    집합에 대조하므로(docs/specs/airborne-fire-driven-consume.md), 데몬의
+    마감라벨 ev.open_time 의 KST hour 가 곧 도착시각 = 게이트 시각이다.
+    v0.6.51 의 -1h 시작시각 보정 되돌림.
     """
-    from scripts.airborne_alert_daemon import _fire_bar_kst_hour
-    # 데몬 마감라벨 00:00 KST = 15:00 UTC → 시작시각 23:00 KST
+    from scripts.airborne_alert_daemon import _fire_arrival_kst_hour
+    # 데몬 마감라벨 00:00 KST = 15:00 UTC → 도착시각 00:00 KST (=0)
     ev_open_ms = int(pd.Timestamp("2026-06-08T15:00:00Z").timestamp() * 1000)
-    assert _fire_bar_kst_hour(ev_open_ms) == 23  # 게이트 판정용 = 시작 23시
-    # 03:00-04:00 봉(마감라벨 04:00=19:00 UTC) → 시작 03시 (비경계도 일관)
+    assert _fire_arrival_kst_hour(ev_open_ms) == 0  # 도착(마감) 0시
+    # 마감라벨 04:00 KST = 19:00 UTC → 도착 04시
     ev_open_ms2 = int(pd.Timestamp("2026-06-08T19:00:00Z").timestamp() * 1000)
-    assert _fire_bar_kst_hour(ev_open_ms2) == 3
+    assert _fire_arrival_kst_hour(ev_open_ms2) == 4
 
 
-def test_notice_displays_buy_time_hour_not_bar_start():
-    """텔레그램 표시 = *매수 시각* (봉 마감 = 시작+1h), 판정은 시작시각.
+def test_notice_displays_arrival_hour_and_verbatim_set():
+    """텔레그램 표시 = *도착시각*(= 알림시각) + 게이트 집합 그대로 (시프트 제거).
 
-    사용자 XPL 사례: 11시 시작 봉(12시 마감=매수) long → kst-hours 게이트 외인데,
-    알람이 12시에 오고 매수도 12시이므로 표시는 'KST 12시' 여야 직관적 (11시 아님).
-    게이트 ✅/❌ 판정은 시작시각(11)으로 — 거래 동작 불변.
+    알람이 7시에 오면 매수도 7시, 게이트 판정도 7 ∈ {1,2,3,6,7,8,23} → ✅.
+    11시 도착(게이트 외)이면 'KST 11시 게이트 외' 그대로 (12시 시프트 없음).
     """
     msg = _format_strategy_notice(side="long", kst_hour=11, symbol="XPLUSDT")
-    assert "KST 12시" in msg       # 매수 시각 표기
-    assert "KST 11시" not in msg    # 봉 시작시각은 표시 안 함
+    assert "KST 11시" in msg        # 도착시각 그대로 표기 (시프트 없음)
+    assert "KST 12시" not in msg     # +1 시프트 제거됨
     assert "게이트 외" in msg
+    # 게이트 집합 표시도 시프트 없이 verbatim {1,2,3,6,7,8,23}.
+    assert "1/2/3/6/7/8/23" in msg
 
 
-def test_notice_gate_decision_unchanged_uses_start_hour():
-    """판정은 시작시각 그대로 — 23시 시작 봉 short → kst-hours ✅ (23 ∈ 게이트).
-    표시 매수시각(0시)과 무관하게 ✅/❌ 는 시작시각 기준 = 트레이더와 일치.
+def test_notice_gate_decision_uses_arrival_hour():
+    """판정 = 도착시각 — 23시 도착 short → kst-hours ✅ (23 ∈ 게이트).
+
+    봉루프 decouple 게이트와 동일: 도착시각이 곧 매수시각이자 게이트 시각.
     """
     msg = _format_strategy_notice(side="short", kst_hour=23, symbol="MRVLUSDT")
     kst_seg = msg.split("kst-hours")[1].split("short-whitelist")[0]
