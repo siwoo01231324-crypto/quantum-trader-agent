@@ -306,15 +306,22 @@ class AsyncBitgetFuturesClient:
         self,
         *,
         symbol: str,
-        plan_type: str,          # "profit_plan" (TP) | "loss_plan" (SL)
+        plan_type: str,          # whole: "pos_loss"(SL)/"pos_profit"(TP) | partial: "loss_plan"/"profit_plan"
         trigger_price: Decimal,
-        hold_side: str,          # "long" | "short" — 보호 대상 포지션 방향
-        size: Decimal,
+        hold_side: str,          # one-way: "buy"(롱)/"sell"(숏) | hedge: "long"/"short"
         client_oid: str,
+        size: Decimal | None = None,   # None = 포지션 전체(whole-position), 값 = 부분(partial)
         trigger_type: str = "mark_price",
         margin_coin: str = "USDT",
     ) -> str:
-        """Bitget v2 TPSL plan order 제출 — broker orderId 반환."""
+        """Bitget v2 TPSL plan order 제출 — broker orderId 반환.
+
+        2026-06-12 — **포지션 전체(whole-position) TPSL 기본.** planType
+        ``pos_loss``(SL)/``pos_profit``(TP) + size 생략 → 거래소가 *전체 포지션*
+        을 라인에서 청산(데모 실측: 35초 내 자동청산 확인). partial(``loss_plan``/
+        ``profit_plan`` + size + executePrice)은 라인 닿아도 일부만 닫혀 포지션이
+        늘어지던 사고의 정체 → size 를 넘길 때만 partial body 구성(레거시/호환).
+        """
         body: dict[str, Any] = {
             "marginCoin": margin_coin,
             "productType": self._product_type,
@@ -322,11 +329,13 @@ class AsyncBitgetFuturesClient:
             "planType": plan_type,
             "triggerPrice": str(trigger_price),
             "triggerType": trigger_type,
-            "executePrice": "0",   # 0 = 트리거 시 시장가 청산
             "holdSide": hold_side,
-            "size": str(size),
             "clientOid": client_oid,
         }
+        if size is not None:
+            # partial TPSL — size + executePrice(0=시장가) 필요.
+            body["size"] = str(size)
+            body["executePrice"] = "0"
         data = await self._request(
             "POST", "/api/v2/mix/order/place-tpsl-order", body=body
         )

@@ -24,6 +24,10 @@ class _Adapter:
         return oid
     async def cancel_protective_order(self, *, symbol, broker_order_id):
         self.cancelled.append(broker_order_id)
+    async def get_net_positions(self):
+        # broker 실제 net — 기본 빈 dict(=종목 net 0 → 취소 허용). 테스트가
+        # _nets 로 override 가능.
+        return getattr(self, "_nets", {})
 
 
 class _Store:
@@ -63,6 +67,29 @@ async def test_second_fill_same_position_does_not_reregister():
     await c.on_fill(symbol="BTCUSDT", side="sell", strategy_id="sid-air", fill=_Fill(100.0))
     await c.on_fill(symbol="BTCUSDT", side="sell", strategy_id="sid-air", fill=_Fill(100.0))
     assert len(a.placed) == 2  # 재등록 안 함
+
+
+@pytest.mark.asyncio
+async def test_two_strategies_same_symbol_registers_once():
+    # 2026-06-12 — 두 에어본 전략이 같은 종목 진입해도 whole-position TPSL 1세트만.
+    a = _Adapter()
+    store = _Store({"sid-air": [("BTCUSDT", -3.0)], "sid-wl": [("BTCUSDT", -3.0)]})
+    c = _coord(a, store)
+    await c.on_fill(symbol="BTCUSDT", side="sell", strategy_id="sid-air", fill=_Fill(100.0))
+    await c.on_fill(symbol="BTCUSDT", side="sell", strategy_id="sid-wl", fill=_Fill(100.0))
+    assert len(a.placed) == 2  # SL+TP 1세트 (4개 아님 — 이중등록 제거)
+
+
+@pytest.mark.asyncio
+async def test_exit_keeps_protection_while_other_strategy_holds():
+    # 한 전략 net 0 이어도 broker net>0(다른 전략 보유)면 취소 안 함.
+    a = _Adapter(); a._nets = {"BTCUSDT": Decimal("-3.0")}  # broker 아직 보유
+    store = _Store({"sid-air": [("BTCUSDT", -3.0)]})
+    c = _coord(a, store)
+    await c.on_fill(symbol="BTCUSDT", side="sell", strategy_id="sid-air", fill=_Fill(100.0))
+    store._p["sid-air"] = []  # 이 전략만 net 0
+    await c.on_fill(symbol="BTCUSDT", side="buy", strategy_id="sid-air", fill=_Fill(99.0))
+    assert len(a.cancelled) == 0  # broker net 살아있음 → 보호 유지
 
 
 @pytest.mark.asyncio

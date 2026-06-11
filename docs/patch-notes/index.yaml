@@ -15,6 +15,23 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.59"
+    date: "2026-06-12"
+    title: "거래소 TP/SL = 포지션 전체(whole-position)로 — 라인에서 진짜 청산 (partial 50% 사고 해결)"
+    tags: [fix, safety]
+    summary: >
+      post-fill 거래소 TP/SL 이 partial(loss_plan/profit_plan + size)로 걸려 라인
+      닿아도 *50% 만* 청산 → 포지션이 늘어지고 SL/TP 가 -8%/+30% 로 어긋나던 사고
+      (유저 거래소 직접 확인 + 데모 발동테스트로 확정). whole-position(pos_loss/
+      pos_profit, size 생략)으로 전환 → 라인에서 전체 포지션 자동청산(데모 실측
+      5~35초 내). 종목당 1세트만 등록(이중등록 제거).
+    items:
+      - "async_http.place_tpsl_order: size=None 이면 whole-position(planType pos_loss/pos_profit, size·executePrice 생략), size 주면 partial(레거시)."
+      - "async_adapter.place_protective_order: STOP_MARKET→pos_loss / TAKE_PROFIT_MARKET→pos_profit, size 미전달. one-way holdSide(buy/sell)+43023 settle-retry 유지."
+      - "protective_coordinator: _registered 를 symbol 키로 — 종목당 whole-position 1세트(두 전략 같은 종목 진입해도 1번). 취소는 broker net 실제 0 일 때만(다른 전략 보유 중 보호 유지)."
+      - "데모 발동검증(scripts/probe_bitget_tpsl_firing.py mode C): adapter 경로가 라인 닿자 5초 내 포지션 전체 자동청산 확인."
+    refs:
+      - "docs/specs/realtime-data-stability.md"
   - version: "v0.6.58"
     date: "2026-06-11"
     title: "Bitget post-fill TP/SL 43023 settle-race — backoff 재시도"

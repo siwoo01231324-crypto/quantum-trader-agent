@@ -42,8 +42,8 @@ class ProtectiveOrderCoordinator:
         self._adapter = adapter
         self._store = position_store
         self._policy_lookup = policy_lookup
-        # (sid, symbol) -> {"sl": order_id, "tp": order_id}
-        self._registered: dict[tuple[str, str], dict[str, str]] = {}
+        # symbol -> {"sl": order_id, "tp": order_id} — whole-position TPSL 종목당 1세트.
+        self._registered: dict[str, dict[str, str]] = {}
 
     # ── public ────────────────────────────────────────────────────────────────
 
@@ -76,15 +76,20 @@ class ProtectiveOrderCoordinator:
     ) -> None:
         if not strategy_id or not symbol:
             return  # orphan — TP/SL 설정 모름. synthetic/reconciler 가 커버.
-        key = (strategy_id, symbol)
         net = self._net_qty(strategy_id, symbol)
 
         if net == 0:
-            await self._cancel(key, symbol)   # 청산 완료 → 보호주문 취소
+            # 이 전략 net 0 — 단, whole-position TPSL 은 *종목 net 전체*를 보호하므로
+            # 같은 종목을 다른 전략이 아직 보유 중이면 취소하면 안 된다(이중진입).
+            # broker net 이 실제 0 일 때만 취소(불확실/조회실패 시 유지 — 보호 우선).
+            if await self._symbol_broker_net_zero(symbol):
+                await self._cancel(symbol)
             return
 
-        if key in self._registered:
-            return  # 이미 등록됨 (add/partial 은 v1 에서 재등록 안 함)
+        # 2026-06-12 — 종목당 whole-position TPSL **1세트만** 등록(이중등록 제거).
+        # 두 에어본 전략이 같은 종목 진입해도 net 포지션에 pos_loss/pos_profit 1개씩.
+        if symbol in self._registered:
+            return
 
         policy = None
         try:
@@ -121,15 +126,15 @@ class ProtectiveOrderCoordinator:
             symbol=symbol, side=close_side, qty=qty,
             stop_price=tp_price, kind="TAKE_PROFIT_MARKET",
         )
-        self._registered[key] = {"sl": sl_id, "tp": tp_id}
+        self._registered[symbol] = {"sl": sl_id, "tp": tp_id}
         logger.info(
-            "protective_coordinator: registered sid=%s %s side=%s qty=%s "
+            "protective_coordinator: registered(whole-position) sid=%s %s side=%s "
             "entry=%s SL=%s TP=%s",
-            strategy_id, symbol, entry_side, qty, entry_price, sl_price, tp_price,
+            strategy_id, symbol, entry_side, entry_price, sl_price, tp_price,
         )
 
-    async def _cancel(self, key: tuple[str, str], symbol: str) -> None:
-        ids = self._registered.pop(key, None)
+    async def _cancel(self, symbol: str) -> None:
+        ids = self._registered.pop(symbol, None)
         if not ids:
             return
         for oid in (ids.get("sl"), ids.get("tp")):
@@ -144,7 +149,24 @@ class ProtectiveOrderCoordinator:
                     "protective_coordinator: cancel failed %s oid=%s: %s",
                     symbol, oid, exc,
                 )
-        logger.info("protective_coordinator: cancelled sid=%s %s", key[0], symbol)
+        logger.info("protective_coordinator: cancelled %s", symbol)
+
+    async def _symbol_broker_net_zero(self, symbol: str) -> bool:
+        """broker 의 *실제* net 포지션이 0 인가 — whole-position TPSL 취소 판정.
+
+        조회 실패/예외 시 False(취소 안 함) — 열린 포지션의 보호를 실수로 제거하는
+        것보다 stale 주문(트리거 시 22002 무해)이 안전하다. adapter 에
+        get_net_positions 없으면(테스트 fake 등) 보수적으로 False.
+        """
+        getter = getattr(self._adapter, "get_net_positions", None)
+        if getter is None:
+            return False
+        try:
+            nets = await getter()
+            q = nets.get(symbol, 0) if isinstance(nets, dict) else 0
+            return Decimal(str(q)) == 0
+        except Exception:  # noqa: BLE001
+            return False
 
     def _net_qty(self, sid: str, symbol: str) -> Decimal:
         try:
