@@ -490,6 +490,16 @@ async def run_shadow_loop(
 
         tick_queue: asyncio.Queue[Tick] = asyncio.Queue(maxsize=1)
 
+        # 2026-06-11 — airborne fire-driven consumer (봉루프 decouple) 가 읽는
+        # 최신 스냅샷 캐시. consumer() 가 매 tick build_snapshot 결과의
+        # equity_usdt 와 ohlcv_history(BTC) 를 여기에 박아두면, fire consumer 의
+        # equity_provider / btc_ohlcv_provider 가 봉루프와 무관하게 읽는다.
+        # 미설정(부팅 직후 / AIRBORNE_FIRE_CONSUMER off) 이면 fire consumer 는
+        # equity 0 → 사이징 drop (안전), BTC None → trend filter 생략.
+        _live_snapshot_cache: dict[str, Any] = {
+            "equity_usdt": 0.0, "ohlcv_history": None,
+        }
+
         async def producer():
             # WS reconnect loop (#133 hotfix): keepalive ping timeout / network
             # errors restart the feed with exponential backoff instead of
@@ -632,6 +642,16 @@ async def run_shadow_loop(
                     if config.balance_provider is not None:
                         await asyncio.to_thread(snapshot_builder.refresh_balance)
                     snapshot = snapshot_builder.build_snapshot(tick)
+                    # airborne fire-driven consumer 가 읽을 최신 equity / BTC
+                    # ohlcv 캐시 갱신 (봉루프와 무관하게 발화 진입 사이징/필터에
+                    # 사용). dict 갱신만 — fire consumer off 면 무비용 (읽는 곳 없음).
+                    if isinstance(snapshot, dict):
+                        _live_snapshot_cache["equity_usdt"] = snapshot.get(
+                            "equity_usdt", 0.0,
+                        )
+                        _live_snapshot_cache["ohlcv_history"] = snapshot.get(
+                            "ohlcv_history",
+                        )
                     if _consumer_tick_count == 1:
                         logger.info("consumer.run_bar_start tick=%d ts=%s", _consumer_tick_count, ts.isoformat())
                     _t0 = time.monotonic() if _consumer_tick_count <= 3 else None
@@ -746,6 +766,33 @@ async def run_shadow_loop(
 
         producer_task = asyncio.create_task(producer())
         consumer_task = asyncio.create_task(consumer())
+
+        # ── Airborne fire-driven consumer (봉루프 decouple, 2026-06-11) ──────
+        # AIRBORNE_FIRE_CONSUMER=1 일 때만 활성. history.jsonl 발화를 트레이더
+        # OHLCV 봉루프와 무관하게 직접 구동 → universe refresh 랙으로 발화가
+        # 떨어지던 사고("7시 롱 미매수") fix. 등록된 airborne live-scanner 전략
+        # (id prefix `live-airborne`) 만 대상. dedup 은 on_bar consume 과 동일
+        # logs/airborne_reentry/{ClassName}.json 영속 파일 공유 → 두 경로 동시
+        # 가동해도 중복진입 0 (+ orchestrator._live_entered 가 (sid,sym) 1포지션).
+        # 상세: docs/specs/airborne-fire-driven-consume.md.
+        fire_consumer_task: asyncio.Task | None = None
+        if os.environ.get("AIRBORNE_FIRE_CONSUMER", "0") == "1":
+            try:
+                fire_consumer_task = _start_airborne_fire_consumer(
+                    orchestrator=orchestrator,
+                    snapshot_cache=_live_snapshot_cache,
+                    router=router,
+                    kill_switch=kill_switch,
+                    wal=wal,
+                    metrics=metrics,
+                    position_store=config.position_store,
+                    release_live_entered=_release_live_entered,
+                    stop_event=stop_event,
+                )
+            except Exception as err:  # noqa: BLE001 — 배선 실패가 거래 막으면 안 됨
+                logger.warning(
+                    "airborne fire consumer wiring failed (계속 진행): %s", err,
+                )
 
         # Binance fill-stream consumer (#231 S5 / live-fill gap). ONLY when
         # broker_mode == "binance-testnet-shadow" with a real binance_adapter
@@ -994,6 +1041,8 @@ async def run_shadow_loop(
                 shutdown_tasks.append(fill_task)
             if mark_price_task is not None:
                 shutdown_tasks.append(mark_price_task)
+            if fire_consumer_task is not None:
+                shutdown_tasks.append(fire_consumer_task)
             for t in shutdown_tasks:
                 if not t.done():
                     t.cancel()
@@ -1198,6 +1247,155 @@ async def _run_mark_price_consumer(
         await feed.aclose()
     except BaseException:
         pass
+
+
+def _build_airborne_fire_specs(orchestrator: AsyncStrategyOrchestrator) -> list:
+    """등록된 airborne live-scanner 전략 → AirborneStrategySpec 리스트.
+
+    id prefix ``live-airborne`` 인 전략만 대상. 각 전략 인스턴스에서 게이트
+    명세를 introspect:
+      - kst_entry_hours: 진입 허용 KST 도착시각 set (instance/class attr).
+      - allowed_sides: ``shorts_allowed`` + short-only 여부로 결정.
+          * short-whitelist 류 (id 에 ``short`` 포함) → {"short"}.
+          * 그 외 bidir airborne → {"long","short"}.
+      - universe: ``get_universe()`` set (실패/미선언 시 None = 무제한).
+      - btc_filter: ``btc_trend_filter_enabled`` (default False).
+      - instance: dedup 공유용 전략 인스턴스.
+    """
+    from src.live.airborne_fire_consumer import AirborneStrategySpec
+
+    specs: list = []
+    for sid, strat in orchestrator.strategies.items():
+        if not sid.startswith("live-airborne"):
+            continue
+        hours = getattr(strat, "kst_entry_hours", None)
+        if hours is None:
+            continue
+        kst_hours = frozenset(int(h) for h in hours)
+        # allowed sides — short-only 전략은 id 에 "short" 포함 (short-whitelist).
+        if "short" in sid:
+            allowed_sides = frozenset({"short"})
+        elif getattr(strat, "shorts_allowed", False):
+            allowed_sides = frozenset({"long", "short"})
+        else:
+            allowed_sides = frozenset({"long"})
+        # universe — get_universe() (classmethod). 실패/미선언 → None.
+        universe: frozenset[str] | None = None
+        get_u = getattr(type(strat), "get_universe", None)
+        if callable(get_u):
+            try:
+                universe = frozenset(get_u())
+            except Exception:  # noqa: BLE001 — 조회 실패 시 무제한 (보수적)
+                universe = None
+        btc_filter = bool(getattr(strat, "btc_trend_filter_enabled", False))
+        specs.append(AirborneStrategySpec(
+            id=sid,
+            kst_entry_hours=kst_hours,
+            allowed_sides=allowed_sides,
+            universe=universe,
+            btc_filter=btc_filter,
+            instance=strat,
+        ))
+    return specs
+
+
+def _start_airborne_fire_consumer(
+    *,
+    orchestrator: AsyncStrategyOrchestrator,
+    snapshot_cache: dict,
+    router,
+    kill_switch: KillSwitch,
+    wal: WAL,
+    metrics: Metrics,
+    position_store,
+    release_live_entered: Callable[[str, str], None],
+    stop_event: asyncio.Event,
+) -> "asyncio.Task | None":
+    """AirborneFireConsumer 구성 + run_loop 백그라운드 task 시작.
+
+    route_intents 는 consumer() 가 run_bar OrderIntent 에 쓰는 것과 동일한
+    경로(signal_emitted WAL → execute_intents)를 재사용한다. equity_provider /
+    btc_ohlcv_provider 는 봉루프가 매 tick 갱신하는 snapshot_cache 에서 읽는다.
+    """
+    from src.live.airborne_fire_consumer import AirborneFireConsumer
+
+    specs = _build_airborne_fire_specs(orchestrator)
+    if not specs:
+        logger.info(
+            "airborne fire consumer: 등록된 live-airborne 전략 없음 — 미시작",
+        )
+        return None
+
+    store_path = os.environ.get(
+        "AIRBORNE_FIRE_STORE_PATH", "logs/airborne_fires/history.jsonl",
+    )
+    from src.dashboard.airborne_fire_store import AirborneFireStore
+    fire_store = AirborneFireStore(store_path)
+
+    async def _route(intents: list) -> None:
+        if not intents:
+            return
+        # run_bar OrderIntent 라우팅과 동일 — signal_emitted WAL 선기록 후
+        # execute_intents (kill_switch/conversion/broker/post-only fallback).
+        for intent in intents:
+            try:
+                wal.write(WALEvent(
+                    ts=datetime.now(timezone.utc).isoformat(),
+                    event_type="signal_emitted",
+                    payload={
+                        "strategy_id": intent.strategy_id,
+                        "symbol": intent.symbol,
+                        "side": intent.side,
+                        "qty": str(intent.qty),
+                        "reason": intent.reason,
+                    },
+                ))
+            except Exception as wal_err:  # noqa: BLE001
+                logger.warning(
+                    "wal.signal_emitted_write_failed (airborne_fire) "
+                    "strategy_id=%s error=%s", intent.strategy_id, wal_err,
+                )
+        await execute_intents(
+            intents, broker=router, kill_switch=kill_switch,
+            wal=wal, metrics=metrics, market_state=None,
+            position_store=position_store,
+            on_entry_unfilled=release_live_entered,
+        )
+
+    def _equity_provider() -> float:
+        try:
+            return float(snapshot_cache.get("equity_usdt", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    def _btc_ohlcv_provider():
+        ohlcv = snapshot_cache.get("ohlcv_history")
+        if isinstance(ohlcv, dict):
+            return ohlcv.get("BTCUSDT")
+        return None
+
+    freshness = float(os.environ.get("AIRBORNE_FIRE_FRESHNESS_SEC", "600") or 600)
+    interval = float(os.environ.get("AIRBORNE_FIRE_INTERVAL_SEC", "15") or 15)
+
+    consumer = AirborneFireConsumer(
+        fire_store=fire_store,
+        orchestrator=orchestrator,
+        strategy_specs=specs,
+        route_intents=_route,
+        equity_provider=_equity_provider,
+        btc_ohlcv_provider=_btc_ohlcv_provider,
+        freshness_sec=freshness,
+        interval_sec=interval,
+    )
+    task = asyncio.create_task(
+        consumer.run_loop(stop_event), name="airborne-fire-consumer",
+    )
+    # run_loop 자체가 "started (decoupled from bar loop)" 를 emit — 여기선 배선
+    # 세부(specs/store)만 추가 기록.
+    logger.info(
+        "airborne fire consumer wired: specs=%d store=%s", len(specs), store_path,
+    )
+    return task
 
 
 def _setup_signal_handlers(stop_event: asyncio.Event) -> None:

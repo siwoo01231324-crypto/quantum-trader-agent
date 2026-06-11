@@ -371,6 +371,18 @@ class LiveAirborneBbReversalKstHours(LiveAirborneBbReversalKstMorning):
         import os
         return os.environ.get("AIRBORNE_CONSUME_DAEMON_FIRES", "0") == "1"
 
+    @staticmethod
+    def _fire_consumer_active() -> bool:
+        """봉루프 decouple 한 AirborneFireConsumer 가 활성인지 (2026-06-11).
+
+        활성 시 on_bar consume 분기는 hold 반환 — 진입은 fire consumer 가
+        history.jsonl 발화를 직접 구동해 담당한다 (이중경로 차단). dedup 은
+        양쪽이 공유하므로 안전망은 이중이나, 명시적으로 봉루프 consume 을 끈다.
+        상세: docs/specs/airborne-fire-driven-consume.md.
+        """
+        import os
+        return os.environ.get("AIRBORNE_FIRE_CONSUMER", "0") == "1"
+
     def _consume_daemon_fire_on_bar(self, ctx, closed_ts, history, symbol, allowed_sides):
         """consume — 데몬 발화를 그대로 진입. KST 게이트 + side 필터 + 같은봉 dedup.
 
@@ -378,6 +390,11 @@ class LiveAirborneBbReversalKstHours(LiveAirborneBbReversalKstMorning):
         차이로 인한 종목 불일치 제거). allowed_sides: kst-hours={long,short},
         short-whitelist={short}.
         """
+        # 봉루프 decouple consumer 활성 시 on_bar consume 은 hold — 진입은
+        # AirborneFireConsumer 가 발화를 직접 구동해 담당 (이중경로 차단).
+        if self._fire_consumer_active():
+            return Signal(action="hold", size=0.0,
+                          reason="fire_consumer_active:onbar_consume_disabled")
         from backtest.strategies.live_airborne_bb_reversal_kst_morning import (
             _bar_hour_kst,
         )
