@@ -15,6 +15,24 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.57"
+    date: "2026-06-11"
+    title: "Bitget post-fill 거래소 손절/익절 43011 해결 — one-way holdSide=buy/sell"
+    tags: [fix, safety]
+    summary: >
+      preset(진입첨부) TP/SL 이 40836/40832 로 거부된 naked 포지션에 post-fill
+      거래소 stop 을 거는 경로(ProtectiveOrderCoordinator)가 place-tpsl-order 의
+      holdSide="long"/"short" 때문에 [43011] holdSide error 로 막혀 있었다
+      (SKYAI -12.93% 등 naked SL 미체결의 정체). 데모 실측으로 Bitget v2 one-way
+      모드는 holdSide 를 포지션 개시방향 "buy"(롱)/"sell"(숏) 로 요구함을 확정 →
+      포지션모드 조건부 매핑으로 수정.
+    items:
+      - "async_adapter.place_protective_order: one-way(_hedge_mode False/None)는 holdSide buy(롱)/sell(숏), hedge 는 long/short. close_side BUY(숏청산)→one-way sell, SELL(롱청산)→one-way buy."
+      - "데모 실측(scripts/probe_bitget_tpsl_demo.py): holdSide short→[43011], 제거→[400172] empty, buy→[40917] long검증, sell→ACCEPTED. adapter.place_protective_order SL/TP 양쪽 ACCEPTED 확인."
+      - "단위테스트: one-way buy/sell + hedge long/short 매핑 회귀 가드."
+      - "게이트 BITGET_NATIVE_TPSL_POSTFILL=1 은 여전히 OFF 기본 — 데모 end-to-end 확인 후 마인넷 활성."
+    refs:
+      - "docs/specs/realtime-data-stability.md"
   - version: "v0.6.55"
     date: "2026-06-11"
     title: "콘솔 로그 자동 회전파일 기록 — logs/live_run.log (붙여넣기 불편 해소)"
