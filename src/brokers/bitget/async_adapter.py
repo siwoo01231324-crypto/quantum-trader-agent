@@ -391,15 +391,57 @@ class AsyncBitgetFuturesAdapter:
             strategy="prot", symbol=symbol, side=plan_type,
             ts_ms=int(time.time() * 1000),
         )
-        order_id = await self._client.place_tpsl_order(
-            symbol=symbol, plan_type=plan_type, trigger_price=trigger,
-            hold_side=hold_side, size=qty, client_oid=cid,
+        # 43023 settlement race (2026-06-11 라이브 관측): 진입 체결 WS 이벤트
+        # 직후 거래소가 포지션을 아직 등록하기 전에 stop 을 걸면 [43023]
+        # "Insufficient position, can not set profit or stop loss". 데모에선 진입
+        # 후 2초 대기 시 정상 등록 → coordinator 의 즉시 호출이 레이스. 짧은
+        # backoff 로 재시도(포지션 정착 대기). 마지막까지 실패면 raise → coordinator
+        # 가 로그+synthetic 백업 (기존 동작).
+        order_id = await self._place_tpsl_with_settle_retry(
+            symbol=symbol, plan_type=plan_type, trigger=trigger,
+            hold_side=hold_side, qty=qty, cid=cid,
         )
         log.info(
             "bitget protective placed %s %s trigger=%s holdSide=%s size=%s oid=%s",
             symbol, plan_type, trigger, hold_side, qty, order_id,
         )
         return order_id
+
+    # 43023 = 포지션 미정착(체결 직후 레이스). backoff 누적 ~4s (0.4+0.8+1.2+1.6).
+    _PROTECTIVE_SETTLE_BACKOFF: tuple[float, ...] = (0.4, 0.8, 1.2, 1.6)
+
+    async def _place_tpsl_with_settle_retry(
+        self, *, symbol: str, plan_type: str, trigger, hold_side: str, qty, cid: str,
+    ) -> str:
+        """place_tpsl_order — [43023] Insufficient position 이면 backoff 재시도.
+
+        43023 외 에러는 즉시 raise(잘못된 가격/방향 등은 재시도 무의미). client_oid
+        는 재시도마다 새로 발급(중복 제출 방지)."""
+        last_err: Exception | None = None
+        attempts = len(self._PROTECTIVE_SETTLE_BACKOFF) + 1
+        for i in range(attempts):
+            try:
+                return await self._client.place_tpsl_order(
+                    symbol=symbol, plan_type=plan_type, trigger_price=trigger,
+                    hold_side=hold_side, size=qty, client_oid=cid,
+                )
+            except Exception as err:  # noqa: BLE001 — 43023 만 재시도
+                if "43023" not in str(err):
+                    raise
+                last_err = err
+                if i < len(self._PROTECTIVE_SETTLE_BACKOFF):
+                    delay = self._PROTECTIVE_SETTLE_BACKOFF[i]
+                    log.info(
+                        "bitget protective 43023 (포지션 미정착) %s %s — %.1fs 후 재시도 (%d/%d)",
+                        symbol, plan_type, delay, i + 1, len(self._PROTECTIVE_SETTLE_BACKOFF),
+                    )
+                    await asyncio.sleep(delay)
+                    cid = client_id_mod.generate(
+                        strategy="prot", symbol=symbol, side=plan_type,
+                        ts_ms=int(time.time() * 1000),
+                    )
+        assert last_err is not None
+        raise last_err
 
     async def cancel_protective_order(
         self,
