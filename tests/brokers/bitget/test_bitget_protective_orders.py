@@ -59,11 +59,11 @@ async def test_short_sl_oneway_maps_loss_plan_sell_holdside():
         stop_price=Decimal("100.5"), kind="STOP_MARKET",
     )
     call = a._client.calls[0]
-    assert call["plan_type"] == "loss_plan"
+    assert call["plan_type"] == "pos_loss"     # whole-position SL (2026-06-12)
     assert call["hold_side"] == "sell"         # one-way: BUY 청산 = 숏 → "sell"
     assert call["trigger_price"] == Decimal("100.5")
-    assert call["size"] == Decimal("3")
-    assert oid == "oid-loss_plan"
+    assert call.get("size") is None            # whole-position = size 생략
+    assert oid == "oid-pos_loss"
 
 
 @pytest.mark.asyncio
@@ -74,7 +74,7 @@ async def test_short_tp_oneway_maps_profit_plan_sell():
         stop_price=Decimal("99.0"), kind="TAKE_PROFIT_MARKET",
     )
     call = a._client.calls[0]
-    assert call["plan_type"] == "profit_plan"
+    assert call["plan_type"] == "pos_profit"   # whole-position TP (2026-06-12)
     assert call["hold_side"] == "sell"
 
 
@@ -129,7 +129,7 @@ async def test_protective_43023_settle_retry_then_succeeds(monkeypatch):
         symbol="BTCUSDT", side="BUY", qty=Decimal("3"),
         stop_price=Decimal("100.5"), kind="STOP_MARKET",
     )
-    assert oid == "oid-loss_plan"
+    assert oid == "oid-pos_loss"
     assert n["c"] == 3           # 2 실패 + 1 성공
     assert len(sleeps) == 2      # 성공 전 2회 backoff
 

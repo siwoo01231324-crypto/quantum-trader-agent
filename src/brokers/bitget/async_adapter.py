@@ -368,7 +368,11 @@ class AsyncBitgetFuturesAdapter:
         stop_price: Decimal,
         kind: str,           # "STOP_MARKET"(SL) | "TAKE_PROFIT_MARKET"(TP)
     ) -> str:
-        plan_type = "profit_plan" if kind == "TAKE_PROFIT_MARKET" else "loss_plan"
+        # 2026-06-12 — **포지션 전체(whole-position) TPSL.** pos_profit(TP)/pos_loss
+        # (SL) + size 생략 → 거래소가 전체 포지션을 라인에서 청산. partial(profit_plan
+        # /loss_plan + size)은 50% 만 걸려 포지션이 늘어지던 사고의 정체(유저 거래소
+        # 확인 + 데모 발동테스트로 확정). qty 는 사용 안 함(전체).
+        plan_type = "pos_profit" if kind == "TAKE_PROFIT_MARKET" else "pos_loss"
         # close_side BUY = 숏 포지션 청산(보호대상=숏), SELL = 롱 청산(보호대상=롱).
         # 2026-06-11 데모 실측: Bitget v2 place-tpsl-order 의 holdSide 는 **포지션
         # 모드에 따라 값이 다르다.**
@@ -423,7 +427,7 @@ class AsyncBitgetFuturesAdapter:
             try:
                 return await self._client.place_tpsl_order(
                     symbol=symbol, plan_type=plan_type, trigger_price=trigger,
-                    hold_side=hold_side, size=qty, client_oid=cid,
+                    hold_side=hold_side, size=None, client_oid=cid,  # None=포지션 전체
                 )
             except Exception as err:  # noqa: BLE001 — 43023 만 재시도
                 if "43023" not in str(err):
