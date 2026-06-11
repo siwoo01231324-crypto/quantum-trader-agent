@@ -369,10 +369,20 @@ class AsyncBitgetFuturesAdapter:
         kind: str,           # "STOP_MARKET"(SL) | "TAKE_PROFIT_MARKET"(TP)
     ) -> str:
         plan_type = "profit_plan" if kind == "TAKE_PROFIT_MARKET" else "loss_plan"
-        # close_side BUY = 숏 포지션 청산 → 보호 대상 holdSide=short.
-        # close_side SELL = 롱 포지션 청산 → holdSide=long.
+        # close_side BUY = 숏 포지션 청산(보호대상=숏), SELL = 롱 청산(보호대상=롱).
+        # 2026-06-11 데모 실측: Bitget v2 place-tpsl-order 의 holdSide 는 **포지션
+        # 모드에 따라 값이 다르다.**
+        #   one-way 모드: 포지션 *개시 방향* "buy"(롱) / "sell"(숏).
+        #     ("short"/"long" → [43011] "holdSide error", "sell" → ACCEPTED 확인.
+        #      "buy" 는 롱으로 해석돼 [40917] long-position 검증을 탐 → 매핑 확정.)
+        #   hedge 모드: "long" / "short".
+        # 우리 운영은 one-way(ensure_position_mode(hedge=False)) → _hedge_mode False/
+        # None. None(미설정) 은 one-way default 로 간주.
         side_str = (side.value if hasattr(side, "value") else str(side)).upper()
-        hold_side = "short" if side_str == "BUY" else "long"
+        if bool(getattr(self, "_hedge_mode", None)):
+            hold_side = "short" if side_str == "BUY" else "long"
+        else:
+            hold_side = "sell" if side_str == "BUY" else "buy"
         try:
             trigger = self._symbol_filters.quantize_price(symbol, stop_price)
         except Exception:  # noqa: BLE001 — 필터 없으면 un-quantized 제출
