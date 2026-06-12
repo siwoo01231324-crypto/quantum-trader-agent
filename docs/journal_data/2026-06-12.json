@@ -1,10 +1,10 @@
 {
   "date_kst": "2026-06-12",
   "kst_window_start": "2026-06-12T00:00:00+09:00",
-  "now_kst": "2026-06-12T23:33:39.959050+09:00",
+  "now_kst": "2026-06-12T23:58:47.775117+09:00",
   "counts": {
-    "auto_fills": 346,
-    "auto_signals": 121,
+    "auto_fills": 350,
+    "auto_signals": 123,
     "manual_trades": 0,
     "airborne_fires": 0
   },
@@ -5024,6 +5024,62 @@
       "fee_asset": "USDT",
       "trade_id": "1449334594345877504",
       "server_ts": null
+    },
+    {
+      "ts": "2026-06-12T14:52:44.485000+00:00",
+      "client_order_id": "1449268656379752448",
+      "broker_order_id": "1449341930746576899",
+      "symbol": "",
+      "side": "",
+      "qty": "2.2",
+      "fill_qty": "2.2",
+      "fill_price": "43.28",
+      "fees": "0",
+      "fee_asset": "USDT",
+      "trade_id": "1449341930946957312",
+      "server_ts": null
+    },
+    {
+      "ts": "2026-06-12T14:52:44.485000+00:00",
+      "client_order_id": "1449268656379752448",
+      "broker_order_id": "1449341930746576899",
+      "symbol": "",
+      "side": "",
+      "qty": "1.4",
+      "fill_qty": "1.4",
+      "fill_price": "43.28",
+      "fees": "0",
+      "fee_asset": "USDT",
+      "trade_id": "1449341930946957314",
+      "server_ts": null
+    },
+    {
+      "ts": "2026-06-12T14:52:53.291000+00:00",
+      "client_order_id": "1449330703754817536",
+      "broker_order_id": "1449341967685812330",
+      "symbol": "",
+      "side": "",
+      "qty": "14.2",
+      "fill_qty": "14.2",
+      "fill_price": "6.644",
+      "fees": "0",
+      "fee_asset": "USDT",
+      "trade_id": "1449341967881998336",
+      "server_ts": null
+    },
+    {
+      "ts": "2026-06-12T14:52:53.291000+00:00",
+      "client_order_id": "1449330703754817536",
+      "broker_order_id": "1449341967685812330",
+      "symbol": "",
+      "side": "",
+      "qty": "9.2",
+      "fill_qty": "9.2",
+      "fill_price": "6.644",
+      "fees": "0",
+      "fee_asset": "USDT",
+      "trade_id": "1449341967881998338",
+      "server_ts": null
     }
   ],
   "auto_signals": [
@@ -5994,6 +6050,22 @@
       "side": "buy",
       "qty": "0.851",
       "reason": "fire_consume:long@2026-06-12T14:00:57+00:00"
+    },
+    {
+      "ts": "2026-06-12T14:52:56.327766+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "AVAXUSDT",
+      "side": "sell",
+      "qty": "23.4",
+      "reason": "live_take_profit:entry=6.572,last=6.647,pct=+0.0114"
+    },
+    {
+      "ts": "2026-06-12T14:53:27.064852+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "AVAXUSDT",
+      "side": "sell",
+      "qty": "23.4",
+      "reason": "live_take_profit:entry=6.572,last=6.649,pct=+0.0117"
     }
   ],
   "manual_trades": [],
