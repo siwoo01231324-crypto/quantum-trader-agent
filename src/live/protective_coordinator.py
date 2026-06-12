@@ -87,9 +87,15 @@ class ProtectiveOrderCoordinator:
             return
 
         # 2026-06-12 — 종목당 whole-position TPSL **1세트만** 등록(이중등록 제거).
-        # 두 에어본 전략이 같은 종목 진입해도 net 포지션에 pos_loss/pos_profit 1개씩.
+        # 단, _registered 메모리 플래그는 포지션이 청산돼도(특히 청산 fill 이
+        # "cannot resolve" orphan 이거나 reconciler phantom 정리로 닫힌 경우) 안
+        # 지워질 수 있다 → 재진입 시 "이미 등록됨"으로 skip → **naked 회귀**
+        # (PAXG/XAUT 2026-06-12). 따라서 메모리 플래그가 있어도 **거래소에 실제
+        # active TP/SL 이 있을 때만** skip, 없으면 stale 로 보고 정리 후 재등록.
         if symbol in self._registered:
-            return
+            if await self._has_active_tpsl(symbol):
+                return                              # 진짜 보호 중 → skip
+            self._registered.pop(symbol, None)      # stale(청산됨) → 재등록 진행
 
         policy = None
         try:
@@ -165,6 +171,23 @@ class ProtectiveOrderCoordinator:
             nets = await getter()
             q = nets.get(symbol, 0) if isinstance(nets, dict) else 0
             return Decimal(str(q)) == 0
+        except Exception:  # noqa: BLE001
+            return False
+
+    async def _has_active_tpsl(self, symbol: str) -> bool:
+        """거래소에 이 종목의 active TP/SL plan order 가 실제로 있나 (stale 판정).
+
+        Bitget pos-TPSL 은 포지션 청산 시 자동 취소되므로, 청산된 종목은 빈 리스트
+        → ``_registered`` 가 stale 임을 의미. 조회 실패/미지원 시 **False**(= stale 로
+        간주해 재등록) — naked 보다 중복등록(benign: 먼저 발동한 게 청산, 나머지
+        auto-cancel)이 안전하다.
+        """
+        lister = getattr(self._adapter, "list_open_protective_orders", None)
+        if lister is None:
+            return False
+        try:
+            rows = await lister(symbol=symbol)
+            return bool(rows)
         except Exception:  # noqa: BLE001
             return False
 

@@ -17,17 +17,24 @@ class _Fill:
 
 
 class _Adapter:
-    def __init__(self): self.placed = []; self.cancelled = []
+    def __init__(self): self.placed = []; self.cancelled = []; self._active = {}  # symbol->[oid]
     async def place_protective_order(self, *, symbol, side, qty, stop_price, kind):
         oid = f"{kind}-{len(self.placed)}"
         self.placed.append(dict(symbol=symbol, side=side, qty=qty, stop_price=stop_price, kind=kind, oid=oid))
+        self._active.setdefault(symbol, []).append(oid)
         return oid
     async def cancel_protective_order(self, *, symbol, broker_order_id):
         self.cancelled.append(broker_order_id)
+        for lst in self._active.values():
+            if broker_order_id in lst: lst.remove(broker_order_id)
     async def get_net_positions(self):
         # broker 실제 net — 기본 빈 dict(=종목 net 0 → 취소 허용). 테스트가
         # _nets 로 override 가능.
         return getattr(self, "_nets", {})
+    async def list_open_protective_orders(self, *, symbol=None):
+        # 거래소 active TP/SL — place 후 active, cancel/포지션청산 시 사라짐.
+        # 테스트가 _active[symbol]=[] 로 "거래소 자동취소(청산)" 시뮬 가능.
+        return [{"orderId": o} for o in self._active.get(symbol, [])]
 
 
 class _Store:
@@ -78,6 +85,22 @@ async def test_two_strategies_same_symbol_registers_once():
     await c.on_fill(symbol="BTCUSDT", side="sell", strategy_id="sid-air", fill=_Fill(100.0))
     await c.on_fill(symbol="BTCUSDT", side="sell", strategy_id="sid-wl", fill=_Fill(100.0))
     assert len(a.placed) == 2  # SL+TP 1세트 (4개 아님 — 이중등록 제거)
+
+
+@pytest.mark.asyncio
+async def test_stale_registration_reregisters_on_reentry():
+    # PAXG/XAUT 회귀 fix (2026-06-12) — 포지션 청산(거래소 pos-TPSL auto-cancel)
+    # 됐는데 _registered 플래그가 stale 로 남은 뒤 재진입 → 거래소에 active TP/SL
+    # 없으니 stale 로 보고 재등록(naked 방지). 청산 fill 이 cannot-resolve orphan
+    # 이라 net=0 정리 경로를 안 타는 실제 케이스.
+    a = _Adapter()
+    store = _Store({"sid-air": [("BTCUSDT", -3.0)]})
+    c = _coord(a, store)
+    await c.on_fill(symbol="BTCUSDT", side="sell", strategy_id="sid-air", fill=_Fill(100.0))
+    assert len(a.placed) == 2
+    a._active["BTCUSDT"] = []   # 포지션 청산 → 거래소 TP/SL auto-cancel (단 _registered stale)
+    await c.on_fill(symbol="BTCUSDT", side="sell", strategy_id="sid-air", fill=_Fill(101.0))
+    assert len(a.placed) == 4   # 재등록됨 (naked 아님)
 
 
 @pytest.mark.asyncio
