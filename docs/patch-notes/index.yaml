@@ -15,6 +15,24 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.60"
+    date: "2026-06-12"
+    title: "coordinator stale 등록 회귀 fix — 재진입 naked 차단 (PAXG/XAUT)"
+    tags: [fix, safety]
+    summary: >
+      v0.6.59 의 "종목당 TP/SL 1세트"(symbol 키 dedup)가, 포지션 청산 fill 이
+      "cannot resolve" orphan 이거나 reconciler phantom 정리로 닫히면 _registered
+      메모리 플래그를 안 지워 → 같은 종목 재진입 시 "이미 등록됨"으로 조용히 skip →
+      **naked**(PAXG/XAUT 03시 등록 후 청산, 08시 재진입 무방비). 메모리 플래그
+      대신 *거래소 실제 active TP/SL*(list_open_protective_orders)로 판정해 stale
+      이면 재등록.
+    items:
+      - "protective_coordinator: symbol in _registered 여도 _has_active_tpsl(거래소 조회) True 일 때만 skip, 빈 리스트면 stale 로 보고 _registered 정리 후 재등록. Bitget pos-TPSL 은 포지션 청산 시 auto-cancel 되므로 청산=빈 리스트."
+      - "조회 실패 시 False(재등록) — naked 보다 중복등록(benign: 먼저 발동분이 청산, 나머지 auto-cancel)이 안전."
+      - "테스트: stale 재진입 재등록 / 정상 재진입 skip / 이중전략 1세트 회귀 가드."
+      - "별건 미해결: SMCI 류 [45122] Short SL price > mark(진입 후 가격이 SL 트리거 지나감) — 다음 fast-follow."
+    refs:
+      - "docs/specs/realtime-data-stability.md"
   - version: "v0.6.59"
     date: "2026-06-12"
     title: "거래소 TP/SL = 포지션 전체(whole-position)로 — 라인에서 진짜 청산 (partial 50% 사고 해결)"
