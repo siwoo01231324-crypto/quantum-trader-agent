@@ -15,6 +15,23 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.62"
+    date: "2026-06-12"
+    title: "40762 '잔고부족'을 max-notional 쿨다운으로 오판 → 누락 차단 수정 + 거부사유 로깅"
+    tags: [fix, safety]
+    summary: >
+      동시발화(03·23시)에서 먼저 체결분이 마진을 소진하면 나머지가 [40762] "order
+      amount exceeds the balance"(일시적 잔고부족)로 거부되는데, adapter 가 이를
+      "qty 한도 초과"로 오판해 그 종목을 300s 쿨다운 → 다른 포지션 청산돼 잔고가
+      풀려도 재진입 못 함(누락 직접 원인). balance 케이스는 쿨다운 제외(거부만)
+      → 잔고 풀리면 다음 발화에 자연 재시도. + 쿨다운 skip OrderAck 에 reject_reason
+      채워 WAL order_rejected 추적 가능(이전 빈값, audit #1).
+    items:
+      - "async_adapter.place_order: 40762 메시지에 'balance'/'insufficient' 포함 시 쿨다운 등록 X(거부만 raise). 'exceeds upper limit'(qty한도)·40774(exceeds)만 쿨다운 유지."
+      - "쿨다운 pre-flight skip OrderAck 에 reject_reason='MAX_NOTIONAL_COOLDOWN:remaining=Ns' 추가(이전 None → WAL reason 빈값). BrokerError raise 경로는 executor 가 이미 'BROKER_ERROR:{exc}' 기록."
+      - "테스트: balance-40762 쿨다운 미등록 / skip reject_reason / 기존 qty-limit·40774 회귀. 헬퍼 _native_tpsl_symbols 추가(pre-existing 6 실패 동반 해결)."
+    refs:
+      - "docs/journal/2026-06-12-signal-fill-audit.md"
   - version: "v0.6.61"
     date: "2026-06-12"
     title: "TP/SL 가격이 진입 후 mark 지나감(45122/40836/40832) — mark 너머 재배치 (naked 방지)"
