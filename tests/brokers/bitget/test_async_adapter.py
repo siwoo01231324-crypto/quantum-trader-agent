@@ -41,6 +41,7 @@ def _make_adapter(*, paper: bool = True) -> AsyncBitgetFuturesAdapter:
     ad._MAX_NOTIONAL_COOLDOWN_SEC = 300.0
     ad._hedge_mode = None
     ad._leverage_forced = {}  # #380 ensure_leverage_target 캐시
+    ad._native_tpsl_symbols = set()  # P2 — preset TP/SL 활성 종목(__new__ 우회라 명시)
     cli = MagicMock()
     cli.place_order = AsyncMock()
     cli.cancel_order = AsyncMock()
@@ -136,6 +137,36 @@ async def test_40762_registers_cooldown_and_reraises():
         await ad.place_order(_mk_req(Side.SELL))
     # cooldown key uses req.side.value which is uppercase ("BUY"/"SELL")
     assert ("BTCUSDT", "SELL") in ad._max_notional_cooldown
+
+
+@pytest.mark.asyncio
+async def test_40762_balance_does_not_register_cooldown():
+    # 2026-06-12 ① — 40762 "exceeds the balance" = 일시적 잔고부족. 쿨다운 걸면
+    # 그 종목이 300s 막혀 잔고 풀려도 재진입 못 함(03·23시 동시발화 누락 원인).
+    # 거부는 되되 쿨다운은 X → 다음 발화에 잔고 있으면 자연 재시도.
+    ad = _make_adapter()
+    ad._client.place_order.side_effect = InvalidOrderError(
+        "[40762] The order amount exceeds the balance"
+    )
+    with pytest.raises(InvalidOrderError):
+        await ad.place_order(_mk_req(Side.SELL))
+    assert ("BTCUSDT", "SELL") not in ad._max_notional_cooldown  # 쿨다운 안 걸림
+
+
+@pytest.mark.asyncio
+async def test_cooldown_skip_sets_reject_reason():
+    # 2026-06-12 ② — 쿨다운으로 스킵된 주문 OrderAck 에 reject_reason 채워짐
+    # (이전 None → WAL order_rejected reason 빈값 → 누락 추적 불가).
+    ad = _make_adapter()
+    ad._client.place_order.side_effect = InvalidOrderError(
+        "[40762] order qty exceeds upper limit"
+    )
+    with pytest.raises(InvalidOrderError):
+        await ad.place_order(_mk_req(Side.SELL))           # 쿨다운 등록
+    ad._client.place_order.side_effect = None
+    ack = await ad.place_order(_mk_req(Side.SELL))         # 쿨다운에 막힘
+    assert ack.status == "REJECTED"
+    assert ack.reject_reason and "MAX_NOTIONAL_COOLDOWN" in ack.reject_reason
 
 
 @pytest.mark.asyncio

@@ -140,6 +140,11 @@ class AsyncBitgetFuturesAdapter:
                     ts=datetime.now(tz=timezone.utc),
                     qty=req.qty,
                     price=None,
+                    # 2026-06-12 ② 거부 사유 로깅 — 이전엔 None 이라 WAL order_rejected
+                    # reason 이 빈값 → 누락 추적 불가(audit #1). 쿨다운 잔여시간 명시.
+                    reject_reason=(
+                        f"MAX_NOTIONAL_COOLDOWN:remaining={expiry - now:.0f}s"
+                    ),
                 )
             else:
                 self._max_notional_cooldown.pop(cooldown_key, None)
@@ -201,14 +206,26 @@ class AsyncBitgetFuturesAdapter:
                 preset_sl_price=_psl,
             )
         except BrokerError as exc:
-            # 40762 = order qty exceeds upper limit (= Binance -2027 equivalent).
-            # 40774 looks like a max-notional error by name but Bitget actually
-            # uses it for "order type / position mode mismatch" — NOT cooldown.
             err_str = str(exc)
-            if isinstance(exc, InvalidOrderError) and (
-                "[40762]" in err_str
-                or ("[40774]" in err_str and "exceeds" in err_str.lower())
-            ):
+            err_lower = err_str.lower()
+            # 40762 는 Bitget 이 같은 코드로 *두 가지* 다른 상황에 쓴다:
+            #   (a) "exceeds upper limit/maximum" = qty/notional 심볼 *한도* 초과
+            #       (지속적) → 쿨다운으로 반복거부 방지 OK.
+            #   (b) "exceeds the balance"/insufficient = *일시적 잔고/마진 부족*
+            #       → **쿨다운 걸면 안 됨.** 잔고는 다른 포지션 청산되면 곧 풀리는데
+            #       300s 쿨다운이 그 종목을 막아 재진입을 못 함 (2026-06-12 03·23시
+            #       동시발화 누락의 직접 원인). 쿨다운 없이 거부만 → 다음 발화에
+            #       잔고 있으면 자연 재시도.
+            # 40774 는 이름만 max-notional, 실제론 order type / position mode
+            # mismatch — "exceeds" 포함된 경우만 한도로 취급.
+            _balance_40762 = "[40762]" in err_str and (
+                "balance" in err_lower or "insufficient" in err_lower
+            )
+            _qty_limit = (
+                ("[40762]" in err_str and not _balance_40762)
+                or ("[40774]" in err_str and "exceeds" in err_lower)
+            )
+            if isinstance(exc, InvalidOrderError) and _qty_limit:
                 self._max_notional_cooldown[cooldown_key] = (
                     time.monotonic() + self._MAX_NOTIONAL_COOLDOWN_SEC
                 )
@@ -217,6 +234,12 @@ class AsyncBitgetFuturesAdapter:
                     req.symbol, req.side.value, self._MAX_NOTIONAL_COOLDOWN_SEC,
                 )
                 raise
+            if isinstance(exc, InvalidOrderError) and _balance_40762:
+                # 쿨다운 X — 거부만(아래 preset-retry 미해당 → raise). 누락 추적용 로그.
+                log.warning(
+                    "bitget place_order rejected (잔고부족, 쿨다운 미적용) %s %s: %s",
+                    req.symbol, req.side.value, err_str[:90],
+                )
 
             # 2026-06-09 — 거래소 preset TP/SL 가격 거부(40836 등): 진입가 대비
             # 시장이 움직여 SL/TP 가 즉시 트리거 조건이 되면 *주문 전체가 거부*돼
