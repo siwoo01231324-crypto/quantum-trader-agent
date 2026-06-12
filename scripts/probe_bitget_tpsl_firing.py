@@ -81,7 +81,21 @@ async def main() -> int:
         print(f"  숏 {SIZE} 진입. mark={mark} → SL(위)={sl} TP(아래)={tp} (±0.15%, 곧 닿게)")
 
         ep = "/api/v2/mix/order/place-tpsl-order"
-        if MODE == "C":
+        if MODE == "D":
+            # 45122 재배치 검증 — 숏 SL 을 *현재가 아래*(무효)로 걸어 45122 유발 →
+            # adapter 가 mark 너머로 재배치 후 거래소가 수락하는지.
+            adapter._hedge_mode = False
+            bad_sl = (mark * Decimal("0.99")).quantize(Decimal("0.001"))  # 숏 SL 인데 mark 아래 = 무효
+            print(f"  [D] 무효 SL(mark 아래) {bad_sl} 시도 → 45122 후 mark 너머 재배치 기대")
+            try:
+                oid = await adapter.place_protective_order(
+                    symbol=SYMBOL, side="BUY", qty=SIZE, stop_price=bad_sl, kind="STOP_MARKET")
+                print(f"  [D] ✅ 재배치 성공 oid={oid}")
+            except Exception as e:  # noqa: BLE001
+                print(f"  [D] ❌ {e}")
+            pend = await c.get_pending_tpsl_orders(symbol=SYMBOL)
+            print(f"  [D] 거래소 pending TPSL: {len(pend or [])}건 (>=1 이면 재배치 수락됨)")
+        elif MODE == "C":
             # 실제 프로덕션 경로 — adapter.place_protective_order (whole-position).
             adapter._hedge_mode = False
             for label, kind, trig in [("SL", "STOP_MARKET", sl), ("TP", "TAKE_PROFIT_MARKET", tp)]:
