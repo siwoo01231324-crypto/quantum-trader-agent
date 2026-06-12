@@ -15,6 +15,22 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.65"
+    date: "2026-06-13"
+    title: "보호주문 price-past-mark 일반화 — stale 지연진입 NAKED 방지 (40917 적발)"
+    tags: [fix, safety]
+    summary: >
+      BTC 추세필터로 8분 지연된 롱이 stale 발화가에 진입 → SL(발화가×0.995)이 그새
+      떨어진 mark 보다 위 → [40917] 거래소 거부 → 핸들러에 코드 없어 raise → NAKED
+      (VELVET 2026-06-13). 코드 화이트리스트(45122/40836/40832)를 하나씩 사후적발하다
+      naked 나던 패턴을 끊고 "mark price + 비교자" 메시지 패턴으로 일반화 — 미적발
+      신규 코드(가격 상승 시 롱 TP<mark 등)까지 포괄해 mark 바로 너머로 자동 재배치.
+    items:
+      - "async_adapter: _PRICE_PAST_MARK_CODES 에 40917 추가 + _adjust_trigger_past_mark 를 메시지 기반(mark price+비교자)으로 일반화. 43023 등 mark 무관 에러는 그대로 raise."
+      - "8분 대기 로직 자체는 유지(사용자 결정) — NAKED 만 차단. 재배치 SL=mark∓0.15%."
+      - "테스트 3건: 40917 파싱 / 미적발코드 일반화(>mark) / mark무관 None."
+    refs:
+      - "docs/journal/2026-06-12-signal-fill-audit.md"
   - version: "v0.6.64"
     date: "2026-06-13"
     title: "변동성 보정 손절 — thin 종목 청산 슬리피지 보정으로 실현손실 타이트 유지"

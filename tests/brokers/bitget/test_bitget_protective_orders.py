@@ -186,8 +186,20 @@ def test_adjust_trigger_past_mark_parsing():
         "[45122] stop loss price please > mark price 100.0") == Decimal("100.150")
     assert A._adjust_trigger_past_mark(
         "[40832] take profit price please < mark price 50.0") == Decimal("49.9250")
+    # 40917 (2026-06-13 VELVET 라이브 적발) — 롱 SL 이 stale 발화가 탓에 mark 위.
+    # "< mark price 0.91678" → mark−0.15% = 0.91678×0.9985 = 0.91540477
+    assert A._adjust_trigger_past_mark(
+        "[40917] Stop price for long positions please < mark price 0.91678"
+    ) == Decimal("0.91678") * (Decimal("1") - Decimal("0.0015"))
+    # 미적발 신규 코드라도 "mark price" + 비교자 메시지면 일반화 포괄 (naked 방지).
+    # 예: 8분 대기 중 가격 상승 → 롱 TP 가 mark 아래 (가상 신규 코드 49999).
+    assert A._adjust_trigger_past_mark(
+        "[49999] take profit for long should be > mark price 2.5"
+    ) == Decimal("2.5") * (Decimal("1") + Decimal("0.0015"))
+    # mark price 무관 에러는 코드 불문 None (재배치 안 함).
     assert A._adjust_trigger_past_mark("[43023] Insufficient position") is None
     assert A._adjust_trigger_past_mark("[45122] no comparator here") is None
+    assert A._adjust_trigger_past_mark("[40000] balance < 5 something") is None
 
 
 def test_roi_vs_price_short_trigger_prices():
