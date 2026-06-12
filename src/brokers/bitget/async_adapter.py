@@ -460,8 +460,11 @@ class AsyncBitgetFuturesAdapter:
         )
         return order_id
 
-    # 45122/40836/40832 = TPSL 가격이 현재가(mark)를 지나감. mark 너머 0.15% 에 재배치.
-    _PRICE_PAST_MARK_CODES: tuple[str, ...] = ("45122", "40836", "40832")
+    # 45122/40836/40832/40917 = TPSL 가격이 현재가(mark)를 지나감. mark 너머 0.15% 에 재배치.
+    # 40917 (2026-06-13 라이브 적발): "Stop price for long positions please < mark price X"
+    # — 롱 진입이 지연돼 발화가가 stale → SL(발화가×0.995)이 그새 떨어진 mark 보다 위 →
+    # 거래소 거부. 핸들러에 없어 raise→네이키드(VELVET). 코드 추가로 mark−0.15% 재배치.
+    _PRICE_PAST_MARK_CODES: tuple[str, ...] = ("45122", "40836", "40832", "40917")
     _MARK_BUFFER = Decimal("0.0015")
 
     @classmethod
@@ -473,7 +476,15 @@ class AsyncBitgetFuturesAdapter:
           ``<`` = trigger 가 mark 보다 *작아야* 함 → ``mark×(1−buf)``
         해당 코드/패턴 아니면 None (호출자가 raise).
         """
-        if not any(c in err_str for c in cls._PRICE_PAST_MARK_CODES):
+        # 코드 화이트리스트(빠른 경로) **또는** "mark price" + 비교자 메시지면
+        # price-past-mark 로 간주. 2026-06-13: 신규 코드(40917)를 사후 적발하다
+        # naked 나던 패턴을 끊으려 메시지 기반으로 일반화 — 롱 SL 하락(40917)뿐
+        # 아니라 8분 대기 중 가격이 *올라* 롱 TP 가 mark 아래로 가는 미적발 코드도
+        # 포괄. 43023 등 mark 무관 에러는 "mark price" 없어 그대로 None(재배치 안 함).
+        s = err_str.lower()
+        known_code = any(c in err_str for c in cls._PRICE_PAST_MARK_CODES)
+        mark_msg = "mark price" in s and ("<" in err_str or ">" in err_str)
+        if not (known_code or mark_msg):
             return None
         import re
         m = re.search(r"([<>])\s*(?:mark\s*price\s*)?([0-9]+\.?[0-9]*)", err_str)
