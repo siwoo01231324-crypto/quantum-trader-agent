@@ -1376,6 +1376,7 @@ def _start_airborne_fire_consumer(
 
     freshness = float(os.environ.get("AIRBORNE_FIRE_FRESHNESS_SEC", "600") or 600)
     interval = float(os.environ.get("AIRBORNE_FIRE_INTERVAL_SEC", "15") or 15)
+    pace = float(os.environ.get("AIRBORNE_FIRE_PACE_SEC", "0.15") or 0.15)
 
     consumer = AirborneFireConsumer(
         fire_store=fire_store,
@@ -1386,6 +1387,7 @@ def _start_airborne_fire_consumer(
         btc_ohlcv_provider=_btc_ohlcv_provider,
         freshness_sec=freshness,
         interval_sec=interval,
+        pace_sec=pace,
     )
     task = asyncio.create_task(
         consumer.run_loop(stop_event), name="airborne-fire-consumer",

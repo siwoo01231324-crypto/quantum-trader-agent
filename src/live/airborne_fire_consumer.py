@@ -79,6 +79,7 @@ class AirborneFireConsumer:
         btc_ohlcv_provider: Callable[[], "pd.DataFrame | None"] | None = None,
         freshness_sec: float = 600.0,
         interval_sec: float = 15.0,
+        pace_sec: float = 0.15,
     ) -> None:
         self._store = fire_store
         self._orch = orchestrator
@@ -88,6 +89,11 @@ class AirborneFireConsumer:
         self._btc_ohlcv_provider = btc_ohlcv_provider
         self._freshness_sec = float(freshness_sec)
         self._interval_sec = float(interval_sec)
+        # ③ 주문 페이싱 — 동시발화(03·23시 25개+)를 한꺼번에 쏘면 거래소가 [429]
+        # Too Many Requests / [40092] service unavailable 로 튕긴다(2026-06-12 audit).
+        # 발주 사이에 짧은 간격을 둬 rate-limit 회피(발주는 어차피 순차 await 이나
+        # 무딜레이라 초당 폭주). 0 이면 비활성(기존 동작).
+        self._pace_sec = float(pace_sec)
 
     # ── BTC trend filter (long 차단) ──────────────────────────────────────────
 
@@ -254,6 +260,9 @@ class AirborneFireConsumer:
                 spec.id, symbol, side, fire_close, hour_kst,
             )
             entered_any = True
+            # ③ 페이싱 — 발주 사이 간격(rate-limit 회피). 0 이면 skip.
+            if self._pace_sec > 0:
+                await asyncio.sleep(self._pace_sec)
         return entered_any
 
     async def _route(self, intents: list) -> None:
