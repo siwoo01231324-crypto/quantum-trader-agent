@@ -67,6 +67,32 @@ async def test_short_entry_registers_sl_tp_at_correct_prices():
 
 
 @pytest.mark.asyncio
+async def test_volatility_adjusted_sl_tightens():
+    # 2026-06-13 변동성 보정 — 변동성 큰 종목은 손절선을 당겨 등록(슬립 후 목표 안착).
+    a = _Adapter()
+    store = _Store({"sid-air": [("BTCUSDT", -3.0)]})
+    c = ProtectiveOrderCoordinator(
+        adapter=a, position_store=store, policy_lookup=_lookup,
+        volatility_provider=lambda s: 0.01, sl_slip_factor=0.15, sl_slip_cap_pct=0.003,
+    )
+    await c.on_fill(symbol="BTCUSDT", side="sell", strategy_id="sid-air", fill=_Fill(100.0))
+    sl = next(p for p in a.placed if p["kind"] == "STOP_MARKET")
+    # sl_pct 0.005 → buffer=min(0.01×0.15, 0.003)=0.0015 → eff 0.0035 → 숏 SL=100×1.0035
+    assert sl["stop_price"] == Decimal("100.350")
+
+
+@pytest.mark.asyncio
+async def test_volatility_factor_zero_unchanged():
+    # factor=0(기본) → 손절선 그대로 −0.5% (byte-identical, 비활성).
+    a = _Adapter()
+    store = _Store({"sid-air": [("BTCUSDT", -3.0)]})
+    c = _coord(a, store)
+    await c.on_fill(symbol="BTCUSDT", side="sell", strategy_id="sid-air", fill=_Fill(100.0))
+    sl = next(p for p in a.placed if p["kind"] == "STOP_MARKET")
+    assert sl["stop_price"] == Decimal("100.500")
+
+
+@pytest.mark.asyncio
 async def test_second_fill_same_position_does_not_reregister():
     a = _Adapter()
     store = _Store({"sid-air": [("BTCUSDT", -3.0)]})
