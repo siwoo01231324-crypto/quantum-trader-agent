@@ -145,7 +145,7 @@ async def test_protective_non_43023_raises_immediately(monkeypatch):
     n = {"c": 0}
     async def _bad(**kw):
         n["c"] += 1
-        raise RuntimeError("[40836] preset price error")
+        raise RuntimeError("[40774] one-way mode mismatch")  # 비-43023·비-가격 에러
     a._client.place_tpsl_order = _bad
     with pytest.raises(RuntimeError):
         await a.place_protective_order(
@@ -153,6 +153,41 @@ async def test_protective_non_43023_raises_immediately(monkeypatch):
             stop_price=Decimal("100.5"), kind="STOP_MARKET",
         )
     assert n["c"] == 1           # 재시도 안 함
+
+
+@pytest.mark.asyncio
+async def test_price_past_mark_replaces_at_adjusted_trigger(monkeypatch):
+    # 45122 (Short SL 가격이 mark 를 지나감) → mark 너머 0.15% 로 1회 재배치 (B 옵션).
+    import src.brokers.bitget.async_adapter as mod
+    async def _fs(d): pass
+    monkeypatch.setattr(mod.asyncio, "sleep", _fs)
+    a = _adapter()
+    calls = []
+    async def _flaky(**kw):
+        calls.append(kw)
+        if len(calls) == 1:
+            raise RuntimeError(
+                "[45122] Short position stop loss price please > mark price 100.0"
+            )
+        return f"oid-{kw['plan_type']}"
+    a._client.place_tpsl_order = _flaky
+    oid = await a.place_protective_order(
+        symbol="BTCUSDT", side="BUY", qty=Decimal("3"),
+        stop_price=Decimal("99.0"), kind="STOP_MARKET",
+    )
+    assert oid == "oid-pos_loss"
+    assert calls[-1]["trigger_price"] == Decimal("100.150")  # 100 × 1.0015
+    assert calls[-1].get("size") is None                      # whole-position 유지
+
+
+def test_adjust_trigger_past_mark_parsing():
+    A = AsyncBitgetFuturesAdapter
+    assert A._adjust_trigger_past_mark(
+        "[45122] stop loss price please > mark price 100.0") == Decimal("100.150")
+    assert A._adjust_trigger_past_mark(
+        "[40832] take profit price please < mark price 50.0") == Decimal("49.9250")
+    assert A._adjust_trigger_past_mark("[43023] Insufficient position") is None
+    assert A._adjust_trigger_past_mark("[45122] no comparator here") is None
 
 
 def test_roi_vs_price_short_trigger_prices():

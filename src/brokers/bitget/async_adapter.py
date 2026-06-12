@@ -401,15 +401,69 @@ class AsyncBitgetFuturesAdapter:
         # 후 2초 대기 시 정상 등록 → coordinator 의 즉시 호출이 레이스. 짧은
         # backoff 로 재시도(포지션 정착 대기). 마지막까지 실패면 raise → coordinator
         # 가 로그+synthetic 백업 (기존 동작).
-        order_id = await self._place_tpsl_with_settle_retry(
-            symbol=symbol, plan_type=plan_type, trigger=trigger,
-            hold_side=hold_side, qty=qty, cid=cid,
-        )
+        try:
+            order_id = await self._place_tpsl_with_settle_retry(
+                symbol=symbol, plan_type=plan_type, trigger=trigger,
+                hold_side=hold_side, qty=qty, cid=cid,
+            )
+        except Exception as err:  # noqa: BLE001
+            # 45122/40836/40832 = SL/TP 가격이 현재가(mark)를 *이미 지나감*(진입 후
+            # 가격이 그새 SL/TP 트리거를 통과). 즉시청산 대신 **mark 바로 너머로
+            # trigger 재계산해 1회 재배치** (B 옵션: server-side stop 유지 → 반등 시
+            # TP 기회도 남김, naked 방지). 에러 문구에 mark·방향(>/<)이 들어있어
+            # 파싱. price-past-mark 코드 아니거나 파싱 실패면 그대로 raise(기존 동작).
+            adj = self._adjust_trigger_past_mark(str(err))
+            if adj is None:
+                raise
+            try:
+                trigger = self._symbol_filters.quantize_price(symbol, adj)
+            except Exception:  # noqa: BLE001
+                trigger = adj
+            cid = client_id_mod.generate(
+                strategy="prot", symbol=symbol, side=plan_type,
+                ts_ms=int(time.time() * 1000),
+            )
+            order_id = await self._client.place_tpsl_order(
+                symbol=symbol, plan_type=plan_type, trigger_price=trigger,
+                hold_side=hold_side, size=None, client_oid=cid,
+            )
+            log.info(
+                "bitget protective price-past-mark 재배치 %s %s → trigger=%s (mark 너머) oid=%s",
+                symbol, plan_type, trigger, order_id,
+            )
         log.info(
             "bitget protective placed %s %s trigger=%s holdSide=%s size=%s oid=%s",
             symbol, plan_type, trigger, hold_side, qty, order_id,
         )
         return order_id
+
+    # 45122/40836/40832 = TPSL 가격이 현재가(mark)를 지나감. mark 너머 0.15% 에 재배치.
+    _PRICE_PAST_MARK_CODES: tuple[str, ...] = ("45122", "40836", "40832")
+    _MARK_BUFFER = Decimal("0.0015")
+
+    @classmethod
+    def _adjust_trigger_past_mark(cls, err_str: str) -> "Decimal | None":
+        """price-validation 에러(45122 등)에서 mark·방향 파싱 → 유효 trigger 반환.
+
+        에러 예: ``Short position stop loss price please > mark price 31.915``
+          ``>`` = trigger 가 mark 보다 *커야* 함 → ``mark×(1+buf)``
+          ``<`` = trigger 가 mark 보다 *작아야* 함 → ``mark×(1−buf)``
+        해당 코드/패턴 아니면 None (호출자가 raise).
+        """
+        if not any(c in err_str for c in cls._PRICE_PAST_MARK_CODES):
+            return None
+        import re
+        m = re.search(r"([<>])\s*(?:mark\s*price\s*)?([0-9]+\.?[0-9]*)", err_str)
+        if not m:
+            return None
+        try:
+            mark = Decimal(m.group(2))
+        except Exception:  # noqa: BLE001
+            return None
+        if not (mark > 0):
+            return None
+        return (mark * (Decimal("1") + cls._MARK_BUFFER) if m.group(1) == ">"
+                else mark * (Decimal("1") - cls._MARK_BUFFER))
 
     # 43023 = 포지션 미정착(체결 직후 레이스). backoff 누적 ~4s (0.4+0.8+1.2+1.6).
     _PROTECTIVE_SETTLE_BACKOFF: tuple[float, ...] = (0.4, 0.8, 1.2, 1.6)

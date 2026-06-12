@@ -15,6 +15,22 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.61"
+    date: "2026-06-12"
+    title: "TP/SL 가격이 진입 후 mark 지나감(45122/40836/40832) — mark 너머 재배치 (naked 방지)"
+    tags: [fix, safety]
+    summary: >
+      진입 직후 가격이 SL/TP 트리거를 이미 지나가면 거래소가 [45122]/[40836]/[40832]
+      (예: "Short SL price > mark")로 거부 → naked(SMCI 05시 사고). 즉시청산(A) 대신
+      **에러 문구의 mark 를 파싱해 현재가 바로 너머(±0.15%)로 1회 재배치**(B) →
+      server-side stop 유지(반등 시 TP 기회도 보존). 데모 실측: 무효 SL→45122→mark
+      너머 재배치→거래소 수락 확인.
+    items:
+      - "async_adapter.place_protective_order: _place_tpsl_with_settle_retry(43023) 실패가 45122/40836/40832 면 _adjust_trigger_past_mark 로 mark·방향(>/<) 파싱 → mark×(1±0.0015) 로 1회 재배치(whole-position 유지). 그 외 에러는 raise(기존)."
+      - "_adjust_trigger_past_mark: 에러 정규식 파싱(실제 문구 'please > mark price 31.915'). 해당 코드/패턴 아니면 None."
+      - "데모 검증(probe mode D) + 단위테스트(45122 재배치/파싱/비대상 raise)."
+    refs:
+      - "docs/specs/realtime-data-stability.md"
   - version: "v0.6.60"
     date: "2026-06-12"
     title: "coordinator stale 등록 회귀 fix — 재진입 naked 차단 (PAXG/XAUT)"
