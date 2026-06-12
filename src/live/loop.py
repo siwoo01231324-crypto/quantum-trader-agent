@@ -886,12 +886,38 @@ async def run_shadow_loop(
                 and config.position_store is not None
             ):
                 from src.live.protective_coordinator import ProtectiveOrderCoordinator
+
+                def _symbol_volatility(symbol: str) -> "float | None":
+                    # 최근 N봉 (high-low)/close 평균 = 변동성 대리지표(슬리피지 ∝).
+                    # snapshot ohlcv_history[symbol] 에서. 없으면 None(보정 안 함).
+                    oh = _live_snapshot_cache.get("ohlcv_history")
+                    if not isinstance(oh, dict):
+                        return None
+                    df = oh.get(symbol)
+                    if df is None or len(df) == 0:
+                        return None
+                    try:
+                        tail = df.tail(12)
+                        rng = ((tail["high"] - tail["low"]) / tail["close"]).mean()
+                        return float(rng)
+                    except Exception:  # noqa: BLE001
+                        return None
+
+                _sl_factor = float(os.environ.get("AIRBORNE_SL_SLIP_FACTOR", "0") or 0)
+                _sl_cap = float(os.environ.get("AIRBORNE_SL_SLIP_CAP_PCT", "0.003") or 0.003)
                 _prot_coord = ProtectiveOrderCoordinator(
                     adapter=bitget_adapter,
                     position_store=config.position_store,
                     policy_lookup=config.position_risk_manager.effective_policy,
+                    volatility_provider=_symbol_volatility,
+                    sl_slip_factor=_sl_factor,
+                    sl_slip_cap_pct=_sl_cap,
                 )
                 _prot_on_fill = _prot_coord.on_fill
+                if _sl_factor > 0:
+                    logger.info(
+                        "변동성 보정 손절 ON (factor=%.3f cap=%.4f)", _sl_factor, _sl_cap,
+                    )
                 logger.info(
                     "bitget native TP/SL coordinator ATTACHED (BITGET_NATIVE_TPSL=1)"
                 )

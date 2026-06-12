@@ -15,6 +15,37 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.64"
+    date: "2026-06-13"
+    title: "변동성 보정 손절 — thin 종목 청산 슬리피지 보정으로 실현손실 타이트 유지"
+    tags: [feat, safety]
+    summary: >
+      thin/변동성 큰 종목은 빠른 무빙에 시장가 손절이 라인보다 밀려 실현손실이
+      −0.5%→−0.8%(=−8%ROE) 로 커진다(LWLG −8.75% 등 → 손익비 파괴). 슬리피지 ∝
+      변동성이므로 변동성을 대리지표로 손절선을 buffer 만큼 *당겨* 밀려도 목표
+      (−0.5%)에 안착시킨다. TP 는 resting limit 이라 슬립 무 → 안 건드림. factor=0
+      기본(비활성, 기존 동작) — 청산 fill 미귀속으로 정밀측정 막혀 factor 는 라이브
+      관찰로 튜닝(env AIRBORNE_SL_SLIP_FACTOR).
+    items:
+      - "protective_coordinator: sl_pct_eff = sl_pct − min(vol×factor, cap), 과당김 floor=sl_pct/2. volatility_provider(snapshot ohlcv 최근12봉 (H-L)/C 평균) 주입."
+      - "loop.py: AIRBORNE_SL_SLIP_FACTOR(기본 0=off)/AIRBORNE_SL_SLIP_CAP_PCT(0.003) 배선. >0 시 로그."
+      - "테스트: factor>0 손절선 당김(100.350) / factor=0 불변(100.500). 효능은 라이브 forward 관찰 필요(측정 막힘)."
+    refs:
+      - "docs/journal/2026-06-12-signal-fill-audit.md"
+  - version: "v0.6.63"
+    date: "2026-06-12"
+    title: "③ 주문 페이싱 — 동시발화 버스트 rate-limit(429/40092) 회피"
+    tags: [fix, safety]
+    summary: >
+      동시발화(03·23시 25개+)를 무딜레이로 한꺼번에 발주하면 [429] Too Many
+      Requests / [40092] service unavailable 로 일부가 튕겨 누락(2026-06-12 audit).
+      AirborneFireConsumer 가 발주 사이에 짧은 간격(기본 0.15s)을 둬 초당 발주율을
+      낮춘다. 0 이면 비활성(기존 동작).
+    items:
+      - "airborne_fire_consumer: 발주(_route) 후 pace_sec(기본 0.15s) sleep. env AIRBORNE_FIRE_PACE_SEC 로 조절(loop 배선)."
+      - "잔고-40762 쿨다운 제외(v0.6.62)와 합쳐 동시발화 누락 추가 완화."
+    refs:
+      - "docs/journal/2026-06-12-signal-fill-audit.md"
   - version: "v0.6.62"
     date: "2026-06-12"
     title: "40762 '잔고부족'을 max-notional 쿨다운으로 오판 → 누락 차단 수정 + 거부사유 로깅"

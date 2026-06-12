@@ -38,12 +38,24 @@ class ProtectiveOrderCoordinator:
         adapter: Any,            # async place/cancel/list_open_protective_order
         position_store: Any,     # get_positions(sid) -> list[(symbol, qty)]
         policy_lookup: PolicyLookup,   # sid -> (stop_loss_pct, take_profit_pct) | None
+        volatility_provider: "Callable[[str], float | None] | None" = None,
+        sl_slip_factor: float = 0.0,
+        sl_slip_cap_pct: float = 0.003,
     ) -> None:
         self._adapter = adapter
         self._store = position_store
         self._policy_lookup = policy_lookup
         # symbol -> {"sl": order_id, "tp": order_id} — whole-position TPSL 종목당 1세트.
         self._registered: dict[str, dict[str, str]] = {}
+        # 2026-06-13 변동성 보정 손절 — thin/변동성 큰 종목은 빠른 무빙에 시장가
+        # 손절이 라인보다 밀려 *실현손실*이 −0.5% → −0.8% 로 커진다(손익비 파괴,
+        # LWLG −8.75% 등). 슬리피지 ∝ 변동성이므로, 변동성을 대리지표로 손절선을
+        # 그만큼 *당겨* 밀려도 목표(−0.5%)에 안착시킨다. buffer = vol×factor (cap 적용).
+        # factor=0 이면 비활성(기존 동작 byte-identical). 측정 막혀(청산 fill 미귀속)
+        # factor 는 라이브 관찰로 튜닝 — env AIRBORNE_SL_SLIP_FACTOR.
+        self._vol_provider = volatility_provider
+        self._sl_slip_factor = float(sl_slip_factor)
+        self._sl_slip_cap_pct = float(sl_slip_cap_pct)
 
     # ── public ────────────────────────────────────────────────────────────────
 
@@ -115,8 +127,11 @@ class ProtectiveOrderCoordinator:
 
         entry_side = "BUY" if net > 0 else "SELL"   # net 부호로 포지션 방향 도출
         qty = abs(net)
+        # 변동성 보정 — 손절선을 buffer 만큼 *당겨* 슬리피지 후 실현손실이 목표에
+        # 안착. TP 는 resting limit 이라 슬립 없음 → 안 건드림.
+        sl_pct_eff = self._slip_adjusted_sl_pct(symbol, sl_pct)
         cfg = ProtectiveOrderConfig(
-            stop_loss_pct=Decimal(str(sl_pct)),
+            stop_loss_pct=Decimal(str(sl_pct_eff)),
             take_profit_pct=Decimal(str(tp_pct)),
         )
         sl_price, tp_price, close_side = (
@@ -190,6 +205,25 @@ class ProtectiveOrderCoordinator:
             return bool(rows)
         except Exception:  # noqa: BLE001
             return False
+
+    def _slip_adjusted_sl_pct(self, symbol: str, sl_pct: float) -> float:
+        """변동성 기반 슬리피지 보정 — 손절선을 buffer 만큼 *당긴* sl_pct 반환.
+
+        buffer = vol(symbol) × factor, cap 적용. factor=0 또는 vol 미가용/예외면
+        원래 sl_pct (기존 동작 byte-identical). 과당김 방지로 sl_pct 의 절반까지만.
+        예: sl_pct=0.005, vol=0.02(2% range), factor=0.15 → buffer=0.003 → eff
+        sl_pct=0.002 (손절선 −0.2%, 0.3% 밀려도 실현 ≈ −0.5%).
+        """
+        if self._sl_slip_factor <= 0 or self._vol_provider is None:
+            return sl_pct
+        try:
+            vol = self._vol_provider(symbol)
+        except Exception:  # noqa: BLE001
+            return sl_pct
+        if not vol or vol <= 0:
+            return sl_pct
+        buffer = min(float(vol) * self._sl_slip_factor, self._sl_slip_cap_pct)
+        return max(sl_pct - buffer, sl_pct * 0.5)
 
     def _net_qty(self, sid: str, symbol: str) -> Decimal:
         try:
