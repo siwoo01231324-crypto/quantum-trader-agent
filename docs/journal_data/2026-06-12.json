@@ -6100,5 +6100,14 @@
         "reason": "no_data"
       }
     ]
+  },
+  "exchange_truth": {
+    "source": "/api/v2/mix/position/history-position (netProfit)",
+    "closed_positions": 70,
+    "win": 25,
+    "loss": 45,
+    "net_usdt": -4.04,
+    "pf": 0.93,
+    "note": "reconstruct(WAL) 기반 +17.24(#426)/+18.92(#429)는 empty-symbol fill 누락으로 오류. 일일손익은 이 값 사용."
   }
 }
