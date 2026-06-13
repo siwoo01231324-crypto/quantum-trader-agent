@@ -10095,6 +10095,19 @@
       "manual": "logs/manual_trade.jsonl",
       "airborne_fires": "logs/airborne_fires/history.jsonl",
       "sims": "logs/airborne_fires/sim_cache.jsonl"
+    },
+    "WARNING_wal_unreliable": "reconstruct_trades(WAL) 손익은 청산 누락(13 vs 실제 39)·손실 오귀속. 거래소 ledger 사용.",
+    "exchange_truth": {
+      "source": "/api/v2/mix/position/history-position (netProfit)",
+      "closed_positions": 39,
+      "win": 12,
+      "loss": 27,
+      "net_usdt": -58.31,
+      "pf": 0.39,
+      "long": "6건 -7.40",
+      "short": "33건 -50.91",
+      "top_loss": "BEAT -22.55, VELVET -18.15, HU -18.11",
+      "note": "VELVET 5건 분할 합 -31.94. 초안 reconstruct(-59.82/13건)는 총액만 우연히 근접."
     }
   }
 }
