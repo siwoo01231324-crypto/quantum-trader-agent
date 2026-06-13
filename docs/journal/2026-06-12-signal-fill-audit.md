@@ -3,11 +3,13 @@ type: trading-journal
 id: 2026-06-12-signal-fill-audit
 date: 2026-06-12
 report_kind: signal-fill-audit
-auto_trades: 44
+auto_trades: 70
 manual_trades: 0
-win_count: 16
-loss_count: 28
-total_pnl_usdt: 3.62
+win_count: 25
+loss_count: 45
+total_pnl_usdt: -4.04
+audit_subset_pnl_usdt: 3.62
+pnl_source: bitget-exchange-history-position
 total_pnl_krw: 0
 airborne_fires: 59
 created: 2026-06-12
@@ -27,7 +29,7 @@ tags:
 
 - **진입 예정 56건 중 실제 체결 44건 → 12건 누락** (이월보유 3건 제외 시 **★진짜 누락 9건**).
 - **지표(sim) ↔ 실제 결과 괴리 23%** (43건 중 10건) — ±0.5~1% 임계 + 10x 레버리지라 미세 진입차로 TP↔SL 뒤집힘.
-- **실제 44건: 16승 28패(승률 36.4%), 실현 +3.62 USDT, PF 1.10** — thin-edge 흑자.
+- **본 감사 대상(유저 제공 44건): 16승 28패, +3.62 USDT.** ⚠️ 단 이는 부분 집합 — **거래소 전체 6/12 = 70건 25승45패 net −4.04 USDT**(정식 저널 `2026-06-12.md`·PR #432). 감사는 알림↔체결↔지표 정합성용이라 44건 표본으로 충분하나, 일일 총손익은 −4.04 가 정답.
 - **결정타: 05시(kst 게이트 외) short-whitelist 7건 전부 손절 −6.73** — 게이트를 안 지킨 전략이 게이트가 막았어야 할 시간에 진입해 전멸.
 
 ---
@@ -69,8 +71,8 @@ tags:
 
 ## ③ 전체 통계
 
-- **실제 체결 44건: 16승 28패 (승률 36.4%)**
-- **실현 PnL +3.62 USDT** (이익 +41.56 / 손실 −37.94, **PF 1.10**) — 간신히 흑자, thin edge 그대로.
+- **본 감사 표본(유저 제공 44건): 16승 28패, +3.62 USDT** (이익 +41.56 / 손실 −37.94, PF 1.10).
+- ⚠️ **거래소 전체 6/12 = 70건 25승45패 net −4.04 USDT** (history-position netProfit). 44건은 부분 집합이라 +3.62 였을 뿐, 일일 총손익은 −4.04. 정식 저널 `2026-06-12.md`(PR #432) 참조.
 - **10x 레버리지**라 ±0.5~1% 가격이 ±5~11% 마진으로 증폭 (큰 익절 +10%대, 손절 −5~9%).
 
 ### 시간대(KST)별 실제 손익
