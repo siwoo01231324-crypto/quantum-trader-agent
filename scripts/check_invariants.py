@@ -62,8 +62,9 @@ REQUIRED_FIELDS: dict[str, list[str]] = {
 # 필수 필드 중 "비어 있어도 허용" 하는 필드 (빈 리스트 등).
 EMPTY_OK_FIELDS = {"instruments", "inputs", "sources", "tags", "affected_strategies"}
 
-# threshold 처럼 0 이 정상 값인 필드는 None 만 금지.
-ZERO_OK_FIELDS = {"threshold", "lookback", "tick_size"}
+# 0 이 정상 값인 필드 — None(null) 도 0 으로 허용 (예: 거래 없는 날 total_pnl = null/0).
+ZERO_OK_FIELDS = {"threshold", "lookback", "tick_size",
+                   "total_pnl_usdt", "total_pnl_krw"}
 
 WIKILINK_RE = re.compile(r"\[\[([^\[\]|#]+?)(?:\|[^\]]+)?\]\]")
 INLINE_CODE_RE = re.compile(r"`[^`\n]*`")
@@ -167,7 +168,10 @@ def check_frontmatter_schema(notes) -> list[str]:
             warnings.append(f"[schema] {path}: 알 수 없는 type={t!r}")
             continue
         for required in REQUIRED_FIELDS[t]:
-            if required not in fm or fm.get(required) in (None, ""):
+            val = fm.get(required)
+            absent = required not in fm
+            empty = val in (None, "") and required not in ZERO_OK_FIELDS
+            if absent or empty:
                 warnings.append(f"[schema] {path}: 필수 필드 누락 '{required}' (type={t})")
     return warnings
 

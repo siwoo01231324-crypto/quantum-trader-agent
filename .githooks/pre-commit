@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# 커밋 직전 프론트매터 스키마 검증 — check_invariants.py --strict
+# 설치: git config core.hooksPath .githooks
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+# python-frontmatter 없으면 경고 후 통과 (로컬 dev 환경 배려)
+if ! python3 -c "import frontmatter" 2>/dev/null; then
+    echo "[pre-commit] python-frontmatter 미설치 — 스키마 검증 스킵 (pip install python-frontmatter)"
+    exit 0
+fi
+
+echo "[pre-commit] 프론트매터 스키마 검증 중..."
+if ! python3 scripts/check_invariants.py --strict; then
+    echo ""
+    echo "[pre-commit] ❌ 스키마 위반 감지 — 커밋이 차단됐습니다."
+    echo "  위 오류를 수정한 뒤 다시 커밋하세요."
+    exit 1
+fi
+echo "[pre-commit] ✅ 스키마 검증 통과"
