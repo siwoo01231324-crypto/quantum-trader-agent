@@ -15,6 +15,27 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.68"
+    date: "2026-06-14"
+    title: "네이티브 TP/SL 청산 fill 귀속 — store 인플레이션(3~8×) 근본 차단"
+    tags: [fix, safety]
+    summary: >
+      거래소 네이티브 TP/SL 청산은 우리가 coid 를 등록 안 한 plan order 로 발동돼
+      fill_consumer 가 in-memory coid 맵으로 symbol 을 못 찾음 → order_filled 를
+      symbol="" 로 기록 → StrategyPositionStore replay 가 drop → 청산이 store 에서
+      차감 안 돼 숏이 매 run 누적(3~8× 인플레이션; 청산된 AVAX/CL 도 store 잔존).
+      그 결과 synthetic 리스크매니저가 유령/과대 수량을 닫으려다 40804/22002 폭주 +
+      _live_entered 슬롯 점유로 신규 진입 차단. BrokerFill 이 fill 자체 symbol/side
+      (Bitget instId/side)를 싣고, coid 미해석 시 단독보유 전략에 귀속해 청산이
+      store 에서 정상 차감되게 함.
+    items:
+      - "BrokerFill 에 symbol/side 필드 추가(기본 \"\" → 기존 생성부 byte-identical). bitget _parse_fill_from_order 가 instId/side 채움."
+      - "fill_consumer._resolve_fill_attribution: coid context 우선, 없으면 fill.symbol/side + StrategyPositionStore.sole_holder_strategy(단독보유 전략) 귀속. 0명(수동 ORDI)·2명(다전략)은 미귀속(현행 ALERT-ONLY 유지) — 사용자 결정."
+      - "근본만 수정(L1) — reconciler 다전략 trim 은 사용자 결정으로 현행 유지. 옛 WAL 인플레이션은 reconciler 가 런타임 self-heal(실포지션 청산되면 phantom 정리)."
+      - "테스트 9건(tests/live/test_fill_attribution_native_tpsl.py) + 기존 fill consumer 회귀 통과. 실포지션은 거래소 네이티브 TP/SL 로 보호돼 무위험."
+    refs:
+      - "src/live/fill_consumer.py"
+      - "src/live/strategy_position_store.py"
   - version: "v0.6.67"
     date: "2026-06-14"
     title: "SHORT airborne 오후 역알파 시간대 제외 (14시 PF 0.18 차단, 24h→19h)"

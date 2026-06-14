@@ -111,6 +111,14 @@ def _parse_fill_from_order(
     # Bitget v2 exposes ``execType``: "T"=taker, "M"=maker. Treat absent → taker.
     is_maker = str(o.get("execType", "T")).upper() == "M"
 
+    # 2026-06-14 — fill 의 종목/방향을 보존한다. 거래소 네이티브 TP/SL 청산은
+    # 우리가 coid 를 등록 안 한 plan order 로 발동돼 fill_consumer 의 in-memory
+    # coid 맵으로 symbol 을 못 찾는다 → 옛날엔 symbol="" 로 기록 → store replay
+    # 가 drop → 청산이 누락돼 숏이 매 run 누적(3~8× 인플레이션). instId/side 를
+    # BrokerFill 에 실어 청산도 제대로 차감되게 한다.
+    symbol = str(o.get("instId", ""))
+    side = str(o.get("side", "")).lower()
+
     return BrokerFill(
         parent_id=client_order_id,
         broker_order_id=broker_order_id,
@@ -122,6 +130,8 @@ def _parse_fill_from_order(
         fee_asset=fee_asset,
         ts=ts,
         is_maker=is_maker,
+        symbol=symbol,
+        side=side,
     )
 
 
