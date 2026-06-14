@@ -314,6 +314,20 @@ class LivePositionRiskManager:
                 reason=reason,
                 reduce_only=True,
             ))
+            # 2026-06-14 진단 로그 (동작 변화 없음 — observability 전용).
+            # "갓 진입한 재진입 포지션을 synthetic 이 즉시 phantom-청산" (AVAX/BTC/DOGE
+            # 01:01 사고) 의 stale 필드를 사실로 못박기 위함. water_mark<avg_cost(숏)
+            # 또는 dynamic policy 잔존이면 이전 사이클 stale 상태 상속을 의심.
+            _is_dyn = (strategy_id, symbol) in self._dynamic_policies
+            _stale_wm = (prev_mark < avg_cost) if is_short else (prev_mark > avg_cost)
+            logger.info(
+                "live_risk STOP-FIRE sid=%s %s %s side=%s held=%s entry=%s last=%s "
+                "water_mark=%s stale_wm=%s dyn_policy=%s sl_pct=%s tp_pct=%s trail_pct=%s",
+                strategy_id, symbol, triggered_reason,
+                "buy" if is_short else "sell", held, avg_cost, last_price,
+                prev_mark, _stale_wm, _is_dyn,
+                policy.stop_loss_pct, policy.take_profit_pct, policy.trailing_stop_pct,
+            )
             self._emit_stop_event(
                 strategy_id=strategy_id,
                 symbol=symbol,
@@ -362,7 +376,25 @@ class LivePositionRiskManager:
         cb_held, avg_cost = self._pnl._cost_basis.get(
             (strategy_id, symbol), (Decimal("0"), Decimal("0"))
         )
-        # Mismatch is a soft warning — store is authoritative for triggering.
+        # 2026-06-14 — cost basis 가 store qty 와 *부호*까지 어긋나면 avg_cost 가
+        # 반대방향(stale) 진입가라 stop_loss 가 즉시 오발동한다. 정체: reconciler
+        # 가 phantom-clear 할 때 force_sync_position 은 qty 만 0 으로 만들고
+        # _cost_basis 는 stale 롱 진입가로 잔존 → 같은 (sid,symbol) 재진입(숏)이
+        # held=-x 인데 avg_cost 는 옛 롱 진입가(예 6.572) → 숏 SL=6.572×1.005=6.605
+        # < mark 6.758 → 진입 즉시 synthetic 이 reduce_only 로 청산(AVAX/BTC/DOGE
+        # 01:01 "진입가에 −0.8% flat 청산" 사고의 정체). 부호 불일치 = cost basis
+        # 무효 → avg_cost=0 반환해 호출부(held==0 or avg_cost<=0)가 평가 skip.
+        # 거래소 native TP/SL(protective_coordinator)가 그 사이 보호를 커버하고,
+        # 다음 실체결의 record_fill 이 cost basis 를 새 방향으로 갱신하면 재개된다.
+        if cb_held != 0 and (cb_held > 0) != (held > 0):
+            logger.warning(
+                "live_position_risk.cost_basis_sign_mismatch sid=%s sym=%s "
+                "store=%s pnl=%s — stale cost basis, synthetic 평가 skip "
+                "(거래소 TP/SL 커버)",
+                strategy_id, symbol, held, cb_held,
+            )
+            return held, Decimal("0")
+        # 부호는 맞지만 수량만 다른 경우는 soft warning — store 가 트리거 기준.
         if cb_held != held:
             logger.debug(
                 "live_position_risk.qty_mismatch sid=%s sym=%s store=%s pnl=%s",
