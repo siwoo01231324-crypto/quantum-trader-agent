@@ -15,6 +15,24 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.69"
+    date: "2026-06-14"
+    title: "롱 진입 정각 빠른 매수 — BTC필터 지연 stale 진입(8분) 차단"
+    tags: [fix, safety]
+    summary: >
+      airborne 롱은 BTC 추세필터가 막으면 fire 가 store 에 남아 매 sweep 재평가되다
+      BTC 추세가 풀리는 순간 *묵은* fire_close 가격으로 ~8분 뒤 진입(stale →
+      price-past-mark NAKED, v0.6.65). 롱 전용 짧은 freshness(기본 90s)로 봉마감
+      직후에만 진입: BTC 상승추세 롱은 첫 sweep(~45s)에 즉시 매수("정각 빠르게"),
+      그 안에 BTC 통과 못 하면 abandon(늦은 stale 진입 차단). 숏은 기존 freshness
+      (600s, 재시작 backlog 보호) 유지. env AIRBORNE_LONG_FRESHNESS_SEC.
+    items:
+      - "AirborneFireConsumer.long_freshness_sec(기본 90s): side=='long' 은 이 cap, 숏은 freshness_sec(600s)."
+      - "loop.py: AIRBORNE_LONG_FRESHNESS_SEC env 배선(기본 90)."
+      - "근거: 6/8~6/14 1m 실험 — 숏 0분 진입 PF 1.66(즉시 최적), 롱은 BTC필터 통과분만 빠르게(롱 죽이지 않고 타이밍만 교정, 사용자 결정)."
+      - "테스트 3건(롱 stale skip / 롱 fresh 진입 / 숏 long-cap 무관)."
+    refs:
+      - "src/live/airborne_fire_consumer.py"
   - version: "v0.6.68"
     date: "2026-06-14"
     title: "네이티브 TP/SL 청산 fill 귀속 — store 인플레이션(3~8×) 근본 차단"

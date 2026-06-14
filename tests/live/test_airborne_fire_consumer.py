@@ -112,6 +112,7 @@ def _consumer(store, orch, specs, **kw):
         btc_ohlcv_provider=kw.pop("btc_ohlcv_provider", None),
         notify=kw.pop("notify", None),
         freshness_sec=kw.pop("freshness_sec", 600.0),
+        long_freshness_sec=kw.pop("long_freshness_sec", 90.0),
         interval_sec=kw.pop("interval_sec", 15.0),
     )
     return c, routed
@@ -444,6 +445,54 @@ def test_no_notify_when_universe_blocks_not_hour():
     )
     assert asyncio.run(c.sweep_once()) == 0
     assert msgs == []  # hour 는 통과했고 universe 가 binding → 알림 X
+
+
+# ── (h) 롱 전용 짧은 freshness (정각 빠른 매수 / stale 늦은진입 차단) ──────────
+
+
+def _aged_fire(symbol, side, *, age_sec, hour_kst=None):
+    """now−age_sec 의 fire. hour_kst 지정 시 그 KST 시각 정시로 맞춤(게이트용)."""
+    now = datetime.now(timezone.utc)
+    ts = now - timedelta(seconds=age_sec)
+    return _fire(symbol, side, ts.isoformat())
+
+
+def test_long_stale_beyond_long_freshness_skipped():
+    """롱은 long_freshness_sec 넘으면 진입 안 함 (BTC 지연 후 묵은 가격 진입 차단)."""
+    f = _aged_fire("SOLUSDT", "long", age_sec=120)  # 2분 — 90s 초과
+    h = int(pd.Timestamp(f["ts"]).tz_convert("Asia/Seoul").floor("1h").hour)
+    orch = _FakeOrch()
+    c, _ = _consumer(
+        _FakeStore([f]), orch, [_spec(hours=frozenset({h}))],
+        long_freshness_sec=90.0, freshness_sec=600.0,
+    )
+    assert asyncio.run(c.sweep_once()) == 0
+    assert orch.calls == []
+
+
+def test_long_fresh_within_long_freshness_enters():
+    """봉마감 직후(≤90s) 롱은 진입 (BTC 통과 시 즉시)."""
+    f = _aged_fire("SOLUSDT", "long", age_sec=40)
+    h = int(pd.Timestamp(f["ts"]).tz_convert("Asia/Seoul").floor("1h").hour)
+    orch = _FakeOrch()
+    c, _ = _consumer(
+        _FakeStore([f]), orch, [_spec(hours=frozenset({h}))],
+        long_freshness_sec=90.0,
+    )
+    assert asyncio.run(c.sweep_once()) == 1
+
+
+def test_short_not_affected_by_long_freshness():
+    """숏은 long cap 무관 — 기존 freshness(600s) 적용 (재시작 backlog 보호)."""
+    f = _aged_fire("SOLUSDT", "short", age_sec=300)  # 5분: long cap 초과지만 short OK
+    h = int(pd.Timestamp(f["ts"]).tz_convert("Asia/Seoul").floor("1h").hour)
+    orch = _FakeOrch()
+    c, _ = _consumer(
+        _FakeStore([f]), orch, [_spec(hours=frozenset({h}), sides=frozenset({"short"}))],
+        long_freshness_sec=90.0, freshness_sec=600.0,
+    )
+    assert asyncio.run(c.sweep_once()) == 1
+    assert orch.calls[0]["side"] == "short"
 
 
 # ── run_loop ─────────────────────────────────────────────────────────────────
