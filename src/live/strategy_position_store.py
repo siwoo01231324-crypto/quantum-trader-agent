@@ -138,6 +138,22 @@ class StrategyPositionStore:
         else:
             bucket[symbol] = Decimal(str(qty))
 
+    def sole_holder_strategy(self, symbol: str) -> str | None:
+        """symbol 을 0 이 아닌 qty 로 들고 있는 전략이 *정확히 1개* 면 그 strategy_id.
+
+        거래소 네이티브 TP/SL 청산처럼 coid 로 strategy 를 못 찾는 fill 의 귀속용
+        (fill_consumer). 귀속 규칙 (2026-06-14, 사용자 결정):
+          - 1명: 그 전략에 귀속 → 청산이 store 에서 정상 차감.
+          - 0명: 수동/외부 포지션(예: ORDI) → None → 미귀속(안 건드림).
+          - 2명 이상: 다전략 동시보유 → None → 현행 유지(reconciler ALERT-ONLY).
+            자동 귀속 추정 안 함.
+        """
+        holders = [
+            sid for sid, bucket in self._positions.items()
+            if bucket.get(symbol, Decimal("0")) != 0
+        ]
+        return holders[0] if len(holders) == 1 else None
+
     def get_positions(self, strategy_id: str) -> list[tuple[str, float]]:
         bucket = self._positions.get(strategy_id, {})
         return [

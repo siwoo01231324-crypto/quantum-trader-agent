@@ -61,6 +61,30 @@ logger = logging.getLogger(__name__)
 _DEFAULT_MAX_ATTEMPTS = 100
 
 
+def _resolve_fill_attribution(ctx, fill, position_store):
+    """(symbol, side, strategy_id) 결정 — coid context 우선, 없으면 fill 자체.
+
+    coid 가 in-memory order-context 맵에 있으면 그대로(진입 경로). 없으면(거래소
+    네이티브 TP/SL 청산 등 우리가 등록 안 한 plan order) **fill 자체의 symbol/side**
+    (Bitget orders 채널 instId/side)를 쓰고, strategy_id 는 그 symbol 의 *단독
+    보유* 전략에 귀속한다 (``StrategyPositionStore.sole_holder_strategy``):
+      - 1명: 귀속 → 청산이 store 에서 정상 차감 (인플레이션 근본 차단).
+      - 0명(수동/외부, 예: ORDI) / 2명(다전략) → None → 미귀속(현행 유지).
+
+    fill 에 symbol 이 없으면(예: binance BrokerFill, 기본 "") symbol="" →
+    strategy_id None → 기존 동작 byte-identical.
+    """
+    if ctx is not None:
+        return ctx  # (symbol, side, strategy_id)
+    symbol = getattr(fill, "symbol", "") or ""
+    side = getattr(fill, "side", "") or ""
+    strategy_id = (
+        position_store.sole_holder_strategy(symbol)
+        if (symbol and position_store is not None) else None
+    )
+    return symbol, side, strategy_id
+
+
 def broker_fill_to_order_filled_event(
     fill: BrokerFill,
     *,
@@ -159,20 +183,18 @@ async def run_binance_fill_consumer(
                 ctx = position_store.resolve_order_context(
                     fill.client_order_id
                 ) if position_store is not None else None
-                if ctx is not None:
-                    symbol, side, strategy_id = ctx
-                else:
-                    # Unresolvable coid — emit anyway (real money), warn.
-                    symbol = ""
-                    side = ""
-                    strategy_id = None
+                symbol, side, strategy_id = _resolve_fill_attribution(
+                    ctx, fill, position_store,
+                )
+                if strategy_id is None:
+                    # Unresolvable coid + no sole-holder — emit anyway (real
+                    # money), warn. totals stay correct; per-strategy unattributed.
                     logger.warning(
                         "binance_fill_consumer: cannot resolve order context "
-                        "for coid=%r (broker_order_id=%s trade_id=%s) — "
-                        "emitting order_filled WITHOUT strategy_id (totals "
-                        "stay correct; per-strategy unattributed)",
+                        "for coid=%r (broker_order_id=%s trade_id=%s symbol=%r) "
+                        "— emitting order_filled WITHOUT strategy_id",
                         fill.client_order_id, fill.broker_order_id,
-                        fill.trade_id,
+                        fill.trade_id, symbol,
                     )
 
                 event = broker_fill_to_order_filled_event(
@@ -286,18 +308,16 @@ async def run_bitget_fill_consumer(
                 ctx = position_store.resolve_order_context(
                     fill.client_order_id
                 ) if position_store is not None else None
-                if ctx is not None:
-                    symbol, side, strategy_id = ctx
-                else:
-                    symbol = ""
-                    side = ""
-                    strategy_id = None
+                symbol, side, strategy_id = _resolve_fill_attribution(
+                    ctx, fill, position_store,
+                )
+                if strategy_id is None:
                     logger.warning(
                         "bitget_fill_consumer: cannot resolve order context "
-                        "for coid=%r (broker_order_id=%s trade_id=%s) — "
-                        "emitting order_filled WITHOUT strategy_id",
+                        "for coid=%r (broker_order_id=%s trade_id=%s symbol=%r) "
+                        "— emitting order_filled WITHOUT strategy_id",
                         fill.client_order_id, fill.broker_order_id,
-                        fill.trade_id,
+                        fill.trade_id, symbol,
                     )
 
                 event = broker_fill_to_order_filled_event(
