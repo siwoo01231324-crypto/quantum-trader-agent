@@ -110,6 +110,7 @@ def _consumer(store, orch, specs, **kw):
         route_intents=_route,
         equity_provider=kw.pop("equity_provider", lambda: 10_000.0),
         btc_ohlcv_provider=kw.pop("btc_ohlcv_provider", None),
+        notify=kw.pop("notify", None),
         freshness_sec=kw.pop("freshness_sec", 600.0),
         interval_sec=kw.pop("interval_sec", 15.0),
     )
@@ -356,6 +357,93 @@ def test_bad_fire_does_not_kill_sweep():
     c, _ = _consumer(_FakeStore(fires), orch, [_spec(hours=frozenset({h}))])
     assert asyncio.run(c.sweep_once()) == 1
     assert orch.calls[0]["symbol"] == "SOLUSDT"
+
+
+# ── (g) 시간게이트 진입 스킵 텔레그램 알림 ───────────────────────────────────
+
+
+def test_hour_gate_skip_notifies():
+    """시간게이트 밖 발화 → notify 호출 + 메시지에 KST hour/심볼/방향 포함."""
+    ts = _recent_iso(minutes_ago=1)
+    h = int(pd.Timestamp(ts).tz_convert("Asia/Seoul").floor("1h").hour)
+    bad_hours = frozenset({(h + 5) % 24})  # fire hour 제외
+    msgs: list[str] = []
+    orch = _FakeOrch()
+    c, _ = _consumer(
+        _FakeStore([_fire("SOLUSDT", "short", ts)]), orch,
+        [_spec(hours=bad_hours, sides=frozenset({"short"}))],
+        notify=msgs.append,
+    )
+    assert asyncio.run(c.sweep_once()) == 0
+    assert orch.calls == []
+    assert len(msgs) == 1
+    assert "SOLUSDT" in msgs[0]
+    assert f"{h:02d}시" in msgs[0]
+    assert "숏" in msgs[0]
+
+
+def test_hour_gate_skip_notify_dedup_once_per_fire():
+    """같은 발화는 매 sweep 재평가돼도 알림 1회만."""
+    ts = _recent_iso(minutes_ago=1)
+    h = int(pd.Timestamp(ts).tz_convert("Asia/Seoul").floor("1h").hour)
+    bad_hours = frozenset({(h + 5) % 24})
+    msgs: list[str] = []
+    c, _ = _consumer(
+        _FakeStore([_fire("SOLUSDT", "short", ts)]), _FakeOrch(),
+        [_spec(hours=bad_hours, sides=frozenset({"short"}))],
+        notify=msgs.append,
+    )
+    asyncio.run(c.sweep_once())
+    asyncio.run(c.sweep_once())
+    assert len(msgs) == 1  # 두 번째 sweep 은 dedup
+
+
+def test_hour_gate_skip_aggregates_per_hour_side():
+    """같은 hour/side 다수 발화 → 한 메시지로 집계(N건 + 심볼 나열)."""
+    ts = _recent_iso(minutes_ago=1)
+    h = int(pd.Timestamp(ts).tz_convert("Asia/Seoul").floor("1h").hour)
+    bad_hours = frozenset({(h + 5) % 24})
+    msgs: list[str] = []
+    fires = [_fire(s, "short", ts) for s in ("AAA", "BBB", "CCC")]
+    c, _ = _consumer(
+        _FakeStore(fires), _FakeOrch(),
+        [_spec(hours=bad_hours, sides=frozenset({"short"}))],
+        notify=msgs.append,
+    )
+    asyncio.run(c.sweep_once())
+    assert len(msgs) == 1
+    assert "3건" in msgs[0]
+    for s in ("AAA", "BBB", "CCC"):
+        assert s in msgs[0]
+
+
+def test_no_notify_when_entered():
+    """진입 성공한 발화는 스킵 알림 안 함."""
+    ts = _recent_iso(minutes_ago=1)
+    h = int(pd.Timestamp(ts).tz_convert("Asia/Seoul").floor("1h").hour)
+    msgs: list[str] = []
+    c, _ = _consumer(
+        _FakeStore([_fire("SOLUSDT", "short", ts)]), _FakeOrch(),
+        [_spec(hours=frozenset({h}), sides=frozenset({"short"}))],
+        notify=msgs.append,
+    )
+    assert asyncio.run(c.sweep_once()) == 1
+    assert msgs == []
+
+
+def test_no_notify_when_universe_blocks_not_hour():
+    """universe 로 막힌 건 시간 사유 아님 → 스킵 알림 안 함 (오탐 방지)."""
+    ts = _recent_iso(minutes_ago=1)
+    h = int(pd.Timestamp(ts).tz_convert("Asia/Seoul").floor("1h").hour)
+    msgs: list[str] = []
+    c, _ = _consumer(
+        _FakeStore([_fire("NOTINUSDT", "short", ts)]), _FakeOrch(),
+        [_spec(hours=frozenset({h}), sides=frozenset({"short"}),
+               universe=frozenset({"SOLUSDT"}))],
+        notify=msgs.append,
+    )
+    assert asyncio.run(c.sweep_once()) == 0
+    assert msgs == []  # hour 는 통과했고 universe 가 binding → 알림 X
 
 
 # ── run_loop ─────────────────────────────────────────────────────────────────

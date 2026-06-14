@@ -77,6 +77,7 @@ class AirborneFireConsumer:
         route_intents: Callable[[list], Awaitable[None]] | Callable[[list], None],
         equity_provider: Callable[[], float],
         btc_ohlcv_provider: Callable[[], "pd.DataFrame | None"] | None = None,
+        notify: Callable[[str], None] | None = None,
         freshness_sec: float = 600.0,
         interval_sec: float = 15.0,
         pace_sec: float = 0.15,
@@ -87,6 +88,13 @@ class AirborneFireConsumer:
         self._route_intents = route_intents
         self._equity_provider = equity_provider
         self._btc_ohlcv_provider = btc_ohlcv_provider
+        # 진입 스킵 텔레그램 알림 — 시간게이트(예: 14시 역알파)로 발화를 안 사면
+        # "KST 14시 게이트 — 숏 진입 스킵: ..." 통지. None 이면 비활성(테스트 기본).
+        # sync callable(text) — sweep 안에서 asyncio.to_thread 로 호출(blocking 회피).
+        self._notify = notify
+        # fire 단위 스킵 dedup — 같은 (symbol, side, bar_open) 발화를 매 sweep
+        # (15s) 재평가해도 알림은 1회만. freshness(600s) 밖이면 다시 안 잡혀 무한 X.
+        self._skip_notified: set[tuple[str, str, str]] = set()
         self._freshness_sec = float(freshness_sec)
         self._interval_sec = float(interval_sec)
         # ③ 주문 페이싱 — 동시발화(03·23시 25개+)를 한꺼번에 쏘면 거래소가 [429]
@@ -178,6 +186,8 @@ class AirborneFireConsumer:
         # BTC 하락추세는 sweep 당 1회만 계산해 캐시 (long 발화마다 200h EMA
         # 재계산 회피). long 발화가 하나도 없으면 아예 안 본다 (lazy).
         self._btc_down_cache: bool | None = None
+        # 이번 sweep 에서 시간게이트로 진입 안 한 발화 모음 (집계 알림용).
+        self._hour_skip_buf: list[dict] = []
         for f in fires:
             try:
                 if await self._consume_one(f, now):
@@ -187,6 +197,11 @@ class AirborneFireConsumer:
                     "airborne_fire_consumer fire failed sym=%s err=%s",
                     f.get("symbol"), err,
                 )
+        # 시간게이트 스킵 집계 알림 (절대 raise 안 함).
+        try:
+            await self._notify_hour_skips()
+        except Exception as err:  # noqa: BLE001
+            logger.warning("airborne_fire_consumer skip-notify failed: %s", err)
         if entered:
             logger.info(
                 "airborne fire consumer: %d entries (scanned %d fires since %s)",
@@ -232,11 +247,18 @@ class AirborneFireConsumer:
         bar_open_key = self._bar_open_key(fire_ts)
 
         entered_any = False
+        # 시간게이트가 binding reason 인지 추적 — side 매칭 spec 중 hour 게이트를
+        # 통과한 게 하나도 없으면(=시간 때문에 다 막힘) "14시라서 진입 안함" 알림.
+        # side 불일치/universe/btc 로 막힌 건 시간 사유가 아니므로 제외.
+        any_passed_hour = False
+        hour_blocked = False
         for spec in self._specs:
-            if hour_kst not in spec.kst_entry_hours:
-                continue
             if side not in spec.allowed_sides:
                 continue
+            if hour_kst not in spec.kst_entry_hours:
+                hour_blocked = True
+                continue
+            any_passed_hour = True
             if spec.universe is not None and symbol not in spec.universe:
                 continue
             if side == "long" and spec.btc_filter and self._btc_down_cached():
@@ -263,7 +285,50 @@ class AirborneFireConsumer:
             # ③ 페이싱 — 발주 사이 간격(rate-limit 회피). 0 이면 skip.
             if self._pace_sec > 0:
                 await asyncio.sleep(self._pace_sec)
+
+        # 시간게이트 binding — 진입 0 + side 매칭 spec 이 hour 게이트 전부 못 통과.
+        # (universe/btc/dedup 로 막힌 경우는 any_passed_hour=True 라 알림 안 함.)
+        if (
+            self._notify is not None and not entered_any
+            and hour_blocked and not any_passed_hour
+        ):
+            key = (symbol, side, bar_open_key)
+            if key not in self._skip_notified:
+                self._hour_skip_buf.append(
+                    {"symbol": symbol, "side": side, "hour": hour_kst, "key": key}
+                )
         return entered_any
+
+    async def _notify_hour_skips(self) -> None:
+        """이번 sweep 의 시간게이트 스킵을 (hour, side) 별 1건으로 집계 통지.
+
+        같은 발화 재알림 방지를 위해 통지한 key 는 ``_skip_notified`` 에 마크.
+        ``_notify`` 미연결이면 no-op. sync notify 는 to_thread 로 호출(blocking 회피).
+        """
+        buf = getattr(self, "_hour_skip_buf", [])
+        if not buf or self._notify is None:
+            return
+        from collections import defaultdict
+        groups: dict[tuple[int, str], list[str]] = defaultdict(list)
+        for r in buf:
+            groups[(r["hour"], r["side"])].append(r["symbol"])
+            self._skip_notified.add(r["key"])
+        for (hour, side), syms in sorted(groups.items()):
+            side_ko = "숏" if side == "short" else "롱"
+            head = ", ".join(syms[:15])
+            more = f" 외 {len(syms) - 15}건" if len(syms) > 15 else ""
+            text = (
+                f"KST {hour:02d}시 게이트 — {side_ko} 진입 안 함 "
+                f"({len(syms)}건): {head}{more}"
+            )
+            try:
+                await asyncio.to_thread(self._notify, text)
+            except Exception as err:  # noqa: BLE001 — 알림 실패가 거래 막지 않음
+                logger.warning("airborne hour-skip notify failed: %s", err)
+        # dedup set 무한증식 방지 — freshness 밖 발화는 재로드 안 되므로 대량
+        # 누적 시 통째 비워도 재알림 위험 낮음.
+        if len(self._skip_notified) > 5000:
+            self._skip_notified.clear()
 
     async def _route(self, intents: list) -> None:
         """route_intents 호출 — sync/async 양쪽 지원 (테스트는 sync spy).

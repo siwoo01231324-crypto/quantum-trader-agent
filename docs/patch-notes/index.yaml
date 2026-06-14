@@ -15,6 +15,25 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.67"
+    date: "2026-06-14"
+    title: "SHORT airborne 오후 역알파 시간대 제외 (14시 PF 0.18 차단, 24h→19h)"
+    tags: [feat]
+    summary: >
+      최근 22일(5/24~6/14) airborne SHORT sim 시간대별 PF 분석 — 14시 PF 0.18
+      (WR 12%, net -9.14%) 명백한 역알파, 13/16/17/04시도 net 음수(PF 0.92~1.07).
+      live-airborne-short-whitelist-v1 의 kst_entry_hours 에서 {4,13,14,16,17}
+      제외(24h→19h). ⚠️ band-aid: 본 전략 spec 5y bench 는 "TP1%/SL0.5% 에선
+      시간게이트가 PF<1 근본결함(0.5% 노이즈 손절)을 못 살림"으로 기록 — 본 trim 은
+      #380 라이브누적우선 방침하 명백 역알파(특히 14시)만 우선 차단하는 모니터링
+      조치. 근본해결은 TP/SL 재설계(Hard-OOS 6%/3% 복귀).
+    items:
+      - "production.yaml: live-airborne-short-whitelist-v1 kst_entry_hours 24h→19h ({4,13,14,16,17} 제외)."
+      - "tests/configs/test_airborne_short_whitelist_hours.py: 역알파 제외 + 황금시간 유지 회귀 3건."
+      - "spec 에 2026-06-14 시간대 PF 표 + band-aid caveat 명시. standalone whitelist yaml(deprecated) 미변경."
+      - "airborne_fire_consumer: 시간게이트로 진입 안 한 발화를 텔레그램 통지 ('KST 14시 게이트 — 숏 진입 안 함 (N건): …'). (hour,side)별 집계 + fire 단위 dedup, universe/btc 사유는 오탐 제외. notify None 이면 no-op. 테스트 5건."
+    refs:
+      - "docs/specs/strategies/live-airborne-short-whitelist-v1.md"
   - version: "v0.6.66"
     date: "2026-06-14"
     title: "synthetic 리스크매니저 stale cost-basis phantom 청산 차단 (AVAX/BTC/DOGE)"
