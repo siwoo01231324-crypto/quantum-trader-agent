@@ -79,6 +79,7 @@ class AirborneFireConsumer:
         btc_ohlcv_provider: Callable[[], "pd.DataFrame | None"] | None = None,
         notify: Callable[[str], None] | None = None,
         freshness_sec: float = 600.0,
+        long_freshness_sec: float = 90.0,
         interval_sec: float = 15.0,
         pace_sec: float = 0.15,
     ) -> None:
@@ -96,6 +97,13 @@ class AirborneFireConsumer:
         # (15s) 재평가해도 알림은 1회만. freshness(600s) 밖이면 다시 안 잡혀 무한 X.
         self._skip_notified: set[tuple[str, str, str]] = set()
         self._freshness_sec = float(freshness_sec)
+        # 롱 전용 짧은 freshness (2026-06-14) — BTC 추세필터가 롱을 막으면 fire 가
+        # store 에 남아 매 sweep 재평가되다, BTC 추세가 풀리는 순간 *묵은* fire_close
+        # 가격으로 8분 뒤 진입(stale → price-past-mark NAKED, v0.6.65). 롱은 봉마감
+        # 직후(≤~1.5분)에만 진입 — 그 안에 BTC 통과 못 하면 abandon(늦은 stale 진입
+        # 차단). BTC 상승추세 롱은 첫 sweep(~45s)에 즉시 진입 → "정각 빠른 매수".
+        # 숏은 기존 freshness 유지(재시작 backlog 보호). env AIRBORNE_LONG_FRESHNESS_SEC.
+        self._long_freshness_sec = float(long_freshness_sec)
         self._interval_sec = float(interval_sec)
         # ③ 주문 페이싱 — 동시발화(03·23시 25개+)를 한꺼번에 쏘면 거래소가 [429]
         # Too Many Requests / [40092] service unavailable 로 튕긴다(2026-06-12 audit).
@@ -237,8 +245,13 @@ class AirborneFireConsumer:
             fire_ts = fire_ts.tz_localize("UTC")
 
         # freshness — now−fire_ts ≤ freshness_sec (재시작 backlog 재매수 차단).
+        # 롱은 짧은 cap: 봉마감 직후에만 진입, BTC 추세필터로 지연돼 묵은 가격에
+        # 늦게 들어가는 것(8분 stale → NAKED) 차단. 숏은 기존 freshness 유지.
         age_sec = (now - fire_ts.to_pydatetime()).total_seconds()
-        if age_sec > self._freshness_sec:
+        eff_freshness = (
+            self._long_freshness_sec if side == "long" else self._freshness_sec
+        )
+        if age_sec > eff_freshness:
             return False
 
         # 도착시각 게이트 — floor(fire_ts,1h).KST.hour.

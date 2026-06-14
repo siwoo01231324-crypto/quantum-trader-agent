@@ -1401,6 +1401,7 @@ def _start_airborne_fire_consumer(
         return None
 
     freshness = float(os.environ.get("AIRBORNE_FIRE_FRESHNESS_SEC", "600") or 600)
+    long_freshness = float(os.environ.get("AIRBORNE_LONG_FRESHNESS_SEC", "90") or 90)
     interval = float(os.environ.get("AIRBORNE_FIRE_INTERVAL_SEC", "15") or 15)
     pace = float(os.environ.get("AIRBORNE_FIRE_PACE_SEC", "0.15") or 0.15)
 
@@ -1421,6 +1422,7 @@ def _start_airborne_fire_consumer(
         btc_ohlcv_provider=_btc_ohlcv_provider,
         notify=_skip_notify,
         freshness_sec=freshness,
+        long_freshness_sec=long_freshness,
         interval_sec=interval,
         pace_sec=pace,
     )
