@@ -15,6 +15,26 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.66"
+    date: "2026-06-14"
+    title: "synthetic 리스크매니저 stale cost-basis phantom 청산 차단 (AVAX/BTC/DOGE)"
+    tags: [fix, safety]
+    summary: >
+      reconciler 가 phantom-clear 할 때 force_sync_position 은 store qty 만 0 으로
+      만들고 PnL _cost_basis 는 stale(옛 진입가)로 잔존한다. 같은 (sid,symbol)
+      재진입 시 _lookup_position 이 store held(−x, 숏)와 부호가 반대인 stale 롱
+      진입가를 avg_cost 로 그대로 써서 synthetic 이 stop_loss 즉시 오발동 →
+      reduce_only 로 진입가에 −0.8% flat 청산(AVAX 01:01 사고: 거래소 실체결 3건
+      Sell/Buy(reduceOnly)/Sell 로 확인). 부호 불일치 = cost basis 무효 → synthetic
+      평가 skip(거래소 native TP/SL 가 커버), 다음 record_fill 이 갱신하면 재개.
+      관측용 STOP-FIRE 진단 로그(entry/last/water_mark/stale_wm/dyn_policy) 추가.
+    items:
+      - "live_position_risk._lookup_position: cb_held 와 held 부호 불일치면 avg_cost=0 반환 → 호출부 skip. 부호 일치(정상 숏)는 그대로 발동."
+      - "STOP-FIRE INFO 로그 추가(동작 변화 없음) — 다음 발생 시 stale 필드 사실 확정용."
+      - "회귀 테스트 2건: 부호불일치 skip / 정상 숏 발동 유지. probe_bitget_live_state.py(읽기전용 거래소 상태 조회) 추가."
+      - "후속(미포함): force_sync 시 cost-basis 리셋(근본), coordinator SL/TP 원자등록·per-symbol lock(double-entry race), 4중 보호 메커니즘 단일 PositionManager 수렴."
+    refs:
+      - "docs/journal/2026-06-12-signal-fill-audit.md"
   - version: "v0.6.65"
     date: "2026-06-13"
     title: "보호주문 price-past-mark 일반화 — stale 지연진입 NAKED 방지 (40917 적발)"

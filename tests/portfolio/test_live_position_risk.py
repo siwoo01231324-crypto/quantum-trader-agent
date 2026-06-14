@@ -453,3 +453,49 @@ class TestPendingExitTimeoutSelfHeal:
         intents2 = mgr.evaluate("005930", Decimal("76400"), _now())
         assert intents2 == []
         assert ("live_rsi", "005930") not in mgr._pending_exit
+
+
+class TestCostBasisSignMismatch:
+    """AVAX/BTC/DOGE 2026-06-14 회귀 — reconciler phantom-clear 후 재진입 시
+    PnL cost basis 가 stale(반대부호 옛 진입가)로 남아 synthetic 이 진입 즉시
+    오발동 reduce_only 청산(−0.8% flat)하던 사고. 부호 불일치면 평가 skip."""
+
+    def test_sign_mismatch_skips_synthetic_stop(self):
+        store = StrategyPositionStore()
+        pnl = PnLAggregator()
+        # 1) 이전 사이클: 롱 진입 → cost basis (+23.4, 6.572)
+        pnl.record_fill(
+            strategy_id="momo", symbol="AVAXUSDT", side="buy",
+            qty=Decimal("23.4"), price=Decimal("6.572"),
+        )
+        # 2) reconciler phantom-clear: store qty 0 (cost basis 는 stale 잔존)
+        store.force_sync_position(
+            strategy_id="momo", symbol="AVAXUSDT", qty=Decimal("0"),
+        )
+        # 3) 재진입 숏: store held -23.4 (cost basis 는 아직 stale 롱 +23.4)
+        store.force_sync_position(
+            strategy_id="momo", symbol="AVAXUSDT", qty=Decimal("-23.4"),
+        )
+        captured: list = []
+        mgr = LivePositionRiskManager(
+            position_store=store, pnl_aggregator=pnl,
+            wal_observer=captured.append,
+        )
+        mgr.register_strategy_policy(
+            "momo", stop_loss_pct=0.03, take_profit_pct=0.06,
+        )
+        # stale avg_cost(6.572) 기준이면 숏 SL=6.572×1.03=6.769 → last 6.8 에서
+        # 오발동했어야 함. 부호 불일치 skip 으로 청산 intent 없어야 한다.
+        intents = mgr.evaluate("AVAXUSDT", Decimal("6.8"), _now())
+        assert intents == []
+
+    def test_matching_short_still_fires(self):
+        """부호 일치(정상 숏)면 stop 정상 발동 — 보호 회귀 없음."""
+        mgr, _ = _setup_short(
+            symbol="AVAXUSDT", entry_price=6.757, qty=23.4,
+            stop_loss_pct=0.005,
+        )
+        # 숏 SL = 6.757×1.005 = 6.790. last 6.80 ≥ 6.790 → 정상 발동(cover=buy).
+        intents = mgr.evaluate("AVAXUSDT", Decimal("6.80"), _now())
+        assert len(intents) == 1
+        assert intents[0].side == "buy"
