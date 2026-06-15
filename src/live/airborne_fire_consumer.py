@@ -80,6 +80,7 @@ class AirborneFireConsumer:
         notify: Callable[[str], None] | None = None,
         freshness_sec: float = 600.0,
         long_freshness_sec: float = 90.0,
+        short_block_hours: "frozenset[int] | None" = None,
         interval_sec: float = 15.0,
         pace_sec: float = 0.15,
     ) -> None:
@@ -104,6 +105,15 @@ class AirborneFireConsumer:
         # 차단). BTC 상승추세 롱은 첫 sweep(~45s)에 즉시 진입 → "정각 빠른 매수".
         # 숏은 기존 freshness 유지(재시작 backlog 보호). env AIRBORNE_LONG_FRESHNESS_SEC.
         self._long_freshness_sec = float(long_freshness_sec)
+        # 숏 차단 시간대 (2026-06-15) — 해당 KST 시각의 SHORT 발화는 진입 안 함.
+        # 기본 {7}: KST 07시 = 유럽장 시작 거래량 급증. 이 시각엔 평소 숏 신호가
+        # 적은데(대개 롱), 숏이 다발로 뜨면 = 많은 종목이 BB 상단 동시 터치 =
+        # 본격 상승추세 신호 → 숏 진입 시 줄줄이 깔림(2026-06-15 07시 실거래
+        # -21.96 USDT, 23건 중 21패). LONG 은 영향 없음(이 가드는 short 만).
+        # env AIRBORNE_SHORT_BLOCK_HOURS (csv). None → {7}.
+        self._short_block_hours = (
+            frozenset({7}) if short_block_hours is None else frozenset(short_block_hours)
+        )
         self._interval_sec = float(interval_sec)
         # ③ 주문 페이싱 — 동시발화(03·23시 25개+)를 한꺼번에 쏘면 거래소가 [429]
         # Too Many Requests / [40092] service unavailable 로 튕긴다(2026-06-12 audit).
@@ -258,6 +268,19 @@ class AirborneFireConsumer:
         bar_close = fire_ts.floor("1h")
         hour_kst = int(bar_close.tz_convert(_KST).hour)
         bar_open_key = self._bar_open_key(fire_ts)
+
+        # 숏 차단 시간대 (2026-06-15) — KST 07시 등에 숏 다발 = 상승추세 신호로
+        # 보고 SHORT 진입 안 함. LONG 은 통과. short-whitelist·kst-hours 양쪽
+        # 07 숏을 단일 지점에서 차단(07 롱은 kst-hours 게이트로 그대로 진입).
+        if side == "short" and hour_kst in self._short_block_hours:
+            if self._notify is not None:
+                key = (symbol, side, bar_open_key)
+                if key not in self._skip_notified:
+                    self._hour_skip_buf.append({
+                        "symbol": symbol, "side": side, "hour": hour_kst,
+                        "key": key, "reason": "short_block",
+                    })
+            return False
 
         entered_any = False
         # 시간게이트가 binding reason 인지 추적 — side 매칭 spec 중 hour 게이트를

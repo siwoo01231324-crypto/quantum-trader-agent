@@ -15,6 +15,23 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.70"
+    date: "2026-06-15"
+    title: "KST 07시 숏 진입 차단 — 유럽장 상승추세 가드"
+    tags: [feat, safety]
+    summary: >
+      KST 07시(유럽장 시작·거래량 급증)는 평소 숏 신호가 적은데(대개 롱), 숏이
+      다발로 뜨면 = 많은 종목이 BB 상단 동시 터치 = 본격 상승추세 신호 → 이 시각
+      숏 진입은 줄줄이 깔린다(2026-06-15 07시 실거래 -21.96 USDT, 23건 중 21패;
+      5y 숏 07시 PF 0.60 최악). AirborneFireConsumer 가 KST 07시 SHORT 발화를
+      진입 안 함(단일 지점 차단 → short-whitelist·kst-hours 양쪽 07 숏 차단,
+      07 LONG 은 그대로 통과). env AIRBORNE_SHORT_BLOCK_HOURS(csv, 기본 "7").
+    items:
+      - "AirborneFireConsumer.short_block_hours(기본 {7}): side=='short' & KST hour∈set → 진입 안 함 + 텔레그램 통지."
+      - "loop.py: AIRBORNE_SHORT_BLOCK_HOURS env 배선. LONG 은 영향 없음(가드는 short 전용)."
+      - "테스트 3건(차단시각 숏차단+롱통과 / 타시각 숏정상 / 기본 {7})."
+    refs:
+      - "src/live/airborne_fire_consumer.py"
   - version: "v0.6.69"
     date: "2026-06-14"
     title: "롱 진입 정각 빠른 매수 — BTC필터 지연 stale 진입(8분) 차단"

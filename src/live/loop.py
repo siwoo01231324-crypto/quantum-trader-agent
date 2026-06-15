@@ -1402,6 +1402,11 @@ def _start_airborne_fire_consumer(
 
     freshness = float(os.environ.get("AIRBORNE_FIRE_FRESHNESS_SEC", "600") or 600)
     long_freshness = float(os.environ.get("AIRBORNE_LONG_FRESHNESS_SEC", "90") or 90)
+    # 숏 차단 시간대 — KST 07시 기본 (유럽장 상승추세 가드, 2026-06-15). csv.
+    _sbh_env = os.environ.get("AIRBORNE_SHORT_BLOCK_HOURS", "7")
+    short_block_hours = frozenset(
+        int(h) for h in _sbh_env.split(",") if h.strip().isdigit()
+    )
     interval = float(os.environ.get("AIRBORNE_FIRE_INTERVAL_SEC", "15") or 15)
     pace = float(os.environ.get("AIRBORNE_FIRE_PACE_SEC", "0.15") or 0.15)
 
@@ -1423,6 +1428,7 @@ def _start_airborne_fire_consumer(
         notify=_skip_notify,
         freshness_sec=freshness,
         long_freshness_sec=long_freshness,
+        short_block_hours=short_block_hours,
         interval_sec=interval,
         pace_sec=pace,
     )
