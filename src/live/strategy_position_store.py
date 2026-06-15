@@ -282,8 +282,10 @@ class StrategyPositionStore:
             payload.get("client_order_id", "")
         )
         if not strategy_id:
-            logger.warning(
-                "ingest_fill_event: cannot resolve strategy_id (coid=%r)",
+            # 2026-06-15 WARN→DEBUG: 네이티브 TP/SL·수동청산(숫자 broker coid)은
+            # 귀속 불가가 정상. replay(재시작)+매 미귀속 live fill 마다 폭주.
+            logger.debug(
+                "ingest_fill_event: cannot resolve strategy_id (coid=%r) — skip",
                 payload.get("client_order_id"),
             )
             return
