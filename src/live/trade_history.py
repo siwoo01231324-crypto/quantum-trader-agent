@@ -168,6 +168,12 @@ def reconstruct_trades(wal_paths: list[Path] | list[str]) -> list[Trade]:
     """
     legs: dict[tuple[str, str], _Leg] = {}
     trades: list[Trade] = []
+    # 2026-06-15 — 귀속 불가 fill 은 per-fill WARN 대신 호출당 1줄 집계.
+    # reconstruct_trades 는 대시보드 /api/trade_history·/strategy_positions 가
+    # 매 5~10s 폴링마다 *전체 WAL* 을 재구성하며 호출 → 네이티브 TP/SL·수동청산
+    # (숫자 broker coid, 미귀속) fill 마다 WARN 찍으면 폴링마다 수만 줄 폭주
+    # (2026-06-15 57,843줄). 거래 무관 노이즈라 DEBUG 요약으로 강등.
+    _unresolved = 0
 
     for path in wal_paths:
         events, _corruptions = replay(path)
@@ -183,10 +189,7 @@ def reconstruct_trades(wal_paths: list[Path] | list[str]) -> list[Trade]:
                 continue
             strategy_id = _resolve_strategy(payload)
             if not strategy_id:
-                logger.warning(
-                    "reconstruct_trades: cannot resolve strategy_id (coid=%r)",
-                    payload.get("client_order_id"),
-                )
+                _unresolved += 1
                 continue
             try:
                 qty = Decimal(str(raw_qty))
@@ -282,6 +285,14 @@ def reconstruct_trades(wal_paths: list[Path] | list[str]) -> list[Trade]:
             holding_seconds=None,
             status="open",
         ))
+
+    if _unresolved:
+        # 호출당 1줄 DEBUG 요약 (per-fill WARN 폭주 대체). 네이티브 TP/SL·수동청산
+        # 등 숫자 broker coid 라 strategy 귀속 불가 → 페어링 제외된 fill 수.
+        logger.debug(
+            "reconstruct_trades: %d fills with unresolvable strategy_id skipped "
+            "(native TP/SL / manual close — expected)", _unresolved,
+        )
 
     trades.sort(key=lambda t: (t.entry_ts, t.symbol))
     return trades
