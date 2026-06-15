@@ -314,6 +314,20 @@ class PnLAggregator:
         self._cost_basis[key] = (held, avg)
         return realized
 
+    def reset_cost_basis(self, strategy_id: str, symbol: str) -> None:
+        """(strategy_id, symbol) 의 cost basis 항목 제거.
+
+        reconciler 가 store 를 broker 실측 0(flat)으로 정리할 때 호출한다.
+        미리셋 시: 다전략 동시보유 종목의 청산 fill 이 귀속 불가로 drop 되면
+        (``sole_holder_strategy`` None), 이 cost_basis 가 옛 진입가로 stale
+        잔존 → 다음 진입과 blend 되어 평균진입가가 실제보다 어긋남 →
+        LivePositionRiskManager 가 그 stale 평균으로 stop 평가해 조기 손절
+        오발동 (XRP 2026-06-15 11:01 -0.09% 청산; v0.6.66 "force_sync 시
+        cost-basis 리셋" 미포함 후속). 실현 PnL 누적(_cum_*)엔 영향 없음 —
+        진행 중 포지션의 평균진입가 추적만 비운다.
+        """
+        self._cost_basis.pop((strategy_id, symbol), None)
+
     def _refresh_business_window(self) -> None:
         bd = self._business_date(self._kst_now())
         ym = (bd.year, bd.month)

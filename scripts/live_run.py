@@ -1266,6 +1266,11 @@ async def _run_pipeline_attached(
             orch = getattr(state, "orchestrator", None)
             if orch is not None and hasattr(orch, "sync_live_entered"):
                 orch.sync_live_entered(sid, symbol, float(qty))
+            # 2026-06-15 — store 가 0(flat)으로 정리되면 PnL cost_basis 도 리셋.
+            # 미리셋 시 다전략 청산 drop 으로 stale 된 진입가가 다음 진입과 blend
+            # → synthetic 조기 손절 오발동(XRP -0.09% 청산, v0.6.66 미포함 후속).
+            if float(qty) == 0 and pnl_aggregator is not None:
+                pnl_aggregator.reset_cost_basis(sid, symbol)
 
         reconciler = PositionReconciler(
             position_store=position_store,
@@ -1746,6 +1751,10 @@ async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
             orch = getattr(dashboard_state, "orchestrator", None)
             if orch is not None and hasattr(orch, "sync_live_entered"):
                 orch.sync_live_entered(sid, symbol, float(qty))
+            # 2026-06-15 — store 0(flat) 정리 시 PnL cost_basis 리셋 (위와 동일,
+            # stale 진입가 blend → 조기 손절 오발동 차단).
+            if float(qty) == 0 and pnl_aggregator is not None:
+                pnl_aggregator.reset_cost_basis(sid, symbol)
 
         reconciler = PositionReconciler(
             position_store=position_store,
