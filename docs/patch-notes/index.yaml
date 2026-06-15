@@ -15,6 +15,25 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.72"
+    date: "2026-06-15"
+    title: "live 포지션 시간기반 청산(timeout) — 상승장 숏 무한정 깔림 차단"
+    tags: [feat, safety]
+    summary: >
+      live 엔 포지션 보유시간 제한이 없어(sim 은 4봉/1h hold) TP/SL 닿을 때까지
+      무한 보유 → 상승장에서 숏이 줄줄이 깔린다(2026-06-15 07시 BTC/ETH/DOGE:
+      sim 은 1h timeout~flat 인데 live 는 2h+ 보유해 -6% ROE 손실). 대시보드 sim
+      PF(1.7)가 곧 "timeout 포함" 성적 — live 에 같은 timeout 을 줘 수렴시킨다.
+      LivePositionRiskManager 가 진입 후 max_hold_sec(기본 3600=1h) 경과 +
+      TP/SL 미도달이면 시장가 reduce_only 청산. 거래소 네이티브 TP/SL 이 있어도
+      동작(거래소는 가격 임계만, 시간청산 안 함). env AIRBORNE_MAX_HOLD_SEC(0=비활성).
+    items:
+      - "LivePositionRiskManager.max_hold_sec + _entry_ts(lazy stamp). evaluate 가 native 체크보다 먼저 timeout 평가(네이티브 있어도 발동), pending-guard 는 존중."
+      - "reason='live_time_exit', reduce_only. entry_ts 는 flat 시 pop(재진입 타이머 리셋)."
+      - "live_run: AIRBORNE_MAX_HOLD_SEC env 배선(양 파이프라인). 기본 3600. 기존 가격 SL/TP/trailing·pending-guard 불변."
+      - "테스트 8건(max_hold 후 발동 / 전 미발동 / None 비활성 / 네이티브 있어도 발동 / 네이티브 가격청산 skip 유지 / 가격 SL 불변 / 재진입 리셋)."
+    refs:
+      - "src/portfolio/live_position_risk.py"
   - version: "v0.6.71"
     date: "2026-06-15"
     title: "reconcile flat 시 PnL cost-basis 리셋 — stale 진입가 조기손절 차단"
