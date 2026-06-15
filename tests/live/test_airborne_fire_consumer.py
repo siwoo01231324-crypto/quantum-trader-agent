@@ -113,6 +113,9 @@ def _consumer(store, orch, specs, **kw):
         notify=kw.pop("notify", None),
         freshness_sec=kw.pop("freshness_sec", 600.0),
         long_freshness_sec=kw.pop("long_freshness_sec", 90.0),
+        # 테스트 기본은 빈 set — wall-clock 이 07시여도 기존 테스트가 안 깨지게.
+        # short-block 전용 테스트만 명시적으로 hours 지정.
+        short_block_hours=kw.pop("short_block_hours", frozenset()),
         interval_sec=kw.pop("interval_sec", 15.0),
     )
     return c, routed
@@ -493,6 +496,59 @@ def test_short_not_affected_by_long_freshness():
     )
     assert asyncio.run(c.sweep_once()) == 1
     assert orch.calls[0]["side"] == "short"
+
+
+# ── (i) 숏 차단 시간대 (07시 상승추세 가드) ──────────────────────────────────
+
+
+def test_short_block_hour_blocks_short_keeps_long():
+    """차단 시각의 SHORT 는 진입 안 함 + 알림, 같은 시각 LONG 은 그대로 진입."""
+    ts = _recent_iso(minutes_ago=1)
+    h = int(pd.Timestamp(ts).tz_convert("Asia/Seoul").floor("1h").hour)
+    # SHORT @ 차단시각 → 차단
+    msgs: list[str] = []
+    orch_s = _FakeOrch()
+    c_s, _ = _consumer(
+        _FakeStore([_fire("SOLUSDT", "short", ts)]), orch_s,
+        [_spec(hours=frozenset({h}), sides=frozenset({"short"}))],
+        short_block_hours=frozenset({h}), notify=msgs.append,
+    )
+    assert asyncio.run(c_s.sweep_once()) == 0
+    assert orch_s.calls == []
+    assert msgs and "SOLUSDT" in msgs[0]
+    # LONG @ 같은 시각 → 통과 (가드는 short 전용)
+    orch_l = _FakeOrch()
+    c_l, _ = _consumer(
+        _FakeStore([_fire("SOLUSDT", "long", ts)]), orch_l,
+        [_spec(hours=frozenset({h}), sides=frozenset({"long", "short"}))],
+        short_block_hours=frozenset({h}),
+    )
+    assert asyncio.run(c_l.sweep_once()) == 1
+    assert orch_l.calls[0]["side"] == "long"
+
+
+def test_short_not_blocked_at_other_hours():
+    """차단 집합 밖 시각의 SHORT 는 정상 진입."""
+    ts = _recent_iso(minutes_ago=1)
+    h = int(pd.Timestamp(ts).tz_convert("Asia/Seoul").floor("1h").hour)
+    other = frozenset({(h + 5) % 24})  # fire 시각 제외
+    orch = _FakeOrch()
+    c, _ = _consumer(
+        _FakeStore([_fire("SOLUSDT", "short", ts)]), orch,
+        [_spec(hours=frozenset({h}), sides=frozenset({"short"}))],
+        short_block_hours=other,
+    )
+    assert asyncio.run(c.sweep_once()) == 1
+
+
+def test_short_block_default_is_kst_7():
+    """ctor short_block_hours=None → 기본 {7} (KST 07시 유럽장 상승추세 가드)."""
+    c = AirborneFireConsumer(
+        fire_store=_FakeStore([]), orchestrator=_FakeOrch(),
+        strategy_specs=[_spec()], route_intents=lambda i: None,
+        equity_provider=lambda: 1.0,
+    )
+    assert c._short_block_hours == frozenset({7})
 
 
 # ── run_loop ─────────────────────────────────────────────────────────────────
