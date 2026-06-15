@@ -15,6 +15,24 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.71"
+    date: "2026-06-15"
+    title: "reconcile flat 시 PnL cost-basis 리셋 — stale 진입가 조기손절 차단"
+    tags: [fix, safety]
+    summary: >
+      다전략 동시보유 종목의 청산 fill 이 귀속 불가(sole_holder None)로 drop 되면
+      PnL cost_basis 가 옛 진입가로 stale 잔존하고, reconciler 는 store qty 만 0 으로
+      정리(cost_basis 방치)했다. 다음 진입이 그 stale 평균과 blend 되어 평균진입가가
+      실제보다 어긋나 → LivePositionRiskManager 가 stale 평균으로 stop 평가 → 조기
+      손절 오발동(XRP 2026-06-15 11:01: 실진입 1.1816인데 blend 1.1713 으로 평가돼
+      -0.09% 청산). v0.6.66 의 "force_sync 시 cost-basis 리셋(근본)" 미포함 후속을 구현.
+    items:
+      - "PnLAggregator.reset_cost_basis(sid, symbol): (sid,symbol) cost_basis 항목 제거. 실현 PnL 누적 불변."
+      - "live_run.py: reconciler on_position_synced 콜백이 qty==0(flat) 시 pnl_aggregator.reset_cost_basis 호출 (attached + _run_pipeline 양 경로)."
+      - "테스트 4건: pop/멱등 / 실현불변 / 재진입 blend 제거 / reconcile phantom-clear→리셋 통합."
+    refs:
+      - "src/live/pnl_aggregator.py"
+      - "src/live/position_reconciler.py"
   - version: "v0.6.70"
     date: "2026-06-15"
     title: "KST 07시 숏 진입 차단 — 유럽장 상승추세 가드"
