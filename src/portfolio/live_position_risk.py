@@ -373,6 +373,94 @@ class LivePositionRiskManager:
 
         return intents
 
+    def sweep_timeouts(
+        self,
+        now: datetime,
+        price_lookup: Callable[[str], Decimal | None] | None = None,
+    ) -> list[OrderIntent]:
+        """Feed-독립 벽시계 timeout sweep — 보유 포지션 전체를 주기적으로 청산 점검.
+
+        틱 구동 ``evaluate()`` 는 mark-price tick 이 *도착한* 종목만 평가한다
+        (loop: ``evaluate(tick.symbol, ...)``). 토큰화 주식(NVDA/SPYUSDT)처럼
+        ticker push 가 멈춘 종목은 evaluate 가 영영 안 불려 max_hold 가 지나도
+        timeout 청산이 안 됐다 — 가격이 안 움직여 TP/SL 에도 안 걸리고 timeout 도
+        못 도는 catch-22 (2026-06-16 NVDA/SPY 무한보유 사고. 같은 16:0x 진입분 중
+        틱 도는 BTC 만 정시 timeout, 틱 멈춘 NVDA/SPY 만 잔존).
+
+        본 sweep 은 inbound tick 과 무관하게 호출돼(loop 의 주기 task) 보유분을
+        순회하며 max_hold 경과분을 시장가 reduce_only 로 청산한다. **timeout 전용** —
+        가격 SL/TP/trailing 은 평가하지 않는다 (stale price 오발동 방지; 가격청산은
+        틱 경로가 담당). ``max_hold_sec`` 비활성(None)이면 즉시 빈 리스트.
+
+        entry_ts 는 틱 경로가 이미 정확히 stamp 했으면 그 값으로 정시 청산. 한 번도
+        틱을 못 받아 미stamp 면 *이번 sweep 에 stamp 하고 skip* — 방금 진입분을
+        즉시 죽이지 않도록 baseline 부터 카운트(최악 max_hold+sweep_interval 보유).
+        """
+        if self._max_hold_sec is None:
+            return []
+        intents: list[OrderIntent] = []
+        for strategy_id in list(self._policies):
+            for symbol, _qty in self._position_store.get_positions(strategy_id):
+                held, avg_cost = self._lookup_position(strategy_id, symbol)
+                if held == 0 or avg_cost <= 0:
+                    continue
+                key = (strategy_id, symbol)
+                entry_ts = self._entry_ts.get(key)
+                if entry_ts is None:
+                    # 틱 한 번도 못 받음 — 지금부터 baseline (다음 sweep 부터 카운트).
+                    self._entry_ts[key] = now
+                    continue
+                if (now - entry_ts).total_seconds() < self._max_hold_sec:
+                    continue
+                # in-flight exit guard — evaluate() 와 동일 self-heal.
+                pending_ts = self._pending_exit.get(key)
+                if pending_ts is not None:
+                    if (now - pending_ts).total_seconds() < self._pending_exit_timeout_sec:
+                        continue
+                    self._pending_exit.pop(key, None)
+                is_short = held < 0
+                last_price: Decimal | None = None
+                if price_lookup is not None:
+                    try:
+                        lp = price_lookup(symbol)
+                        last_price = lp if lp is None or isinstance(lp, Decimal) else Decimal(str(lp))
+                    except Exception:  # noqa: BLE001 — 가격조회 실패가 청산을 막으면 안 됨
+                        last_price = None
+                if last_price is None or last_price <= 0:
+                    last_price = avg_cost  # 시장가 reduce_only — 참조가, stale 허용.
+                pct_change = float((last_price - avg_cost) / avg_cost)
+                intents.append(OrderIntent(
+                    strategy_id=strategy_id,
+                    symbol=symbol,
+                    side="buy" if is_short else "sell",
+                    qty=float(abs(held)),
+                    reason=(
+                        f"live_time_exit:entry={avg_cost},last={last_price},"
+                        f"pct={pct_change:+.4f},src=sweep"
+                    ),
+                    reduce_only=True,
+                ))
+                logger.info(
+                    "live_risk SWEEP-TIMEOUT sid=%s %s held=%s entry=%s last=%s "
+                    "held_sec=%.0f max_hold=%.0f",
+                    strategy_id, symbol, held, avg_cost, last_price,
+                    (now - entry_ts).total_seconds(), self._max_hold_sec,
+                )
+                self._emit_stop_event(
+                    strategy_id=strategy_id,
+                    symbol=symbol,
+                    trigger="time_exit",
+                    avg_cost=avg_cost,
+                    last_price=last_price,
+                    qty=abs(held),
+                    pct_change=pct_change,
+                    ts=now,
+                )
+                self._high_water.pop(key, None)
+                self._dynamic_policies.pop(key, None)
+                self._pending_exit[key] = now
+        return intents
+
     def policies(self) -> dict[str, StopTpPolicy]:
         """Read-only view for tests and dashboard /strategies/{id}/policy."""
         return dict(self._policies)

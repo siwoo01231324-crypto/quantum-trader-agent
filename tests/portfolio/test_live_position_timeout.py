@@ -80,6 +80,69 @@ def test_price_sl_still_fires_before_timeout_when_no_native():
     assert "stop_loss" in intents[0].reason
 
 
+def test_sweep_fires_for_tick_starved_position():
+    """틱 한 번도 못 받은 종목 — sweep 이 baseline stamp 후 max_hold 경과 시 청산.
+
+    NVDA/SPYUSDT 무한보유 사고 재현: evaluate() 가 한 번도 안 불려도(틱 0)
+    sweep 이 청산해야 한다. 첫 sweep 은 baseline stamp + skip, 그 다음 max_hold
+    경과한 sweep 에서 발동.
+    """
+    mgr, _s, _p = _mgr(side="sell", entry=100.0, max_hold_sec=3600.0)
+    # 틱 없이 sweep 만 — 첫 호출은 baseline stamp, 발동 없음.
+    assert mgr.sweep_timeouts(_T0, lambda s: None) == []
+    # max_hold 경과 → 시장가 커버.
+    intents = mgr.sweep_timeouts(_T0 + timedelta(seconds=3601), lambda s: None)
+    assert len(intents) == 1
+    assert intents[0].side == "buy"
+    assert intents[0].reduce_only is True
+    assert "time_exit" in intents[0].reason
+    assert "src=sweep" in intents[0].reason
+
+
+def test_sweep_uses_tick_stamped_entry_ts():
+    """evaluate() 가 이미 stamp 한 entry_ts 를 sweep 이 그대로 써 정시 청산."""
+    mgr, _s, _p = _mgr(side="sell", entry=100.0, max_hold_sec=3600.0)
+    assert mgr.evaluate("X", Decimal("100.0"), _T0) == []   # entry_ts=T0 (정확)
+    # baseline skip 없이 바로 정시 청산 (entry_ts 가 이미 T0).
+    intents = mgr.sweep_timeouts(_T0 + timedelta(seconds=3601), lambda s: Decimal("100.0"))
+    assert len(intents) == 1
+    assert "time_exit" in intents[0].reason
+
+
+def test_sweep_disabled_when_max_hold_none():
+    mgr, _s, _p = _mgr(max_hold_sec=None)
+    assert mgr.sweep_timeouts(_T0, lambda s: None) == []
+    assert mgr.sweep_timeouts(_T0 + timedelta(days=10), lambda s: None) == []
+
+
+def test_sweep_is_timeout_only_not_price():
+    """sweep 은 timeout 전용 — stale price 가 SL 넘어도 가격청산 안 함(틱 경로 담당)."""
+    mgr, _s, _p = _mgr(side="sell", entry=100.0, max_hold_sec=3600.0)
+    mgr.sweep_timeouts(_T0, lambda s: Decimal("100.0"))      # baseline
+    # max_hold 전인데 가격은 SL(+0.5%) 훌쩍 초과 → sweep 은 무시(발동 0).
+    assert mgr.sweep_timeouts(_T0 + timedelta(seconds=60), lambda s: Decimal("105.0")) == []
+
+
+def test_sweep_no_double_fire_within_pending_guard():
+    """sweep 발동 직후 재호출은 in-flight guard 로 중복 발사 차단."""
+    mgr, _s, _p = _mgr(side="sell", entry=100.0, max_hold_sec=3600.0)
+    mgr.sweep_timeouts(_T0, lambda s: None)                  # baseline
+    first = mgr.sweep_timeouts(_T0 + timedelta(seconds=3601), lambda s: None)
+    assert len(first) == 1
+    # 직후(=pending guard 안) 재sweep → store 아직 held≠0 이라도 재발사 안 함.
+    again = mgr.sweep_timeouts(_T0 + timedelta(seconds=3602), lambda s: None)
+    assert again == []
+
+
+def test_sweep_fallback_price_is_avg_cost_when_lookup_none():
+    """price_lookup 가 None 이면 reason 의 last=avg_cost (시장가 참조가)."""
+    mgr, _s, _p = _mgr(side="sell", entry=100.0, max_hold_sec=3600.0)
+    mgr.sweep_timeouts(_T0, lambda s: None)
+    intents = mgr.sweep_timeouts(_T0 + timedelta(seconds=3601), lambda s: None)
+    assert len(intents) == 1
+    assert "last=100" in intents[0].reason  # avg_cost fallback
+
+
 def test_entry_ts_resets_on_flat_reentry():
     """청산(flat) 후 재진입은 timeout 타이머가 리셋된다."""
     mgr, store, pnl = _mgr(side="sell", entry=100.0, max_hold_sec=3600.0)

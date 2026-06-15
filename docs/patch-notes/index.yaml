@@ -15,6 +15,33 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.74"
+    date: "2026-06-16"
+    title: "feed-독립 timeout sweep — 틱 멈춘 종목(토큰화 주식) max_hold 청산 보장"
+    tags: [fix, safety]
+    summary: >
+      시간기반 청산(v0.6.72)이 틱 구동 evaluate(tick.symbol) 안에 있어, mark-price
+      push 가 멈춘 종목은 max_hold 가 지나도 청산이 안 되던 사각을 수정. 2026-06-16
+      NVDA/SPYUSDT 숏(16:00 UTC=01시 KST 진입)이 무한보유된 사고: 같은 16:0x 진입분
+      중 초당 틱 도는 BTC 만 정시 timeout, 가격 평평해 ticker push 멈춘 토큰화 주식
+      NVDA/SPY 만 잔존(가격이 안 움직여 TP/SL 도 안 걸리는 catch-22). 거래소는
+      시간청산을 안 하므로 백업도 없었음.
+    items:
+      - "LivePositionRiskManager.sweep_timeouts(now, price_lookup) 추가 — 보유
+         포지션 전체를 inbound tick 과 무관하게 순회해 max_hold 경과분을 시장가
+         reduce_only 로 청산. timeout 전용(가격 SL/TP/trailing 미평가 → stale price
+         오발동 방지; 가격청산은 기존 틱 경로가 담당)."
+      - "loop._run_timeout_sweep task — AIRBORNE_TIMEOUT_SWEEP_SEC(기본 30s)마다
+         sweep 호출, live_price_cache last-known price 로 라우팅(없으면 avg_cost
+         참조가). =0 으로 끄면 기존 동작. binance/bitget 양 피드 모드 공통."
+      - "entry_ts 는 틱 경로가 정확히 stamp 한 값 우선; 한 번도 틱 못 받은 종목만
+         sweep 이 baseline stamp 후 다음 주기부터 카운트(방금 진입분 즉시청산 방지)."
+      - "in-flight guard·_emit_stop_event(WAL+on_exit 재진입 해제)·water/dynamic
+         cleanup 은 evaluate 경로와 동일 재사용. 신규 테스트 6건."
+    refs:
+      - "src/portfolio/live_position_risk.py"
+      - "src/live/loop.py"
+      - "tests/portfolio/test_live_position_timeout.py"
   - version: "v0.6.72"
     date: "2026-06-15"
     title: "live 포지션 시간기반 청산(timeout) — 상승장 숏 무한정 깔림 차단"

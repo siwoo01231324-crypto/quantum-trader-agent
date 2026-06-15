@@ -970,6 +970,7 @@ async def run_shadow_loop(
         # standalone helper below so its lifecycle matches the producer task
         # (cancelled cleanly on stop_event).
         mark_price_task: asyncio.Task | None = None
+        timeout_sweep_task: asyncio.Task | None = None
         if (
             config.enable_mark_price_feed
             and config.broker_mode == "binance-testnet-shadow"
@@ -1040,6 +1041,36 @@ async def run_shadow_loop(
                 config.broker_mode, len(config.symbols),
             )
 
+        # Feed-독립 timeout sweep (2026-06-16) — 틱 멈춘 종목(토큰화 주식
+        # NVDA/SPYUSDT)도 max_hold 청산 보장. 틱 구동 evaluate 가 안 닿는 사각을
+        # 주기 sweep 으로 커버. AIRBORNE_TIMEOUT_SWEEP_SEC=0 으로 끔(기존 동작).
+        if (
+            config.enable_mark_price_feed
+            and config.position_risk_manager is not None
+        ):
+            _sweep_sec = float(
+                os.environ.get("AIRBORNE_TIMEOUT_SWEEP_SEC", "30") or 30
+            )
+            if _sweep_sec > 0:
+                timeout_sweep_task = asyncio.create_task(
+                    _run_timeout_sweep(
+                        position_risk_manager=config.position_risk_manager,
+                        router=router,
+                        kill_switch=kill_switch,
+                        wal=wal,
+                        metrics=metrics,
+                        position_store=config.position_store,
+                        stop_event=stop_event,
+                        live_price_cache=config.live_price_cache,
+                        interval_sec=_sweep_sec,
+                    ),
+                    name="timeout-sweep",
+                )
+                logger.info(
+                    "timeout sweep started (interval=%.0fs, feed-독립 max_hold 청산)",
+                    _sweep_sec,
+                )
+
         try:
             await asyncio.wait(
                 {producer_task, consumer_task},
@@ -1067,6 +1098,8 @@ async def run_shadow_loop(
                 shutdown_tasks.append(fill_task)
             if mark_price_task is not None:
                 shutdown_tasks.append(mark_price_task)
+            if timeout_sweep_task is not None:
+                shutdown_tasks.append(timeout_sweep_task)
             if fire_consumer_task is not None:
                 shutdown_tasks.append(fire_consumer_task)
             for t in shutdown_tasks:
@@ -1088,6 +1121,94 @@ async def run_shadow_loop(
 
     finally:
         lock.release()
+
+
+async def _run_timeout_sweep(
+    *,
+    position_risk_manager,
+    router,
+    kill_switch: KillSwitch,
+    wal: WAL,
+    metrics: Metrics,
+    position_store,
+    stop_event: asyncio.Event,
+    live_price_cache=None,
+    interval_sec: float = 30.0,
+) -> None:
+    """Feed-독립 주기 timeout sweep — 틱이 멈춘 종목도 max_hold 청산 보장.
+
+    틱 구동 ``position_risk_manager.evaluate(tick.symbol, ...)`` 는 mark-price
+    push 가 오는 종목만 평가한다. 토큰화 주식(NVDA/SPYUSDT)처럼 ticker 가 멈추면
+    evaluate 가 안 불려 max_hold 가 지나도 timeout 청산이 안 됐다 (2026-06-16
+    NVDA/SPY 무한보유 사고). 본 task 는 ``interval_sec`` 마다 보유 포지션 전체를
+    순회(``sweep_timeouts``)해 경과분을 시장가 reduce_only 로 청산한다. price 는
+    live_price_cache 의 last-known (없으면 avg_cost) — 시장가라 참조가면 충분.
+
+    SELL/cover 라우팅은 ``_run_mark_price_consumer`` 와 동일 (signal_emitted WAL
+    → execute_intents). 청산이 불가한 시각(예: 토큰화 주식 미장 폐장)엔 broker 가
+    reject → 다음 sweep 에서 _pending_exit self-heal 후 재시도.
+    """
+    def _price_lookup(symbol: str):
+        if live_price_cache is None:
+            return None
+        snap = live_price_cache.get_price(symbol)
+        return snap.price if snap is not None else None
+
+    while not stop_event.is_set():
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=interval_sec)
+        except asyncio.TimeoutError:
+            pass
+        if stop_event.is_set():
+            break
+        try:
+            now = datetime.now(timezone.utc)
+            intents = position_risk_manager.sweep_timeouts(now, _price_lookup)
+        except Exception as err:  # noqa: BLE001 — sweep 에러로 루프 죽이지 않음
+            logger.warning("timeout_sweep.evaluate_failed err=%s", err)
+            continue
+        for ri in intents:
+            price = _price_lookup(ri.symbol)
+            last = float(price) if price else 0.0
+            ms = MarketState(
+                tick=ExecTick(
+                    symbol=ri.symbol,
+                    bid=last * 0.9999 if last else 0.0,
+                    ask=last * 1.0001 if last else 0.0,
+                    last=last,
+                    volume=0,
+                    ts=now,
+                ),
+                adv=1_000_000.0,
+            )
+            try:
+                wal.write(WALEvent(
+                    ts=datetime.now(timezone.utc).isoformat(),
+                    event_type="signal_emitted",
+                    payload={
+                        "strategy_id": ri.strategy_id,
+                        "symbol": ri.symbol,
+                        "side": ri.side,
+                        "qty": str(ri.qty),
+                        "reason": ri.reason,
+                    },
+                ))
+            except Exception as wal_err:  # noqa: BLE001
+                logger.warning(
+                    "wal.signal_emitted_write_failed (timeout_sweep) "
+                    "strategy_id=%s error=%s", ri.strategy_id, wal_err,
+                )
+            try:
+                await execute_intents(
+                    [ri], broker=router, kill_switch=kill_switch,
+                    wal=wal, metrics=metrics, market_state=ms,
+                    position_store=position_store,
+                )
+            except Exception as exec_err:  # noqa: BLE001 — 한 종목 실패가 sweep 중단 안 함
+                logger.warning(
+                    "timeout_sweep.execute_failed sym=%s err=%s",
+                    ri.symbol, exec_err,
+                )
 
 
 async def _run_mark_price_consumer(
