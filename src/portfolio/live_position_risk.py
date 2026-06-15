@@ -77,6 +77,7 @@ class LivePositionRiskManager:
         on_exit: Callable[[str, str], None] | None = None,
         pending_exit_timeout_sec: float | None = None,
         native_tpsl_check: Callable[[str], bool] | None = None,
+        max_hold_sec: float | None = None,
     ) -> None:
         self._position_store = position_store
         self._pnl = pnl_aggregator
@@ -117,6 +118,16 @@ class LivePositionRiskManager:
             if pending_exit_timeout_sec is not None
             else self.PENDING_EXIT_TIMEOUT_SEC
         )
+        # 2026-06-15 시간기반 청산 — 진입 후 max_hold_sec 경과 + TP/SL 미도달이면
+        # 시장가 청산. 거래소 네이티브 TP/SL 이 있어도 동작(거래소는 시간청산 안
+        # 함) → 상승장 숏이 무한정 깔리는 것 차단. sim 의 4봉/1h hold 와 동일
+        # 개념(대시보드 PF 가 이 timeout 포함 성적). None 이면 비활성(기존 동작).
+        # 진입시각은 lazy 추적 — held!=0 첫 evaluate 시 stamp(재시작 시 소실 →
+        # 재스탬프, trailing high_water 와 동일 한계).
+        self._max_hold_sec: float | None = (
+            float(max_hold_sec) if max_hold_sec else None
+        )
+        self._entry_ts: dict[tuple[str, str], datetime] = {}
 
     def set_native_tpsl_check(self, check: Callable[[str], bool] | None) -> None:
         """P2 (2026-06-10) — broker adapter.has_native_tpsl 를 생성 *후* 주입.
@@ -229,27 +240,21 @@ class LivePositionRiskManager:
                 # 마크 해제. 다음 진입은 처음부터 가드 없이 정상 평가.
                 self._high_water.pop((strategy_id, symbol), None)
                 self._pending_exit.pop((strategy_id, symbol), None)
+                self._entry_ts.pop((strategy_id, symbol), None)
                 continue
 
-            # 2026-06-10 P2 — 거래소 네이티브 preset TP/SL 이 활성인 종목은
-            # synthetic 이 손 뗀다 (거래소가 라인에서 청산). 노이즈성 mark-price
-            # 틱에 synthetic 이 거래소 TP/SL 라인 도달 전 조기청산하던 사고 차단
-            # (CRDO +1.30% 에 live_stop_loss 오발동 등). preset 실패(naked)·청산된
-            # 종목은 check False → synthetic 백업 정상 작동.
-            if self._native_tpsl_check is not None and self._native_tpsl_check(symbol):
-                continue
+            key = (strategy_id, symbol)
+            # 진입 시각 lazy 기록 — held!=0 첫 평가 시 stamp (시간기반 청산용).
+            self._entry_ts.setdefault(key, ts)
 
-            # 2026-05-21 in-flight exit guard — 이전 evaluate 에서 stop/TP
+            # 2026-05-21 in-flight exit guard — 이전 evaluate 에서 stop/TP/timeout
             # 가 발사돼 SELL intent 가 broker 로 전송 중인 (sid, symbol) 은
-            # broker fill 이 도착해 store 가 0 으로 갱신될 때까지 추가 stop
-            # 평가 skip. 미가드 시: mark-price tick (1초 간격) 마다 evaluate
-            # 가 돌면서 같은 (이미 발사된) stop 을 또 fire → broker 에
-            # redundant SELL → 이미 청산된 포지션 위에 SHORT 진입.
-            #
-            # 2026-05-24 self-heal — fill 이 _pending_exit_timeout_sec 안에
-            # 안 도착하면 guard 자동 해제. broker rejection / silent drop /
-            # partial fill 누락으로 영구 stuck 되던 사고 (BTC dust 17h 방치) fix.
-            pending_ts = self._pending_exit.get((strategy_id, symbol))
+            # broker fill 이 도착해 store 가 0 으로 갱신될 때까지 추가 평가 skip.
+            # (2026-06-15 — timeout 도 이 가드를 존중하도록 native 체크보다 앞으로
+            # 이동. native 활성이어도 timeout 은 평가돼야 하므로 순서 변경.)
+            # 2026-05-24 self-heal — fill 이 _pending_exit_timeout_sec 안에 안
+            # 도착하면 guard 자동 해제. broker rejection 등 영구 stuck 사고 fix.
+            pending_ts = self._pending_exit.get(key)
             if pending_ts is not None:
                 elapsed = (ts - pending_ts).total_seconds()
                 if elapsed < self._pending_exit_timeout_sec:
@@ -259,38 +264,55 @@ class LivePositionRiskManager:
                     "elapsed=%.1fs — guard 해제, 재평가",
                     strategy_id, symbol, elapsed,
                 )
-                self._pending_exit.pop((strategy_id, symbol), None)
+                self._pending_exit.pop(key, None)
 
             # 2026-05-21 — dynamic override 가 등록되어 있으면 그것을, 없으면
             # strategy 의 정적 policy 사용 (기존 동작). ATR 기반 동적 stop 활용.
-            policy = self._dynamic_policies.get((strategy_id, symbol), static_policy)
-
+            policy = self._dynamic_policies.get(key, static_policy)
             is_short = held < 0
 
-            # Trailing-stop water mark. LONG tracks the HIGH-water (peak
-            # since entry); SHORT tracks the LOW-water (trough since entry).
-            if policy.trailing_stop_pct is not None:
-                key = (strategy_id, symbol)
-                prev_mark = self._high_water.get(key, avg_cost)
-                if is_short:
-                    if last_price < prev_mark:
-                        prev_mark = last_price
-                else:
-                    if last_price > prev_mark:
-                        prev_mark = last_price
-                self._high_water[key] = prev_mark
-            else:
-                prev_mark = avg_cost  # unused when trailing disabled
+            # 2026-06-15 시간기반 청산 — 진입 후 max_hold 경과 + TP/SL 미도달이면
+            # 시장가 청산. **거래소 네이티브 TP/SL 이 있어도 동작** (거래소는 가격
+            # 임계만, 시간청산은 안 함) → 상승장 숏이 무한정 깔리는 것 차단. sim 의
+            # 4봉/1h hold 와 동일(대시보드 PF 가 이 timeout 포함 성적).
+            triggered_reason: str | None = None
+            entry_ts = self._entry_ts.get(key)
+            if (
+                self._max_hold_sec is not None and entry_ts is not None
+                and (ts - entry_ts).total_seconds() >= self._max_hold_sec
+            ):
+                triggered_reason = "time_exit"
 
-            triggered_reason = self._check_thresholds(
-                policy=policy,
-                avg_cost=avg_cost,
-                last_price=last_price,
-                water_mark=prev_mark,
-                is_short=is_short,
-            )
             if triggered_reason is None:
-                continue
+                # 2026-06-10 P2 — 네이티브 preset TP/SL 활성 종목은 가격 임계 청산을
+                # 거래소가 담당 → synthetic 가격 청산 skip (timeout 은 위에서 이미
+                # 평가됨 — 거래소가 못 하는 시간청산만 synthetic 이 책임).
+                if self._native_tpsl_check is not None and self._native_tpsl_check(symbol):
+                    continue
+                # Trailing-stop water mark. LONG=high-water, SHORT=low-water.
+                if policy.trailing_stop_pct is not None:
+                    prev_mark = self._high_water.get(key, avg_cost)
+                    if is_short:
+                        if last_price < prev_mark:
+                            prev_mark = last_price
+                    else:
+                        if last_price > prev_mark:
+                            prev_mark = last_price
+                    self._high_water[key] = prev_mark
+                else:
+                    prev_mark = avg_cost  # unused when trailing disabled
+                triggered_reason = self._check_thresholds(
+                    policy=policy,
+                    avg_cost=avg_cost,
+                    last_price=last_price,
+                    water_mark=prev_mark,
+                    is_short=is_short,
+                )
+                if triggered_reason is None:
+                    continue
+            else:
+                # timeout 경로 — emission 로깅용 prev_mark.
+                prev_mark = self._high_water.get(key, avg_cost)
 
             pct_change = float((last_price - avg_cost) / avg_cost)
             reason = (

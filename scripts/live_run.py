@@ -1197,6 +1197,9 @@ async def _run_pipeline_attached(
                 position_store=position_store,
                 pnl_aggregator=pnl_aggregator,
                 wal_observer=_wal_observer,
+                max_hold_sec=float(
+                    os.environ.get("AIRBORNE_MAX_HOLD_SEC", "3600") or 3600
+                ),
             )
             config.position_risk_manager = risk_mgr
             logger.info(
@@ -1670,6 +1673,9 @@ async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
             position_store=position_store,
             pnl_aggregator=pnl_aggregator,
             wal_observer=_wal_observer,
+            max_hold_sec=float(
+                os.environ.get("AIRBORNE_MAX_HOLD_SEC", "3600") or 3600
+            ),
         )
         config.position_risk_manager = risk_mgr
         logger.info("LIVE_SCANNER_ENABLED=1 — LivePositionRiskManager constructed")
