@@ -1528,7 +1528,10 @@ def _start_airborne_fire_consumer(
     short_block_hours = frozenset(
         int(h) for h in _sbh_env.split(",") if h.strip().isdigit()
     )
-    interval = float(os.environ.get("AIRBORNE_FIRE_INTERVAL_SEC", "15") or 15)
+    # 2026-06-17 — poll 간격 15s→3s. 발화(history.jsonl)를 더 빨리 집어 진입 지연
+    # 단축(데몬 버퍼 단축과 합쳐 정각 대비 진입을 ~1분+ → ~20s대로). history.jsonl
+    # 로컬 파일 read 라 3s 폴링 부하 무시 가능. env AIRBORNE_FIRE_INTERVAL_SEC override.
+    interval = float(os.environ.get("AIRBORNE_FIRE_INTERVAL_SEC", "3") or 3)
     pace = float(os.environ.get("AIRBORNE_FIRE_PACE_SEC", "0.15") or 0.15)
 
     def _skip_notify(text: str) -> None:

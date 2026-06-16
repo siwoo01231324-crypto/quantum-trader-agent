@@ -311,6 +311,30 @@ def test_next_polling_wakeup_microsecond_precision():
     )
 
 
+def test_next_polling_wakeup_custom_buffer():
+    """buffer_sec 단축(진입 지연 감소) — 05:00:05 → 05:00:10 (buffer=10)."""
+    now = _dt.datetime(2026, 5, 21, 5, 0, 5, tzinfo=_dt.timezone.utc)
+    assert daemon._next_polling_wakeup(now, buffer_sec=10) == _dt.datetime(
+        2026, 5, 21, 5, 0, 10, tzinfo=_dt.timezone.utc,
+    )
+
+
+def test_next_polling_wakeup_custom_buffer_rollover():
+    """buffer 지점이 이미 지났으면 다음 시간 — 05:00:25, buffer=10 → 06:00:10."""
+    now = _dt.datetime(2026, 5, 21, 5, 0, 25, tzinfo=_dt.timezone.utc)
+    assert daemon._next_polling_wakeup(now, buffer_sec=10) == _dt.datetime(
+        2026, 5, 21, 6, 0, 10, tzinfo=_dt.timezone.utc,
+    )
+
+
+def test_next_polling_wakeup_default_unchanged():
+    """기본 인자(30)는 기존 동작 byte-identical — 05:00:25 → 05:00:30."""
+    now = _dt.datetime(2026, 5, 21, 5, 0, 25, tzinfo=_dt.timezone.utc)
+    assert daemon._next_polling_wakeup(now) == _dt.datetime(
+        2026, 5, 21, 5, 0, 30, tzinfo=_dt.timezone.utc,
+    )
+
+
 def test_run_daemon_rejects_unknown_mode():
     """Invalid mode arg should raise ValueError (no silent fallthrough)."""
     with pytest.raises(ValueError, match="unknown mode"):

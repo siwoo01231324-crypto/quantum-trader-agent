@@ -688,14 +688,22 @@ async def _run_ws_loop(
                 pass
 
 
-def _next_polling_wakeup(now_dt: datetime) -> datetime:
-    """Return the next 1h boundary +30s (UTC) strictly after ``now_dt``.
+def _next_polling_wakeup(now_dt: datetime, buffer_sec: int = 30) -> datetime:
+    """Return the next 1h boundary +``buffer_sec`` (UTC) strictly after ``now_dt``.
 
-    e.g. now=05:00:25 → 05:00:30; now=05:00:35 → 06:00:30. The +30s offset
-    lets Binance finalize the just-closed 1h bar before we REST-fetch it.
+    e.g. buffer_sec=30: now=05:00:25 → 05:00:30; now=05:00:35 → 06:00:30. The
+    offset lets Binance finalize the just-closed 1h bar before we REST-fetch it.
+
+    2026-06-17 — 진입 지연 단축. 버퍼 30s 는 봉마감 후 발화를 +30s 지연시켜(이후
+    fetch ~15s 까지 더해 median 발화 :45) consume-mode 트레이더가 정각 대비 1분+
+    늦게 진입, sim TP 가 실거래 SL 로 뒤집히던 주원인. Binance 1h klines 는 마감
+    직후 확정되므로 버퍼를 줄여도 안전. 호출부가 env ``AIRBORNE_POLL_BUFFER_SEC``
+    (기본 10s) 로 주입. 기본 인자 30 은 기존 단위테스트 byte-identical 보존용.
     Pure function — extracted for deterministic unit testing.
     """
-    candidate = now_dt.replace(minute=0, second=30, microsecond=0)
+    candidate = now_dt.replace(minute=0, second=0, microsecond=0) + timedelta(
+        seconds=int(buffer_sec)
+    )
     if candidate <= now_dt:
         candidate += timedelta(hours=1)
     return candidate
@@ -779,9 +787,12 @@ async def _run_polling_loop(
             last_universe_refresh = now_loop
             log.info("states current: %d symbols seeded", len(states))
 
-        # ── Sleep until next 1h boundary +30s (UTC) ────────────────────
+        # ── Sleep until next 1h boundary + buffer (UTC) ────────────────
+        # 버퍼 = env AIRBORNE_POLL_BUFFER_SEC (기본 10s, 기존 30s 에서 단축 →
+        # 발화·진입 지연 ~20s 절감). Binance 1h klines 는 마감 직후 확정.
         now_dt = datetime.now(timezone.utc)
-        next_wakeup = _next_polling_wakeup(now_dt)
+        _poll_buffer = int(float(os.environ.get("AIRBORNE_POLL_BUFFER_SEC", "10") or 10))
+        next_wakeup = _next_polling_wakeup(now_dt, buffer_sec=_poll_buffer)
         wait_secs = (next_wakeup - now_dt).total_seconds()
         log.info(
             "polling: next cycle at %s UTC (%.0fs sleep)",
