@@ -15,6 +15,26 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.76"
+    date: "2026-06-17"
+    title: "airborne 진입 지연 단축 — 데몬 polling 버퍼 30s→10s + 트레이더 poll 15s→3s"
+    tags: [perf, fix]
+    summary: >
+      consume-mode 진입이 정각 대비 ~1분+ 늦어(데몬 발화 median :45 + 트레이더 15s
+      poll) sim의 fire_close TP 가 실거래 SL 로 뒤집히던 체결격차를 단축. 데이터로
+      확인: sim 승률 67.5% vs 실거래 50% 격차의 본체가 이 지연/슬리피지(BTC 레짐
+      필터는 무죄 — 23시 차단 롱 10/10 sim-SL 로 정상 차단 확인).
+    items:
+      - "데몬 _next_polling_wakeup: 봉마감 후 버퍼 30s→env AIRBORNE_POLL_BUFFER_SEC
+         (기본 10s). Binance 1h klines 는 마감 직후 확정되므로 안전. 발화 ~20s 앞당김.
+         기본 인자 30 은 기존 단위테스트 byte-identical 보존."
+      - "트레이더 AirborneFireConsumer poll 간격 15s→3s (env AIRBORNE_FIRE_INTERVAL_SEC
+         기본값 하향). history.jsonl 로컬 read 라 부하 무시 가능."
+      - "합산 효과: 진입 ~88s → ~25~30s 목표. 잔여 floor 는 100종목 REST fetch ~15s."
+      - "테스트: _next_polling_wakeup buffer_sec 3건 추가, 데몬 33건 green."
+    refs:
+      - "scripts/airborne_alert_daemon.py"
+      - "src/live/loop.py"
   - version: "v0.6.75"
     date: "2026-06-16"
     title: "airborne 손익비 widening — +1.1%/-0.5% → +2.0%/-1.0% (수수료 희석·노이즈 손절 완화)"
