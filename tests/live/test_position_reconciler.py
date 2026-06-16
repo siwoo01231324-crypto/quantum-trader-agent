@@ -243,6 +243,60 @@ async def test_auto_fix_invokes_on_position_synced_callback():
 
 
 @pytest.mark.asyncio
+async def test_live_entered_reconcile_called_every_cycle_no_mismatch():
+    """★ 2026-06-16 SKYAI 회귀: store↔broker 가 일치(둘 다 보유 or 둘 다 flat)해
+    mismatch 가 없어도 on_live_entered_reconcile 가 broker 보유집합으로 호출된다.
+
+    네이티브 청산은 store·broker 가 함께 flat 이 돼 mismatch 가 없으므로, auto-fix
+    경로(on_position_synced)로는 _live_entered 해제가 안 됐다 → 종목 영구 재진입차단.
+    본 콜백은 mismatch 유무와 무관하게 매 cycle broker 보유집합을 넘겨야 한다.
+    """
+    store = StrategyPositionStore()
+    store.force_sync_position(strategy_id="scan", symbol="BTCUSDT", qty=Decimal("1"))
+    broker = _FakeBroker({"BTCUSDT": Decimal("1")})  # 완전 일치 → mismatch 없음
+    held_seen: list = []
+    rec = PositionReconciler(
+        position_store=store, broker=broker,
+        on_live_entered_reconcile=lambda held: held_seen.append(held),
+        tol=Decimal("0.001"),
+    )
+    outcome = await rec.reconcile_once()
+    assert outcome.mismatches == ()          # 일치 → mismatch 없음
+    assert held_seen == [{"BTCUSDT"}]         # 그래도 broker 보유집합으로 호출됨
+
+
+@pytest.mark.asyncio
+async def test_live_entered_reconcile_empty_when_broker_flat():
+    """broker 가 전부 flat 이면 빈 집합 전달 → orchestrator 가 전 키 해제(재진입 허용)."""
+    store = StrategyPositionStore()
+    broker = _FakeBroker({})  # broker 아무것도 안 들고 있음
+    held_seen: list = []
+    rec = PositionReconciler(
+        position_store=store, broker=broker,
+        on_live_entered_reconcile=lambda held: held_seen.append(held),
+        tol=Decimal("0.001"),
+    )
+    await rec.reconcile_once()
+    assert held_seen == [set()]
+
+
+@pytest.mark.asyncio
+async def test_live_entered_reconcile_skipped_on_broker_fetch_failure():
+    """broker fetch 실패 cycle 엔 콜백 미호출 (빈집합으로 전체 오해제 방지)."""
+    store = StrategyPositionStore()
+    broker = _FakeBroker({"BTCUSDT": Decimal("1")})
+    broker.raise_next = True
+    held_seen: list = []
+    rec = PositionReconciler(
+        position_store=store, broker=broker,
+        on_live_entered_reconcile=lambda held: held_seen.append(held),
+        tol=Decimal("0.001"),
+    )
+    await rec.reconcile_once()  # fetch raises → early return
+    assert held_seen == []
+
+
+@pytest.mark.asyncio
 async def test_on_position_synced_skipped_for_phantom_and_multi_holder():
     """auto-fix 안 하는 케이스 (phantom holder 0 / multi-holder ≥2) 는 콜백도
     호출 안 한다 — store 를 안 고쳤으니 _live_entered 도 건드리면 안 된다."""
