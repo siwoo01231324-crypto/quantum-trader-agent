@@ -139,6 +139,35 @@ class AsyncStrategyOrchestrator:
         else:
             self._live_entered.add(key)
 
+    def release_flat_live_entered(self, broker_held_symbols) -> list:
+        """broker 가 보유하지 않은 symbol 의 ``_live_entered`` 키 해제 → 재진입 허용.
+
+        네이티브/외부 청산(서버측 TP/SL 등)이 ``release_live_position`` ·
+        ``sync_live_entered`` 를 안 거치고 포지션을 닫으면(store↔broker 둘 다 flat
+        → reconciler mismatch 없음 → 기존 auto-fix sync 미동작) ``_live_entered`` 가
+        leak 돼 그 종목이 run 내내 재진입 차단됐다 (2026-06-16 SKYAI: 18시 네이티브
+        SL 청산 후 22시 재발화가 live_position_open 으로 39회 차단).
+        ``PositionReconciler`` 가 매 cycle broker 보유집합으로 호출 → broker 에 없는
+        종목 키를 해제한다.
+
+        cooldown(``_stop_cooldown_until``)은 안 건드림 — 단순 상태 정합. reconciler
+        는 broker fetch 성공 cycle 에서만 호출하므로 빈 집합으로 전체 해제되는
+        오발동 없음. 같은봉 재진입은 consumer per-bar dedup 이 별도 차단(race 무해).
+        """
+        held = {str(s).upper() for s in (broker_held_symbols or ())}
+        removed = [
+            k for k in list(self._live_entered)
+            if str(k[1]).upper() not in held
+        ]
+        for k in removed:
+            self._live_entered.discard(k)
+        if removed:
+            logger.info(
+                "release_flat_live_entered: %d keys released (broker flat) %s",
+                len(removed), removed,
+            )
+        return removed
+
     def restore_live_entered(
         self, positions: dict[str, list[tuple[str, float]]],
     ) -> None:

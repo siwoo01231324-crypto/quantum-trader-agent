@@ -15,6 +15,30 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.77"
+    date: "2026-06-17"
+    title: "재진입 가드 누수 수정 — 네이티브 청산 후 _live_entered 영구 차단 해제 (reconciler 매 cycle 정합)"
+    tags: [fix, safety]
+    summary: >
+      네이티브/외부 청산(서버측 TP/SL)이 release_live_position·sync_live_entered 를
+      안 거쳐 포지션을 닫으면 store↔broker 둘 다 flat → reconciler mismatch 없음 →
+      auto-fix sync 미동작 → orchestrator._live_entered 가 leak 돼 그 종목이 run
+      내내 재진입 차단됐다 (2026-06-16 SKYAI: 18시 네이티브 SL 청산 후 22시 재발화
+      가 live_position_open 으로 39회 차단, 같은 22시 XAG·STG 는 정상진입 → 종목한정
+      가드 누수 확정). 익절각 종목이 과거 청산 때문에 막히던 원인.
+    items:
+      - "orchestrator.release_flat_live_entered(broker_held_symbols) — broker 가
+         보유하지 않은 symbol 의 _live_entered 키 해제(재진입 허용). cooldown 불변."
+      - "PositionReconciler: on_live_entered_reconcile 콜백을 매 cycle(mismatch 유무·
+         broker fetch 성공 후) broker 보유집합으로 호출. 기존 on_position_synced
+         (auto-fix 시에만)의 사각 보완. fetch 실패 cycle 은 skip(전체 오해제 방지)."
+      - "live_run.py 양 경로(foreground state·CLI dashboard_state)에 배선."
+      - "같은봉 재진입은 consumer per-bar dedup 이 별도 차단 → broker 반영 지연 race 무해."
+      - "테스트: reconciler 3건(no-mismatch 호출·flat 빈집합·fetch실패 skip) + 기존 15 green."
+    refs:
+      - "src/portfolio/_async_orchestrator.py"
+      - "src/live/position_reconciler.py"
+      - "scripts/live_run.py"
   - version: "v0.6.76"
     date: "2026-06-17"
     title: "airborne 진입 지연 단축 — 데몬 polling 버퍼 30s→10s + 트레이더 poll 15s→3s"
