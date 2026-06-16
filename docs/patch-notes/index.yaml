@@ -15,6 +15,28 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.75"
+    date: "2026-06-16"
+    title: "airborne 손익비 widening — +1.1%/-0.5% → +2.0%/-1.0% (수수료 희석·노이즈 손절 완화)"
+    tags: [feat]
+    summary: >
+      airborne 두 전략(kst-hours, short-whitelist)의 가격 SL/TP 를 +1.1%/-0.5%
+      에서 +2.0%/-1.0%(R/R 1:2 유지, 10x 에서 +20%/-10% ROE)로 확대. 동기:
+      6/16 실거래에서 net -2.14 USDT 가 났는데 gross 는 +2.21, 수수료가 -4.35 —
+      타깃이 너무 좁아 고정 왕복수수료(~0.088%)가 거래당 큰 비중을 먹고, -0.5%
+      스톱이 노이즈에 먼저 쏘였다. 실측 비교(sim_cache 2068건, +2/-1 vs +1/-0.5):
+      손절 1035→834 감소, realistic 비용 0.10~0.15% 에서 넓힘 PF 0.98~1.07 로
+      좁힘(0.87~1.02) 대비 우위(수수료 희석). ⚠️ gross PF 는 좁힘이 높음(1.42 vs
+      1.31) — 넓힘 이득은 신호개선이 아니라 비용희석. 손실 1건이 2배라 동시보유
+      캡과 같이 봐야 하고, 23일·86% 하락장 샘플·5y 미검증. 코드 변경 없이
+      production.yaml override 로만 적용.
+    items:
+      - "production.yaml: live-airborne-bb-reversal-kst-hours / live-airborne-short-whitelist-v1 둘 다 stop_loss_pct 0.005→0.010, take_profit_pct 0.011→0.020."
+      - "spec frontmatter(stop/TP)·본문·회귀테스트 동기화(겸 기존 0.010 drift 해소). verdict 회귀테스트는 prose 문자열→profit_factor_bt<1.0 으로 안정화."
+      - "전략 코드/청산 로직 불변 — LivePositionRiskManager 가 kwargs 의 새 pct 를 그대로 사용."
+    refs:
+      - "configs/orchestrator/production.yaml"
+      - "docs/specs/strategies/live-airborne-bb-reversal-kst-hours.md"
   - version: "v0.6.74"
     date: "2026-06-16"
     title: "feed-독립 timeout sweep — 틱 멈춘 종목(토큰화 주식) max_hold 청산 보장"

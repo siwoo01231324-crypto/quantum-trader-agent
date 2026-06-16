@@ -228,10 +228,15 @@ strategies:
       # 13일 1m 실측 기반 — 5y 미검증)) 의 실시간
       # 1h hold 시뮬은 양수 net 보임 → 사용자가 현 시장에 1%/0.5% 적합하다고
       # 운영 판단. 추세 회귀 가능성 인지하고 모니터링 필요.
-      stop_loss_pct: 0.005   # -0.5% price (= -5% ROE @10x)
-      take_profit_pct: 0.011 # +1.1% price (= +11% ROE @10x). 2026-06-08 사용자
-      # 결정 — preset-on-entry 슬리피지(체결가 ↔ 신호가 차이로 실현 TP 가 ~9%대로
-      # 깎이던 것, NEAR +8.79% 사례) 보정 + "벌 때 확실히". R/R 1:2.2.
+      stop_loss_pct: 0.010   # -1.0% price (= -10% ROE @10x). 2026-06-16 widening
+      take_profit_pct: 0.020 # +2.0% price (= +20% ROE @10x). 2026-06-16 widening
+      # 손익비 widening (2026-06-16) — 기존 +1.1%/-0.5% 가 너무 좁아 (1) 노이즈에
+      # 스톱 먼저 쏘이고 (2) 고정 왕복수수료 ~0.088% 가 거래당 큰 비중을 먹어 net
+      # 적자(6/16 실거래 fee -4.35 > gross +2.21). 실측 비교(sim_cache 2068건,
+      # +2/-1 vs +1/-0.5): realistic 비용 0.10~0.15% 에서 넓힘이 PF 0.98~1.07 로
+      # 좁힘(0.87~1.02) 대비 우위 — 수수료 희석 + 손절 1035→834 감소. ⚠️ gross PF 는
+      # 좁힘이 높음(1.42 vs 1.31): 넓힘 이득은 비용희석이지 신호개선 아님. 손실 1건이
+      # 2배(-10% ROE)라 동시보유 캡과 같이 봐야. 23일·86% 하락장 샘플, 5y 미검증. R/R 1:2.
       # stop 청산 직후 같은 (sid, symbol) 재진입 15분 차단 — churn 방지.
       cooldown_after_stop_sec: 900
 
@@ -274,9 +279,11 @@ strategies:
       #   (코인 -0.5% = 포지션 -5% @10x)으로 제한.
       default_size: 0.50         # 명목 50% = 증거금 5%/종목 @10x (#380 사용자 요청)
       max_concurrent_positions: 18  # 동시 보유 상한 18종 = 증거금 90% (#380, 버퍼 10%)
-      stop_loss_pct: 0.005       # -0.5% 코인가 (= -5% ROE @10x)
-      take_profit_pct: 0.011     # +1.1% 코인가 (= +11% ROE @10x). 2026-06-08
-      # 사용자 결정 — preset-on-entry 슬리피지 보정 + "벌 때 확실히". R/R 1:2.2.
+      stop_loss_pct: 0.010       # -1.0% 코인가 (= -10% ROE @10x). 2026-06-16 widening
+      take_profit_pct: 0.020     # +2.0% 코인가 (= +20% ROE @10x). 2026-06-16 widening
+      # 손익비 widening (2026-06-16, kst-hours 와 동일) — 좁은 +1.1%/-0.5% 가 수수료
+      # 비중 과다(6/16 fee -4.35 > gross +2.21)·노이즈 손절 유발. 실측상 realistic
+      # 비용에서 +2/-1 우위(수수료 희석). R/R 1:2. 손실 2배라 동시보유 캡 병행 권장.
       retrace_ratio: 0.4         # base airborne (RETRACE_RATIO) — 알림과 동일 포착
       atr_body_mult: 0.6         # base airborne (DEFAULT_ATR_BODY_MULT_V11)
       # 2026-06-14 오후 역알파 시간대 제외 — 최근 22일(5/24~6/14) airborne SHORT

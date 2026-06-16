@@ -1,7 +1,8 @@
 """Regression — production.yaml 의 live-airborne-bb-reversal-kst-hours 가
-사용자 결정 (2026-06-05) 한 0.005/0.010 룰을 정확히 들고 있어야 한다.
+SL 1.0% / TP 2.0% 룰 (2026-06-16 손익비 widening, R/R 1:2)을 정확히 들고 있어야 한다.
 
-옛 룰 (0.03/0.06) 로 회귀 시 즉시 catch — 누가 실수로 되돌리면 CI fail.
+옛 룰 (0.03/0.06, 또는 좁은 0.005/0.011) 로 회귀 시 즉시 catch — 누가 실수로
+되돌리면 CI fail.
 
 또한 spec frontmatter 도 동일 값. 실 운영과 spec 가 mismatch 면 docs 가 거짓.
 """
@@ -27,31 +28,32 @@ def _load_strategy_kwargs(strategy_id: str) -> dict:
     )
 
 
-def test_kst_hours_uses_0_5_pct_stop():
-    """SL = 0.5% (옛 3% 에서 변경, 2026-06-05)."""
+def test_kst_hours_uses_1_0_pct_stop():
+    """SL = 1.0% (2026-06-16 widening, 옛 0.5%/3% 에서 변경)."""
     kwargs = _load_strategy_kwargs("live-airborne-bb-reversal-kst-hours")
-    assert kwargs["stop_loss_pct"] == 0.005, (
-        f"stop_loss_pct must be 0.005 (옛 0.03 에서 사용자 결정으로 변경). "
+    assert kwargs["stop_loss_pct"] == 0.010, (
+        f"stop_loss_pct must be 0.010 (2026-06-16 widening). "
         f"got {kwargs.get('stop_loss_pct')!r}"
     )
 
 
-def test_kst_hours_uses_1_0_pct_take_profit():
-    """TP = 1.0% (옛 6% 에서 변경, 2026-06-05). R/R 1:2 유지."""
+def test_kst_hours_uses_2_0_pct_take_profit():
+    """TP = 2.0% (2026-06-16 widening, 옛 1.0%/1.1%/6% 에서 변경). R/R 1:2."""
     kwargs = _load_strategy_kwargs("live-airborne-bb-reversal-kst-hours")
-    assert kwargs["take_profit_pct"] == 0.010, (
-        f"take_profit_pct must be 0.010. got {kwargs.get('take_profit_pct')!r}"
+    assert kwargs["take_profit_pct"] == 0.020, (
+        f"take_profit_pct must be 0.020 (2026-06-16 widening). "
+        f"got {kwargs.get('take_profit_pct')!r}"
     )
 
 
 def test_kst_hours_risk_reward_is_1_to_2():
-    """TP : SL 비율은 항상 1:2 (옛 룰 6%/3% 도 1:2, 새 룰 1%/0.5% 도 1:2)."""
+    """TP : SL 비율 = 1:2 (SL 1.0% / TP 2.0%, 2026-06-16 widening 후에도 유지)."""
     kwargs = _load_strategy_kwargs("live-airborne-bb-reversal-kst-hours")
     sl = kwargs["stop_loss_pct"]
     tp = kwargs["take_profit_pct"]
-    assert tp / sl == 2.0, (
+    assert abs(tp / sl - 2.0) < 1e-9, (
         f"R/R 1:2 가 깨졌다 — tp/sl = {tp/sl}. "
-        f"airborne 의 설계 손익비는 항상 1:2 (spec 참조)."
+        f"airborne 의 설계 손익비는 1:2 (spec 참조)."
     )
 
 
@@ -83,11 +85,20 @@ def test_spec_frontmatter_matches_production_yaml():
     )
 
 
-def test_spec_frontmatter_5y_verdict_reflects_new_rule():
-    """verdict_5y 는 새 룰 (REJECTED PF 0.545) 반영 — 옛 룰 PF 1.081 PASS 가 남아있으면 안 됨."""
+def test_spec_frontmatter_5y_verdict_is_rejected_with_losing_pf():
+    """5y 판정은 REJECTED 이고 profit_factor_bt < 1.0 (손실 룰) 이어야 한다.
+
+    verdict_5y prose 의 특정 숫자 문자열에 결합하지 않는다 — verdict 텍스트는
+    게이트/룰 변경마다 정당하게 재작성되므로(예: 2026-06-06 KST gate v3),
+    PF 는 전용 필드 ``profit_factor_bt`` 로 검증해 안정적인 회귀 가드로 둔다.
+    옛 룰 PF 1.081 PASS 로 회귀하면 (verdict 또는 PF 둘 중 하나로) catch.
+    """
     spec_fm = _parse_frontmatter(_SPEC.read_text(encoding="utf-8"))
     verdict = spec_fm.get("verdict_5y", "")
-    assert "REJECTED" in verdict and "0.545" in verdict, (
-        f"verdict_5y 가 옛 PF 1.081 PASS 텍스트를 유지 중 — 사용자 룰 변경 "
-        f"(2026-06-05) 미반영. got: {verdict[:120]!r}"
+    pf = spec_fm.get("profit_factor_bt")
+    assert "REJECTED" in verdict, (
+        f"verdict_5y 가 REJECTED 아님 — 5y 미통과 룰 반영 필요. got: {verdict[:120]!r}"
+    )
+    assert pf is not None and float(pf) < 1.0, (
+        f"profit_factor_bt 가 1.0 이상 — 옛 PASS 수치로 회귀? got: {pf!r}"
     )
