@@ -262,6 +262,10 @@ class AirborneFireConsumer:
             self._long_freshness_sec if side == "long" else self._freshness_sec
         )
         if age_sec > eff_freshness:
+            logger.info(
+                "airborne fire skip sym=%s side=%s reason=stale age=%.0fs cap=%.0fs",
+                symbol, side, age_sec, eff_freshness,
+            )
             return False
 
         # 도착시각 게이트 — floor(fire_ts,1h).KST.hour.
@@ -296,8 +300,16 @@ class AirborneFireConsumer:
                 continue
             any_passed_hour = True
             if spec.universe is not None and symbol not in spec.universe:
+                logger.info(
+                    "airborne fire skip sid=%s sym=%s side=%s reason=not_in_universe",
+                    spec.id, symbol, side,
+                )
                 continue
             if side == "long" and spec.btc_filter and self._btc_down_cached():
+                logger.info(
+                    "airborne fire skip sid=%s sym=%s side=long reason=btc_downtrend",
+                    spec.id, symbol,
+                )
                 continue
             if self._dedup_already(spec, symbol, bar_open_key):
                 continue
@@ -307,6 +319,11 @@ class AirborneFireConsumer:
                 equity_usdt=float(self._equity_provider()),
             )
             if intent is None:
+                logger.info(
+                    "airborne fire skip sid=%s sym=%s side=%s reason=dispatch_none "
+                    "(sizing/capital/이미진입)",
+                    spec.id, symbol, side,
+                )
                 continue
             # 발주 (run_bar OrderIntent 와 동일 라우팅) → dedup 마크. 발주를
             # await 한 뒤에 dedup 을 찍어 미발주분 재시도 가능 (orchestrator 의
