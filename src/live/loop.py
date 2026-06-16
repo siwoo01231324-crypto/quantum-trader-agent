@@ -1515,7 +1515,36 @@ def _start_airborne_fire_consumer(
         except (TypeError, ValueError):
             return 0.0
 
+    # 2026-06-17 — 레짐필터용 신선 BTC 1h. 기존엔 snapshot_cache 의 BTC 히스토리를
+    # 읽었는데 그게 stale(갱신 랙, 수시간 뒤처짐)이라 필터가 실제 BTC 추세와 어긋난
+    # 판정을 했다: 2026-06-16 14:00 UTC 실 BTC -1.39%(하락) 정상차단했으나 16:00 UTC
+    # 실 BTC -1.84%(하락)인데 snapshot 은 상승/중립으로 봐 롱 3개(MU/MRVL/SYN) 통과
+    # (btc_downtrend skip 0건). 60초마다 Binance BTC 1h 를 REST 로 직접 갱신(REST 는
+    # 한국IP 차단 없음, 데몬과 동일 경로)해 snapshot 신선도와 분리. 갱신 전/실패 시
+    # snapshot fallback (graceful). _btc_is_downtrend 는 close series 만 쓰므로 호환.
+    _btc_fresh: dict = {"df": None}
+
+    async def _btc_regime_refresh_loop():
+        from src.brokers.binance.market_ws import fetch_klines_rest
+        while not stop_event.is_set():
+            try:
+                df = await fetch_klines_rest(
+                    symbol="BTCUSDT", interval="1h", limit=260,
+                )
+                if df is not None and len(df) > 0:
+                    _btc_fresh["df"] = df
+            except Exception as err:  # noqa: BLE001 — 갱신 실패가 거래 막지 않음
+                logger.warning("btc regime refresh failed: %s", err)
+            try:
+                await asyncio.wait_for(stop_event.wait(), timeout=60.0)
+            except asyncio.TimeoutError:
+                pass
+
     def _btc_ohlcv_provider():
+        # 신선 REST 데이터 우선; 미가용(첫 갱신 전/실패) 시 snapshot fallback.
+        df = _btc_fresh.get("df")
+        if df is not None and len(df) > 0:
+            return df
         ohlcv = snapshot_cache.get("ohlcv_history")
         if isinstance(ohlcv, dict):
             return ohlcv.get("BTCUSDT")
@@ -1559,10 +1588,16 @@ def _start_airborne_fire_consumer(
     task = asyncio.create_task(
         consumer.run_loop(stop_event), name="airborne-fire-consumer",
     )
+    # 레짐필터용 신선 BTC 1h 갱신 태스크 (60s). stop_event 로 종료. consumer 와
+    # 수명 공유 — 별도 추적 불필요(stop 시 자연 종료).
+    asyncio.create_task(
+        _btc_regime_refresh_loop(), name="btc-regime-refresh",
+    )
     # run_loop 자체가 "started (decoupled from bar loop)" 를 emit — 여기선 배선
     # 세부(specs/store)만 추가 기록.
     logger.info(
-        "airborne fire consumer wired: specs=%d store=%s", len(specs), store_path,
+        "airborne fire consumer wired: specs=%d store=%s (btc-regime-refresh 60s 활성)",
+        len(specs), store_path,
     )
     return task
 
