@@ -15,6 +15,25 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.78"
+    date: "2026-06-17"
+    title: "BTC 레짐필터 신선화 — stale snapshot → 60s REST 갱신 (오판정 차단)"
+    tags: [fix, safety]
+    summary: >
+      롱 BTC 추세필터가 snapshot_cache 의 BTC 1h(갱신 랙으로 수시간 stale)를 읽어
+      실제 추세와 어긋난 판정을 했다: 2026-06-16 14:00 UTC 실 BTC -1.39%(하락)은
+      정상차단했으나, 16:00 UTC 실 BTC -1.84%(하락)인데 snapshot 은 상승/중립으로
+      봐 롱 3개(MU/MRVL/SYN) 통과(btc_downtrend skip 0건). 필터가 양방향 오작동
+      (멀쩡한 롱 차단 ↔ 하락장 롱 통과)했다. fire consumer 의 btc provider 가
+      snapshot 대신 60초마다 Binance BTC 1h 를 직접 REST 갱신하도록 분리.
+    items:
+      - "loop._btc_ohlcv_provider: 신선 REST BTC 1h 우선, 미가용 시 snapshot fallback."
+      - "loop._btc_regime_refresh_loop task(60s, stop_event 종료): fetch_klines_rest
+         로 BTCUSDT 1h 갱신. REST 는 한국IP 차단 없음(데몬 polling 과 동일 경로)."
+      - "_btc_is_downtrend 는 close series 만 사용 → 데이터 소스 교체 호환. 갱신 전
+         첫 cycle 은 snapshot fallback(graceful)."
+    refs:
+      - "src/live/loop.py"
   - version: "v0.6.76"
     date: "2026-06-17"
     title: "airborne 진입 지연 단축 — 데몬 polling 버퍼 30s→10s + 트레이더 poll 15s→3s"
