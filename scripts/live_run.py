@@ -1275,6 +1275,13 @@ async def _run_pipeline_attached(
             if float(qty) == 0 and pnl_aggregator is not None:
                 pnl_aggregator.reset_cost_basis(sid, symbol)
 
+        def _reconcile_orch_live_entered(held) -> None:
+            # 2026-06-17 — 매 cycle broker 보유집합으로 _live_entered 정합. 네이티브
+            # 청산이 가드를 안 풀어 종목 영구 재진입차단되던 leak 보완 (SKYAI).
+            orch = getattr(state, "orchestrator", None)
+            if orch is not None and hasattr(orch, "release_flat_live_entered"):
+                orch.release_flat_live_entered(held)
+
         reconciler = PositionReconciler(
             position_store=position_store,
             broker=_live_broker_adapter,
@@ -1284,6 +1291,7 @@ async def _run_pipeline_attached(
                 if state.timeline_broker is not None else None
             ),
             on_position_synced=_sync_orch_live_entered,
+            on_live_entered_reconcile=_reconcile_orch_live_entered,
             tol=Decimal("0.001"),
             interval_sec=float(os.environ.get("QTA_RECONCILE_INTERVAL_SEC", "60")),
         )
@@ -1762,12 +1770,20 @@ async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
             if float(qty) == 0 and pnl_aggregator is not None:
                 pnl_aggregator.reset_cost_basis(sid, symbol)
 
+        def _reconcile_orch_live_entered(held) -> None:
+            # 2026-06-17 — 매 cycle broker 보유집합으로 _live_entered 정합. 네이티브
+            # 청산이 가드를 안 풀어 종목 영구 재진입차단되던 leak 보완 (SKYAI).
+            orch = getattr(dashboard_state, "orchestrator", None)
+            if orch is not None and hasattr(orch, "release_flat_live_entered"):
+                orch.release_flat_live_entered(held)
+
         reconciler = PositionReconciler(
             position_store=position_store,
             broker=_live_broker_cli,
             wal_observer=_wal_observer,
             alert_publisher=lambda p: timeline_broker.publish(p),
             on_position_synced=_sync_orch_live_entered,
+            on_live_entered_reconcile=_reconcile_orch_live_entered,
             tol=Decimal("0.001"),
             interval_sec=float(os.environ.get("QTA_RECONCILE_INTERVAL_SEC", "60")),
         )

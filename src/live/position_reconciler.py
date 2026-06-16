@@ -80,6 +80,7 @@ class PositionReconciler:
         wal_observer: Callable[[WALEvent], None] | None = None,
         alert_publisher: Callable[[dict[str, Any]], None] | None = None,
         on_position_synced: Callable[[str, str, Decimal], None] | None = None,
+        on_live_entered_reconcile: Callable[[set], None] | None = None,
         tol: Decimal = Decimal("0.001"),
         interval_sec: float = 60.0,
     ) -> None:
@@ -91,6 +92,11 @@ class PositionReconciler:
         # orchestrator._live_entered 를 store 와 정합시키는 데 쓴다 — store 만
         # 고치고 _live_entered 를 방치하면 청산된 종목이 영구 진입 차단된다.
         self._on_position_synced = on_position_synced
+        # 2026-06-17: 매 cycle broker 보유집합으로 orchestrator._live_entered 정합.
+        # auto-fix(불일치)에만 의존하던 on_position_synced 의 사각 보완 — 네이티브
+        # 청산은 store↔broker 둘 다 flat 이라 불일치가 없어 _live_entered 가 leak
+        # → 종목 영구 재진입차단(2026-06-16 SKYAI). 불일치 유무와 무관하게 호출.
+        self._on_live_entered_reconcile = on_live_entered_reconcile
         self._tol = tol
         self._interval_sec = interval_sec
 
@@ -105,6 +111,19 @@ class PositionReconciler:
         except Exception as err:  # noqa: BLE001 — defensive
             logger.warning("PositionReconciler: broker fetch failed: %s", err)
             return ReconciliationOutcome((), (), ())
+
+        # 2026-06-17 — 매 cycle _live_entered 정합 (mismatch 유무와 무관, broker fetch
+        # 성공 후에만). 네이티브 청산으로 닫힌 종목은 store↔broker 일치라 아래 mismatch
+        # 가 없어 auto-fix sync 가 안 돌고 _live_entered 가 leak → 영구 재진입차단
+        # (2026-06-16 SKYAI). broker 보유집합으로 정합해 broker 에 없는 키를 해제한다.
+        if self._on_live_entered_reconcile is not None:
+            try:
+                held = {str(s).upper() for s, n in broker_net.items() if n != 0}
+                self._on_live_entered_reconcile(held)
+            except Exception as err:  # noqa: BLE001 — 정합 실패가 loop 죽이면 안 됨
+                logger.warning(
+                    "PositionReconciler: live_entered reconcile failed: %s", err,
+                )
 
         logical = {sid: dict(bucket) for sid, bucket in self._store._positions.items()}
         mismatches = reconcile_positions(logical, broker_net, tol=self._tol)
