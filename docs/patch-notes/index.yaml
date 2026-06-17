@@ -15,6 +15,27 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.79"
+    date: "2026-06-17"
+    title: "모멘텀 진입 필터 — 펌핑한 토큰 숏·폭락한 토큰 롱 차단 (승률↑·슬립꼬리↓)"
+    tags: [feat, perf]
+    summary: >
+      이미 크게 움직인 토큰 진입을 차단해 손실 꼬리를 제거. 숏은 직전24h +X%↑
+      펌핑(스퀴즈·stop 슬립 위험), 롱은 -Y%↓ 폭락(떨어지는칼)이면 skip. 백테스트
+      (sim_cache 6/01+): 숏 skip>+20% PF 1.69→1.89·승률 48→51%, 롱 skip<-10%
+      PF 1.17→1.31·41→44% — PF·승률·총합 셋 다 개선되는 positive-sum(손실꼬리만
+      제거). 실거래 슬립(-15~18% ROI, UNI/JTO/SKYAI 숏 스퀴즈)을 직접 겨냥.
+    items:
+      - "AirborneFireConsumer: klines_fetcher 주입 시 활성. 진입 전 토큰 직전24h
+         변화% 계산(1h 26봉, 5분 캐시). 숏 +AIRBORNE_SHORT_PUMP_SKIP_PCT(기본20)
+         초과면 momentum_pump skip, 롱 -AIRBORNE_LONG_CRASH_SKIP_PCT(기본10) 미만이면
+         momentum_crash skip. 임계 0=비활성. 토큰 OHLCV 미가용 시 fail-open(허용)."
+      - "loop.py 가 _token_1h_fetcher(Binance REST, 한국IP 무차단) 주입 → 프로덕션
+         활성. 테스트는 미주입=비활성이라 기존 동작 불변."
+      - "테스트 6건 추가(펌핑숏 skip·폭락롱 skip·완화 통과·fail-open·미주입 OFF), 총 32 green."
+    refs:
+      - "src/live/airborne_fire_consumer.py"
+      - "src/live/loop.py"
   - version: "v0.6.78"
     date: "2026-06-17"
     title: "BTC 레짐필터 신선화 — stale snapshot → 60s REST 갱신 (오판정 차단)"
