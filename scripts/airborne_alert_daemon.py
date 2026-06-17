@@ -78,7 +78,9 @@ log = logging.getLogger("airborne_alert_daemon")
 # 데몬 버전 — 게이트/표시 시각 의미가 바뀔 때 patch 증가 + patch-notes 추가.
 # v0.6.56 (2026-06-11): buy-time(+1) 시프트 되돌림 → 도착시각(=알림시각) 기준
 # 게이트·표시 통일 (트레이더 봉루프 decouple 게이트와 일치).
-DAEMON_VERSION = "v0.6.56"
+# v0.6.81 (2026-06-17): 알림에 진입필터(변동성/모멘텀) 차단 사유 표시 + 숏게이트를
+# production.yaml(오후 역알파 제외)과 동기화 + 숏 미거래 시각 표기.
+DAEMON_VERSION = "v0.6.81"
 
 # 2026-06-07 — Bitget venue 지원 (#airborne-bitget-venue). 실거래 트레이더가
 # Bitget top-100 을 거래하는데 알림 데몬은 Binance fapi top-100 을 봐서 알림과
@@ -114,10 +116,17 @@ except ImportError:
     # daemon-only 환경 (전략 코드 미배포) 안전 fallback. v3 set.
     _KST_HOURS_KSTHOURS: frozenset[int] = frozenset({1, 2, 3, 6, 7, 8, 23})
 
-# 2026-06-07 #380 — short-whitelist 게이트 19h → 24h (production.yaml
-# kst_entry_hours override). 알림이 실제 진입과 일치하도록 24h 로 고정.
-# (전략 모듈 _KST_HOURS_19 는 reference 로 남았지만 runtime gate 아님.)
-_KST_HOURS_SHORT_WL: frozenset[int] = frozenset(range(24))
+# 2026-06-17 — production.yaml short-whitelist kst_entry_hours 와 동기화. 24h(stale)
+# → 오후 역알파 제외(13·14·16·17) + short_block(7) 반영한 실제 게이트. 알림이
+# 실제 진입과 일치하도록. production.yaml 변경 시 같이 갱신 (drift 주의).
+_KST_HOURS_SHORT_WL: frozenset[int] = frozenset(
+    {0, 1, 2, 3, 5, 6, 8, 9, 10, 11, 12, 15, 18, 19, 20, 21, 22, 23}
+)
+# 진입 필터 임계 (트레이더 consumer 와 동일 — 알림이 실제 진입과 일치하도록).
+# env 로 트레이더와 함께 튜닝. 0 이면 해당 필터 비활성(표시 안 함).
+_MAX_VOL_PCT: float = float(os.environ.get("AIRBORNE_MAX_VOL_PCT", "5") or 5)
+_SHORT_PUMP_PCT: float = float(os.environ.get("AIRBORNE_SHORT_PUMP_SKIP_PCT", "20") or 20)
+_LONG_CRASH_PCT: float = float(os.environ.get("AIRBORNE_LONG_CRASH_SKIP_PCT", "10") or 10)
 # whitelist 활성 종목 lazy cache — daemon 수명 동안 1회 로드. weekly refresh
 # 시 daemon 재시작 필요.
 _WHITELIST_ACTIVE_CACHE: frozenset[str] | None = None
@@ -223,41 +232,70 @@ def _update_btc_trend_state(btc_hist) -> None:
         _BTC_DOWNTREND_STATE = None
 
 
-def _format_strategy_notice(*, side: str, kst_hour: int, symbol: str) -> str:
-    """이 fire 로 어떤 production 전략이 진입할지 안내 (4 줄).
+def _token_filter_metrics(history) -> "tuple[float | None, float | None]":
+    """history(1h df) → (평균 1h 변동폭%, 직전24h 변화%). 트레이더 consumer 와 동일
+    계산 — 알림이 실제 진입필터와 일치. 데이터 부족/오류 시 (None, None)."""
+    try:
+        if history is None or len(history) < 25:
+            return None, None
+        c = history["close"]
+        last = float(c.iloc[-1]); prev = float(c.iloc[-25])
+        chg = (last - prev) / prev * 100 if prev > 0 else None
+        rng = (history["high"] - history["low"]) / history["close"] * 100
+        rng = rng[history["close"] > 0]
+        vol = float(rng.mean()) if len(rng) else None
+        return vol, chg
+    except Exception:  # noqa: BLE001
+        return None, None
 
-    kst-hours 는 KST gate + BTC trend filter 두 단계 체크 (사용자 지적 반영
-    2026-06-05). 둘 다 PASS 여야 실제 진입.
 
-    시각 표기 (2026-06-11 — 봉루프 decouple): ``kst_hour`` 는 fire 의 *도착시각*
-    (= 봉 마감 = 알림시각) KST. 트레이더의 신규 게이트가 이 도착시각을 집합에
-    대조하므로 (docs/specs/airborne-fire-driven-consume.md), 게이트 판정·표시
-    모두 도착시각(= 알림시각) 하나로 통일한다. v0.6.51 의 buy-time(+1) 시프트
-    표기 ({0,2,3,4,7,8,9}) 는 되돌려 제거 — 알람이 7시에 오면 매수도 7시,
-    표시도 ``{1,2,3,6,7,8,23}`` 그대로.
+def _format_strategy_notice(*, side: str, kst_hour: int, symbol: str, history=None) -> str:
+    """이 fire 로 어떤 production 전략이 진입할지 + 막히면 어떤 필터 때문인지 안내.
+
+    체크 순서는 트레이더 consumer 와 동일: 시간게이트 → 변동성 → 모멘텀 → BTC추세.
+    ``kst_hour`` = fire 도착시각(= 봉마감 = 알림시각) KST. 변동성/모멘텀은 history
+    로 계산(consumer 와 동일 임계). history 미공급 시 그 필터는 표시 생략.
     """
-    in_kst4 = kst_hour in _KST_HOURS_KSTHOURS  # 판정 = 도착시각 (트레이더와 동일)
+    in_kst4 = kst_hour in _KST_HOURS_KSTHOURS
     in_kst19 = kst_hour in _KST_HOURS_SHORT_WL
-    in_wl = _in_trading_universe(symbol)  # #380 — 거래량 top-100 (1000SHIB↔SHIB 정규화)
-    # 표시 = 도착시각(= 알림시각) + 게이트 집합 그대로 (시프트 제거).
+    in_wl = _in_trading_universe(symbol)
+    is_short = side.lower() == "short"
     hours_label = _kst_hours_label(_KST_HOURS_KSTHOURS)
+    # 숏 미거래 시각 (전체 - 숏게이트) — 사용자 요청: 숏 진입/미진입 시각 표시.
+    wl_off_label = _kst_hours_label(frozenset(range(24)) - _KST_HOURS_SHORT_WL)
+    vol, chg = _token_filter_metrics(history)
 
-    # kst-hours: bidir + KST gate + BTC trend filter (long-only)
+    def _filter_block() -> "str | None":
+        """공통 진입필터(변동성/모멘텀) 차단 사유 — consumer 와 동일."""
+        if _MAX_VOL_PCT > 0 and vol is not None and vol > _MAX_VOL_PCT:
+            return f"❌ 고변동 {vol:.1f}%/h (>{_MAX_VOL_PCT:.0f} 필터)"
+        if chg is not None:
+            if is_short and _SHORT_PUMP_PCT > 0 and chg > _SHORT_PUMP_PCT:
+                return f"❌ 펌핑 +{chg:.0f}% (>+{_SHORT_PUMP_PCT:.0f} 숏필터)"
+            if (not is_short) and _LONG_CRASH_PCT > 0 and chg < -_LONG_CRASH_PCT:
+                return f"❌ 폭락 {chg:.0f}% (<-{_LONG_CRASH_PCT:.0f} 롱필터)"
+        return None
+    filt = _filter_block()
+
+    # kst-hours: bidir + KST gate + 변동성/모멘텀 + BTC trend(long)
     if not in_kst4:
-        kst_line = f"❌ KST {kst_hour}시 — 게이트 외 (매수 {hours_label}시만)"
-    elif (side.lower() == "long" and _BTC_DOWNTREND_STATE is True):
-        # BTC 하락추세 → LONG entry 차단. strategy 의 on_bar 와 일관.
+        kst_line = f"❌ KST {kst_hour}시 — 게이트 외 (매매 {hours_label}시만)"
+    elif filt is not None:
+        kst_line = filt
+    elif side.lower() == "long" and _BTC_DOWNTREND_STATE is True:
         kst_line = f"❌ BTC 하락추세 LONG 차단 ({_BTC_DOWNTREND_REASON or 'downtrend'})"
     else:
         kst_line = "✅ 진입 예정"
 
-    # short-whitelist: SHORT only + 거래량 top-100 + 24시간 게이트 (#380).
+    # short-whitelist: SHORT only + top-100 + 숏게이트 + 변동성/모멘텀
     if side.lower() == "long":
         wl_line = "❌ LONG 미지원 (숏 전용 전략)"
     elif not in_wl:
         wl_line = "❌ TOP100 외 종목"
     elif not in_kst19:
-        wl_line = f"❌ KST {kst_hour}시 — 게이트 외"
+        wl_line = f"❌ KST {kst_hour}시 — 숏 미거래 시각 (미거래 {wl_off_label}시)"
+    elif filt is not None:
+        wl_line = filt
     else:
         wl_line = "✅ 진입 예정"
 
@@ -356,7 +394,9 @@ def dispatch_fire(
         title = f"🔴⬇️ 숏 진입 신호 — {symbol} (1시간봉)"
         extreme_label = "최고점"
     kst_hour = _fire_arrival_kst_hour(ev.open_time)
-    notice = _format_strategy_notice(side=side, kst_hour=kst_hour, symbol=symbol)
+    notice = _format_strategy_notice(
+        side=side, kst_hour=kst_hour, symbol=symbol, history=state.history_1h
+    )
     body = (
         "✨ 40% 되돌림 발화 (Airborne v1.1)\n"
         f"   현재가: {ev.close:.6g}\n"
