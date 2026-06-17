@@ -122,16 +122,19 @@ def _consumer(store, orch, specs, **kw):
     return c, routed
 
 
-def _stub_fetcher(chg_pct):
-    """24h 변화 chg_pct% 인 합성 1h df 반환 fetcher (모멘텀 필터 테스트용).
-    chg_pct=None 이면 None 반환(미상장/실패 → fail-open 검증)."""
+def _stub_fetcher(chg_pct, range_pct=0.0):
+    """24h 변화 chg_pct% + 1h 변동폭 range_pct% 합성 1h df fetcher (필터 테스트용).
+    chg_pct=None → None 반환(미상장/실패 → fail-open 검증). range_pct 기본 0(변동성
+    필터 미발동)이라 기존 모멘텀 테스트 불변."""
     async def f(symbol):
         if chg_pct is None:
             return None
         base = 100.0
         closes = [base] * 25 + [base * (1 + chg_pct / 100.0)]  # [-25]=base,[-1]=last
+        highs = [c * (1 + range_pct / 200.0) for c in closes]
+        lows = [c * (1 - range_pct / 200.0) for c in closes]  # (high-low)/close = range_pct%
         return pd.DataFrame({
-            "open": closes, "high": closes, "low": closes,
+            "open": closes, "high": highs, "low": lows,
             "close": closes, "volume": [0.0] * 26,
         })
     return f
@@ -663,3 +666,46 @@ def test_momentum_off_without_fetcher():
         [_spec(hours=frozenset({fire_kst_hour}), sides=frozenset({"short"}))],
     )  # klines_fetcher 미주입
     assert asyncio.run(c.sweep_once()) == 1
+
+
+# ── (h) 변동성 필터 (2026-06-17) ────────────────────────────────────────────
+
+
+def test_vol_filter_skips_high_vol_coin():
+    """평균 1h 변동폭 8% (>임계 5%) 코인 → high_volatility skip (양방향)."""
+    ts = _recent_iso(minutes_ago=1)
+    h = int(pd.Timestamp(ts).tz_convert("Asia/Seoul").floor("1h").hour)
+    orch = _FakeOrch()
+    c, _ = _consumer(
+        _FakeStore([_fire("SIRENUSDT", "short", ts)]), orch,
+        [_spec(hours=frozenset({h}), sides=frozenset({"short"}))],
+        klines_fetcher=_stub_fetcher(0.0, range_pct=8.0),  # 24h 변화 0, 변동폭 8%
+    )
+    assert asyncio.run(c.sweep_once()) == 0
+    assert orch.calls == []
+
+
+def test_vol_filter_allows_low_vol_coin():
+    """평균 1h 변동폭 2% (<임계 5%) → 정상 진입."""
+    ts = _recent_iso(minutes_ago=1)
+    h = int(pd.Timestamp(ts).tz_convert("Asia/Seoul").floor("1h").hour)
+    orch = _FakeOrch()
+    c, _ = _consumer(
+        _FakeStore([_fire("SOLUSDT", "short", ts)]), orch,
+        [_spec(hours=frozenset({h}), sides=frozenset({"short"}))],
+        klines_fetcher=_stub_fetcher(0.0, range_pct=2.0),
+    )
+    assert asyncio.run(c.sweep_once()) == 1
+
+
+def test_vol_filter_applies_to_long_too():
+    """변동성 필터는 양방향 — 고변동 코인 롱도 skip."""
+    ts = _recent_iso(minutes_ago=1)
+    h = int(pd.Timestamp(ts).tz_convert("Asia/Seoul").floor("1h").hour)
+    orch = _FakeOrch()
+    c, _ = _consumer(
+        _FakeStore([_fire("HUSDT", "long", ts)]), orch,
+        [_spec(hours=frozenset({h}), sides=frozenset({"long"}))],
+        klines_fetcher=_stub_fetcher(0.0, range_pct=10.0),
+    )
+    assert asyncio.run(c.sweep_once()) == 0

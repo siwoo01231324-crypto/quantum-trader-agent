@@ -15,6 +15,26 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.80"
+    date: "2026-06-17"
+    title: "변동성 진입 필터 — 초고변동 코인(SKYAI/SIREN류) 진입 차단 (SL 슬립 블로업 방지)"
+    tags: [feat, safety]
+    summary: >
+      코인 최근 평균 1h 변동폭% > 임계면 양방향 진입 skip. SKYAI/SIREN/HU/VELVET 류는
+      시간당 평균 5~14% 출렁(BTC 0.6%의 5~20배)이라 -1% SL 이 무의미 — 노이즈로 뚫고
+      stop-market 이 급등을 따라가 -19% ROI 슬립(SIREN 06-17 실거래). 실거래 검증:
+      평균1h변동폭 >5%/h 코인 PF 0.16·net -278(sim 은 슬립 못 봐 "수익"이라 오판).
+      0=비활성. 모멘텀 필터(방향성)와 보완 — 이건 코인 자체 특성(비방향).
+    items:
+      - "AirborneFireConsumer: klines_fetcher df 로 평균 1h 변동폭%((high-low)/close)
+         계산. AIRBORNE_MAX_VOL_PCT(기본 5) 초과면 high_volatility skip(양방향).
+         24h 변화·변동폭이 같은 fetch/5분캐시 공용(_get_klines)."
+      - "loop._token_1h_fetcher limit 26→100 (변동성 윈도우)."
+      - "OHLCV 미가용 시 fail-open. fetcher 미주입(테스트)=비활성 → 기존 동작 불변."
+      - "테스트 3건 추가(고변동 숏/롱 skip·저변동 통과), 총 35 green."
+    refs:
+      - "src/live/airborne_fire_consumer.py"
+      - "src/live/loop.py"
   - version: "v0.6.79"
     date: "2026-06-17"
     title: "모멘텀 진입 필터 — 펌핑한 토큰 숏·폭락한 토큰 롱 차단 (승률↑·슬립꼬리↓)"
