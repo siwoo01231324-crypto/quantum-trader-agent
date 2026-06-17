@@ -83,6 +83,7 @@ class AirborneFireConsumer:
         short_block_hours: "frozenset[int] | None" = None,
         interval_sec: float = 15.0,
         pace_sec: float = 0.15,
+        klines_fetcher: "Callable[[str], Awaitable] | None" = None,
     ) -> None:
         self._store = fire_store
         self._orch = orchestrator
@@ -120,6 +121,22 @@ class AirborneFireConsumer:
         # 발주 사이에 짧은 간격을 둬 rate-limit 회피(발주는 어차피 순차 await 이나
         # 무딜레이라 초당 폭주). 0 이면 비활성(기존 동작).
         self._pace_sec = float(pace_sec)
+        # 모멘텀 진입 필터 (2026-06-17) — 이미 크게 움직인 토큰 진입 차단.
+        # 숏: 직전24h +X%↑ 펌핑이면 스퀴즈·슬립 위험 → skip. 롱: -Y%↓ 폭락이면
+        # 떨어지는칼 → skip. 백테스트(6/01+, sim): 숏 skip>+20% PF 1.69→1.89·
+        # 승률 48→51%, 롱 skip<-10% PF 1.17→1.31·41→44% (positive-sum, 손실꼬리만
+        # 제거). klines_fetcher 주입 시에만 활성(테스트는 미주입=OFF). env 로 임계 튜닝
+        # (0 이면 해당 방향 비활성). 토큰 OHLCV 미가용 시 fail-open(허용).
+        import os as _os
+        self._klines_fetcher = klines_fetcher
+        self._short_pump_skip = float(
+            _os.environ.get("AIRBORNE_SHORT_PUMP_SKIP_PCT", "20") or 20
+        )
+        self._long_crash_skip = float(
+            _os.environ.get("AIRBORNE_LONG_CRASH_SKIP_PCT", "10") or 10
+        )
+        # symbol → (stamp, 24h_change_pct|None). 5분 캐시 (모멘텀은 시간봉 단위).
+        self._mom_cache: dict[str, tuple] = {}
 
     # ── BTC trend filter (long 차단) ──────────────────────────────────────────
 
@@ -234,6 +251,29 @@ class AirborneFireConsumer:
             self._btc_down_cache = self._btc_downtrend()
         return bool(self._btc_down_cache)
 
+    async def _token_24h_change(self, symbol: str) -> "float | None":
+        """직전 24h % 변화 (모멘텀 필터용). klines_fetcher 로 1h 26봉 fetch,
+        5분 캐시. 실패/미상장/데이터부족 시 None (fail-open). None 도 캐시해
+        같은 종목 5분 내 재fetch 폭주 차단.
+        """
+        from datetime import datetime, timezone
+        nowt = datetime.now(timezone.utc)
+        c = self._mom_cache.get(symbol)
+        if c is not None and (nowt - c[0]).total_seconds() < 300:
+            return c[1]
+        chg = None
+        try:
+            df = await self._klines_fetcher(symbol)
+            if df is not None and len(df) >= 25:
+                cl = df["close"]
+                last = float(cl.iloc[-1]); prev = float(cl.iloc[-25])
+                if prev > 0:
+                    chg = (last - prev) / prev * 100
+        except Exception as err:  # noqa: BLE001 — 게이트 에러로 거래 막지 않음
+            logger.warning("airborne momentum fetch failed sym=%s: %s", symbol, err)
+        self._mom_cache[symbol] = (nowt, chg)
+        return chg
+
     async def _consume_one(self, fire: dict, now: datetime) -> bool:
         symbol = str(fire.get("symbol", ""))
         side = str(fire.get("side", "")).lower()
@@ -285,6 +325,28 @@ class AirborneFireConsumer:
                         "key": key, "reason": "short_block",
                     })
             return False
+
+        # ── 모멘텀 진입 필터 (2026-06-17, symbol+side 레벨) ──────────────────
+        # 숏: 직전24h +X%↑ 펌핑 → 스퀴즈/슬립 위험으로 skip. 롱: -Y%↓ 폭락 →
+        # 떨어지는칼 skip. fetcher 미주입(테스트) 또는 임계 0 이면 비활성. 토큰
+        # OHLCV 미가용(Bitget-only 등) 시 None → fail-open(허용).
+        if self._klines_fetcher is not None:
+            if side == "short" and self._short_pump_skip > 0:
+                chg = await self._token_24h_change(symbol)
+                if chg is not None and chg > self._short_pump_skip:
+                    logger.info(
+                        "airborne fire skip sym=%s side=short reason=momentum_pump "
+                        "24h=%+.1f%% (>+%.1f)", symbol, chg, self._short_pump_skip,
+                    )
+                    return False
+            elif side == "long" and self._long_crash_skip > 0:
+                chg = await self._token_24h_change(symbol)
+                if chg is not None and chg < -self._long_crash_skip:
+                    logger.info(
+                        "airborne fire skip sym=%s side=long reason=momentum_crash "
+                        "24h=%+.1f%% (<-%.1f)", symbol, chg, self._long_crash_skip,
+                    )
+                    return False
 
         entered_any = False
         # 시간게이트가 binding reason 인지 추적 — side 매칭 spec 중 hour 게이트를

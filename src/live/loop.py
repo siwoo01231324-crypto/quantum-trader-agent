@@ -1571,6 +1571,13 @@ def _start_airborne_fire_consumer(
         except Exception as err:  # noqa: BLE001 — 알림 실패가 거래 막지 않음
             logger.warning("airborne skip notify wiring failed: %s", err)
 
+    # 모멘텀 진입 필터용 토큰 1h fetcher (2026-06-17). 주입 시에만 모멘텀 활성.
+    # REST 는 한국IP 차단 없음(데몬 polling 과 동일). Bitget-only 토큰은 Binance
+    # 400 → consumer 가 None 으로 fail-open. 진입당 1콜(5분 캐시).
+    async def _token_1h_fetcher(symbol: str):
+        from src.brokers.binance.market_ws import fetch_klines_rest
+        return await fetch_klines_rest(symbol=symbol, interval="1h", limit=26)
+
     consumer = AirborneFireConsumer(
         fire_store=fire_store,
         orchestrator=orchestrator,
@@ -1584,6 +1591,7 @@ def _start_airborne_fire_consumer(
         short_block_hours=short_block_hours,
         interval_sec=interval,
         pace_sec=pace,
+        klines_fetcher=_token_1h_fetcher,
     )
     task = asyncio.create_task(
         consumer.run_loop(stop_event), name="airborne-fire-consumer",

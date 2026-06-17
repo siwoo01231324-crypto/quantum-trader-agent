@@ -117,8 +117,24 @@ def _consumer(store, orch, specs, **kw):
         # short-block 전용 테스트만 명시적으로 hours 지정.
         short_block_hours=kw.pop("short_block_hours", frozenset()),
         interval_sec=kw.pop("interval_sec", 15.0),
+        klines_fetcher=kw.pop("klines_fetcher", None),
     )
     return c, routed
+
+
+def _stub_fetcher(chg_pct):
+    """24h 변화 chg_pct% 인 합성 1h df 반환 fetcher (모멘텀 필터 테스트용).
+    chg_pct=None 이면 None 반환(미상장/실패 → fail-open 검증)."""
+    async def f(symbol):
+        if chg_pct is None:
+            return None
+        base = 100.0
+        closes = [base] * 25 + [base * (1 + chg_pct / 100.0)]  # [-25]=base,[-1]=last
+        return pd.DataFrame({
+            "open": closes, "high": closes, "low": closes,
+            "close": closes, "volume": [0.0] * 26,
+        })
+    return f
 
 
 def _fire(symbol, side, ts, fire_close=100.0):
@@ -585,3 +601,65 @@ def test_run_loop_absorbs_sweep_exception():
         await asyncio.wait_for(task, timeout=1.0)
 
     asyncio.run(_drive())
+
+
+# ── (g) 모멘텀 진입 필터 (2026-06-17) ────────────────────────────────────────
+
+
+def _mom_setup(side, chg_pct):
+    """side 발화 1건 + chg_pct% 변화 stub fetcher 로 consumer 구성. 게이트 통과
+    되게 fire hour 를 spec 에 맞춤."""
+    ts = _recent_iso(minutes_ago=1)
+    fire_kst_hour = int(pd.Timestamp(ts).tz_convert("Asia/Seoul").floor("1h").hour)
+    orch = _FakeOrch()
+    c, routed = _consumer(
+        _FakeStore([_fire("SOLUSDT", side, ts)]), orch,
+        [_spec(hours=frozenset({fire_kst_hour}), sides=frozenset({side}))],
+        klines_fetcher=_stub_fetcher(chg_pct),
+    )
+    return c, orch, routed
+
+
+def test_momentum_skips_pumped_short():
+    """직전24h +25% 펌핑 토큰 숏 → momentum_pump skip (기본 임계 +20%)."""
+    c, orch, _ = _mom_setup("short", 25.0)
+    assert asyncio.run(c.sweep_once()) == 0
+    assert orch.calls == []
+
+
+def test_momentum_allows_mild_short():
+    """직전24h +5% (임계 미만) 숏 → 정상 진입."""
+    c, orch, _ = _mom_setup("short", 5.0)
+    assert asyncio.run(c.sweep_once()) == 1
+    assert len(orch.calls) == 1
+
+
+def test_momentum_skips_crashed_long():
+    """직전24h -15% 폭락 토큰 롱 → momentum_crash skip (기본 임계 -10%)."""
+    c, orch, _ = _mom_setup("long", -15.0)
+    assert asyncio.run(c.sweep_once()) == 0
+    assert orch.calls == []
+
+
+def test_momentum_allows_mild_long():
+    """직전24h -5% (임계 미만) 롱 → 정상 진입."""
+    c, orch, _ = _mom_setup("long", -5.0)
+    assert asyncio.run(c.sweep_once()) == 1
+
+
+def test_momentum_failopen_when_no_data():
+    """fetcher 가 None(미상장/실패) → fail-open, 진입 허용."""
+    c, orch, _ = _mom_setup("short", None)
+    assert asyncio.run(c.sweep_once()) == 1
+
+
+def test_momentum_off_without_fetcher():
+    """fetcher 미주입 → 모멘텀 비활성, +25% 펌핑도 그대로 진입."""
+    ts = _recent_iso(minutes_ago=1)
+    fire_kst_hour = int(pd.Timestamp(ts).tz_convert("Asia/Seoul").floor("1h").hour)
+    orch = _FakeOrch()
+    c, _ = _consumer(
+        _FakeStore([_fire("SOLUSDT", "short", ts)]), orch,
+        [_spec(hours=frozenset({fire_kst_hour}), sides=frozenset({"short"}))],
+    )  # klines_fetcher 미주입
+    assert asyncio.run(c.sweep_once()) == 1
