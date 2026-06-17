@@ -135,8 +135,12 @@ class AirborneFireConsumer:
         self._long_crash_skip = float(
             _os.environ.get("AIRBORNE_LONG_CRASH_SKIP_PCT", "10") or 10
         )
-        # symbol → (stamp, 24h_change_pct|None). 5분 캐시 (모멘텀은 시간봉 단위).
-        self._mom_cache: dict[str, tuple] = {}
+        # 변동성 필터 (2026-06-17) — 코인 최근 평균 1h 변동폭% > 임계면 양방향 진입
+        # skip. SKYAI/SIREN류 초고변동 코인은 -1% SL 이 무의미(노이즈로 뚫고 stop
+        # 슬립 -19%). 실거래 검증: >5%/h 코인 PF 0.16/net -278(슬립). 0=비활성.
+        self._max_vol_pct = float(_os.environ.get("AIRBORNE_MAX_VOL_PCT", "5") or 5)
+        # symbol → (stamp, df|None). 1h 캔들 5분 캐시 — 24h 변화·평균변동폭 공용.
+        self._klines_cache: dict[str, tuple] = {}
 
     # ── BTC trend filter (long 차단) ──────────────────────────────────────────
 
@@ -251,28 +255,44 @@ class AirborneFireConsumer:
             self._btc_down_cache = self._btc_downtrend()
         return bool(self._btc_down_cache)
 
-    async def _token_24h_change(self, symbol: str) -> "float | None":
-        """직전 24h % 변화 (모멘텀 필터용). klines_fetcher 로 1h 26봉 fetch,
-        5분 캐시. 실패/미상장/데이터부족 시 None (fail-open). None 도 캐시해
-        같은 종목 5분 내 재fetch 폭주 차단.
-        """
+    async def _get_klines(self, symbol: str):
+        """klines_fetcher 로 1h 캔들 fetch, 5분 캐시 (df). 24h 변화·변동폭 공용.
+        실패/미상장 시 None (fail-open). None 도 캐시해 5분 내 재fetch 폭주 차단."""
         from datetime import datetime, timezone
         nowt = datetime.now(timezone.utc)
-        c = self._mom_cache.get(symbol)
+        c = self._klines_cache.get(symbol)
         if c is not None and (nowt - c[0]).total_seconds() < 300:
             return c[1]
-        chg = None
+        df = None
         try:
             df = await self._klines_fetcher(symbol)
-            if df is not None and len(df) >= 25:
-                cl = df["close"]
-                last = float(cl.iloc[-1]); prev = float(cl.iloc[-25])
-                if prev > 0:
-                    chg = (last - prev) / prev * 100
+            if df is None or len(df) < 25:
+                df = None
         except Exception as err:  # noqa: BLE001 — 게이트 에러로 거래 막지 않음
-            logger.warning("airborne momentum fetch failed sym=%s: %s", symbol, err)
-        self._mom_cache[symbol] = (nowt, chg)
-        return chg
+            logger.warning("airborne klines fetch failed sym=%s: %s", symbol, err)
+            df = None
+        self._klines_cache[symbol] = (nowt, df)
+        return df
+
+    async def _token_24h_change(self, symbol: str) -> "float | None":
+        """직전 24h % 변화 (모멘텀 필터용). 미가용 시 None (fail-open)."""
+        df = await self._get_klines(symbol)
+        if df is None:
+            return None
+        cl = df["close"]; last = float(cl.iloc[-1]); prev = float(cl.iloc[-25])
+        return (last - prev) / prev * 100 if prev > 0 else None
+
+    async def _token_avg_1h_range(self, symbol: str) -> "float | None":
+        """최근 1h 평균 변동폭%((high-low)/close). 변동성 필터용. 미가용 시 None."""
+        df = await self._get_klines(symbol)
+        if df is None:
+            return None
+        try:
+            rng = (df["high"] - df["low"]) / df["close"] * 100
+            rng = rng[df["close"] > 0]
+            return float(rng.mean()) if len(rng) else None
+        except Exception:  # noqa: BLE001
+            return None
 
     async def _consume_one(self, fire: dict, now: datetime) -> bool:
         symbol = str(fire.get("symbol", ""))
@@ -331,6 +351,16 @@ class AirborneFireConsumer:
         # 떨어지는칼 skip. fetcher 미주입(테스트) 또는 임계 0 이면 비활성. 토큰
         # OHLCV 미가용(Bitget-only 등) 시 None → fail-open(허용).
         if self._klines_fetcher is not None:
+            # 변동성 필터 (양방향) — 코인 최근 평균 1h 변동폭% > 임계면 skip.
+            # 초고변동 코인(SKYAI/SIREN)은 -1% SL 이 무의미해 stop 슬립 -19%.
+            if self._max_vol_pct > 0:
+                vol = await self._token_avg_1h_range(symbol)
+                if vol is not None and vol > self._max_vol_pct:
+                    logger.info(
+                        "airborne fire skip sym=%s side=%s reason=high_volatility "
+                        "avg1h=%.1f%% (>%.1f)", symbol, side, vol, self._max_vol_pct,
+                    )
+                    return False
             if side == "short" and self._short_pump_skip > 0:
                 chg = await self._token_24h_change(symbol)
                 if chg is not None and chg > self._short_pump_skip:

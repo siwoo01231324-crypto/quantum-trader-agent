@@ -1575,8 +1575,9 @@ def _start_airborne_fire_consumer(
     # REST 는 한국IP 차단 없음(데몬 polling 과 동일). Bitget-only 토큰은 Binance
     # 400 → consumer 가 None 으로 fail-open. 진입당 1콜(5분 캐시).
     async def _token_1h_fetcher(symbol: str):
+        # limit=100 — 24h 변화(26봉)+변동성 필터(평균 1h 변동폭) 공용 윈도우.
         from src.brokers.binance.market_ws import fetch_klines_rest
-        return await fetch_klines_rest(symbol=symbol, interval="1h", limit=26)
+        return await fetch_klines_rest(symbol=symbol, interval="1h", limit=100)
 
     consumer = AirborneFireConsumer(
         fire_store=fire_store,
