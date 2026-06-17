@@ -381,6 +381,49 @@ def test_strategy_notice_short_at_kst_8_only_kst_hours_eligible():
     assert "❌" in notice.split("short-whitelist")[1]
 
 
+def _make_1h_history(*, n=30, base=100.0, end=None, rng_pct=1.0):
+    """1h df 빌더 — end 지정 시 base→end 선형(24h 변화%), rng_pct = (high-low)/close%."""
+    end = base if end is None else end
+    closes = list(np.linspace(base, end, n))
+    half = [c * rng_pct / 200.0 for c in closes]
+    idx = pd.date_range("2026-01-01", periods=n, freq="1h")
+    return pd.DataFrame(
+        {"open": closes,
+         "high": [c + h for c, h in zip(closes, half)],
+         "low": [c - h for c, h in zip(closes, half)],
+         "close": closes, "volume": [1.0] * n},
+        index=idx,
+    )
+
+
+def test_strategy_notice_high_volatility_blocks_with_reason():
+    # 평균 1h 변동폭 10% > 5 → kst-hours 게이트 내라도 변동성 필터로 차단 표시.
+    hist = _make_1h_history(rng_pct=10.0)  # 저모멘텀(평탄) + 고변동
+    notice = daemon._format_strategy_notice(
+        side="long", kst_hour=2, symbol="BTCUSDT", history=hist,
+    )
+    assert "고변동" in notice and "%/h" in notice
+
+
+def test_strategy_notice_short_pump_blocks_with_reason():
+    # 24h +25% 펌핑 + 저변동 → 숏 momentum_pump 필터 사유 표시.
+    hist = _make_1h_history(base=70.0, end=110.0, rng_pct=0.5)
+    notice = daemon._format_strategy_notice(
+        side="short", kst_hour=2, symbol="BTCUSDT", history=hist,
+    )
+    assert "펌핑" in notice
+
+
+def test_strategy_notice_short_offhour_shows_nontrade_hours(monkeypatch):
+    # KST 14시 = 숏 미거래 시각(오후 역알파 제외). universe 통과시켜 게이트 라인 노출.
+    monkeypatch.setattr(daemon, "_in_trading_universe", lambda *_a, **_k: True)
+    notice = daemon._format_strategy_notice(
+        side="short", kst_hour=14, symbol="BTCUSDT",
+    )
+    wl_line = notice.split("short-whitelist")[1]
+    assert "미거래" in wl_line and "14" in wl_line
+
+
 def test_dispatch_fire_title_has_short_emoji_and_korean():
     spy_calls: list[tuple[str, str, str, dict]] = []
 
@@ -439,10 +482,14 @@ def test_in_trading_universe_fetch_failure_is_permissive(monkeypatch):
     assert daemon._in_trading_universe("ANYUSDT") is True
 
 
-def test_short_wl_gate_is_24h():
-    """#380 — short-whitelist 게이트가 24시간 (제외시간 없음)."""
-    assert len(daemon._KST_HOURS_SHORT_WL) == 24
-    for h in (4, 6, 7, 8, 13):  # 이전 제외시간도 이제 포함
+def test_short_wl_gate_matches_production_afternoon_excluded():
+    """2026-06-17 — short-whitelist 게이트를 production.yaml(오후 역알파 제외)과 동기화.
+    24h(stale) → 4·7·13·14·16·17시 제외(short_block 7 + 오후 역알파)."""
+    excluded = {4, 7, 13, 14, 16, 17}
+    assert daemon._KST_HOURS_SHORT_WL == frozenset(range(24)) - excluded
+    for h in excluded:
+        assert h not in daemon._KST_HOURS_SHORT_WL
+    for h in (0, 2, 8, 18, 23):  # 정상 거래 시각은 포함
         assert h in daemon._KST_HOURS_SHORT_WL
 
 

@@ -15,6 +15,26 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.81"
+    date: "2026-06-17"
+    title: "텔레그램 알림에 진입필터 차단 사유 표시 + 숏 게이트 production 동기화"
+    tags: [feat, docs]
+    summary: >
+      에어본 발화 알림이 "왜 봇이 안 사는지"를 보여준다. kst-hours/short-whitelist
+      각 라인이 게이트 외·고변동·펌핑/폭락·BTC하락추세 중 실제 차단 사유를 표기.
+      숏 게이트는 데몬에 24h(stale)로 박혀 있어 실제 production(오후 역알파 제외)과
+      어긋났던 것을 동기화 — 숏 미거래 시각(4·7·13·14·16·17)도 알림에 명시.
+    items:
+      - "_format_strategy_notice: history(1h) 로 평균변동폭%·24h변화%를 consumer 와
+         동일 계산해 변동성(>AIRBORNE_MAX_VOL_PCT)·모멘텀(숏 펌핑/롱 폭락) 차단 사유
+         표시. 체크 순서 시간게이트→변동성→모멘텀→BTC추세 (트레이더와 일치)."
+      - "_KST_HOURS_SHORT_WL: frozenset(range(24)) → production.yaml short-whitelist
+         kst_entry_hours 와 동기화(4·7·13·14·16·17 제외). drift 주의 주석."
+      - "숏 게이트 외 시각이면 '숏 미거래 시각 (미거래 …시)' 로 진입/미진입 시각 안내."
+      - "데몬 단독에서도 알림이 실제 진입과 일치 — 트레이더 consumer 필터와 임계 공유(env)."
+    refs:
+      - "scripts/airborne_alert_daemon.py"
+      - "configs/orchestrator/production.yaml"
   - version: "v0.6.80"
     date: "2026-06-17"
     title: "변동성 진입 필터 — 초고변동 코인(SKYAI/SIREN류) 진입 차단 (SL 슬립 블로업 방지)"
