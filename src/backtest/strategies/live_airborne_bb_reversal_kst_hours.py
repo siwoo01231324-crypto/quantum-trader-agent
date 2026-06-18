@@ -1,4 +1,4 @@
-"""Live-scanner: Pine v1.2 airborne BB-reversal (bidir) + KST {1,2,3,6,7,8,23}시 게이트 (v3).
+"""Live-scanner: Pine v1.2 airborne BB-reversal (bidir) + KST {1,2,3,5,6,7,8,23}시 게이트 (v3+5시).
 
 [[live-airborne-bb-reversal-kst-morning]] (rejected, PF 0.906) 의 후속.
 *시각 단일 블록* (06-12) 이 over-fit 임이 5y 데이터로 증명된 후, v2 는
@@ -37,10 +37,14 @@ from backtest.strategies.live_airborne_bb_reversal_kst_morning import (
 # hour-of-day 분석에서 새벽~아침 {1,2,3,6,7,8,23} 이 순손익/PF 최상위
 # (net +68%, PF 2.39), 옛 v2 의 16시(PF 0.15)·22시(PF 0.61)가 손실 누적.
 # 23시 추가(2026-06-06): 23시 숏 PF 2.09(+7.5%), 롱은 손실(PF 0.69)이나 BTC trend filter 가 약세장 23시 롱을 차단해 숏만 잔존 → 운영자 추가. 동일 in-sample caveat 적용.
+# 5시 추가(2026-06-18): 라이브 에어본 포착분(sim_cache_2pct, 6/04~) 시각별 PF 에서
+# 5시 롱 PF 2.22(n=63, win 66.7%, +20.3) — 현재 게이트 평균(PF 1.75) 상회. 5시 숏도
+# PF 1.23(+3.0) 양수 → 양방향 공유 게이트에 추가. ⚠️ 인접 4시는 PF 0.13(최악)이라
+# 제외 유지. 5y hourly 로는 5시 롱 PF 0.99(≈본전)라 최근-윈도우 알파 — 모니터링.
 # ⚠️ CAVEAT: 13일 in-sample 선정 — 5y bench 미검증이며 5y hourly 분석은
 # 다른 시각({8,11,16,22})을 선호. hour-of-day 알파가 윈도우마다 불안정 →
 # 과적합 위험. 운영자 직접 판단으로 적용, 5y walk-forward 검증 전까지 모니터링 필요.
-_KST_TOP_HOURS_V3: frozenset[int] = frozenset({1, 2, 3, 6, 7, 8, 23})
+_KST_TOP_HOURS_V3: frozenset[int] = frozenset({1, 2, 3, 5, 6, 7, 8, 23})
 
 # BTC trend filter (2026-06-05) — airborne 이 시장 전체 하락추세에서 LONG 잡는
 # 사고 차단. 6/04 incident: bb-reversal 보유 14 LONG 종목이 새벽~오전에 전량
@@ -92,7 +96,7 @@ class LiveAirborneBbReversalKstHours(LiveAirborneBbReversalKstMorning):
     """v1.2 bidir airborne + KST hour gate + BTC trend filter (2026-06-05).
 
     Parent 와 동일한 시그널·청산·warmup. 두 가지 차이:
-      1. KST entry hours = {1,2,3,6,7,8,23} (v3, 13일 1m 기반) — 새벽~아침+23시 시각.
+      1. KST entry hours = {1,2,3,5,6,7,8,23} (v3+5시) — 새벽~아침+23시 시각.
          ⚠️ 13일 in-sample 선정, 5y 미검증, 과적합 위험.
       2. BTC trend filter — BTC 가 하락추세이면 LONG entry 자체 차단 (short 은
          그대로). 시장 동조 손실 (6/04 incident) 차단.

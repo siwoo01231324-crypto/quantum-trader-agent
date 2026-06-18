@@ -15,6 +15,24 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.82"
+    date: "2026-06-18"
+    title: "airborne kst-hours 게이트에 KST 5시 추가 (v3+5시)"
+    tags: [feat]
+    summary: >
+      라이브 에어본 포착분(sim_cache_2pct, 6/04~) 시각별 PF 분석에서 KST 5시 롱이
+      PF 2.22(n=63, win 66.7%, +20.3)로 기존 게이트 평균(1.75)을 상회 → 양방향
+      공유 게이트 _KST_TOP_HOURS_V3 에 5 추가({1,2,3,5,6,7,8,23}). 5시 숏도
+      PF 1.23(+3.0) 양수라 무해. 인접 4시(PF 0.13)는 제외 유지.
+    items:
+      - "_KST_TOP_HOURS_V3: {1,2,3,6,7,8,23} → {1,2,3,5,6,7,8,23}. 데몬 표시는
+         _KST_TOP_HOURS_V3 직접 import 라 자동 동기(별도 수정 불필요)."
+      - "근거는 라이브 포착분 — 실거래 5시 롱은 게이트에 막혀 n=1(데이터 없음)."
+      - "⚠️ 5y hourly 로는 5시 롱 PF 0.99(≈본전) — 최근-윈도우 알파 가능성, 모니터링."
+      - "테스트/스펙 갱신, KST 5시 진입 통과 케이스 추가."
+    refs:
+      - "src/backtest/strategies/live_airborne_bb_reversal_kst_hours.py"
+      - "docs/specs/strategies/live-airborne-bb-reversal-kst-hours.md"
   - version: "v0.6.81"
     date: "2026-06-17"
     title: "텔레그램 알림에 진입필터 차단 사유 표시 + 숏 게이트 production 동기화"

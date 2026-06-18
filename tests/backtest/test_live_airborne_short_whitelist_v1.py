@@ -119,10 +119,10 @@ class TestInheritance:
             assert excluded not in s.kst_entry_hours
 
     def test_parent_classvars_not_polluted(self) -> None:
-        # 부모 kst-hours gate v3 보존 (#375 이후 {1,2,3,6,7,8,23}).
+        # 부모 kst-hours gate v3 보존 (#375 이후 {1,2,3,5,6,7,8,23}).
         # 이전엔 {8,11,16,22} 단정 → #375 부터 stale, #380 에서 정정.
         assert LiveAirborneBbReversalKstHours.kst_entry_hours == frozenset(
-            {1, 2, 3, 6, 7, 8, 23}
+            {1, 2, 3, 5, 6, 7, 8, 23}
         )
         # 부모 morning 6-hour gate 보존
         assert LiveAirborneBbReversalKstMorning.kst_entry_hours == frozenset(

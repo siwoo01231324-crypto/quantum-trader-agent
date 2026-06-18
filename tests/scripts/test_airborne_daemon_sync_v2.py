@@ -4,7 +4,7 @@
   "원래는 텔레그램 알림에서 kst hours 거래 예정이라고 알림 와도 실제로는
    필터링돼서 안 살 수도 있잖아 그것도 통일시켜야 될 거 같은데?"
 
-v3 (2026-06-06) 갱신: KST gate {1,2,3,6,7,8,23} (13일 1m 실측 기반).
+v3 (2026-06-06) 갱신: KST gate {1,2,3,5,6,7,8,23} (13일 1m 실측 기반).
 
 가드:
   1. _KST_HOURS_KSTHOURS 가 strategy 의 _KST_TOP_HOURS_V3 와 동일 (직접 import)
@@ -12,7 +12,7 @@ v3 (2026-06-06) 갱신: KST gate {1,2,3,6,7,8,23} (13일 1m 실측 기반).
   3. KST 7,8시 fire — "진입 예정" 표시 (v3 포함)
   4. BTC 하락추세 + LONG fire — "BTC 하락추세 LONG 차단" 표시
   5. BTC 하락추세 + SHORT fire — 정상 "진입 예정" (short 그대로 통과)
-  6. label 생성기가 set 변경 시 자동 동기 ({1,2,3,6,7,8,23} → '1/2/3/6/7/8/23')
+  6. label 생성기가 set 변경 시 자동 동기 ({1,2,3,5,6,7,8,23} → '1/2/3/5/6/7/8/23')
 """
 from __future__ import annotations
 
@@ -41,7 +41,7 @@ from backtest.strategies.live_airborne_bb_reversal_kst_hours import (
 
 def test_daemon_kst_hours_imported_from_strategy():
     """daemon 의 set 이 strategy 의 _KST_TOP_HOURS_V3 와 동일 객체 또는 동일 값."""
-    assert _KST_HOURS_KSTHOURS == _KST_TOP_HOURS_V3 == frozenset({1, 2, 3, 6, 7, 8, 23})
+    assert _KST_HOURS_KSTHOURS == _KST_TOP_HOURS_V3 == frozenset({1, 2, 3, 5, 6, 7, 8, 23})
 
 
 # ── (7) 게이트 판정·표시 = 도착시각(=알림시각) 통일 (2026-06-11 봉루프 decouple) ──
@@ -66,15 +66,15 @@ def test_arrival_hour_is_bar_close_for_trader_match():
 def test_notice_displays_arrival_hour_and_verbatim_set():
     """텔레그램 표시 = *도착시각*(= 알림시각) + 게이트 집합 그대로 (시프트 제거).
 
-    알람이 7시에 오면 매수도 7시, 게이트 판정도 7 ∈ {1,2,3,6,7,8,23} → ✅.
+    알람이 7시에 오면 매수도 7시, 게이트 판정도 7 ∈ {1,2,3,5,6,7,8,23} → ✅.
     11시 도착(게이트 외)이면 'KST 11시 게이트 외' 그대로 (12시 시프트 없음).
     """
     msg = _format_strategy_notice(side="long", kst_hour=11, symbol="XPLUSDT")
     assert "KST 11시" in msg        # 도착시각 그대로 표기 (시프트 없음)
     assert "KST 12시" not in msg     # +1 시프트 제거됨
     assert "게이트 외" in msg
-    # 게이트 집합 표시도 시프트 없이 verbatim {1,2,3,6,7,8,23}.
-    assert "1/2/3/6/7/8/23" in msg
+    # 게이트 집합 표시도 시프트 없이 verbatim {1,2,3,5,6,7,8,23}.
+    assert "1/2/3/5/6/7/8/23" in msg
 
 
 def test_notice_gate_decision_uses_arrival_hour():
@@ -84,7 +84,7 @@ def test_notice_gate_decision_uses_arrival_hour():
     """
     msg = _format_strategy_notice(side="short", kst_hour=23, symbol="MRVLUSDT")
     kst_seg = msg.split("kst-hours")[1].split("short-whitelist")[0]
-    assert "✅ 진입 예정" in kst_seg  # 23 ∈ {1,2,3,6,7,8,23} → 진입 (트레이더 동일)
+    assert "✅ 진입 예정" in kst_seg  # 23 ∈ {1,2,3,5,6,7,8,23} → 진입 (트레이더 동일)
 
 
 def test_daemon_kst_hours_excludes_11():
@@ -128,7 +128,7 @@ def test_notice_kst_6_pass_v3():
 
 def test_kst_hours_label_auto_sync():
     """label 자동 생성기 — set 바뀌면 안내 문자열도 자동 갱신."""
-    assert _kst_hours_label(frozenset({1, 2, 3, 6, 7, 8, 23})) == "1/2/3/6/7/8/23"
+    assert _kst_hours_label(frozenset({1, 2, 3, 5, 6, 7, 8, 23})) == "1/2/3/5/6/7/8/23"
     # set 다른 값으로도 동작 (회귀 가드 — 옛 8/11/16/22 hardcode 없어졌는지)
     assert _kst_hours_label(frozenset({8, 11, 16, 22})) == "8/11/16/22"
 

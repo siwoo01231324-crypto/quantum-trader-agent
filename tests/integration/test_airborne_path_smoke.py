@@ -8,7 +8,7 @@ PR #336/#337 의 회귀 두 건 (args._orchestrator NameError, _klines_to_datafr
   ① fetch_universe_klines 가 1h 봉의 distinct index 보존 (v0.6.16 fix)
   ② LiveScannerMixin per-symbol dispatch (orchestrator.run_bar)
   ③ get_universe() 필터 (#337 Phase 3) 통과
-  ④ LiveAirborneBbReversalKstHours 의 KST {1,2,3,6,7,8,23}시 gate (v3)
+  ④ LiveAirborneBbReversalKstHours 의 KST {1,2,3,5,6,7,8,23}시 gate (v3)
   ⑤ BB-reversal long signal emit → OrderIntent 생성
 
 KST gate 시각이 아니면 hold, 맞으면 BUY 가 나오는 두 방향 검증.
@@ -142,7 +142,7 @@ def _new_orchestrator() -> AsyncStrategyOrchestrator:
 # Step ④/⑤ — KST gate ON 시각엔 BUY emit, OFF 시각엔 hold
 # ──────────────────────────────────────────────────────────────────────────
 
-# KST 8:00 = UTC 23:00 → gate v3 ∈ {1,2,3,6,7,8,23} 에 포함
+# KST 8:00 = UTC 23:00 → gate v3 ∈ {1,2,3,5,6,7,8,23} 에 포함
 _GATE_ON_LAST_UTC = "2026-05-30T23:00:00"
 # KST 13:00 = UTC 04:00 → gate v3 미포함
 _GATE_OFF_LAST_UTC = "2026-05-30T04:00:00"
