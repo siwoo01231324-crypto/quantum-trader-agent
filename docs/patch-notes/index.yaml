@@ -15,6 +15,25 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.83"
+    date: "2026-06-18"
+    title: "MA크로스 레짐 전략 candidate 추가(비활성)"
+    tags: [feat]
+    summary: >
+      live-macross-regime-v1 — 1h SMA(25)/SMA(200) 골든·데드 크로스 + BTC SMA200
+      레짐 게이트(골든→롱은 상승장, 데드→숏은 하락장에서만; 역행/BTC부재 시 hold).
+      청산 1:6 (stop −2%/TP +12%). 2년 broad PF 1.22·기대값 +0.39%(전 반기 양수)
+      이나 5y BTC/ETH PF 1.01(본전, 2022·2025 손실) → 활성화 게이트 미충족.
+      status: candidate, production.yaml 미등록·비활성.
+    items:
+      - "신규: src/backtest/strategies/live_macross_regime_v1.py (LiveScannerMixin,
+         venue-routing top-100 universe, BTC SMA200 레짐 게이트 양방향)."
+      - "spec docs/specs/strategies/live-macross-regime-v1.md (status: candidate),
+         단위 테스트 tests/backtest/test_live_macross_regime_v1.py 16건."
+      - "production.yaml 등록·orchestrator register/returns export 안 함 (비활성)."
+    refs:
+      - "src/backtest/strategies/live_macross_regime_v1.py"
+      - "docs/specs/strategies/live-macross-regime-v1.md"
   - version: "v0.6.82"
     date: "2026-06-18"
     title: "airborne kst-hours 게이트에 KST 5시 추가 (v3+5시)"
