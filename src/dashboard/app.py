@@ -4040,6 +4040,10 @@ async function forceRefresh(){
 window.addEventListener('DOMContentLoaded', () => {
   const sel = document.getElementById('window-selector');
   if (sel) sel.value = CURRENT_WINDOW;
+  if (typeof CURRENT_REGIME !== 'undefined'){
+    document.querySelectorAll('.regime-btn').forEach(b =>
+      b.classList.toggle('active', b.dataset.regime === CURRENT_REGIME));
+  }
 });
 refresh();
 setInterval(refresh, 60000);  // 1분마다 (서버는 5분 캐시이므로 보통 캐시 반환)
@@ -4194,10 +4198,17 @@ tbody tr:hover{background:#1c2229}
       <option value="all">전체 누적</option>
     </select>
   </label>
+  <span style="display:inline-flex;gap:0;border:1px solid var(--border);border-radius:4px;overflow:hidden;font-size:.74rem">
+    <button class="regime-btn" data-regime="raw" onclick="changeRegime('raw')"
+            style="background:var(--surface);color:var(--text);border:0;padding:5px 10px;cursor:pointer;font-family:var(--mono)">전체(raw)</button>
+    <button class="regime-btn" data-regime="filtered" onclick="changeRegime('filtered')"
+            style="background:var(--surface);color:var(--text);border:0;border-left:1px solid var(--border);padding:5px 10px;cursor:pointer;font-family:var(--mono)">레짐필터(추세정렬)</button>
+  </span>
   <span class="rule-badge" id="rule-badge">룰: golden=롱/death=숏 · TP +12% / SL -2% / 720봉(=30일) hold · 양방향 수수료 0.034%</span>
   <div class="meta" id="meta">로딩 중…</div>
   <button class="refresh-btn" id="refresh-btn" onclick="forceRefresh()">↻ 캐시 무효화 + 재계산</button>
 </div>
+<style>.regime-btn.active{background:var(--green)!important;color:#03110a!important;font-weight:700}</style>
 <div id="content"><div class="empty">데이터를 불러오는 중입니다…</div></div>
 <script>
 const KST = 'Asia/Seoul';
@@ -4382,6 +4393,7 @@ function render(d){
 }
 
 let CURRENT_WINDOW = (new URL(location.href).searchParams.get('window')) || 'today';
+let CURRENT_REGIME = (new URL(location.href).searchParams.get('regime')) || 'raw';
 
 function _windowLabel(w){
   const map = {
@@ -4394,9 +4406,22 @@ function _windowLabel(w){
   return map[w] || w;
 }
 
+function changeRegime(value){
+  CURRENT_REGIME = value;
+  const url = new URL(location.href);
+  url.searchParams.set('regime', value);
+  history.replaceState(null, '', url.toString());
+  // 버튼 활성표시
+  document.querySelectorAll('.regime-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.regime === value);
+  });
+  refresh();
+}
+
 async function refresh(){
   try{
-    const r = await fetch('/api/ma_cross_metrics?window=' + encodeURIComponent(CURRENT_WINDOW));
+    const r = await fetch('/api/ma_cross_metrics?window=' + encodeURIComponent(CURRENT_WINDOW)
+        + '&regime=' + encodeURIComponent(CURRENT_REGIME));
     const j = await r.json();
     const meta = document.getElementById('meta');
     const content = document.getElementById('content');
@@ -4433,7 +4458,7 @@ async function forceRefresh(){
   btn.textContent = '재계산 중…';
   try{
     const r = await fetch('/api/ma_cross_metrics?window=' + encodeURIComponent(CURRENT_WINDOW)
-        + '&_=' + Date.now());
+        + '&regime=' + encodeURIComponent(CURRENT_REGIME) + '&_=' + Date.now());
     const j = await r.json();
     const content = document.getElementById('content');
     const meta = document.getElementById('meta');
@@ -4460,6 +4485,10 @@ async function forceRefresh(){
 window.addEventListener('DOMContentLoaded', () => {
   const sel = document.getElementById('window-selector');
   if (sel) sel.value = CURRENT_WINDOW;
+  if (typeof CURRENT_REGIME !== 'undefined'){
+    document.querySelectorAll('.regime-btn').forEach(b =>
+      b.classList.toggle('active', b.dataset.regime === CURRENT_REGIME));
+  }
 });
 refresh();
 setInterval(refresh, 60000);
@@ -5980,11 +6009,56 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
         bars.sort(key=lambda b: b["open_time"])
         return bars
 
+    async def _btc_regime_lookup():
+        """BTC 1h SMA200 레짐 조회 함수 반환 — ``ts_iso → 'up'|'down'|'?'``.
+
+        cross 진입 시점의 BTC 추세(close ≥ SMA200 = 상승, 아니면 하락) 를
+        asof 조회한다. 골든+상승/데드+하락 = 추세정렬 필터용. bitget 1h 최근
+        1000봉(≈42일, SMA200 확보분 ≈33일) fetch. 실패 시 항상 '?' (필터 무효과).
+        """
+        import httpx as _hx
+        import numpy as _np
+        import pandas as _pd
+        try:
+            async with _hx.AsyncClient() as c:
+                r = await c.get(
+                    "https://api.bitget.com/api/v2/mix/market/candles",
+                    params={"symbol": "BTCUSDT", "productType": "USDT-FUTURES",
+                            "granularity": "1H", "limit": "1000"},
+                    timeout=10.0,
+                )
+                rows = (r.json().get("data") or [])
+            df = _pd.DataFrame(
+                [(int(x[0]), float(x[4])) for x in rows], columns=["t", "c"],
+            ).sort_values("t").reset_index(drop=True)
+            df["sma"] = df["c"].rolling(200).mean()
+            t_arr = df["t"].to_numpy()
+            up_arr = (df["c"] >= df["sma"]).to_numpy()
+            sma_nan = df["sma"].isna().to_numpy()
+        except Exception:  # noqa: BLE001 — 레짐 조회 실패가 페이지를 죽이면 안 됨
+            return lambda _ts: "?"
+
+        def _lookup(ts_iso: str) -> str:
+            try:
+                ms = int(datetime.fromisoformat(
+                    str(ts_iso).replace("Z", "+00:00")).timestamp() * 1000)
+            except (ValueError, TypeError):
+                return "?"
+            idx = int(_np.searchsorted(t_arr, ms, side="right")) - 1
+            if idx < 0 or sma_nan[idx]:
+                return "?"
+            return "up" if up_arr[idx] else "down"
+        return _lookup
+
     @app.get("/api/ma_cross_metrics")
     async def api_ma_cross_metrics(
         window: str = Query(
             "today",
             description="today | yesterday | all | 7d | 30d",
+        ),
+        regime: str = Query(
+            "raw",
+            description="raw(전체) | filtered(BTC 레짐 정렬: 골든+상승/데드+하락만)",
         ),
     ) -> JSONResponse:
         """골든/데드 크로스 CROSS 의 TP/SL 시뮬레이션 메트릭 — 누적 윈도우.
@@ -5999,7 +6073,7 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
         import httpx as _httpx
 
         now = _time.time()
-        cache_key = window
+        cache_key = f"{window}:{regime}"
         cache_entry = _ma_cross_metrics_cache.get(cache_key)
         if (cache_entry is not None
                 and now - cache_entry["ts"] < MA_CROSS_METRICS_CACHE_TTL
@@ -6087,6 +6161,16 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
                 sim_cache.put_many(new_sims)
 
         sims = cached_sims + new_sims
+        # ── BTC 레짐 태깅 (골든+상승/데드+하락 = 추세정렬). filtered 면 정렬분만 ──
+        _btc_reg = await _btc_regime_lookup()
+        for s in sims:
+            s["btc_regime"] = _btc_reg(s.get("ts", ""))
+        if regime == "filtered":
+            def _aligned(s: dict) -> bool:
+                r = s.get("btc_regime")
+                return ((s.get("cross") == "golden" and r == "up")
+                        or (s.get("cross") == "death" and r == "down"))
+            sims = [s for s in sims if _aligned(s)]
         agg = _aggregate_ma_cross_sims(sims)
         sim_keys = {(s["ts"], s["symbol"]) for s in sims}
         no_bar = [
@@ -6105,6 +6189,7 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
             "sim_cache_hits": len(cached_sims),
             "sim_cache_misses": len(missing),
             "crosses_total": len(crosses),
+            "regime": regime,
             "sims_total": len(sims),
             **agg,
             "sims": sims + no_bar,  # per-cross 상세 (ts/symbol/cross/close/outcome/pct/bar_idx)
