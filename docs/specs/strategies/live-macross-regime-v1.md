@@ -132,6 +132,27 @@ orch.refresh_portfolio_risk()
 - 일수익률을 공급하지 않으면 `portfolio_risk is None` → 리스크 평가기가 항상
   ALLOW → 리스크 관리 무력화 (불변식). 활성화 전 반드시 연동.
 
+### ⚠️ 활성화 전 필수 — 시간기반 청산(time-stop) 면제
+
+**현재 `LivePositionRiskManager.max_hold_sec` 는 global**(전 전략 공통,
+`scripts/live_run.py` 가 env `AIRBORNE_MAX_HOLD_SEC` 기본 **3600초=1시간**으로
+주입). airborne(역추세·단기, 상승장 숏 무한보유 방지 v0.6.72/#440)용 방어장치다.
+
+**MA크로스는 이 1h time-stop 과 정면 충돌한다.** 추세추종 1:6 이라 TP(+12%)
+도달에 **중앙값 2.4일·최대 30일** 걸린다(백테스트 보유분포). global 1h 아래서
+돌면 **전 포지션이 진입 1시간 만에 `time_exit` 강제청산** → 손익비 1:6 이 ~0 으로
+붕괴, 엣지 전멸. (airborne 의 보수적 방지턱이 추세전략엔 독.)
+
+→ **활성화 시 둘 중 하나 필수**:
+1. `LivePositionRiskManager` 에 **per-strategy `max_hold_sec` 오버라이드** 추가.
+   MA크로스 = `max_hold_sec=None`(면제) 또는 긴 값(30일=2592000s). airborne 은
+   기존 1h 유지(회귀 가드).
+2. 또는 MA크로스를 **별도 risk manager 인스턴스**(max_hold_sec=None)로 운용.
+
+권장 = 1번. 전략에 `max_hold_sec: ClassVar = None` 선언 → 활성화 배선이 정책
+반영. **이 조치 없이 활성화 금지.** (trailing 미사용 → #258 warm-guard N/A.
+synthetic SL/TP 백업은 본 전략 0.02/0.12 그대로 써 정상.)
+
 ## 과적합 / 한계
 
 - **breadth 의존** — 2년 broad(top-65) 양수가 5y BTC/ETH 본전과 갈리는 핵심:
