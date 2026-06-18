@@ -15,6 +15,23 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.85"
+    date: "2026-06-19"
+    title: "데몬 BTC 하락추세 LONG 차단 알림 수정 — 1h fetch 100→250봉 (EMA200)"
+    tags: [fix]
+    summary: >
+      "BTC 하락추세 LONG 차단" 알림이 절대 안 뜨던 버그 수정. _btc_is_downtrend 가
+      EMA200 계산에 1h 200봉이 필요한데 데몬은 100봉만 fetch → 항상
+      "insufficient_btc_history"(False) → BTC 가 실제 하락추세여도(트레이더는 롱
+      차단 중) 알림엔 미표시. 1h fetch limit 100→250 으로 상향해 트레이더와 일치.
+    items:
+      - "_bootstrap_history_venue: 1h limit 100→250 (binance/bitget 양 경로).
+         시그널은 100 으로 충분하나 EMA200 trend filter 표시에 200+ 필요, 추가
+         history 는 BB/ATR(trailing) 에 무해."
+      - "WS append cap max_bars 200→250 (EMA200 여유)."
+      - "회귀 테스트: 100봉→insufficient(미표시), 250봉 하락→'BTC 하락추세' 표시."
+    refs:
+      - "scripts/airborne_alert_daemon.py"
   - version: "v0.6.84"
     date: "2026-06-18"
     title: "per-strategy time-stop(max_hold) 오버라이드 — 추세전략 강제청산 면제 (에어본 영향 0)"

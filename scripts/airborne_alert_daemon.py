@@ -80,7 +80,9 @@ log = logging.getLogger("airborne_alert_daemon")
 # 게이트·표시 통일 (트레이더 봉루프 decouple 게이트와 일치).
 # v0.6.81 (2026-06-17): 알림에 진입필터(변동성/모멘텀) 차단 사유 표시 + 숏게이트를
 # production.yaml(오후 역알파 제외)과 동기화 + 숏 미거래 시각 표기.
-DAEMON_VERSION = "v0.6.81"
+# v0.6.85 (2026-06-19): 1h fetch limit 100→250 — BTC EMA200 trend filter 가 200봉
+# 필요했는데 100만 받아 "BTC 하락추세 LONG 차단" 알림이 절대 안 뜨던 버그 수정.
+DAEMON_VERSION = "v0.6.85"
 
 # 2026-06-07 — Bitget venue 지원 (#airborne-bitget-venue). 실거래 트레이더가
 # Bitget top-100 을 거래하는데 알림 데몬은 Binance fapi top-100 을 봐서 알림과
@@ -529,12 +531,17 @@ async def _bootstrap_history_venue(
     if venue != VENUE_BITGET:
         return await bootstrap_history(
             symbols=symbols, intervals=("1h", "5m"),
-            limit_per_interval={"1h": 100, "5m": 50},
+            # 1h=250: BTC trend filter 의 _btc_is_downtrend 가 EMA200 계산에 200봉
+            # 필요. 100 이면 항상 "insufficient_btc_history" → 알림에 BTC 하락추세
+            # LONG 차단이 절대 안 뜸 (2026-06-19 fix). 시그널은 100 으로 충분하나
+            # 추가 history 는 무해(BB/ATR 은 trailing window).
+            limit_per_interval={"1h": 250, "5m": 50},
             base_url=rest_base_url,
         )
     from brokers.bitget.market_ws import bootstrap_history as bitget_bootstrap
     out: dict[str, dict[str, pd.DataFrame]] = {s: {} for s in symbols}
-    for iv, limit in (("1h", 100), ("5m", 50)):
+    # 1h=250: BTC EMA200 trend filter 표시용 (위 binance 주석 참조).
+    for iv, limit in (("1h", 250), ("5m", 50)):
         per_sym = await bitget_bootstrap(
             symbols=symbols, interval=iv, limit=limit, paper=True,
         )
@@ -615,7 +622,7 @@ async def _consume_stream(
         if ev.interval == "1h":
             if not ev.is_closed:
                 continue
-            state.history_1h = _append_bar(state.history_1h, ev, max_bars=200)
+            state.history_1h = _append_bar(state.history_1h, ev, max_bars=250)  # EMA200 trend filter 여유
             # 2026-06-05 — BTC trend filter 알림 동기. BTCUSDT 1h 마감 시
             # state 갱신 → 다음 fire 알림이 정확한 BTC trend 상태 반영.
             if sym == "BTCUSDT":

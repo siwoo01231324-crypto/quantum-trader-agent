@@ -503,3 +503,42 @@ def test_short_wl_notice_in_top100_shows_enter(monkeypatch):
     )
     assert "TOP100 외 종목" not in notice
     assert "✅ 진입 예정" in notice
+
+
+# ── v0.6.85: BTC trend filter 표시 (EMA200 → 1h 200봉 필요) ──────────────────
+def _btc_frame(n, *, downtrend):
+    """n 봉 BTC 1h. downtrend=True 면 우하향(EMA200 하회), False 면 우상향."""
+    if downtrend:
+        closes = np.linspace(120.0, 80.0, n)   # 하락 → close < EMA200
+    else:
+        closes = np.linspace(80.0, 120.0, n)
+    idx = pd.date_range("2026-01-01", periods=n, freq="1h", tz="UTC")
+    return pd.DataFrame(
+        {"open": closes, "high": closes * 1.001, "low": closes * 0.999,
+         "close": closes, "volume": [1.0] * n}, index=idx)
+
+
+def test_btc_downtrend_needs_200_bars_then_shows_in_notice():
+    """100봉이면 insufficient(False) — 옛 버그. 250봉이면 하락추세 감지 → 알림 표시."""
+    saved = daemon._BTC_DOWNTREND_STATE
+    try:
+        # 100봉 — EMA200 미달 → 항상 False (옛 limit=100 버그 재현)
+        daemon._update_btc_trend_state(_btc_frame(100, downtrend=True))
+        assert daemon._BTC_DOWNTREND_STATE is not True  # insufficient
+        # 250봉 하락 → True → kst-hours 롱 라인에 차단 사유 표시
+        daemon._update_btc_trend_state(_btc_frame(250, downtrend=True))
+        assert daemon._BTC_DOWNTREND_STATE is True
+        notice = daemon._format_strategy_notice(
+            side="long", kst_hour=2, symbol="BTCUSDT")  # 게이트 내, history 미공급(필터 skip)
+        assert "BTC 하락추세" in notice
+    finally:
+        daemon._BTC_DOWNTREND_STATE = saved
+
+
+def test_btc_uptrend_250_bars_no_block():
+    saved = daemon._BTC_DOWNTREND_STATE
+    try:
+        daemon._update_btc_trend_state(_btc_frame(250, downtrend=False))
+        assert daemon._BTC_DOWNTREND_STATE is False
+    finally:
+        daemon._BTC_DOWNTREND_STATE = saved
