@@ -81,7 +81,7 @@ class _FakeStrategyInstance:
 
 def _spec(
     sid="live-airborne-x",
-    hours=frozenset({1, 2, 3, 6, 7, 8, 23}),
+    hours=frozenset({1, 2, 3, 5, 6, 7, 8, 23}),
     sides=frozenset({"long", "short"}),
     universe=None,
     btc_filter=False,
@@ -159,7 +159,7 @@ def _recent_iso(minutes_ago=1, *, hour_utc=None):
 
 
 def test_arrival_hour_gate_in_set_dispatches():
-    """floor(fire_ts,1h).KST.hour ∈ {1,2,3,6,7,8,23} → dispatch.
+    """floor(fire_ts,1h).KST.hour ∈ {1,2,3,5,6,7,8,23} → dispatch.
 
     KST 8시 = UTC 23시. fire ts 를 *방금* (now − 1m) 으로 두고, KST hour 를
     그 ts 에서 계산해 게이트 집합에 그 hour 가 들어가도록 spec 을 맞춘다.

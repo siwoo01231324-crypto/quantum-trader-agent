@@ -1,9 +1,9 @@
-"""Unit tests for LiveAirborneBbReversalKstHours (KST {1,2,3,6,7,8,23} hours gate, v3).
+"""Unit tests for LiveAirborneBbReversalKstHours (KST {1,2,3,5,6,7,8,23} hours gate, v3).
 
 대부분의 v1.2 bidir 동작은 [[test_live_airborne_bb_reversal_kst_morning]] 가
 이미 박제. 본 모듈은 *시각 게이트 차이* 만 검증:
-  - kst_entry_hours = {1, 2, 3, 6, 7, 8, 23} (v3, 13일 1m 기반)
-  - {1,2,3,6,7,8,23} 만 진입 통과, 다른 시각 차단
+  - kst_entry_hours = {1, 2, 3, 5, 6, 7, 8, 23} (v3, 13일 1m 기반)
+  - {1,2,3,5,6,7,8,23} 만 진입 통과, 다른 시각 차단
   - 22시 (v2 에서는 통과) → v3 에서 차단 확인 (set 이 다름)
   - 1시 (KST_MORNING 에서는 차단) → v3 에서 통과 확인
   - 부모 클래스 ClassVar 미오염 (instance shadow 작동)
@@ -69,16 +69,16 @@ class TestInheritance:
         assert s.is_live_scanner is True
 
     def test_kst_entry_hours_is_top5(self):
-        """v3 set (2026-06-06) — 13일 1m 실측 기반 새벽~아침+23시 {1,2,3,6,7,8,23}."""
+        """v3 set (2026-06-06) — 13일 1m 실측 기반 새벽~아침+23시 {1,2,3,5,6,7,8,23}."""
         s = LiveAirborneBbReversalKstHours()
-        assert s.kst_entry_hours == frozenset({1, 2, 3, 6, 7, 8, 23})
+        assert s.kst_entry_hours == frozenset({1, 2, 3, 5, 6, 7, 8, 23})
 
     def test_parent_classvar_not_polluted(self):
         """Subclass override 가 parent ClassVar 를 변경하면 안 됨."""
         # Parent 의 default (morning block) 보존
         assert LiveAirborneBbReversalKstMorning.kst_entry_hours == frozenset({6, 7, 8, 9, 10, 11})
-        # Subclass 만 새 set (v3 — 새벽~아침+23시 {1,2,3,6,7,8,23})
-        assert LiveAirborneBbReversalKstHours.kst_entry_hours == frozenset({1, 2, 3, 6, 7, 8, 23})
+        # Subclass 만 새 set (v3 — 새벽~아침+23시 {1,2,3,5,6,7,8,23})
+        assert LiveAirborneBbReversalKstHours.kst_entry_hours == frozenset({1, 2, 3, 5, 6, 7, 8, 23})
 
     def test_stop_tp_inherited(self):
         s = LiveAirborneBbReversalKstHours()
@@ -87,12 +87,13 @@ class TestInheritance:
 
 
 class TestTimeGate:
-    """v3 set (2026-06-06) — {1,2,3,6,7,8,23}만 통과. 13일 1m 실측 기반."""
+    """v3 set (2026-06-06) — {1,2,3,5,6,7,8,23}만 통과. 13일 1m 실측 기반."""
 
     @pytest.mark.parametrize("utc_hour, kst_hour", [
         (16, 1),    # UTC 16 = KST 1 → PASS (v3 새벽)
         (17, 2),    # UTC 17 = KST 2 → PASS (v3 새벽)
         (18, 3),    # UTC 18 = KST 3 → PASS (v3 새벽)
+        (20, 5),    # UTC 20 = KST 5 → PASS (v3+5시, 라이브 롱 PF 2.22)
         (21, 6),    # UTC 21 = KST 6 → PASS (v3 아침)
         (22, 7),    # UTC 22 = KST 7 → PASS (v3 아침)
         (23, 8),    # UTC 23 = KST 8 → PASS (v3 아침)

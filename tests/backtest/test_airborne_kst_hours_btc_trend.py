@@ -1,9 +1,9 @@
-"""Regression — KST gate v3 ({1,2,3,6,7,8,23}) + BTC trend filter.
+"""Regression — KST gate v3 ({1,2,3,5,6,7,8,23}) + BTC trend filter.
 
 2026-06-06 v3 갱신 (13일 1m 실측 기반 새벽~아침+23시 시각).
 
 가드:
-  1. KST gate = {1, 2, 3, 6, 7, 8, 23} (v3, 13일 1m 기반)
+  1. KST gate = {1, 2, 3, 5, 6, 7, 8, 23} (v3, 13일 1m 기반)
   2. BTC EMA200 아래 close → LONG entry 차단 (short 그대로)
   3. BTC 24h drawdown < -1% → LONG entry 차단 (short 그대로)
   4. BTC uptrend → 진입 정상 통과
@@ -30,9 +30,9 @@ from backtest.strategies.live_airborne_bb_reversal_kst_hours import (
 # ── KST gate v3 ─────────────────────────────────────────────────────────────
 
 def test_kst_gate_v2_is_5_hours():
-    """{1, 2, 3, 6, 7, 8, 23} — v3 새벽~아침+23시 7시각 (13일 1m 실측 기반)."""
+    """{1, 2, 3, 5, 6, 7, 8, 23} — v3+5시 8시각 (13일 1m 실측 기반)."""
     assert LiveAirborneBbReversalKstHours.kst_entry_hours == frozenset(
-        {1, 2, 3, 6, 7, 8, 23}
+        {1, 2, 3, 5, 6, 7, 8, 23}
     )
 
 

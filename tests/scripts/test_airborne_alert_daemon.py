@@ -362,13 +362,13 @@ def test_strategy_notice_long_fires_kst_hours_only_at_gate():
 
 def test_strategy_notice_long_blocked_outside_gate():
     # KST 16시 도착(=알림시각) — v3 게이트 밖. 판정·표시 모두 도착시각(16).
-    # 게이트 set 도 시프트 없이 verbatim {1,2,3,6,7,8,23} (2026-06-11 봉루프 decouple).
+    # 게이트 set 도 시프트 없이 verbatim {1,2,3,5,6,7,8,23} (2026-06-11 봉루프 decouple).
     notice = daemon._format_strategy_notice(
         side="long", kst_hour=16, symbol="BTCUSDT",
     )
     assert "❌" in notice
     assert "KST 16시" in notice       # 도착시각 그대로 (시프트 없음)
-    assert "1/2/3/6/7/8/23" in notice  # 게이트 set verbatim
+    assert "1/2/3/5/6/7/8/23" in notice  # 게이트 set verbatim
 
 
 def test_strategy_notice_short_at_kst_8_only_kst_hours_eligible():
