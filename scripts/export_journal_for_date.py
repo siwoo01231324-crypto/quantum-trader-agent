@@ -128,6 +128,15 @@ def main() -> int:
         ),
     }
 
+    # ── 잔고 검산 (bill 원장) — 로컬 .env creds 로 Bitget read-only fetch ──
+    # 클라우드 routine 은 API 접근 불가하므로 *이 로컬 export* 가 JSON 에 굳혀둔다.
+    # 실패해도 export 전체를 막지 않는다 (graceful).
+    try:
+        from scripts.bitget_account_reconcile import reconcile as _reconcile
+        account_reconciliation = _reconcile(args.date_kst)
+    except Exception as exc:  # noqa: BLE001 — 검산은 보조, export 차단 금지
+        account_reconciliation = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+
     for arr in (auto_fills, auto_signals, manual):
         arr.sort(key=lambda r: str(r.get("ts") or ""))
 
@@ -146,6 +155,7 @@ def main() -> int:
         "manual_trades": manual,
         "airborne_fires": airborne_fires,
         "cs_tsmom_top10": cs_tsmom_top10,
+        "account_reconciliation": account_reconciliation,
         "_backfill_meta": {
             "generated_by": "scripts/export_journal_for_date.py",
             "generated_at_kst": datetime.now(KST).isoformat(),

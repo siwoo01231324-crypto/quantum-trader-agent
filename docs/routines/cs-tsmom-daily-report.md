@@ -151,9 +151,18 @@ JSON 파일이 없거나 비어있으면 PR 만들지 말고 종료.
 "잘한 점" / "개선 여지" 분석을 만들지 말 것 — 학습 가치 없음.
 
 ### 규칙 4 — 자동 거래 분석 항목 (실제 fill 있을 때만)
+
+> ⚠️ **일일손익(PnL) source — WAL round-trip 금지, 거래소 ledger 사용 (2026-06-13 정정)**
+> `auto_fills`(WAL) buy↔sell round-trip 매칭으로 realized_pnl 을 계산하면 **유령/누락
+> fill 로 방향·금액이 통째로 틀린다** (6/13 BSB 숏 +58.50 발명 = 실제 롱 +1.61, 전면오류).
+> **일일손익·승패·PF 는 거래소 청산이력 `/api/v2/mix/position/history-position` 의
+> `netProfit`(=실현손익+펀딩−수수료, 거래소 화면 일치) 기준으로만 산출한다.**
+> 입력 JSON 의 `auto_pnl_ledger` 필드(로컬 export — 아래 규칙 7 참조)에서 읽어라.
+> `auto_fills`(WAL) 는 *체결 시각/종목/신호 대조*용 참고로만 쓰고 PnL 합산엔 쓰지 말 것.
+
 - **언제 어떤 전략이 진입했나**: auto_signals.reason + auto_fills 시각
-- **익절/손절 여부**: 같은 strategy_id+symbol 의 buy↔sell 페어로 round-trip
-  매칭. realized_pnl 계산 (sell_price - buy_price) × qty
+- **익절/손절 여부**: 거래소 ledger 의 포지션별 netProfit (방향·금액 신뢰). 일별
+  합·승패·PF 는 ledger 기준.
 - **잘한 점/못한 점**:
   - 익절: 전략 규율대로 stop_loss / take_profit 발동? entry timing 합리적?
   - 손절: 신호 자체가 noise? stop_loss_pct 너무 빡빡? 메타라벨러가 막았어야?
@@ -202,7 +211,13 @@ JSON 파일이 없거나 비어있으면 PR 만들지 말고 종료.
 `airborne_fires` 가 비어있지 않으면 매일 적중률을 다음 룰로 시뮬레이션해 분석
 섹션에 포함한다.
 
-**검증 룰** (2026-05-23~25 3일치 전수 검증으로 정한 default. PF 2.04 / win 51%):
+> ⚠️ **sim 룰은 *현재 라이브 룰*과 일치시켜라 (2026-06-17 widening 정정)**.
+> 라이브 청산 룰이 바뀌면 sim 도 따라간다 — sim 과 실거래를 비교하는 게 목적이므로.
+> **현재 라이브 = widening TP +2.0% / SL −1.0% / hold 1h (1시간봉 평가)** (STOP-FIRE
+> `sl_pct=0.01 tp_pct=0.02`). 아래 +1%/−0.5%/15m 은 widening 이전(~6/16)의 기존
+> default — 그날 입력 데이터의 라이브 룰을 따르고, 표 헤더에 실제 적용 룰을 명시할 것.
+
+**검증 룰** (~6/16 까지의 기존 default. PF 2.04 / win 51% — 2026-05-23~25 3일 검증):
 - 진입가 = `fire_close` (알림 시점 1h close)
 - TP = +1.0% / SL = -0.5% (LONG 기준; SHORT 는 부호 반전)
 - hold 기간 = 다음 15분봉 4개 (총 1h). 각 봉 high/low 가 TP/SL 닿는지 평가.
@@ -227,6 +242,28 @@ JSON 파일이 없거나 비어있으면 PR 만들지 말고 종료.
 분석은 정성적으로 짧게, 수치 표는 markdown table 로. 매일 누적되면 일주일치
 는 routine 이 직접 비교 가능.
 
+### 규칙 7 — 잔고 검산 (bill 원장, 2026-06-19 추가)
+
+일일손익(ledger netProfit)이 **실제 계좌 잔고 흐름**과 앞뒤로 맞는지 검산한다.
+입력 JSON 의 `account_reconciliation` 필드(로컬 export — `scripts/
+bitget_account_reconcile.py {date_kst}` 결과)에서 읽어라. 필드:
+`open_balance`(전일 종료잔고)·`close_balance`(당일 종료)·`balance_delta`·
+`trade_flow`·`fees`·`transfers_deposits`·`no_external_flow`.
+
+> ⚠️ **클라우드 routine 은 Bitget API 직접 접근 불가**(creds 로컬 전용·보안).
+> 따라서 bill/ledger 데이터는 **로컬에서 JSON 으로 export 된 것을 읽기만** 한다.
+> `account_reconciliation` 필드가 없으면 이 섹션은 "잔고 검산 데이터 없음
+> (로컬 export 누락)" 1줄로 넘긴다.
+
+**검증 항목**:
+- **잔고 연속성**: `balance_delta`(종료−시작) 가 당일 거래 흐름과 일치하는지.
+- **입출금/이체 격리**: `no_external_flow=true` 면 "잔고변동 100% 트레이딩
+  (외부 유입 없음)". false 면 입출금/이체액 분리 표기 — 손익 해석에서 제외.
+- **tie-out**: 잔고 Δ ↔ 당일 ledger netProfit(규칙4 합). 자정 걸친 포지션의
+  open-leg/close-leg 시점차로 ~0.1~0.3 USDT 차이는 정상. 그 이상 벌어지면
+  "검산 불일치 — 점검 필요" 명시.
+- **수수료**: `fees` 가 거래flow 의 큰 비중이면(예: gross 작은 날) 과매매 경보.
+
 ## 출력 형식
 
 파일 경로: `docs/journal/{date_kst}.md` (날짜는 입력의 `date_kst` 그대로).
@@ -241,8 +278,9 @@ auto_trades: <auto_fills 의 *실제 거래* count, 더미 아닌 것>
 manual_trades: <manual_trades 의 *실 거래* count, 더미 아닌 것>
 win_count: <outcome=win 또는 realized_pnl>0 count>
 loss_count: <outcome=loss 또는 realized_pnl<0 count>
-total_pnl_usdt: <Binance 통화 합산>
+total_pnl_usdt: <거래소 ledger netProfit 합산 (규칙4 — WAL 금지)>
 total_pnl_krw: <KIS 통화 합산>
+pnl_source: bitget-exchange-history-position
 airborne_fires: <airborne_fires 개수>
 airborne_tp: <시뮬레이션 TP 도달 건수>
 airborne_sl: <시뮬레이션 SL 도달 건수>
@@ -286,6 +324,23 @@ cs_tsmom_top10 1줄 참조. 끝.)
 - 실제 fill 매칭: [...]
 - 격차: (시그널 떴는데 발주 없으면 원인 추정)
 
+## 잔고 검산 (bill 원장)
+
+(규칙 7. 입력 JSON 의 `account_reconciliation` 필드에서 읽는다. 없으면 한 줄:
+"잔고 검산 데이터 없음 (로컬 export 누락)." 끝.)
+
+| 항목 | 값 |
+|---|---|
+| 시작잔고(전일 종료) | {open_balance} USDT |
+| 종료잔고 | {close_balance} USDT |
+| **잔고 Δ** | **{balance_delta:+} USDT** |
+| 거래 flow (수수료 포함) | {trade_flow:+} (fee {fees:+}) |
+| 입출금/이체 | {transfers_deposits:+} ({no_external_flow ? "외부 유입 없음 — 트레이딩 100%" : "⚠️ 외부 유입 분리"}) |
+
+- **tie-out**: 잔고 Δ {balance_delta:+} ↔ 자동 ledger netProfit {total_pnl_usdt:+}
+  — {차이 ~0.1~0.3 면 "정합(자정 걸친 포지션 시점차)", 그 이상이면 "⚠️ 불일치 점검"}.
+- (외부 유입 있으면 손익 해석에서 제외했음을 명시.)
+
 ## 수동 계좌
 
 (테스트/더미만 있고 실 거래 없으면 한 줄: "오늘 수동 실 거래 없음
@@ -320,7 +375,7 @@ cs_tsmom_top10 1줄 참조. 끝.)
 
 (있으면 규칙 6 의 시뮬레이션 룰로 분석:)
 
-### 시뮬레이션 요약 (TP +1.0% / SL -0.5% / 4봉 hold)
+### 시뮬레이션 요약 (그날 라이브 룰 명시 — 예: widening TP +2% / SL −1% / 1h)
 
 | 항목 | 값 |
 |---|---|
