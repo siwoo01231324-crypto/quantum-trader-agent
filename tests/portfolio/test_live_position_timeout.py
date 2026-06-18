@@ -158,3 +158,58 @@ def test_entry_ts_resets_on_flat_reentry():
     mgr.evaluate("X", Decimal("100.0"), _T0 + timedelta(seconds=20))  # fresh stamp @ +20
     # +20 에서 1800s 뒤(=fresh 기준 30분 < 1h) → timeout 아직 안 남.
     assert mgr.evaluate("X", Decimal("100.0"), _T0 + timedelta(seconds=1820)) == []
+
+
+# ── per-strategy max_hold 오버라이드 (2026-06-18, MA크로스 time-stop 면제) ──
+# 핵심: airborne(미선언)은 global 1h 그대로(영향 0), MA크로스류만 면제/별도.
+
+def _mgr2(max_hold_sec=3600.0):
+    """두 전략(airborne=글로벌, exempt=면제 대상) 숏 포지션 보유 매니저."""
+    store = StrategyPositionStore()
+    pnl = PnLAggregator()
+    for sid in ("airborne", "exempt"):
+        pnl.record_fill(strategy_id=sid, symbol="X", side="sell",
+                        qty=Decimal("1"), price=Decimal("100"))
+        store.record_fill(strategy_id=sid, symbol="X", side="sell", qty=Decimal("1"))
+    mgr = LivePositionRiskManager(
+        position_store=store, pnl_aggregator=pnl, max_hold_sec=max_hold_sec,
+    )
+    for sid in ("airborne", "exempt"):
+        mgr.register_strategy_policy(sid, stop_loss_pct=0.005, take_profit_pct=0.011)
+    return mgr, store, pnl
+
+
+def test_per_strategy_max_hold_none_exempts_only_that_sid():
+    """exempt 전략은 time-stop 면제, airborne 은 global 1h 그대로(영향 0) — sweep."""
+    mgr, _s, _p = _mgr2(max_hold_sec=3600.0)
+    mgr.set_strategy_max_hold("exempt", None)        # MA크로스류 면제
+    mgr.sweep_timeouts(_T0, lambda s: None)          # baseline stamp
+    intents = mgr.sweep_timeouts(_T0 + timedelta(seconds=3601), lambda s: None)
+    assert {i.strategy_id for i in intents} == {"airborne"}, \
+        "exempt 가 청산됐거나 airborne 이 누락 — 면제/영향0 실패"
+
+
+def test_per_strategy_no_override_is_global_byte_identical():
+    """오버라이드 미설정이면 전 전략 global time-stop (airborne 기존 동작 불변)."""
+    mgr, _s, _p = _mgr2(max_hold_sec=3600.0)         # set_strategy_max_hold 미호출
+    mgr.sweep_timeouts(_T0, lambda s: None)
+    intents = mgr.sweep_timeouts(_T0 + timedelta(seconds=3601), lambda s: None)
+    assert {i.strategy_id for i in intents} == {"airborne", "exempt"}
+
+
+def test_per_strategy_exempt_evaluate_path():
+    """evaluate(틱) 경로도 면제 — None override 면 무한 경과해도 time_exit 안 남."""
+    mgr, _s, _p = _mgr(side="sell", entry=100.0, max_hold_sec=3600.0)
+    mgr.set_strategy_max_hold("sid", None)
+    assert mgr.evaluate("X", Decimal("100.0"), _T0) == []
+    assert mgr.evaluate("X", Decimal("100.0"), _T0 + timedelta(days=10)) == []
+
+
+def test_per_strategy_max_hold_longer_value():
+    """양수 오버라이드 = 그 전략만 더 긴 보유한도(global 지나도 override 전엔 미발동)."""
+    mgr, _s, _p = _mgr(side="sell", entry=100.0, max_hold_sec=3600.0)
+    mgr.set_strategy_max_hold("sid", 7200.0)
+    assert mgr.evaluate("X", Decimal("100.0"), _T0) == []
+    assert mgr.evaluate("X", Decimal("100.0"), _T0 + timedelta(seconds=3601)) == []
+    intents = mgr.evaluate("X", Decimal("100.0"), _T0 + timedelta(seconds=7201))
+    assert len(intents) == 1 and "time_exit" in intents[0].reason

@@ -15,6 +15,26 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.84"
+    date: "2026-06-18"
+    title: "per-strategy time-stop(max_hold) 오버라이드 — 추세전략 강제청산 면제 (에어본 영향 0)"
+    tags: [feat, safety]
+    summary: >
+      LivePositionRiskManager 의 max_hold_sec 가 global(전 전략 1h, AIRBORNE_MAX_HOLD_SEC)
+      이라, 추세추종 전략(MA크로스 1:6, 보유 수일~30일)이 활성화되면 전 포지션이
+      진입 1시간 만에 time_exit 강제청산돼 엣지가 붕괴한다. per-strategy 오버라이드를
+      추가해 전략별로 면제(None)/별도 보유한도를 줄 수 있게 함. **맵 미등록 전략은
+      global 사용 — airborne 등 기존 전략 byte-identical(영향 0).** 전략이
+      `max_hold_sec` ClassVar 를 선언한 경우에만 `_register_exit_policies` 가 sentinel
+      로 읽어 등록. live-macross-regime-v1(candidate)은 None(면제) 선언.
+    items:
+      - "LivePositionRiskManager: _max_hold_by_sid 맵 + set_strategy_max_hold(sid, sec) + _effective_max_hold(sid). evaluate/sweep 양 경로가 global 대신 per-sid 유효값 사용(미등록 시 global)."
+      - "scripts/live_run._register_exit_policies: max_hold_sec ClassVar 선언 전략만 sentinel(_UNSET)로 읽어 오버라이드 등록. airborne 미선언 → no-op."
+      - "live_macross_regime_v1: max_hold_sec ClassVar = None (time-stop 면제)."
+      - "회귀테스트 4건(미등록=global byte-identical / None 면제(sweep·evaluate) / 양수 별도한도). 기존 timeout 테스트 전원 통과."
+    refs:
+      - "src/portfolio/live_position_risk.py"
+      - "docs/specs/strategies/live-macross-regime-v1.md"
   - version: "v0.6.83"
     date: "2026-06-18"
     title: "MA크로스 레짐 전략 candidate 추가(비활성)"

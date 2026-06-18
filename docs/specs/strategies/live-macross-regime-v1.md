@@ -143,15 +143,17 @@ orch.refresh_portfolio_risk()
 돌면 **전 포지션이 진입 1시간 만에 `time_exit` 강제청산** → 손익비 1:6 이 ~0 으로
 붕괴, 엣지 전멸. (airborne 의 보수적 방지턱이 추세전략엔 독.)
 
-→ **활성화 시 둘 중 하나 필수**:
-1. `LivePositionRiskManager` 에 **per-strategy `max_hold_sec` 오버라이드** 추가.
-   MA크로스 = `max_hold_sec=None`(면제) 또는 긴 값(30일=2592000s). airborne 은
-   기존 1h 유지(회귀 가드).
-2. 또는 MA크로스를 **별도 risk manager 인스턴스**(max_hold_sec=None)로 운용.
+→ **조치 = 1번(per-strategy 오버라이드) 구현 완료 (2026-06-18)**:
+- `LivePositionRiskManager.set_strategy_max_hold(sid, max_hold_sec)` + `_max_hold_by_sid`
+  맵 + `_effective_max_hold(sid)` 추가. 맵 미등록 전략은 global 사용(**airborne
+  byte-identical, 영향 0**) — 회귀테스트 `tests/portfolio/test_live_position_timeout.py`
+  (`test_per_strategy_no_override_is_global_byte_identical` 등) 박제.
+- 본 전략은 `max_hold_sec: ClassVar = None`(time-stop 면제) 선언. `scripts/live_run.py::
+  _register_exit_policies` 가 ClassVar 선언 전략만 sentinel 로 읽어 오버라이드 등록
+  → **활성화 시 자동 면제**. airborne 은 ClassVar 미선언 → 맵 미등록 → global 1h 유지.
 
-권장 = 1번. 전략에 `max_hold_sec: ClassVar = None` 선언 → 활성화 배선이 정책
-반영. **이 조치 없이 활성화 금지.** (trailing 미사용 → #258 warm-guard N/A.
-synthetic SL/TP 백업은 본 전략 0.02/0.12 그대로 써 정상.)
+(trailing 미사용 → #258 warm-guard N/A. synthetic SL/TP 백업은 본 전략 0.02/0.12
+그대로 써 정상.)
 
 ## 과적합 / 한계
 

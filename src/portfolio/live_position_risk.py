@@ -127,6 +127,13 @@ class LivePositionRiskManager:
         self._max_hold_sec: float | None = (
             float(max_hold_sec) if max_hold_sec else None
         )
+        # 2026-06-18 per-strategy max_hold 오버라이드. 비어있으면 모든 전략이
+        # global ``_max_hold_sec`` 사용(기존 동작 byte-identical). 전략이
+        # `max_hold_sec` ClassVar 를 선언한 경우에만 `_register_exit_policies`
+        # 가 여기 등록 → 그 전략만 별도(또는 None=time-stop 면제). MA크로스 같은
+        # 추세추종(보유 수일~30일)이 airborne 의 global 1h time-stop 에 강제청산
+        # 되는 충돌 차단용. airborne 은 ClassVar 미선언 → map 미등록 → 영향 0.
+        self._max_hold_by_sid: dict[str, float | None] = {}
         self._entry_ts: dict[tuple[str, str], datetime] = {}
 
     def set_native_tpsl_check(self, check: Callable[[str], bool] | None) -> None:
@@ -150,6 +157,24 @@ class LivePositionRiskManager:
             take_profit_pct=take_profit_pct,
             trailing_stop_pct=trailing_stop_pct,
         )
+
+    def set_strategy_max_hold(
+        self, strategy_id: str, max_hold_sec: float | None,
+    ) -> None:
+        """전략별 time-stop(max_hold) 오버라이드. ``None``/0 = 그 전략 time-stop
+        면제(예: 추세추종 MA크로스). 양수 = 그 전략만 별도 보유한도(초).
+
+        미호출 전략은 global ``_max_hold_sec`` 사용(기존 동작 불변). airborne 등
+        ``max_hold_sec`` ClassVar 미선언 전략은 여기 등록 안 됨 → 영향 0.
+        """
+        self._max_hold_by_sid[strategy_id] = (
+            float(max_hold_sec) if max_hold_sec else None
+        )
+
+    def _effective_max_hold(self, strategy_id: str) -> float | None:
+        """해당 전략의 유효 max_hold. 오버라이드 있으면(None 포함) 그 값,
+        없으면 global. ``dict.get`` 이라 sid→None 등록 시 None(면제) 반환."""
+        return self._max_hold_by_sid.get(strategy_id, self._max_hold_sec)
 
     def effective_policy(self, strategy_id: str) -> tuple[float, float] | None:
         """거래소 네이티브 TP/SL 코디네이터용 — (stop_loss_pct, take_profit_pct).
@@ -277,9 +302,10 @@ class LivePositionRiskManager:
             # 4봉/1h hold 와 동일(대시보드 PF 가 이 timeout 포함 성적).
             triggered_reason: str | None = None
             entry_ts = self._entry_ts.get(key)
+            _mh = self._effective_max_hold(strategy_id)
             if (
-                self._max_hold_sec is not None and entry_ts is not None
-                and (ts - entry_ts).total_seconds() >= self._max_hold_sec
+                _mh is not None and entry_ts is not None
+                and (ts - entry_ts).total_seconds() >= _mh
             ):
                 triggered_reason = "time_exit"
 
@@ -396,10 +422,13 @@ class LivePositionRiskManager:
         틱을 못 받아 미stamp 면 *이번 sweep 에 stamp 하고 skip* — 방금 진입분을
         즉시 죽이지 않도록 baseline 부터 카운트(최악 max_hold+sweep_interval 보유).
         """
-        if self._max_hold_sec is None:
+        if self._max_hold_sec is None and not any(self._max_hold_by_sid.values()):
             return []
         intents: list[OrderIntent] = []
         for strategy_id in list(self._policies):
+            _mh = self._effective_max_hold(strategy_id)
+            if _mh is None:
+                continue  # 이 전략은 time-stop 면제 (예: 추세추종 MA크로스).
             for symbol, _qty in self._position_store.get_positions(strategy_id):
                 held, avg_cost = self._lookup_position(strategy_id, symbol)
                 if held == 0 or avg_cost <= 0:
@@ -410,7 +439,7 @@ class LivePositionRiskManager:
                     # 틱 한 번도 못 받음 — 지금부터 baseline (다음 sweep 부터 카운트).
                     self._entry_ts[key] = now
                     continue
-                if (now - entry_ts).total_seconds() < self._max_hold_sec:
+                if (now - entry_ts).total_seconds() < _mh:
                     continue
                 # in-flight exit guard — evaluate() 와 동일 self-heal.
                 pending_ts = self._pending_exit.get(key)
@@ -444,7 +473,7 @@ class LivePositionRiskManager:
                     "live_risk SWEEP-TIMEOUT sid=%s %s held=%s entry=%s last=%s "
                     "held_sec=%.0f max_hold=%.0f",
                     strategy_id, symbol, held, avg_cost, last_price,
-                    (now - entry_ts).total_seconds(), self._max_hold_sec,
+                    (now - entry_ts).total_seconds(), _mh,
                 )
                 self._emit_stop_event(
                     strategy_id=strategy_id,

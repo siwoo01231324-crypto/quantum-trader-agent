@@ -119,6 +119,12 @@ class LiveMacrossRegime(LiveScannerMixin):
     stop_loss_pct: ClassVar[float] = 0.02
     take_profit_pct: ClassVar[float] = 0.12
 
+    # time-stop 면제 — 추세추종 1:6 은 TP(+12%) 도달에 수일~30일 걸려, airborne
+    # 용 global 1h time-stop(AIRBORNE_MAX_HOLD_SEC) 에 강제청산되면 엣지 붕괴.
+    # `_register_exit_policies` 가 이 ClassVar 를 읽어 LivePositionRiskManager 에
+    # per-strategy 오버라이드(None=면제) 등록. airborne 은 미선언이라 global 유지.
+    max_hold_sec: ClassVar[float | None] = None
+
     # bidir — death 크로스 숏 진입. orchestrator 가 reduce_only=False stamp 필요
     # (airborne 와 동일 — 그렇지 않으면 Binance Futures -2022 reduceOnly reject).
     shorts_allowed: ClassVar[bool] = True

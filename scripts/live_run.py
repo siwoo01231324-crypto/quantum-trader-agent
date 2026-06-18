@@ -990,6 +990,17 @@ def _register_exit_policies(orch, risk_mgr, logger) -> int:
     take_profit is skipped — we never invent thresholds.
     """
     registered = 0
+    _UNSET_MH = object()
+
+    def _apply_max_hold(sid_: str, strat_: object) -> None:
+        """전략이 ``max_hold_sec`` ClassVar 를 선언한 경우만 per-strategy time-stop
+        오버라이드. 미선언(airborne 등)이면 sentinel → no-op → global 유지(영향 0).
+        추세추종(MA크로스)이 global 1h time-stop 에 강제청산되는 충돌 차단용."""
+        mh = getattr(strat_, "max_hold_sec", _UNSET_MH)
+        if mh is not _UNSET_MH and hasattr(risk_mgr, "set_strategy_max_hold"):
+            risk_mgr.set_strategy_max_hold(sid_, mh)
+            logger.info("live_risk.max_hold_override sid=%s max_hold_sec=%s", sid_, mh)
+
     for sid, strategy in orch.strategies.items():
         if getattr(strategy, "is_live_scanner", False):
             risk_mgr.register_strategy_policy(
@@ -998,6 +1009,7 @@ def _register_exit_policies(orch, risk_mgr, logger) -> int:
                 take_profit_pct=float(getattr(strategy, "take_profit_pct", 0.06)),
                 trailing_stop_pct=getattr(strategy, "trailing_stop_pct", None),
             )
+            _apply_max_hold(sid, strategy)
             registered += 1
             logger.info("live_scanner.policy_registered sid=%s", sid)
             continue
@@ -1012,6 +1024,7 @@ def _register_exit_policies(orch, risk_mgr, logger) -> int:
             take_profit_pct=float(tp),
             trailing_stop_pct=getattr(strategy, "trailing_stop_pct", None),
         )
+        _apply_max_hold(sid, strategy)
         registered += 1
         logger.info("single_ticker.policy_registered sid=%s", sid)
     logger.info(
