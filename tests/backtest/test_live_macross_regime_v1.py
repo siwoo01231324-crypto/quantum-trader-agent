@@ -372,3 +372,103 @@ class TestADXFilter:
             f"Expected buy but got hold: {sig.reason}. "
             "trending 프레임의 ADX 가 20 미만 — 프레임 설계 재검토 필요."
         )
+
+
+# ── 리서치 confluence 필터 (opt-in, 숏-집중 스택) ─────────────────────────────
+
+
+def _gentle_death_frame() -> pd.DataFrame:
+    """데드크로스 + close 양수(105) + close<SMA200 + 과확장 아님 + slope↓ + ADX≥20.
+
+    close 가 110 flat → 마지막 105 (X<110 이면 데드크로스, math: 7X<770).
+    SMA200[-1]=(199×110+105)/200=109.975 → close(105)<sma200 (자기200 정렬 ✓),
+    ext=(109.975-105)/105=4.7% (<10% 과확장 아님 ✓). lows 매봉 하향 → -DM 누적.
+    """
+    n = _N
+    base, spike = 110.0, 105.0
+    closes = np.full(n, base)
+    closes[-1] = spike
+    highs = np.full(n, base + 1.0)
+    lows = np.array([base - i * 0.05 - 10.0 for i in range(n)])
+    highs[-1] = spike + 1.0
+    lows[-1] = spike - 1.0
+    idx = pd.date_range("2024-01-01", periods=n, freq="1h", tz="UTC")
+    return pd.DataFrame(
+        {"open": closes, "high": highs, "low": lows,
+         "close": closes, "volume": np.full(n, 1000.0)},
+        index=idx,
+    )
+
+
+def _reindex_end_kst(df: pd.DataFrame, kst_hour: int) -> pd.DataFrame:
+    """마지막 봉의 KST 시(時) 가 kst_hour 가 되도록 인덱스 재배치."""
+    utc_hour = (kst_hour - 9) % 24
+    end = pd.Timestamp("2024-01-09", tz="UTC") + pd.Timedelta(hours=utc_hour)
+    out = df.copy()
+    out.index = pd.date_range(end=end, periods=len(df), freq="1h", tz="UTC")
+    return out
+
+
+class TestConfluenceFilters:
+    def test_both_directions_disabled_raises(self):
+        try:
+            LiveMacrossRegime(allow_long=False, allow_short=False)
+        except ValueError:
+            return
+        raise AssertionError("allow_long·allow_short 둘 다 False → ValueError 기대")
+
+    def test_allow_long_false_blocks_golden(self):
+        # 숏-집중: 골든크로스(롱 후보)는 long_disabled 로 hold.
+        sig = _run(LiveMacrossRegime(allow_long=False),
+                   _ctx(_golden_cross_trending_frame(), _btc_frame("up")))
+        assert sig.action == "hold"
+        assert "long_disabled" in sig.reason
+
+    def test_allow_short_false_blocks_death(self):
+        sig = _run(LiveMacrossRegime(allow_short=False),
+                   _ctx(_death_cross_trending_frame(), _btc_frame("down")))
+        assert sig.action == "hold"
+        assert "short_disabled" in sig.reason
+
+    def test_kst_gate_blocks_offhour(self):
+        # KST 21시(게이트 밖)에 끝나는 데드크로스 → kst_gate 로 hold.
+        df = _reindex_end_kst(_gentle_death_frame(), 21)
+        sig = _run(LiveMacrossRegime(kst_hour_gate=True),
+                   _ctx(df, _btc_frame("down")))
+        assert sig.action == "hold"
+        assert "kst_gate" in sig.reason
+
+    def test_kst_gate_allows_ingate(self):
+        # KST 23시(게이트 안) → 통과해서 sell.
+        df = _reindex_end_kst(_gentle_death_frame(), 23)
+        sig = _run(LiveMacrossRegime(kst_hour_gate=True),
+                   _ctx(df, _btc_frame("down")))
+        assert sig.action == "sell"
+
+    def test_self_sma200_aligned_short_passes(self):
+        sig = _run(LiveMacrossRegime(self_sma200_filter=True),
+                   _ctx(_gentle_death_frame(), _btc_frame("down")))
+        assert sig.action == "sell"
+
+    def test_overextension_blocks_far_entry(self):
+        # 골든 trending: close(200) 가 SMA200(~90.6) 에서 +50%↑ → overextended hold.
+        sig = _run(LiveMacrossRegime(overextension_max_pct=0.10),
+                   _ctx(_golden_cross_trending_frame(), _btc_frame("up")))
+        assert sig.action == "hold"
+        assert "overextended" in sig.reason
+
+    def test_full_short_stack_sells(self):
+        # 권장 숏-집중 풀스택: allow_long=False + 시간게이트(23시) + 자기200 + 과확장.
+        df = _reindex_end_kst(_gentle_death_frame(), 23)
+        s = LiveMacrossRegime(
+            allow_long=False, kst_hour_gate=True,
+            self_sma200_filter=True, overextension_max_pct=0.10)
+        sig = _run(s, _ctx(df, _btc_frame("down")))
+        assert sig.action == "sell"
+        assert "macross_death_short" in sig.reason
+
+    def test_default_filters_off_unchanged(self):
+        # 기본(필터 OFF) 동작 보존 — 골든 trending+up → buy.
+        sig = _run(LiveMacrossRegime(),
+                   _ctx(_golden_cross_trending_frame(), _btc_frame("up")))
+        assert sig.action == "buy"

@@ -45,12 +45,15 @@ BTC ohlcv 는 airborne 처럼 orchestrator 가
 from __future__ import annotations
 
 from typing import ClassVar
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 
 from backtest.protocol import Signal
 from backtest.strategies._indicators import ADX_TREND_DEFAULT, adx
 from backtest.strategies._live_scanner_helpers import LiveScannerMixin
+
+_KST = ZoneInfo("Asia/Seoul")
 
 # detect_cross 규약 (scripts/ma_cross_alert_daemon.py 와 동일).
 _FAST: int = 25
@@ -70,6 +73,14 @@ _SLOPE_LOOKBACK: int = 5
 
 # ADX 필터 — Wilder 기준 20 이상이면 추세 환경 (ADX_TREND_DEFAULT = 20.0).
 _ADX_PERIOD: int = 14
+
+# 리서치 confluence 필터 default (opt-in — 기본 OFF, 기존 bidir 동작 보존).
+# 5y/2y/split-half OOS 검증으로 채택된 숏-집중 스택. 근거·수치는
+# docs/specs/strategies/live-macross-regime-v1.md "리서치 confluence" 섹션.
+#   - KST 시간게이트: airborne kst-hours 와 동일 {1,2,3,5,6,7,8,23}
+#   - 과확장 회피: 진입가가 SMA200 에서 10% 초과 이탈 시 추격 금지
+_KST_HOURS_DEFAULT: tuple[int, ...] = (1, 2, 3, 5, 6, 7, 8, 23)
+_OVEREXTENSION_MAX_DEFAULT: float = 0.10
 
 
 def detect_cross(close: pd.Series, fast: int = _FAST, slow: int = _SLOW) -> str | None:
@@ -181,6 +192,16 @@ class LiveMacrossRegime(LiveScannerMixin):
         trailing_stop_pct: float | None = None,
         # #380 — orchestrator 가 읽는 동시 보유 종목 상한 (전 전략 공통 옵션).
         max_concurrent_positions: int | None = None,
+        # ── 리서치 confluence 필터 (opt-in, 기본 OFF) ──────────────────
+        # 5y/2y/split-half OOS 검증으로 채택. 숏-집중 권장 구성:
+        #   allow_long=False, kst_hour_gate=True, self_sma200_filter=True,
+        #   overextension_max_pct=0.10. 근거 → spec "리서치 confluence" 섹션.
+        allow_long: bool = True,
+        allow_short: bool = True,
+        kst_hour_gate: bool = False,
+        kst_hours: tuple[int, ...] | None = None,
+        self_sma200_filter: bool = False,
+        overextension_max_pct: float | None = None,
     ) -> None:
         if not 0 < default_size <= 1.0:
             raise ValueError(f"default_size must be in (0, 1], got {default_size}")
@@ -190,6 +211,19 @@ class LiveMacrossRegime(LiveScannerMixin):
         self.slow = int(slow) if slow is not None else self.SLOW
         if self.fast >= self.slow:
             raise ValueError(f"fast({self.fast}) must be < slow({self.slow})")
+
+        # confluence 필터 설정.
+        self.allow_long = bool(allow_long)
+        self.allow_short = bool(allow_short)
+        if not (self.allow_long or self.allow_short):
+            raise ValueError("allow_long·allow_short 둘 다 False 면 진입 불가")
+        self.kst_hour_gate = bool(kst_hour_gate)
+        self.kst_hours = frozenset(kst_hours if kst_hours is not None else _KST_HOURS_DEFAULT)
+        self.self_sma200_filter = bool(self_sma200_filter)
+        if overextension_max_pct is not None and not 0 < overextension_max_pct < 1.0:
+            raise ValueError(
+                f"overextension_max_pct must be in (0, 1), got {overextension_max_pct}")
+        self.overextension_max_pct = overextension_max_pct
 
         if stop_loss_pct is not None:
             self.stop_loss_pct = stop_loss_pct
@@ -262,15 +296,46 @@ class LiveMacrossRegime(LiveScannerMixin):
                           reason="btc_regime_unavailable")
 
         c_now = float(history["close"].iloc[-1])
-        if cross == _CROSS_GOLDEN:
-            if regime != "up":
-                return Signal(action="hold", size=0.0,
-                              reason=f"regime_gate:golden_in_{regime}market")
-            return Signal(action="buy", size=self.default_size,
-                          reason=f"macross_golden_long:regime=up,c={c_now:.6g}")
-        # death cross
-        if regime != "down":
+        side = "long" if cross == _CROSS_GOLDEN else "short"
+
+        # ── 방향 허용 (숏-집중 구성 시 allow_long=False) ────────────────
+        if side == "long" and not self.allow_long:
+            return Signal(action="hold", size=0.0, reason="long_disabled")
+        if side == "short" and not self.allow_short:
+            return Signal(action="hold", size=0.0, reason="short_disabled")
+
+        # ── BTC 레짐 게이트 (엣지의 핵심) ──────────────────────────────
+        want_regime = "up" if side == "long" else "down"
+        if regime != want_regime:
             return Signal(action="hold", size=0.0,
-                          reason=f"regime_gate:death_in_{regime}market")
+                          reason=f"regime_gate:{side}_in_{regime}market")
+
+        # ── 리서치 confluence 필터 (opt-in) ────────────────────────────
+        if self.kst_hour_gate:
+            ts = history.index[-1]
+            ts = ts.tz_localize("UTC") if ts.tzinfo is None else ts
+            hour_kst = ts.astimezone(_KST).hour
+            if hour_kst not in self.kst_hours:
+                return Signal(action="hold", size=0.0,
+                              reason=f"kst_gate:hour={hour_kst}")
+
+        if self.self_sma200_filter or self.overextension_max_pct is not None:
+            sma200 = float(history["close"].rolling(self.slow).mean().iloc[-1])
+            # 자기 SMA200 정렬: 롱은 가격이 자기 200선 위, 숏은 아래.
+            if self.self_sma200_filter:
+                aligned = (c_now > sma200) if side == "long" else (c_now < sma200)
+                if not aligned:
+                    return Signal(action="hold", size=0.0,
+                                  reason=f"self_sma200:c={c_now:.6g},sma={sma200:.6g}")
+            # 과확장 회피: 진입가가 자기 200선에서 너무 멀어졌으면 추격 금지.
+            if self.overextension_max_pct is not None and c_now > 0:
+                ext = (c_now - sma200) / c_now if side == "long" else (sma200 - c_now) / c_now
+                if ext > self.overextension_max_pct:
+                    return Signal(action="hold", size=0.0,
+                                  reason=f"overextended:ext={ext:.3f}>{self.overextension_max_pct}")
+
+        if side == "long":
+            return Signal(action="buy", size=self.default_size,
+                          reason=f"macross_golden_long:regime=up,adx={adx_val:.1f},c={c_now:.6g}")
         return Signal(action="sell", size=self.default_size,
-                      reason=f"macross_death_short:regime=down,c={c_now:.6g}")
+                      reason=f"macross_death_short:regime=down,adx={adx_val:.1f},c={c_now:.6g}")
