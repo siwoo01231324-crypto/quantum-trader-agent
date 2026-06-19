@@ -16,6 +16,7 @@ from src.dashboard.app import (
     MA_CROSS_SL_PCT,
     MA_CROSS_TP_PCT,
     _aggregate_ma_cross_sims,
+    _ma_cross_confluence_reject,
     _parse_ma_cross_from_docker_logs,
     _parse_ma_cross_line,
     _simulate_ma_cross,
@@ -262,3 +263,37 @@ class TestAggregateMaCrossSims:
         assert b["n"] == 2
         assert b["tp"] == 1
         assert b["sl"] == 1
+
+
+class TestConfluenceReject:
+    """confluence 필터(_ma_cross_confluence_reject) — 숏-집중 대시보드 근사."""
+
+    # KST 3시 = 18:00 UTC (게이트 안). death+down+close<sma+ext작음 → 통과(None).
+    _IN = {"cross": "death", "btc_regime": "down", "close": 105.0,
+           "sma_slow": 109.0, "ts": "2026-06-18T18:00:00+00:00"}
+
+    def test_passes_full_short_confluence(self):
+        assert _ma_cross_confluence_reject(self._IN) is None
+
+    def test_long_rejected(self):
+        r = _ma_cross_confluence_reject({**self._IN, "cross": "golden"})
+        assert r is not None and "long" in r
+
+    def test_btc_up_rejected(self):
+        r = _ma_cross_confluence_reject({**self._IN, "btc_regime": "up"})
+        assert r is not None and "btc_regime" in r
+
+    def test_kst_offhour_rejected(self):
+        # 03:00 UTC = KST 12시 (게이트 밖).
+        r = _ma_cross_confluence_reject({**self._IN, "ts": "2026-06-18T03:00:00+00:00"})
+        assert r is not None and "kst_hour" in r
+
+    def test_self_sma200_above_rejected(self):
+        # 숏인데 close > sma_slow → 자기200 위.
+        r = _ma_cross_confluence_reject({**self._IN, "close": 115.0})
+        assert r is not None and "self_sma200" in r
+
+    def test_overextended_rejected(self):
+        # close 90 vs sma 109 → 약 21% 이탈 (>10%).
+        r = _ma_cross_confluence_reject({**self._IN, "close": 90.0})
+        assert r is not None and "overextended" in r
