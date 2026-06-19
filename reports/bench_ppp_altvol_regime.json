@@ -1,0 +1,230 @@
+{
+  "symbols": [
+    "WLDUSDT",
+    "WIFUSDT",
+    "1000PEPEUSDT",
+    "ORDIUSDT"
+  ],
+  "sr_win": 30,
+  "chop_thr": 61.8,
+  "use_sr": false,
+  "use_regime": true,
+  "results": [
+    {
+      "config": "opp_cross",
+      "cost12bp": {
+        "trades": 7921,
+        "pf": 0.65,
+        "expectancy": -0.001161,
+        "win_rate": 0.2883,
+        "mdd": -0.9999
+      },
+      "cost20bp": {
+        "trades": 7921,
+        "pf": 0.4973,
+        "expectancy": -0.001961,
+        "win_rate": 0.2503,
+        "mdd": -1.0
+      },
+      "cost30bp": {
+        "trades": 7921,
+        "pf": 0.3659,
+        "expectancy": -0.002961,
+        "win_rate": 0.2132,
+        "mdd": -1.0
+      },
+      "per_symbol_20bp": {
+        "WLDUSDT": {
+          "trades": 2295,
+          "pf": 0.5243,
+          "expectancy": -0.001791,
+          "win_rate": 0.2549,
+          "mdd": -0.9846
+        },
+        "WIFUSDT": {
+          "trades": 2111,
+          "pf": 0.527,
+          "expectancy": -0.001979,
+          "win_rate": 0.2577,
+          "mdd": -0.9864
+        },
+        "1000PEPEUSDT": {
+          "trades": 2191,
+          "pf": 0.4744,
+          "expectancy": -0.001958,
+          "win_rate": 0.2401,
+          "mdd": -0.9874
+        },
+        "ORDIUSDT": {
+          "trades": 1324,
+          "pf": 0.4389,
+          "expectancy": -0.002233,
+          "win_rate": 0.2477,
+          "mdd": -0.9577
+        }
+      }
+    },
+    {
+      "config": "fixed_1_2",
+      "cost12bp": {
+        "trades": 6234,
+        "pf": 0.9227,
+        "expectancy": -0.00056,
+        "win_rate": 0.3511,
+        "mdd": -0.9841
+      },
+      "cost20bp": {
+        "trades": 6234,
+        "pf": 0.8247,
+        "expectancy": -0.00136,
+        "win_rate": 0.3511,
+        "mdd": -0.9999
+      },
+      "cost30bp": {
+        "trades": 6234,
+        "pf": 0.7193,
+        "expectancy": -0.00236,
+        "win_rate": 0.3511,
+        "mdd": -1.0
+      },
+      "per_symbol_20bp": {
+        "WLDUSDT": {
+          "trades": 1804,
+          "pf": 0.852,
+          "expectancy": -0.001134,
+          "win_rate": 0.3586,
+          "mdd": -0.8969
+        },
+        "WIFUSDT": {
+          "trades": 1667,
+          "pf": 0.912,
+          "expectancy": -0.000658,
+          "win_rate": 0.3743,
+          "mdd": -0.7557
+        },
+        "1000PEPEUSDT": {
+          "trades": 1705,
+          "pf": 0.8005,
+          "expectancy": -0.001564,
+          "win_rate": 0.3443,
+          "mdd": -0.9417
+        },
+        "ORDIUSDT": {
+          "trades": 1058,
+          "pf": 0.6933,
+          "expectancy": -0.002519,
+          "win_rate": 0.3129,
+          "mdd": -0.9396
+        }
+      }
+    },
+    {
+      "config": "fixed_1_3",
+      "cost12bp": {
+        "trades": 5914,
+        "pf": 0.9655,
+        "expectancy": -0.000281,
+        "win_rate": 0.2689,
+        "mdd": -0.9642
+      },
+      "cost20bp": {
+        "trades": 5914,
+        "pf": 0.8763,
+        "expectancy": -0.001081,
+        "win_rate": 0.2689,
+        "mdd": -0.9993
+      },
+      "cost30bp": {
+        "trades": 5914,
+        "pf": 0.7802,
+        "expectancy": -0.002081,
+        "win_rate": 0.2689,
+        "mdd": -1.0
+      },
+      "per_symbol_20bp": {
+        "WLDUSDT": {
+          "trades": 1695,
+          "pf": 0.9251,
+          "expectancy": -0.000645,
+          "win_rate": 0.2796,
+          "mdd": -0.7569
+        },
+        "WIFUSDT": {
+          "trades": 1571,
+          "pf": 0.9687,
+          "expectancy": -0.000266,
+          "win_rate": 0.289,
+          "mdd": -0.6338
+        },
+        "1000PEPEUSDT": {
+          "trades": 1619,
+          "pf": 0.8086,
+          "expectancy": -0.001708,
+          "win_rate": 0.2532,
+          "mdd": -0.9512
+        },
+        "ORDIUSDT": {
+          "trades": 1029,
+          "pf": 0.7719,
+          "expectancy": -0.002058,
+          "win_rate": 0.2449,
+          "mdd": -0.9043
+        }
+      }
+    },
+    {
+      "config": "fixed_2_4",
+      "cost12bp": {
+        "trades": 4699,
+        "pf": 1.0146,
+        "expectancy": 0.0002,
+        "win_rate": 0.3496,
+        "mdd": -0.9252
+      },
+      "cost20bp": {
+        "trades": 4699,
+        "pf": 0.9577,
+        "expectancy": -0.0006,
+        "win_rate": 0.3496,
+        "mdd": -0.9957
+      },
+      "cost30bp": {
+        "trades": 4699,
+        "pf": 0.8922,
+        "expectancy": -0.0016,
+        "win_rate": 0.3496,
+        "mdd": -0.9999
+      },
+      "per_symbol_20bp": {
+        "WLDUSDT": {
+          "trades": 1318,
+          "pf": 1.031,
+          "expectancy": 0.000428,
+          "win_rate": 0.3665,
+          "mdd": -0.5769
+        },
+        "WIFUSDT": {
+          "trades": 1264,
+          "pf": 0.968,
+          "expectancy": -0.000452,
+          "win_rate": 0.3521,
+          "mdd": -0.8456
+        },
+        "1000PEPEUSDT": {
+          "trades": 1281,
+          "pf": 0.9163,
+          "expectancy": -0.001205,
+          "win_rate": 0.3396,
+          "mdd": -0.8723
+        },
+        "ORDIUSDT": {
+          "trades": 836,
+          "pf": 0.8953,
+          "expectancy": -0.001519,
+          "win_rate": 0.3349,
+          "mdd": -0.8471
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,240 @@
+{
+  "htf": "15min",
+  "entry_tf": "1m",
+  "symbols": [
+    "BTCUSDT",
+    "ETHUSDT"
+  ],
+  "costs_roundtrip_bp": [
+    12.0,
+    20.0,
+    30.0
+  ],
+  "results": [
+    {
+      "config": "opp_cross",
+      "cost12bp": {
+        "trades": 7080,
+        "pf": 0.1745,
+        "expectancy": -0.001262,
+        "win_rate": 0.1617,
+        "mdd": -0.9999,
+        "avg_hold": 5.3
+      },
+      "cost20bp": {
+        "trades": 7080,
+        "pf": 0.076,
+        "expectancy": -0.002062,
+        "win_rate": 0.0891,
+        "mdd": -1.0,
+        "avg_hold": 5.3
+      },
+      "cost30bp": {
+        "trades": 7080,
+        "pf": 0.033,
+        "expectancy": -0.003062,
+        "win_rate": 0.0463,
+        "mdd": -1.0,
+        "avg_hold": 5.3
+      },
+      "per_symbol_20bp": {
+        "BTCUSDT": {
+          "trades": 3807,
+          "pf": 0.052,
+          "expectancy": -0.002085,
+          "win_rate": 0.0654,
+          "mdd": -0.9996,
+          "avg_hold": 5.3
+        },
+        "ETHUSDT": {
+          "trades": 3273,
+          "pf": 0.103,
+          "expectancy": -0.002036,
+          "win_rate": 0.1167,
+          "mdd": -0.9987,
+          "avg_hold": 5.3
+        }
+      }
+    },
+    {
+      "config": "next_ema",
+      "cost12bp": {
+        "trades": 6163,
+        "pf": 0.4618,
+        "expectancy": -0.001127,
+        "win_rate": 0.3184,
+        "mdd": -0.9991,
+        "avg_hold": 50.5
+      },
+      "cost20bp": {
+        "trades": 6163,
+        "pf": 0.2816,
+        "expectancy": -0.001927,
+        "win_rate": 0.2169,
+        "mdd": -1.0,
+        "avg_hold": 50.5
+      },
+      "cost30bp": {
+        "trades": 6163,
+        "pf": 0.1653,
+        "expectancy": -0.002927,
+        "win_rate": 0.1447,
+        "mdd": -1.0,
+        "avg_hold": 50.5
+      },
+      "per_symbol_20bp": {
+        "BTCUSDT": {
+          "trades": 3255,
+          "pf": 0.2552,
+          "expectancy": -0.001949,
+          "win_rate": 0.196,
+          "mdd": -0.9983,
+          "avg_hold": 57.1
+        },
+        "ETHUSDT": {
+          "trades": 2908,
+          "pf": 0.3097,
+          "expectancy": -0.001902,
+          "win_rate": 0.2404,
+          "mdd": -0.9962,
+          "avg_hold": 43.1
+        }
+      }
+    },
+    {
+      "config": "fixed_03_06",
+      "cost12bp": {
+        "trades": 5685,
+        "pf": 0.5904,
+        "expectancy": -0.001134,
+        "win_rate": 0.3397,
+        "mdd": -0.9985,
+        "avg_hold": 88.4
+      },
+      "cost20bp": {
+        "trades": 5685,
+        "pf": 0.4133,
+        "expectancy": -0.001934,
+        "win_rate": 0.3393,
+        "mdd": -1.0,
+        "avg_hold": 88.4
+      },
+      "cost30bp": {
+        "trades": 5685,
+        "pf": 0.2585,
+        "expectancy": -0.002934,
+        "win_rate": 0.3391,
+        "mdd": -1.0,
+        "avg_hold": 88.4
+      },
+      "per_symbol_20bp": {
+        "BTCUSDT": {
+          "trades": 2918,
+          "pf": 0.4114,
+          "expectancy": -0.001941,
+          "win_rate": 0.3382,
+          "mdd": -0.9967,
+          "avg_hold": 111.2
+        },
+        "ETHUSDT": {
+          "trades": 2767,
+          "pf": 0.4153,
+          "expectancy": -0.001925,
+          "win_rate": 0.3404,
+          "mdd": -0.9953,
+          "avg_hold": 64.3
+        }
+      }
+    },
+    {
+      "config": "fixed_03_05",
+      "cost12bp": {
+        "trades": 5773,
+        "pf": 0.5495,
+        "expectancy": -0.001177,
+        "win_rate": 0.3768,
+        "mdd": -0.999,
+        "avg_hold": 77.1
+      },
+      "cost20bp": {
+        "trades": 5773,
+        "pf": 0.3645,
+        "expectancy": -0.001977,
+        "win_rate": 0.3766,
+        "mdd": -1.0,
+        "avg_hold": 77.1
+      },
+      "cost30bp": {
+        "trades": 5773,
+        "pf": 0.2028,
+        "expectancy": -0.002977,
+        "win_rate": 0.3764,
+        "mdd": -1.0,
+        "avg_hold": 77.1
+      },
+      "per_symbol_20bp": {
+        "BTCUSDT": {
+          "trades": 2976,
+          "pf": 0.3653,
+          "expectancy": -0.001972,
+          "win_rate": 0.377,
+          "mdd": -0.9973,
+          "avg_hold": 96.7
+        },
+        "ETHUSDT": {
+          "trades": 2797,
+          "pf": 0.3637,
+          "expectancy": -0.001982,
+          "win_rate": 0.3761,
+          "mdd": -0.9962,
+          "avg_hold": 56.2
+        }
+      }
+    },
+    {
+      "config": "fixed_05_10",
+      "cost12bp": {
+        "trades": 4915,
+        "pf": 0.7137,
+        "expectancy": -0.001175,
+        "win_rate": 0.3343,
+        "mdd": -0.9975,
+        "avg_hold": 186.7
+      },
+      "cost20bp": {
+        "trades": 4915,
+        "pf": 0.574,
+        "expectancy": -0.001975,
+        "win_rate": 0.3335,
+        "mdd": -0.9999,
+        "avg_hold": 186.7
+      },
+      "cost30bp": {
+        "trades": 4915,
+        "pf": 0.4391,
+        "expectancy": -0.002975,
+        "win_rate": 0.3318,
+        "mdd": -1.0,
+        "avg_hold": 186.7
+      },
+      "per_symbol_20bp": {
+        "BTCUSDT": {
+          "trades": 2478,
+          "pf": 0.5769,
+          "expectancy": -0.001952,
+          "win_rate": 0.3354,
+          "mdd": -0.9929,
+          "avg_hold": 229.0
+        },
+        "ETHUSDT": {
+          "trades": 2437,
+          "pf": 0.5712,
+          "expectancy": -0.001999,
+          "win_rate": 0.3316,
+          "mdd": -0.9931,
+          "avg_hold": 143.7
+        }
+      }
+    }
+  ]
+}

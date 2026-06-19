@@ -27,6 +27,7 @@ from src.dashboard.airborne_fire_store import AirborneFireStore
 from src.dashboard.airborne_sim_cache import AirborneSimCache
 from src.dashboard.ma_cross_sim_cache import MaCrossSimCache
 from src.dashboard.ma_cross_store import MaCrossStore
+from src.dashboard.ppp_signal_store import PppSignalStore
 from src.dashboard.ops_counters import OpsCounters
 from src.dashboard.patch_notes import render_patch_notes_page
 from src.dashboard.shadow_runs import discover_shadow_runs, load_run_detail
@@ -90,6 +91,17 @@ def _get_ma_cross_sim_cache() -> MaCrossSimCache:
     if _MA_CROSS_SIM_CACHE is None:
         _MA_CROSS_SIM_CACHE = MaCrossSimCache("logs/ma-cross/sim_cache.jsonl")
     return _MA_CROSS_SIM_CACHE
+
+
+# PPP 반전 스캘핑 페이퍼 시그널 store (scripts/ppp_signal_daemon.py 가 적재).
+_PPP_SIGNAL_STORE: PppSignalStore | None = None
+
+
+def _get_ppp_signal_store() -> PppSignalStore:
+    global _PPP_SIGNAL_STORE
+    if _PPP_SIGNAL_STORE is None:
+        _PPP_SIGNAL_STORE = PppSignalStore("logs/ppp/history.jsonl")
+    return _PPP_SIGNAL_STORE
 from src.live.trade_history import discover_wal_files, reconstruct_trades
 from src.live.wal import replay as wal_replay
 from src.observability.metrics import Metrics
@@ -1252,6 +1264,7 @@ body{{
     <a href="/cs-tsmom" class="nav-pill">cs-tsmom (90%)</a>
     <a href="/airborne" class="nav-pill">airborne 적중</a>
     <a href="/ma-cross" class="nav-pill">골든/데드크로스</a>
+    <a href="/ppp" class="nav-pill">PPP 반전(페이퍼)</a>
     <a href="/manual" class="nav-pill">수동 거래</a>
     <a href="/shadow_runs" class="nav-pill">Shadow Runs</a>
     <a href="/patch-notes" class="nav-pill">패치노트</a>
@@ -4523,6 +4536,66 @@ h1{{font-size:1.1rem;color:#7ecef4;margin-bottom:14px}}
 </html>"""
 
 
+def _render_ppp_page() -> str:
+    """PPP 반전 스캘핑 페이퍼 시그널 수집 페이지 — /api/ppp_signals 소비."""
+    return """<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PPP 반전 시그널 (페이퍼)</title>
+<style>
+body{background:#0d1117;color:#e6edf3;font-family:-apple-system,Segoe UI,sans-serif;margin:0;padding:16px}
+a{color:#58a6ff;text-decoration:none}.nav{margin-bottom:14px}.nav a{margin-right:12px}
+h1{font-size:20px;margin:6px 0}.sub{color:#8b949e;font-size:12px;margin-bottom:14px}
+.warn{background:#3d1c1c;border:1px solid #f85149;border-radius:8px;padding:8px 12px;color:#ffb3ae;font-size:12px;margin-bottom:14px}
+.cards{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.card{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:10px 16px;min-width:110px}
+.card .k{color:#8b949e;font-size:11px}.card .v{font-size:20px;font-weight:700}
+.win{margin-bottom:10px}.win button{background:#21262d;color:#c9d1d9;border:1px solid #30363d;border-radius:6px;padding:5px 12px;margin-right:6px;cursor:pointer}
+.win button.on{background:#1f6feb;border-color:#1f6feb;color:#fff}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th,td{padding:6px 8px;border-bottom:1px solid #21262d;text-align:right}
+th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){text-align:left}
+.long{color:#3fb950}.short{color:#f85149}
+.empty{color:#8b949e;padding:20px;text-align:center}
+</style></head><body>
+<div class="nav"><a href="/">← 대시보드</a><a href="/airborne">에어본</a><a href="/ma-cross">골든/데드크로스</a><a href="/ppp">PPP 반전</a></div>
+<h1>PPP 반전 스캘핑 — 페이퍼 시그널 수집</h1>
+<div class="sub">고변동 알트 5m, 과매수/과매도 극단 + QPP(StochRSI) 크로스 + 횡보레짐(Choppiness≥61.8) 반전. scripts/ppp_signal_daemon.py 가 logs/ppp/history.jsonl 에 누적.</div>
+<div class="warn">⚠️ live-ppp-scalping-v1 은 5y 백테스트 OOS 과적합으로 <b>라이브 자동매매 미활성</b>. 본 페이지는 페이퍼 시그널(실거래 OOS 데이터) 수집 전용 — 실발주 아님.</div>
+<div class="win">
+  <button data-w="today">오늘</button>
+  <button data-w="7d" class="on">7일</button>
+  <button data-w="30d">30일</button>
+  <button data-w="all">전체</button>
+</div>
+<div class="cards" id="cards"></div>
+<div id="bysym" class="sub"></div>
+<table><thead><tr><th>시각(UTC)</th><th>종목</th><th>방향</th><th>종가</th><th>QPP본선</th><th>시그널</th><th>Chop</th></tr></thead>
+<tbody id="rows"><tr><td colspan="7" class="empty">로딩…</td></tr></tbody></table>
+<script>
+let W="7d";
+function esc(s){return String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}
+async function load(){
+  const r=await fetch('/api/ppp_signals?window='+W);const d=await r.json();
+  const c=document.getElementById('cards');
+  c.innerHTML=`<div class="card"><div class="k">기간 시그널</div><div class="v">${d.window_count}</div></div>
+   <div class="card"><div class="k">롱</div><div class="v long">${d.by_side.long||0}</div></div>
+   <div class="card"><div class="k">숏</div><div class="v short">${d.by_side.short||0}</div></div>
+   <div class="card"><div class="k">누적(전체)</div><div class="v">${d.total_store}</div></div>`;
+  document.getElementById('bysym').textContent='종목별: '+Object.entries(d.by_symbol).map(([k,v])=>k+' '+v).join(' · ')+(d.earliest_ts?('  |  최초 '+d.earliest_ts.slice(0,16)):'');
+  const tb=document.getElementById('rows');
+  if(!d.signals.length){tb.innerHTML='<tr><td colspan="7" class="empty">시그널이 아직 없습니다 — 데몬 미가동 또는 조건 미충족.</td></tr>';return;}
+  tb.innerHTML=d.signals.map(s=>{const cl=s.side==='long'?'long':'short';
+   return `<tr><td>${esc((s.ts||'').slice(0,16))}</td><td>${esc(s.symbol)}</td>
+   <td class="${cl}">${s.side==='long'?'롱':'숏'}</td><td>${s.close}</td>
+   <td>${s.qpp_main}</td><td>${s.qpp_sig}</td><td>${s.choppiness}</td></tr>`;}).join('');
+}
+document.querySelectorAll('.win button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.win button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on');W=b.dataset.w;load();});
+load();setInterval(load,60000);
+</script></body></html>"""
+
+
 def create_app(state: DashboardState | None = None) -> FastAPI:
     if state is None:
         state = DashboardState()
@@ -5237,6 +5310,44 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
         airborne 페이지 레이아웃 미러.
         """
         return HTMLResponse(content=_render_ma_cross_page())
+
+    # ── PPP 반전 스캘핑 페이퍼 시그널 (2026-06-19, live-ppp-scalping-v1) ──────
+    # scripts/ppp_signal_daemon.py 가 고변동 알트 5m 반전(과매수/과매도 + QPP
+    # 크로스 + 횡보레짐) 시그널을 logs/ppp/history.jsonl 에 누적. 본 엔드포인트는
+    # store 를 window 별로 읽어 수집 시그널 + 요약을 반환. ⚠️ 라이브 미활성
+    # (5y OOS 과적합) — 페이퍼 OOS 데이터 축적용.
+    @app.get("/api/ppp_signals")
+    async def api_ppp_signals(window: str = "7d") -> JSONResponse:
+        from datetime import datetime as _dt, timedelta as _td, timezone as _tz
+        now = _dt.now(_tz.utc)
+        since = {
+            "today": now.replace(hour=0, minute=0, second=0, microsecond=0),
+            "7d": now - _td(days=7),
+            "30d": now - _td(days=30),
+            "all": _dt(2020, 1, 1, tzinfo=_tz.utc),
+        }.get(window, now - _td(days=7))
+        store = _get_ppp_signal_store()
+        sigs = store.load_since(since)
+        by_side: dict[str, int] = {}
+        by_symbol: dict[str, int] = {}
+        for s in sigs:
+            by_side[s.get("side", "?")] = by_side.get(s.get("side", "?"), 0) + 1
+            by_symbol[s.get("symbol", "?")] = by_symbol.get(s.get("symbol", "?"), 0) + 1
+        return JSONResponse({
+            "available": True,
+            "window": window,
+            "total_store": store.count(),
+            "earliest_ts": store.earliest_ts(),
+            "window_count": len(sigs),
+            "by_side": by_side,
+            "by_symbol": by_symbol,
+            "signals": list(reversed(sigs))[:500],  # 최신순, 최대 500
+        })
+
+    @app.get("/ppp", response_class=HTMLResponse)
+    async def ppp_page() -> HTMLResponse:
+        """PPP 반전 스캘핑 페이퍼 시그널 수집 페이지 (live-ppp-scalping-v1, 비활성)."""
+        return HTMLResponse(content=_render_ppp_page())
 
     # ── 수동 거래 입력 (2026-05-21 — Claude Routines 일일 리포트 준비) ────
     # 2026-06-05 — manual_trade 는 venue-무관 단일 경로 (``logs/manual_trade.jsonl``).

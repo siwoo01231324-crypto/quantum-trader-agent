@@ -444,4 +444,83 @@ services:
         limits:
           memory: 256M
 
+  # 2026-06-16 — 이동평균 골든/데드 크로스 알림 데몬 (비트겟 top-100, 1시간봉).
+  # airborne-daemon 과 동일 패턴: 단독 process (PID 1 = python), Bitget REST
+  # polling (한국 IP safe — Binance WS 같은 region-block 없음), Telegram alert.
+  # 매 1h boundary +30s 에 top-100 1h 캔들 250개 REST fetch → SMA25×SMA200
+  # 크로스 평가 → 발생 시 LIVE 텔레그램 채널 (airborne 알림과 동일 채널) 발송.
+  # 자동매매 아님 — 시각적 가이드 알림 (주문/리스크 결정 없음, 불변식 #6).
+  #
+  # 가동:
+  #   docker compose -f docker-compose.live.yml build ma-cross-daemon
+  #   docker compose -f docker-compose.live.yml up -d ma-cross-daemon
+  #   docker compose -f docker-compose.live.yml logs -f ma-cross-daemon
+  ma-cross-daemon:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: qta-phase2:latest
+    container_name: qta-ma-cross-daemon
+    entrypoint:
+      - "python"
+      - "/app/scripts/ma_cross_alert_daemon.py"
+      - "--top-n"
+      - "100"
+      - "--fast"
+      - "25"
+      - "--slow"
+      - "200"
+    env_file:
+      - ./.env
+    environment:
+      TZ: Asia/Seoul
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - ./logs/ma-cross:/data/logs
+    restart: unless-stopped
+    # healthcheck 미설정 — airborne-daemon 과 동일 (python:slim 에 pgrep 미설치).
+    # process crash 는 restart: unless-stopped 가 커버.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  # 2026-06-19 — PPP 반전 스캘핑 페이퍼 시그널 데몬 (live-ppp-scalping-v1).
+  # 고변동 알트 5m 과매수/과매도 + QPP 크로스 + 횡보레짐 반전 시그널을
+  # logs/ppp/history.jsonl 에 누적 → 대시보드 /ppp 페이지. ma-cross-daemon 미러.
+  # ⚠️ 라이브 자동매매 미활성(5y OOS 과적합) — 페이퍼 OOS 데이터 수집 전용.
+  #   docker compose -f docker-compose.live.yml up -d ppp-signal-daemon
+  ppp-signal-daemon:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: qta-phase2:latest
+    container_name: qta-ppp-signal-daemon
+    entrypoint:
+      - "python"
+      - "/app/scripts/ppp_signal_daemon.py"
+    env_file:
+      - ./.env
+    environment:
+      TZ: Asia/Seoul
+      PYTHONUNBUFFERED: "1"
+      PPP_SYMBOLS: "WLDUSDT,ORDIUSDT,WIFUSDT,1000PEPEUSDT"
+    volumes:
+      - ./logs/ppp:/app/logs/ppp
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
 # Named volumes 미사용 - bind mount 로 호스트 ./data/ 직접 inspect 가능 (운영 일지 작성 시).
