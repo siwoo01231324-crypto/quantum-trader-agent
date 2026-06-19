@@ -4,8 +4,9 @@
 
 가드:
   1. KST gate = {1, 2, 3, 5, 6, 7, 8, 23} (v3, 13일 1m 기반)
-  2. BTC EMA200 아래 close → LONG entry 차단 (short 그대로)
-  3. BTC 24h drawdown < -1% → LONG entry 차단 (short 그대로)
+  2. BTC EMA200 하회 AND 24h 급락(<-2%) 둘 다 → LONG entry 차단 (short 그대로)
+     (2026-06-19 AND/-2% 강화 — 옛 OR/-1% 은 횡보장 롱 과차단)
+  3. 상승추세 + 24h 딥 단독 → 차단 안 함 (AND 미충족)
   4. BTC uptrend → 진입 정상 통과
   5. btc_trend_filter_enabled=False 면 byte-identical (회귀 방지)
   6. universe_ohlcv 키 없으면 graceful — 차단 안 함
@@ -59,28 +60,28 @@ def _btc_hist(close_series: pd.Series) -> pd.DataFrame:
     }, index=close_series.index)
 
 
-def test_btc_is_downtrend_below_ema_returns_true():
-    """200h EMA 아래 close → downtrend."""
+def test_btc_is_downtrend_below_ema_and_drawdown_returns_true():
+    """EMA200 하회 AND 24h 급락(<-2%) 둘 다 → downtrend (2026-06-19 AND/-2%)."""
     n = 300
     idx = pd.date_range("2026-01-01", periods=n, freq="1h")
-    # 1) 옛날 250봉 = 100 근처 평탄. 2) 최근 50봉 = 80 까지 하락
+    # 1) 옛날 250봉 = 100 근처 평탄. 2) 최근 50봉 = 80 까지 하락 (24h −10% 급락 포함)
     closes = np.concatenate([np.full(250, 100.0),
                              np.linspace(100, 80, 50)])
     h = _btc_hist(pd.Series(closes, index=idx))
     is_down, reason = _btc_is_downtrend(h)
     assert is_down
-    assert "btc_below_ema200" in reason
+    assert "btc_downtrend" in reason
 
 
-def test_btc_is_downtrend_24h_drawdown_returns_true():
-    """24h % change < -1% → downtrend."""
+def test_btc_uptrend_with_24h_dip_not_blocked():
+    """AND/-2% 강화: 상승추세(EMA 위)면 24h 딥 단독으로는 차단 안 함 (옛 OR 와 차이)."""
     n = 300
     idx = pd.date_range("2026-01-01", periods=n, freq="1h")
-    # 상승 trend (EMA 위) 인데 직전 24h 만 급락 → downtrend 잡음 (24h 가드)
+    # 상승 trend (EMA 위) 인데 직전 24h 만 급락 → 옛 OR 는 차단했으나 AND 는 통과
     closes = np.concatenate([np.linspace(50, 100, 270), np.linspace(100, 90, 30)])
     h = _btc_hist(pd.Series(closes, index=idx))
-    is_down, reason = _btc_is_downtrend(h)
-    assert is_down  # 24h 가 -10% 라 catch
+    is_down, _ = _btc_is_downtrend(h)
+    assert not is_down  # EMA 위라 below_ema=False → AND 미충족
 
 
 def test_btc_is_uptrend_returns_false():

@@ -15,6 +15,26 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.86"
+    date: "2026-06-19"
+    title: "BTC 롱차단 AND/-2% 강화 (횡보장 롱 과차단 해소) + 일일 필터·게이트 감사 루틴"
+    tags: [fix, docs]
+    summary: >
+      airborne kst-hours 의 BTC 추세 롱차단을 OR(EMA200하회 or 24h<-1%) →
+      AND(EMA200하회 AND 24h<-2%) 로 좁힘. EMA200(1h ~8일 지연)이 회복/횡보장을
+      하락장으로 오인해 이기는 롱을 떼로 차단하던 문제(최근 7일 실측: 차단된 롱
+      승률 80%·net +48%) 해소. 6/04식 급락 사고(아래+급락 동시)만 차단 유지.
+      ⚠️ 5y 보호력은 약해지는 레짐 trade-off → 일일 필터·게이트 감사로 모니터링.
+    items:
+      - "_btc_is_downtrend: OR/-1% → AND/-2%. _BTC_DOWNTREND_PCT -0.01→-0.02.
+         데몬 표시(_update_btc_trend_state)도 같은 함수라 자동 일치."
+      - "테스트: below+급락 동시→차단, 상승장+24h딥 단독→통과(미차단) 로 갱신."
+      - "cs-tsmom-daily-report 루틴에 규칙 8(필터·게이트 일일 감사) 추가 — 매일
+         차단된 fire 가 TP(이기는 신호 거름=손해)냐 SL(정상)이냐 교차분석해 레짐
+         변화 시 필터/게이트 조정 근거 생성. 5일+ 지속 시에만 조정 제안(과적합 방지)."
+    refs:
+      - "src/backtest/strategies/live_airborne_bb_reversal_kst_hours.py"
+      - "docs/routines/cs-tsmom-daily-report.md"
   - version: "v0.6.85"
     date: "2026-06-19"
     title: "데몬 BTC 하락추세 LONG 차단 알림 수정 — 1h fetch 100→250봉 (EMA200)"
