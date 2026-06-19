@@ -53,7 +53,7 @@ _KST_TOP_HOURS_V3: frozenset[int] = frozenset({1, 2, 3, 5, 6, 7, 8, 23})
 # 반영 — 더 단순한 접근: BTC 하락추세 시 LONG entry 자체 차단.
 _BTC_SYMBOL: str = "BTCUSDT"
 _BTC_EMA_PERIOD_HOURS: int = 200      # 약 8일
-_BTC_DOWNTREND_PCT: float = -0.01    # 직전 24h BTC < -1% 면 downtrend
+_BTC_DOWNTREND_PCT: float = -0.02    # AND 조건: 직전 24h BTC < -2% (급락) 일 때만
 
 
 def _btc_is_downtrend(
@@ -62,12 +62,18 @@ def _btc_is_downtrend(
     ema_period: int = _BTC_EMA_PERIOD_HOURS,
     drawdown_threshold: float = _BTC_DOWNTREND_PCT,
 ) -> tuple[bool, str]:
-    """BTC 가 하락추세인지 — 두 조건 OR (둘 다 다른 timescale 가드).
+    """BTC 하락추세 — EMA200 하회 **AND** 24h 급락(<-2%) 둘 다일 때만 (2026-06-19 강화).
 
-    1. 200h EMA 아래 close (medium-term trend)
-    2. 직전 24h % change < -1% (short-term momentum)
+    옛 로직은 두 조건 OR(EMA200 하회 *또는* 24h<-1%) 였으나, EMA200 은 1h 기준
+    ~8일 지연이라 EMA200 근처 횡보·회복장에서 *멀쩡한 롱을 떼로 차단*했다 (최근 7일
+    실측: 차단된 롱 승률 80%·net +48% — 이기는 롱을 죽임). 6/04 같은 *급락 사고*만
+    막도록 **AND/-2%** 로 좁힘: EMA200 아래(추세 약세) 이면서 동시에 24h −2% 급락
+    중일 때만 LONG 차단. 단일 조건(횡보 하회 or 단발 딥)으로는 차단 안 함.
 
-    데이터 부족 시 False (graceful — long block 안 함).
+    ⚠️ 5y 보호력은 약해짐(OR 가 5y 보호 최강) — 레짐 의존적 trade-off. 약세장 전환
+    시 재강화 판단은 일일 필터 감사(docs/routines/cs-tsmom-daily-report.md) 로.
+
+    데이터 부족(EMA200 200봉 or 24h 25봉 미달) 시 False (graceful — long block 안 함).
 
     Returns:
       (is_downtrend, reason)
@@ -75,20 +81,18 @@ def _btc_is_downtrend(
     if btc_hist is None or len(btc_hist) < ema_period:
         return False, "insufficient_btc_history"
     close = btc_hist["close"]
+    if len(close) < 25:
+        return False, "insufficient_24h_history"
     last_close = float(close.iloc[-1])
-    # 1) EMA200 cross
     ema = close.ewm(span=ema_period, adjust=False).mean()
-    if last_close < float(ema.iloc[-1]):
-        return True, f"btc_below_ema200 (close={last_close:.2f} < ema={float(ema.iloc[-1]):.2f})"
-    # 2) 24h drawdown
-    if len(close) >= 25:
-        prev_24h = float(close.iloc[-25])
-        ret_24h = (last_close - prev_24h) / prev_24h
-        if ret_24h < drawdown_threshold:
-            return True, (
-                f"btc_24h_drawdown ({ret_24h*100:.2f}% < "
-                f"{drawdown_threshold*100:.1f}%)"
-            )
+    below_ema = last_close < float(ema.iloc[-1])
+    prev_24h = float(close.iloc[-25])
+    ret_24h = (last_close - prev_24h) / prev_24h
+    if below_ema and ret_24h < drawdown_threshold:
+        return True, (
+            f"btc_downtrend (below_ema200 & 24h={ret_24h*100:.2f}% < "
+            f"{drawdown_threshold*100:.1f}%)"
+        )
     return False, "btc_uptrend_or_neutral"
 
 
