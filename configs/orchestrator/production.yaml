@@ -490,6 +490,33 @@ strategies:
   #   kwargs:
   #     default_size: 0.05
   #     max_entry_hour: 10.5
+  #
+  # PPP 스캘핑 매매법 (#ppp, 2026-06-19) — CANDIDATE, 검증 미완(라이브 미활성).
+  # 1차 bench(15m·큰 청산폭)는 PF<1 FAIL 이나 강의(1m 진입+소폭 구조청산)에 비충실.
+  # 충실 재검증(1m+HTF레짐+소폭청산 그리드) 후 활성화 여부 확정. spec 참조.
+  # 1P EMA(120/240) 배열 + 2P 60/120/240 EMA 지지·저항 + 3P QPP(StochRSI) 크로스,
+  # bidir. 외부 유튜브 강의 PPP 매매법을 공개 표준지표로 독립 구현 (QPP=Stoch RSI,
+  # TradingView 우리 지표와 동일 규약). 청산 stop 1.5%/tp 3% (1:2), 15m, top-100
+  # venue-routing. **5y bench 미실시 — 스캘핑 현실비용 부담 큼 → 활성화 전 필수.**
+  # - id: live-ppp-scalping-v1
+  #   class: backtest.strategies.live_ppp_scalping_v1.LivePppScalping
+  #   kwargs:
+  #     default_size: 0.05
+  #     tol_pct: 0.0015
+  #     touch_lookback: 3
+  #     allow_long: true
+  #     allow_short: true
+  #     btc_regime_gate: false
+  #     stop_loss_pct: 0.015       # sl_mode=fixed 일 때 사용 (또는 동적 계산 폴백)
+  #     take_profit_pct: 0.03      # tp_mode=fixed 일 때 사용 (또는 폴백)
+  #     sl_mode: fixed             # fixed | ema(지지/저항 이평 이탈)
+  #     tp_mode: fixed             # fixed | next_ema | bb_mid | bb_upper
+  #     sl_buffer_pct: 0.003
+  #     bb_period: 20
+  #     bb_std: 2.0
+  #     require_divergence: false  # true → 4P 다이버전스 필수
+  #     require_zone: false        # true → OB/OS 구간 필수
+  #     anomaly_guard_enabled: true
 
   # ── 메타라벨러 활성화 (#85) — 운영자 절차 ─────────────────────────────────
   # 1. python scripts/train_metalabeler_btc.py --output-dir models/momo-btc-v2

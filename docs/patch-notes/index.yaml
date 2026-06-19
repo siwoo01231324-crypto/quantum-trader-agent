@@ -15,6 +15,30 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.87"
+    date: "2026-06-19"
+    title: "PPP 스캘핑 매매법 candidate(검증 미완) + QPP(StochRSI) 지표"
+    tags: [feat]
+    summary: >
+      외부 유튜브 강의 "PPP 스캘핑 매매법"(1P/2P/3P)을 공개 표준지표로 독립 구현한
+      live-scanner 전략. 1P=EMA(120/240) 배열, 2P=60/120/240 EMA 지지·저항 터치,
+      3P=QPP(Stochastic RSI) 본선×시그널 골든/데드 크로스, bidir. 청산 1:2
+      (stop -1.5%/TP +3%), 15m, top-100 venue-routing. QPP 는 PPP 체험판 지표(유료
+      보호상품) 소스 복제 없이 출력 거동으로 StochRSI 계열 확인해 재현. 5y bench
+      미실시 → status candidate, production.yaml commented·비활성.
+    items:
+      - "신규: src/backtest/strategies/live_ppp_scalping_v1.py (LiveScannerMixin,
+         EMA 배열+이평 지지 + QPP StochRSI 크로스, bidir, venue-routing top-100)."
+      - "spec docs/specs/strategies/live-ppp-scalping-v1.md (status: candidate),
+         단위 테스트 tests/backtest/test_live_ppp_scalping_v1.py 35건 통과.
+         4P 다이버전스·OB/OS 가중·익절손절 모드(fixed/ema/next_ema/bb) 포함."
+      - "1차 bench (scripts/bench_ppp_scalping_5y.py, 10메이저·15m·왕복20bp): 4 청산조합
+         PF 0.70~0.87 FAIL. 단 강의(1m 진입+소폭 구조청산, ROI30%≈가격0.6%@50x)에
+         비충실(청산폭 5~10배 과대·15m 단일봉)이라 판정 보류 → 충실 재검증 예정."
+      - "production.yaml 비활성·orchestrator 미등록. candidate 유지(검증 미완)."
+    refs:
+      - "src/backtest/strategies/live_ppp_scalping_v1.py"
+      - "docs/specs/strategies/live-ppp-scalping-v1.md"
   - version: "v0.6.86"
     date: "2026-06-19"
     title: "BTC 롱차단 AND/-2% 강화 (횡보장 롱 과차단 해소) + 일일 필터·게이트 감사 루틴"

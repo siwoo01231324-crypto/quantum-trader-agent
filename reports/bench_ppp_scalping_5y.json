@@ -1,0 +1,70 @@
+{
+  "symbols": [
+    "BTCUSDT",
+    "ETHUSDT",
+    "SOLUSDT",
+    "BNBUSDT",
+    "XRPUSDT",
+    "ADAUSDT",
+    "AVAXUSDT",
+    "DOGEUSDT",
+    "LINKUSDT",
+    "ATOMUSDT"
+  ],
+  "cost_bps_roundtrip": 20.0,
+  "interval": "15m",
+  "results": [
+    {
+      "trades": 34626,
+      "pf": 0.8713,
+      "expectancy": -0.001433,
+      "win_rate": 0.341,
+      "mdd": -1.0,
+      "avg_hold": 31.1,
+      "total_ret": -1.0,
+      "config": "fixed_1to2",
+      "sl_mode": "fixed",
+      "tp_mode": "fixed",
+      "gate_pass": false
+    },
+    {
+      "trades": 58814,
+      "pf": 0.7424,
+      "expectancy": -0.001687,
+      "win_rate": 0.3207,
+      "mdd": -1.0,
+      "avg_hold": 14.1,
+      "total_ret": -1.0,
+      "config": "ema_nextema",
+      "sl_mode": "ema",
+      "tp_mode": "next_ema",
+      "gate_pass": false
+    },
+    {
+      "trades": 61483,
+      "pf": 0.6982,
+      "expectancy": -0.001922,
+      "win_rate": 0.3496,
+      "mdd": -1.0,
+      "avg_hold": 12.4,
+      "total_ret": -1.0,
+      "config": "ema_bbupper",
+      "sl_mode": "ema",
+      "tp_mode": "bb_upper",
+      "gate_pass": false
+    },
+    {
+      "trades": 61747,
+      "pf": 0.7223,
+      "expectancy": -0.001748,
+      "win_rate": 0.3494,
+      "mdd": -1.0,
+      "avg_hold": 12.7,
+      "total_ret": -1.0,
+      "config": "ema_bbmid",
+      "sl_mode": "ema",
+      "tp_mode": "bb_mid",
+      "gate_pass": false
+    }
+  ]
+}

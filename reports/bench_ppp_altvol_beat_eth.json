@@ -1,0 +1,228 @@
+{
+  "symbols": [
+    "BEATUSDT",
+    "ETHUSDT"
+  ],
+  "sr_win": 30,
+  "chop_thr": 61.8,
+  "use_sr": false,
+  "use_regime": true,
+  "results": [
+    {
+      "config": "opp_cross",
+      "cost12bp": {
+        "trades": 2180,
+        "pf": 0.7034,
+        "expectancy": -0.000799,
+        "win_rate": 0.2555,
+        "mdd": -0.8808
+      },
+      "cost20bp": {
+        "trades": 2180,
+        "pf": 0.5174,
+        "expectancy": -0.001599,
+        "win_rate": 0.2046,
+        "mdd": -0.9775
+      },
+      "cost30bp": {
+        "trades": 2180,
+        "pf": 0.3705,
+        "expectancy": -0.002599,
+        "win_rate": 0.1665,
+        "mdd": -0.9972
+      },
+      "per_symbol_20bp": {
+        "BEATUSDT": {
+          "trades": 478,
+          "pf": 0.8785,
+          "expectancy": -0.000719,
+          "win_rate": 0.3096,
+          "mdd": -0.5871
+        },
+        "ETHUSDT": {
+          "trades": 1702,
+          "pf": 0.285,
+          "expectancy": -0.001846,
+          "win_rate": 0.1751,
+          "mdd": -0.9574
+        }
+      },
+      "oos_train_20bp": {
+        "trades": 1062,
+        "pf": 0.5049,
+        "expectancy": -0.001701,
+        "win_rate": 0.1742,
+        "mdd": -0.8753
+      },
+      "oos_test_20bp": {
+        "trades": 1118,
+        "pf": 0.5302,
+        "expectancy": -0.001502,
+        "win_rate": 0.2335,
+        "mdd": -0.8368
+      }
+    },
+    {
+      "config": "fixed_1_2",
+      "cost12bp": {
+        "trades": 1495,
+        "pf": 0.9087,
+        "expectancy": -0.000663,
+        "win_rate": 0.3485,
+        "mdd": -0.7113
+      },
+      "cost20bp": {
+        "trades": 1495,
+        "pf": 0.8121,
+        "expectancy": -0.001463,
+        "win_rate": 0.3485,
+        "mdd": -0.9085
+      },
+      "cost30bp": {
+        "trades": 1495,
+        "pf": 0.7081,
+        "expectancy": -0.002463,
+        "win_rate": 0.3478,
+        "mdd": -0.9783
+      },
+      "per_symbol_20bp": {
+        "BEATUSDT": {
+          "trades": 451,
+          "pf": 0.781,
+          "expectancy": -0.001729,
+          "win_rate": 0.3392,
+          "mdd": -0.6231
+        },
+        "ETHUSDT": {
+          "trades": 1044,
+          "pf": 0.8258,
+          "expectancy": -0.001348,
+          "win_rate": 0.3525,
+          "mdd": -0.8123
+        }
+      },
+      "oos_train_20bp": {
+        "trades": 696,
+        "pf": 0.8583,
+        "expectancy": -0.00108,
+        "win_rate": 0.3621,
+        "mdd": -0.5641
+      },
+      "oos_test_20bp": {
+        "trades": 799,
+        "pf": 0.7733,
+        "expectancy": -0.001797,
+        "win_rate": 0.3367,
+        "mdd": -0.7975
+      }
+    },
+    {
+      "config": "fixed_1_3",
+      "cost12bp": {
+        "trades": 1390,
+        "pf": 0.9311,
+        "expectancy": -0.000565,
+        "win_rate": 0.264,
+        "mdd": -0.6566
+      },
+      "cost20bp": {
+        "trades": 1390,
+        "pf": 0.8448,
+        "expectancy": -0.001365,
+        "win_rate": 0.264,
+        "mdd": -0.878
+      },
+      "cost30bp": {
+        "trades": 1390,
+        "pf": 0.7519,
+        "expectancy": -0.002365,
+        "win_rate": 0.2633,
+        "mdd": -0.9696
+      },
+      "per_symbol_20bp": {
+        "BEATUSDT": {
+          "trades": 447,
+          "pf": 0.8619,
+          "expectancy": -0.001211,
+          "win_rate": 0.2662,
+          "mdd": -0.5529
+        },
+        "ETHUSDT": {
+          "trades": 943,
+          "pf": 0.8367,
+          "expectancy": -0.001438,
+          "win_rate": 0.263,
+          "mdd": -0.8123
+        }
+      },
+      "oos_train_20bp": {
+        "trades": 645,
+        "pf": 0.9187,
+        "expectancy": -0.000697,
+        "win_rate": 0.2822,
+        "mdd": -0.4346
+      },
+      "oos_test_20bp": {
+        "trades": 745,
+        "pf": 0.7837,
+        "expectancy": -0.001943,
+        "win_rate": 0.2483,
+        "mdd": -0.7965
+      }
+    },
+    {
+      "config": "fixed_2_4",
+      "cost12bp": {
+        "trades": 1023,
+        "pf": 1.0499,
+        "expectancy": 0.000667,
+        "win_rate": 0.3627,
+        "mdd": -0.687
+      },
+      "cost20bp": {
+        "trades": 1023,
+        "pf": 0.9904,
+        "expectancy": -0.000133,
+        "win_rate": 0.3627,
+        "mdd": -0.7671
+      },
+      "cost30bp": {
+        "trades": 1023,
+        "pf": 0.922,
+        "expectancy": -0.001133,
+        "win_rate": 0.3617,
+        "mdd": -0.861
+      },
+      "per_symbol_20bp": {
+        "BEATUSDT": {
+          "trades": 388,
+          "pf": 1.132,
+          "expectancy": 0.001757,
+          "win_rate": 0.3892,
+          "mdd": -0.5516
+        },
+        "ETHUSDT": {
+          "trades": 635,
+          "pf": 0.9095,
+          "expectancy": -0.001288,
+          "win_rate": 0.3465,
+          "mdd": -0.7671
+        }
+      },
+      "oos_train_20bp": {
+        "trades": 467,
+        "pf": 1.1018,
+        "expectancy": 0.001351,
+        "win_rate": 0.3919,
+        "mdd": -0.3519
+      },
+      "oos_test_20bp": {
+        "trades": 556,
+        "pf": 0.9042,
+        "expectancy": -0.00138,
+        "win_rate": 0.3381,
+        "mdd": -0.7041
+      }
+    }
+  ]
+}
