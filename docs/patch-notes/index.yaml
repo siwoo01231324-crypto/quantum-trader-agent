@@ -15,6 +15,26 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.88"
+    date: "2026-06-19"
+    title: "MA-크로스 confluence 필터 — ADX·기울기 + 숏-집중 opt-in 스택 (candidate)"
+    tags: [feature, docs]
+    summary: >
+      live-macross-regime-v1 에 ranging/whipsaw 차단 confluence 필터를 추가.
+      ADX(14)≥20 + SMA200 기울기(추세확인) 위에, 리서치로 검증된 숏-집중
+      opt-in 스택(allow_long=False·KST시간게이트·자기SMA200·과확장회피)을 얹음.
+      5y/2y/split-half OOS 검증: 권장 숏 구성 PF 1.33(5y)/1.59(2y)·기대값
+      +0.59%/+1.00% — 현 v1(본전 PF 1.02)이 못 넘던 5y 게이트 통과. 단 30종목
+      1h 한정 검증이라 candidate 유지(production 미등록·비활성).
+    items:
+      - "on_bar: allow_long/allow_short·kst_hour_gate·self_sma200_filter·
+         overextension_max_pct 생성자 인자 추가 (전부 기본 OFF — 기존 bidir 동작 보존)."
+      - "리서치 기각: QPP존·EMA배열·다이버전스·거래량·RSI·4h정렬 — 1h 추세전략에
+         역효과/비robust. 채택은 ADX·숏집중·시간게이트·자기200·과확장만."
+      - "대시보드 /ma-cross 에 confluence regime 토글 + 걸러낸 CROSS 노출."
+      - "테스트 +9(전략) +6(대시보드). spec 진입규칙 5단계 + 리서치 섹션."
+    refs:
+      - "docs/specs/strategies/live-macross-regime-v1.md"
   - version: "v0.6.87"
     date: "2026-06-19"
     title: "PPP 스캘핑 매매법 candidate(검증 미완) + QPP(StochRSI) 지표"
