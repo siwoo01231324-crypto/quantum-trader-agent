@@ -12,7 +12,14 @@
 1. SMA(25)/SMA(200) 크로스 (``detect_cross`` 규약):
    - golden: 직전 fast<=slow 이고 현재 fast>slow → 롱 후보 (buy)
    - death : 직전 fast>=slow 이고 현재 fast<slow → 숏 후보 (sell)
-2. **BTC SMA200 레짐 게이트** (엣지의 핵심):
+2. **SMA200 기울기 필터** (ranging 감지 1차):
+   - 골든→롱: SMA200[-1] > SMA200[-6] (상향 기울기) 일 때만 통과
+   - 데드→숏: SMA200[-1] < SMA200[-6] (하향 기울기) 일 때만 통과
+   - flat SMA200 위 크로스는 range 내 표류 → hold
+3. **ADX(14) ≥ 20 필터** (ranging 감지 2차, Wilder 기준 ADX_TREND_DEFAULT):
+   - ADX < 20 → ranging/choppy 환경 → hold
+   - ADX 데이터 부족(warmup) → 보수적으로 진입 skip (hold)
+4. **BTC SMA200 레짐 게이트** (엣지의 핵심):
    - golden→롱은 **BTC close ≥ BTC SMA200 (상승장)** 일 때만 통과
    - death →숏은 **BTC close <  BTC SMA200 (하락장)** 일 때만 통과
    - 역행 (골든+하락장 / 데드+상승장) → hold (진입 안 함)
@@ -42,6 +49,7 @@ from typing import ClassVar
 import pandas as pd
 
 from backtest.protocol import Signal
+from backtest.strategies._indicators import ADX_TREND_DEFAULT, adx
 from backtest.strategies._live_scanner_helpers import LiveScannerMixin
 
 # detect_cross 규약 (scripts/ma_cross_alert_daemon.py 와 동일).
@@ -54,6 +62,14 @@ _CROSS_DEATH = "death"
 # BTC 레짐 게이트 — airborne 의 universe_ohlcv["BTCUSDT"] 패턴 재사용.
 _BTC_SYMBOL: str = "BTCUSDT"
 _BTC_SMA_PERIOD: int = 200
+
+# SMA200 기울기 필터 — N봉 전 대비 현재 SMA200 방향 확인.
+# 5봉(= 5시간) 전과 비교: 충분히 짧아 최근 추세를 반영하되
+# 단봉 노이즈를 회피. 필요 시 생성자에서 오버라이드 가능.
+_SLOPE_LOOKBACK: int = 5
+
+# ADX 필터 — Wilder 기준 20 이상이면 추세 환경 (ADX_TREND_DEFAULT = 20.0).
+_ADX_PERIOD: int = 14
 
 
 def detect_cross(close: pd.Series, fast: int = _FAST, slow: int = _SLOW) -> str | None:
@@ -81,6 +97,31 @@ def detect_cross(close: pd.Series, fast: int = _FAST, slow: int = _SLOW) -> str 
     if pf >= ps and cf < cs:
         return _CROSS_DEATH
     return None
+
+
+def _slow_slope(close: pd.Series, slow: int = _SLOW,
+                lookback: int = _SLOPE_LOOKBACK) -> str | None:
+    """SMA(slow) 기울기 방향 판정.
+
+    Returns:
+      "up"   : SMA(slow)[-1] > SMA(slow)[-lookback-1]  (상향)
+      "down" : SMA(slow)[-1] < SMA(slow)[-lookback-1]  (하향)
+      "flat" : 동일 (flat range)
+      None   : 데이터 부족 — 호출자는 보수적으로 진입 skip.
+    """
+    need = slow + lookback
+    if close is None or len(close) < need:
+        return None
+    ma = close.rolling(slow).mean()
+    current = ma.iloc[-1]
+    past = ma.iloc[-1 - lookback]
+    if pd.isna(current) or pd.isna(past):
+        return None
+    if current > past:
+        return "up"
+    if current < past:
+        return "down"
+    return "flat"
 
 
 def _btc_regime(btc_hist: pd.DataFrame, *, sma_period: int = _BTC_SMA_PERIOD) -> str | None:
@@ -191,6 +232,25 @@ class LiveMacrossRegime(LiveScannerMixin):
         cross = detect_cross(history["close"], self.fast, self.slow)
         if cross is None:
             return Signal(action="hold", size=0.0, reason="no_cross")
+
+        # ── SMA200 기울기 필터 (ranging 감지 1차) ───────────────────────
+        slope = _slow_slope(history["close"], self.slow, _SLOPE_LOOKBACK)
+        if slope is None:
+            return Signal(action="hold", size=0.0, reason="slope_warmup")
+        if cross == _CROSS_GOLDEN and slope != "up":
+            return Signal(action="hold", size=0.0,
+                          reason=f"slope_gate:golden_slope={slope}")
+        if cross == _CROSS_DEATH and slope != "down":
+            return Signal(action="hold", size=0.0,
+                          reason=f"slope_gate:death_slope={slope}")
+
+        # ── ADX 필터 (ranging 감지 2차, Wilder ADX_TREND_DEFAULT=20) ────
+        adx_val = adx(history, period=_ADX_PERIOD)
+        if adx_val is None:
+            return Signal(action="hold", size=0.0, reason="adx_warmup")
+        if adx_val < ADX_TREND_DEFAULT:
+            return Signal(action="hold", size=0.0,
+                          reason=f"adx_gate:adx={adx_val:.1f}<{ADX_TREND_DEFAULT}")
 
         # ── BTC 레짐 게이트 (엣지의 핵심) ──────────────────────────────
         universe = snap.get("universe_ohlcv") if isinstance(snap, dict) else None
