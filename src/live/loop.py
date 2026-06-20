@@ -1564,10 +1564,10 @@ def _start_airborne_fire_consumer(
     pace = float(os.environ.get("AIRBORNE_FIRE_PACE_SEC", "0.15") or 0.15)
 
     def _skip_notify(text: str) -> None:
-        """시간게이트 진입 스킵 → 텔레그램 (fail-soft). consumer 가 to_thread 로 호출."""
+        """실진입/미진입 ground-truth → 텔레그램 (fail-soft). consumer 가 to_thread 로 호출."""
         try:
             from src.observability.alerts import notify as _alerts_notify
-            _alerts_notify("info", "airborne 진입 스킵", text)
+            _alerts_notify("info", "airborne 실진입/미진입", text)
         except Exception as err:  # noqa: BLE001 — 알림 실패가 거래 막지 않음
             logger.warning("airborne skip notify wiring failed: %s", err)
 

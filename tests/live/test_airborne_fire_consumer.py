@@ -401,7 +401,8 @@ def test_hour_gate_skip_notifies():
     assert orch.calls == []
     assert len(msgs) == 1
     assert "SOLUSDT" in msgs[0]
-    assert f"{h:02d}시" in msgs[0]
+    assert "미진입" in msgs[0]
+    assert "시간게이트" in msgs[0]
     assert "숏" in msgs[0]
 
 
@@ -440,8 +441,8 @@ def test_hour_gate_skip_aggregates_per_hour_side():
         assert s in msgs[0]
 
 
-def test_no_notify_when_entered():
-    """진입 성공한 발화는 스킵 알림 안 함."""
+def test_entry_notifies_ground_truth():
+    """진입 성공한 발화는 '✅ 실진입' ground-truth 알림 (2026-06-20 — 실거래 일치)."""
     ts = _recent_iso(minutes_ago=1)
     h = int(pd.Timestamp(ts).tz_convert("Asia/Seoul").floor("1h").hour)
     msgs: list[str] = []
@@ -451,11 +452,28 @@ def test_no_notify_when_entered():
         notify=msgs.append,
     )
     assert asyncio.run(c.sweep_once()) == 1
-    assert msgs == []
+    assert len(msgs) == 1
+    assert "실진입" in msgs[0]
+    assert "SOLUSDT" in msgs[0]
 
 
-def test_no_notify_when_universe_blocks_not_hour():
-    """universe 로 막힌 건 시간 사유 아님 → 스킵 알림 안 함 (오탐 방지)."""
+def test_entry_notify_dedup_once_per_fire():
+    """같은 진입 발화는 매 sweep 재평가돼도 '실진입' 알림 1회만."""
+    ts = _recent_iso(minutes_ago=1)
+    h = int(pd.Timestamp(ts).tz_convert("Asia/Seoul").floor("1h").hour)
+    msgs: list[str] = []
+    c, _ = _consumer(
+        _FakeStore([_fire("SOLUSDT", "short", ts)]), _FakeOrch(),
+        [_spec(hours=frozenset({h}), sides=frozenset({"short"}))],
+        notify=msgs.append,
+    )
+    asyncio.run(c.sweep_once())
+    asyncio.run(c.sweep_once())
+    assert len(msgs) == 1  # 두 번째 sweep 은 dedup (이미진입)
+
+
+def test_universe_block_notifies_with_reason():
+    """universe 로 막힌 건 '❌ 미진입 ... 유니버스밖' 사유 알림 (2026-06-20 신규)."""
     ts = _recent_iso(minutes_ago=1)
     h = int(pd.Timestamp(ts).tz_convert("Asia/Seoul").floor("1h").hour)
     msgs: list[str] = []
@@ -466,7 +484,10 @@ def test_no_notify_when_universe_blocks_not_hour():
         notify=msgs.append,
     )
     assert asyncio.run(c.sweep_once()) == 0
-    assert msgs == []  # hour 는 통과했고 universe 가 binding → 알림 X
+    assert len(msgs) == 1
+    assert "미진입" in msgs[0]
+    assert "유니버스밖" in msgs[0]
+    assert "NOTINUSDT" in msgs[0]
 
 
 # ── (h) 롱 전용 짧은 freshness (정각 빠른 매수 / stale 늦은진입 차단) ──────────
@@ -709,3 +730,66 @@ def test_vol_filter_applies_to_long_too():
         klines_fetcher=_stub_fetcher(0.0, range_pct=10.0),
     )
     assert asyncio.run(c.sweep_once()) == 0
+
+
+# ── (i) ground-truth 미진입 사유 라벨 + 진입/미진입 동시 통지 ─────────────────
+
+
+def test_momentum_crash_notifies_reason_label():
+    """폭락 롱 skip → '❌ 미진입 ... 폭락' 사유 라벨 통지."""
+    ts = _recent_iso(minutes_ago=1)
+    h = int(pd.Timestamp(ts).tz_convert("Asia/Seoul").floor("1h").hour)
+    msgs: list[str] = []
+    c, _ = _consumer(
+        _FakeStore([_fire("EPICUSDT", "long", ts)]),
+        _FakeOrch(),
+        [_spec(hours=frozenset({h}), sides=frozenset({"long"}))],
+        klines_fetcher=_stub_fetcher(-23.0),
+        notify=msgs.append,
+    )
+    assert asyncio.run(c.sweep_once()) == 0
+    assert len(msgs) == 1
+    assert "미진입" in msgs[0]
+    assert "폭락" in msgs[0]
+    assert "EPICUSDT" in msgs[0]
+
+
+def test_vol_filter_notifies_reason_label():
+    """고변동 코인 skip → '❌ 미진입 ... 고변동' 사유 라벨 통지."""
+    ts = _recent_iso(minutes_ago=1)
+    h = int(pd.Timestamp(ts).tz_convert("Asia/Seoul").floor("1h").hour)
+    msgs: list[str] = []
+    c, _ = _consumer(
+        _FakeStore([_fire("SIRENUSDT", "short", ts)]),
+        _FakeOrch(),
+        [_spec(hours=frozenset({h}), sides=frozenset({"short"}))],
+        klines_fetcher=_stub_fetcher(0.0, range_pct=8.0),
+        notify=msgs.append,
+    )
+    assert asyncio.run(c.sweep_once()) == 0
+    assert len(msgs) == 1
+    assert "고변동" in msgs[0]
+    assert "SIRENUSDT" in msgs[0]
+
+
+def test_entry_and_skip_both_notified_one_sweep():
+    """한 sweep 에 진입 1 + 미진입 1 → '✅ 실진입' / '❌ 미진입' 두 메시지."""
+    ts = _recent_iso(minutes_ago=1)
+    h = int(pd.Timestamp(ts).tz_convert("Asia/Seoul").floor("1h").hour)
+    bad_h = (h + 5) % 24
+    msgs: list[str] = []
+    c, _ = _consumer(
+        _FakeStore([
+            _fire("GOODUSDT", "short", ts),   # hour 통과 → 진입
+            _fire("LATEUSDT", "short", ts),   # 같은 ts 라도 spec hour 밖이면 미진입
+        ]),
+        _FakeOrch(),
+        # spec1: GOOD/LATE 둘 다 hour 통과시키되 universe 로 LATE 만 차단
+        [_spec(hours=frozenset({h}), sides=frozenset({"short"}),
+               universe=frozenset({"GOODUSDT"}))],
+        notify=msgs.append,
+    )
+    assert asyncio.run(c.sweep_once()) == 1
+    joined = "\n".join(msgs)
+    assert "실진입" in joined and "GOODUSDT" in joined
+    assert "미진입" in joined and "LATEUSDT" in joined and "유니버스밖" in joined
