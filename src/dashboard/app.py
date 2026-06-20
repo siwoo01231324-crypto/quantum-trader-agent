@@ -28,6 +28,7 @@ from src.dashboard.airborne_sim_cache import AirborneSimCache
 from src.dashboard.ma_cross_sim_cache import MaCrossSimCache
 from src.dashboard.ma_cross_store import MaCrossStore
 from src.dashboard.ppp_signal_store import PppSignalStore
+from src.dashboard.ppp_sim_cache import PppSimCache
 from src.dashboard.ops_counters import OpsCounters
 from src.dashboard.patch_notes import render_patch_notes_page
 from src.dashboard.shadow_runs import discover_shadow_runs, load_run_detail
@@ -102,6 +103,19 @@ def _get_ppp_signal_store() -> PppSignalStore:
     if _PPP_SIGNAL_STORE is None:
         _PPP_SIGNAL_STORE = PppSignalStore("logs/ppp/history.jsonl")
     return _PPP_SIGNAL_STORE
+
+
+# PPP 시뮬 결과 캐시 — ma-cross sim cache 미러. 데몬이 store 에 직접 적재하므로
+# (docker volume ./logs/ppp 공유) docker-logs refresher 는 불필요 — store 는
+# 항상 신선. 본 cache 는 *시그널 → TP/SL 시뮬 결과* 만 영속화 (cache miss 만 봉 fetch).
+_PPP_SIM_CACHE: PppSimCache | None = None
+
+
+def _get_ppp_sim_cache() -> PppSimCache:
+    global _PPP_SIM_CACHE
+    if _PPP_SIM_CACHE is None:
+        _PPP_SIM_CACHE = PppSimCache("logs/ppp/sim_cache.jsonl")
+    return _PPP_SIM_CACHE
 from src.live.trade_history import discover_wal_files, reconstruct_trades
 from src.live.wal import replay as wal_replay
 from src.observability.metrics import Metrics
@@ -626,6 +640,164 @@ def _aggregate_ma_cross_sims(sims: list[dict]) -> dict:
         "sum_pct": sum_pct, "net_pct": net_pct,
         "pf": pf, "mean_pct": sum_pct / n,
         "by_cross": by_cross, "by_kst_bucket": by_kst_bucket,
+    }
+
+
+# ── PPP 반전 스캘핑 시뮬 + 집계 — ma-cross 미러 ──────────────────────────────
+# scripts/ppp_signal_daemon.py 가 고변동 알트 5m 반전 시그널(long/short)을
+# logs/ppp/history.jsonl 에 직접 적재(docker volume 공유) → store. 본 섹션은
+# 그 시그널을 binance fapi 5m 봉으로 TP/SL 시뮬 → 적중률·PF·net% 집계.
+# 데몬은 절대 수정 안 함 — 대시보드 측만 추가 (ma-cross 와 동일 정책).
+#
+# 룰 (live-ppp-scalping-v1 ClassVar 미러): TP +3% / SL -1.5% (손익비 1:2).
+# long=과매도 골든크로스, short=과매수 데드크로스. hold=12봉(5m×12=1h) — 전략의
+# global 1h time-stop 과 동일 (스캘핑 짧은 보유). 봉 데이터는 데몬과 같은
+# binance fapi (5m) 를 써 시그널-시뮬 정합 유지 (ma-cross 는 bitget 1h).
+PPP_TP_PCT = 0.03     # +3%
+PPP_SL_PCT = 0.015    # -1.5% (1:2 손익비)
+PPP_HOLD_BARS = 12    # 5m 봉 12개 = 1h (전략 global time-stop 미러)
+PPP_BAR_MS_5M = 300_000
+# 비용 — airborne/ma-cross 와 동일 fee 모델 (양방향 합산 실효율, net% 에 반영).
+PPP_FEE_PCT = AIRBORNE_FEE_PCT
+
+
+def _simulate_ppp(
+    sig_rec: dict, bars: list[dict],
+    *,
+    tp_pct: float = PPP_TP_PCT,
+    sl_pct: float = PPP_SL_PCT,
+    hold_bars: int = PPP_HOLD_BARS,
+) -> dict | None:
+    """단일 PPP 시그널의 TP/SL 시뮬 결과. ``_simulate_ma_cross`` 와 동일 시맨틱.
+
+    long=롱 / short=숏. entry=시그널 close. 롱 TP=entry×(1+tp)/SL=entry×(1-sl),
+    숏 미러. bars (진입 이후 5m 캔들) 의 high/low 로 intra-bar 판정, 동시터치
+    SL_first 보수 처리, 둘 다 미도달이면 hold_bars 후 timeout=종가수익.
+
+    Returns:
+        {outcome: "TP"|"SL"|"SL_first"|"timeout", pct, bar_idx} 또는 None.
+        None — bars 비었거나, hold_bars 미만이면서 TP/SL 조기 종결도 없는
+        incomplete sim (caller 가 캐시 skip + 통계 제외 → 다음 호출에 봉이 다
+        닫혀있으면 정상 재계산. ma-cross incomplete-guard 그대로).
+    """
+    if not bars:
+        return None
+    entry = float(sig_rec["close"])
+    is_long = sig_rec.get("side") == "long"
+    tp_px = entry * (1 + tp_pct) if is_long else entry * (1 - tp_pct)
+    sl_px = entry * (1 - sl_pct) if is_long else entry * (1 + sl_pct)
+    for idx, bar in enumerate(bars, start=1):
+        hi, lo = float(bar["high"]), float(bar["low"])
+        if is_long:
+            hit_tp = hi >= tp_px
+            hit_sl = lo <= sl_px
+        else:
+            hit_tp = lo <= tp_px
+            hit_sl = hi >= sl_px
+        if hit_tp and hit_sl:
+            return {"outcome": "SL_first", "pct": -sl_pct * 100, "bar_idx": idx}
+        if hit_sl:
+            return {"outcome": "SL", "pct": -sl_pct * 100, "bar_idx": idx}
+        if hit_tp:
+            return {"outcome": "TP", "pct": +tp_pct * 100, "bar_idx": idx}
+    if len(bars) < hold_bars:
+        return None
+    final_close = float(bars[-1]["close"])
+    if is_long:
+        pct = (final_close - entry) / entry * 100
+    else:
+        pct = (entry - final_close) / entry * 100
+    return {"outcome": "timeout", "pct": pct, "bar_idx": len(bars)}
+
+
+def _aggregate_ppp_sims(sims: list[dict]) -> dict:
+    """PPP 시뮬 결과 list → 집계 통계 dict. ``_aggregate_ma_cross_sims`` 미러.
+
+    ma-cross 의 by_cross(golden/death) 대신 by_side(long/short) 로 분리한다
+    (airborne by_side 와 동일 키).
+
+    Returns:
+        {n, tp, sl, sl_first, timeout, win_rate (0-1), sum_pct (gross),
+         net_pct (after fee), pf (float|None), mean_pct,
+         by_side: {long: {...}, short: {...}}, by_kst_bucket: [...]}
+    """
+    n = len(sims)
+    if n == 0:
+        return {
+            "n": 0, "tp": 0, "sl": 0, "sl_first": 0, "timeout": 0,
+            "win_rate": None, "sum_pct": 0.0, "net_pct": 0.0,
+            "pf": None, "mean_pct": None,
+            "by_side": {}, "by_kst_bucket": [],
+        }
+    tp = sum(1 for s in sims if s["outcome"] == "TP")
+    sl = sum(1 for s in sims if s["outcome"] == "SL")
+    sl_first = sum(1 for s in sims if s["outcome"] == "SL_first")
+    timeout = sum(1 for s in sims if s["outcome"] == "timeout")
+    pcts = [s["pct"] for s in sims]
+    wins = [p for p in pcts if p > 0]
+    losses = [p for p in pcts if p < 0]
+    sum_pct = sum(pcts)
+    net_pct = sum_pct - PPP_FEE_PCT * n
+    pf = (sum(wins) / abs(sum(losses))) if losses else None
+
+    def _bucket(h: int) -> str:
+        if   0 <= h < 6:  return "00-06 새벽"
+        elif 6 <= h < 12: return "06-12 오전"
+        elif 12 <= h < 18:return "12-18 오후"
+        else:             return "18-24 저녁"
+
+    # 방향별 (long/short)
+    by_side: dict = {}
+    for sd in ("long", "short"):
+        rs = [s for s in sims if s.get("side") == sd]
+        if not rs:
+            continue
+        sd_pcts = [r["pct"] for r in rs]
+        sd_wins = [p for p in sd_pcts if p > 0]
+        sd_losses = [p for p in sd_pcts if p < 0]
+        by_side[sd] = {
+            "n": len(rs),
+            "tp": sum(1 for r in rs if r["outcome"] == "TP"),
+            "sl": sum(1 for r in rs if r["outcome"] in ("SL", "SL_first")),
+            "win_rate": len(sd_wins) / len(rs),
+            "sum_pct": sum(sd_pcts),
+            "pf": (sum(sd_wins) / abs(sum(sd_losses))) if sd_losses else None,
+        }
+
+    # KST 시간대별 (입력 sims 의 ts 필드는 ISO 8601 UTC 가정)
+    from collections import defaultdict
+    by_b: dict = defaultdict(list)
+    for s in sims:
+        try:
+            ts = datetime.fromisoformat(str(s["ts"]).replace("Z", "+00:00"))
+            kst_h = ts.astimezone(_KST).hour
+            by_b[_bucket(kst_h)].append(s)
+        except (KeyError, ValueError, TypeError):
+            continue
+    by_kst_bucket = []
+    for bk in ("00-06 새벽", "06-12 오전", "12-18 오후", "18-24 저녁"):
+        rs = by_b.get(bk, [])
+        if not rs:
+            continue
+        rs_pcts = [r["pct"] for r in rs]
+        rs_wins = [p for p in rs_pcts if p > 0]
+        rs_losses = [p for p in rs_pcts if p < 0]
+        by_kst_bucket.append({
+            "bucket": bk,
+            "n": len(rs),
+            "tp": sum(1 for r in rs if r["outcome"] == "TP"),
+            "sl": sum(1 for r in rs if r["outcome"] in ("SL", "SL_first")),
+            "win_rate": len(rs_wins) / len(rs),
+            "sum_pct": sum(rs_pcts),
+            "pf": (sum(rs_wins) / abs(sum(rs_losses))) if rs_losses else None,
+        })
+
+    return {
+        "n": n, "tp": tp, "sl": sl, "sl_first": sl_first, "timeout": timeout,
+        "win_rate": len(wins) / n,
+        "sum_pct": sum_pct, "net_pct": net_pct,
+        "pf": pf, "mean_pct": sum_pct / n,
+        "by_side": by_side, "by_kst_bucket": by_kst_bucket,
     }
 
 
@@ -4607,63 +4779,396 @@ h1{{font-size:1.1rem;color:#7ecef4;margin-bottom:14px}}
 
 
 def _render_ppp_page() -> str:
-    """PPP 반전 스캘핑 페이퍼 시그널 수집 페이지 — /api/ppp_signals 소비."""
-    return """<!doctype html><html lang="ko"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PPP 반전 시그널 (페이퍼)</title>
+    """PPP 반전 스캘핑 적중 페이지 — 시그널의 TP/SL 시뮬레이션 상세.
+
+    ma-cross 페이지 레이아웃을 그대로 미러 — 상단 stat 타일 + long/short 분리
+    카드 + KST 시간대별 표 + 개별 시그널 상세 테이블. ``/api/ppp_metrics`` 한
+    endpoint 만 폴링 (서버 5분 캐시). 손익비 1:2 (TP +3% / SL -1.5%) 고정.
+    ⚠️ live-ppp-scalping-v1 라이브 미활성 — 페이퍼 OOS 데이터 수집 전용.
+    """
+    return """<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>QTA — PPP 반전 스캘핑 적중 (페이퍼)</title>
 <style>
-body{background:#0d1117;color:#e6edf3;font-family:-apple-system,Segoe UI,sans-serif;margin:0;padding:16px}
-a{color:#58a6ff;text-decoration:none}.nav{margin-bottom:14px}.nav a{margin-right:12px}
-h1{font-size:20px;margin:6px 0}.sub{color:#8b949e;font-size:12px;margin-bottom:14px}
-.warn{background:#3d1c1c;border:1px solid #f85149;border-radius:8px;padding:8px 12px;color:#ffb3ae;font-size:12px;margin-bottom:14px}
-.cards{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
-.card{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:10px 16px;min-width:110px}
-.card .k{color:#8b949e;font-size:11px}.card .v{font-size:20px;font-weight:700}
-.win{margin-bottom:10px}.win button{background:#21262d;color:#c9d1d9;border:1px solid #30363d;border-radius:6px;padding:5px 12px;margin-right:6px;cursor:pointer}
-.win button.on{background:#1f6feb;border-color:#1f6feb;color:#fff}
-table{width:100%;border-collapse:collapse;font-size:12px}
-th,td{padding:6px 8px;border-bottom:1px solid #21262d;text-align:right}
-th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){text-align:left}
-.long{color:#3fb950}.short{color:#f85149}
-.empty{color:#8b949e;padding:20px;text-align:center}
-</style></head><body>
-<div class="nav"><a href="/">← 대시보드</a><a href="/airborne">에어본</a><a href="/ma-cross">골든/데드크로스</a><a href="/ppp">PPP 반전</a></div>
-<h1>PPP 반전 스캘핑 — 페이퍼 시그널 수집</h1>
-<div class="sub">고변동 알트 5m, 과매수/과매도 극단 + QPP(StochRSI) 크로스 + 횡보레짐(Choppiness≥61.8) 반전. scripts/ppp_signal_daemon.py 가 logs/ppp/history.jsonl 에 누적.</div>
-<div class="warn">⚠️ live-ppp-scalping-v1 은 5y 백테스트 OOS 과적합으로 <b>라이브 자동매매 미활성</b>. 본 페이지는 페이퍼 시그널(실거래 OOS 데이터) 수집 전용 — 실발주 아님.</div>
-<div class="win">
-  <button data-w="today">오늘</button>
-  <button data-w="7d" class="on">7일</button>
-  <button data-w="30d">30일</button>
-  <button data-w="all">전체</button>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#0b0e11;--surface:#161a1e;--surface2:#1e2329;--border:#2b3139;
+  --text:#eaecef;--text2:#b7bdc6;--text3:#848e9c;--green:#0ecb81;--red:#f6465d;--yellow:#f0a500;
+  --mono:'IBM Plex Mono','Consolas',monospace;--sans:'IBM Plex Sans KR','Segoe UI',sans-serif}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);padding:14px;font-size:13px}
+h1{font-size:1.05rem;color:var(--text);margin-bottom:6px;font-weight:600}
+.subtitle{font-size:.75rem;color:var(--text3);margin-bottom:10px}
+.nav{margin-bottom:14px}
+.nav a{color:var(--text2);text-decoration:none;margin-right:12px;font-size:.8rem;
+  background:var(--surface);padding:6px 12px;border-radius:4px;border:1px solid var(--border)}
+.nav a:hover{color:var(--text);background:var(--surface2)}
+.meta{font-size:.75rem;color:var(--text3);margin-bottom:8px;font-family:var(--mono)}
+.warn{background:rgba(246,70,93,.08);border:1px solid rgba(246,70,93,.35);border-radius:6px;
+  padding:8px 12px;color:#ffb3ae;font-size:.75rem;margin-bottom:12px}
+.empty,.error{padding:30px;text-align:center;color:var(--text3);
+  background:var(--surface);border-radius:6px;border:1px solid var(--border)}
+.error{color:var(--red);border-color:rgba(246,70,93,.35)}
+.header-row{display:flex;align-items:center;gap:14px;margin-bottom:8px;flex-wrap:wrap}
+.rule-badge{background:var(--surface2);border:1px solid var(--border);color:var(--text2);
+  padding:3px 8px;border-radius:4px;font-size:.7rem;font-family:var(--mono)}
+.refresh-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text);
+  padding:6px 14px;border-radius:4px;font-size:.78rem;cursor:pointer;font-family:var(--sans);
+  margin-left:auto;transition:border-color .15s,color .15s}
+.refresh-btn:hover{border-color:var(--green);color:var(--green)}
+.refresh-btn:disabled{opacity:.4;cursor:wait}
+.section-h2{font-size:.85rem;color:var(--text);font-weight:600;margin:18px 0 10px 0;
+  display:flex;align-items:center;gap:10px}
+.section-h2 .count{font-size:.7rem;color:var(--text3);font-family:var(--mono);font-weight:400}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:8px}
+.stat-tile{background:var(--surface);border:1px solid var(--border);border-radius:6px;
+  padding:14px 14px;display:flex;flex-direction:column;gap:6px}
+.stat-tile.is-hero{background:linear-gradient(180deg,rgba(14,203,129,.04),transparent);
+  border-color:rgba(14,203,129,.25)}
+.stat-tile.is-hero-bad{background:linear-gradient(180deg,rgba(246,70,93,.05),transparent);
+  border-color:rgba(246,70,93,.25)}
+.stat-label{font-size:.7rem;color:var(--text3);font-weight:600;letter-spacing:.4px;text-transform:uppercase}
+.stat-val{font-size:1.5rem;font-weight:700;font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--text)}
+.stat-val.dim{color:var(--text3);font-size:1.1rem}
+.stat-val.green{color:var(--green)}
+.stat-val.red{color:var(--red)}
+.stat-sub{font-size:.7rem;color:var(--text3);font-family:var(--mono)}
+.side-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px;margin-bottom:16px}
+.side-card{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:14px}
+.side-card.is-long{border-color:rgba(14,203,129,.3)}
+.side-card.is-short{border-color:rgba(246,70,93,.3)}
+.side-card-hdr{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+.side-card-title{font-size:.85rem;font-weight:700;font-family:var(--mono);letter-spacing:.5px}
+.side-long{color:var(--green)}
+.side-short{color:var(--red)}
+.side-row{display:flex;justify-content:space-between;font-size:.78rem;padding:3px 0;color:var(--text2);font-family:var(--mono)}
+.side-row b{color:var(--text);font-variant-numeric:tabular-nums}
+table{width:100%;border-collapse:separate;border-spacing:0;
+  background:var(--surface);border-radius:6px;overflow:hidden;border:1px solid var(--border)}
+thead th{position:sticky;top:0;background:var(--surface2);color:var(--text2);font-weight:600;
+  text-align:left;padding:8px 10px;font-size:.72rem;text-transform:uppercase;letter-spacing:.4px;
+  border-bottom:1px solid var(--border);z-index:5}
+tbody td{padding:7px 10px;font-size:.78rem;border-bottom:1px solid #20262d;
+  font-family:var(--mono);color:var(--text)}
+tbody tr:hover{background:#1c2229}
+.td-num{text-align:right;font-variant-numeric:tabular-nums}
+.sym-cell{color:#f0b90b;font-weight:600}
+.outcome-badge{display:inline-block;padding:2px 7px;border-radius:3px;font-size:.68rem;
+  font-weight:700;letter-spacing:.4px;font-family:var(--mono)}
+.outcome-TP       {background:rgba(14,203,129,.2);color:#11dd8c}
+.outcome-SL       {background:rgba(246,70,93,.16);color:var(--red)}
+.outcome-SL_first {background:rgba(246,70,93,.16);color:var(--red)}
+.outcome-timeout  {background:rgba(240,165,0,.16);color:var(--yellow)}
+.outcome-no_bars  {background:rgba(132,142,156,.16);color:var(--text3)}
+.side-badge{display:inline-block;padding:2px 6px;border-radius:3px;font-size:.66rem;
+  font-weight:700;font-family:var(--mono);letter-spacing:.4px}
+.side-badge.is-long{background:rgba(14,203,129,.16);color:var(--green)}
+.side-badge.is-short{background:rgba(246,70,93,.16);color:var(--red)}
+.pct-pos{color:var(--green)}
+.pct-neg{color:var(--red)}
+.note{color:var(--text3);font-size:.72rem;margin-top:10px;font-family:var(--mono);line-height:1.55}
+</style>
+</head>
+<body>
+<h1>QTA — PPP 반전 스캘핑 적중 (페이퍼·누적)</h1>
+<div class="meta">현재 룰: <b>long=과매도 골든 / short=과매수 데드 · TP +3% / SL -1.5% (손익비 1:2) · 12봉(=1h) hold</b></div>
+<div class="subtitle">scripts/ppp_signal_daemon.py 의 반전 시그널(고변동 알트 5m, 과매수/과매도 극단 + QPP(StochRSI) 크로스 + 횡보레짐 Choppiness≥61.8)을 영속 JSONL store(데몬이 직접 적재) 에서 읽어 → binance fapi 5m 봉 시뮬 → 적중률·PF·net% 집계.</div>
+<div class="warn">⚠️ live-ppp-scalping-v1 은 5y 백테스트 OOS 과적합으로 <b>라이브 자동매매 미활성</b>. 본 페이지의 적중률·PF·net% 는 <b>페이퍼(가상) 시뮬</b> — 실발주·실손익 아님. 진짜 OOS 데이터 축적용.</div>
+<div class="nav">
+  <a href="/">← 대시보드</a>
+  <a href="/airborne">airborne 적중</a>
+  <a href="/ma-cross">골든/데드 크로스</a>
+  <a href="/cs-tsmom">cs-tsmom</a>
+  <a href="/signals">신호 목록</a>
+  <a href="/strategies">전략 카탈로그</a>
+  <a href="/patch-notes">패치노트</a>
 </div>
-<div class="cards" id="cards"></div>
-<div id="bysym" class="sub"></div>
-<table><thead><tr><th>시각(UTC)</th><th>종목</th><th>방향</th><th>종가</th><th>QPP본선</th><th>시그널</th><th>Chop</th></tr></thead>
-<tbody id="rows"><tr><td colspan="7" class="empty">로딩…</td></tr></tbody></table>
+<div class="header-row">
+  <label style="font-size:.78rem;color:var(--text2)">윈도우:
+    <select id="window-selector" onchange="changeWindow(this.value)"
+            style="background:var(--surface);color:var(--text);border:1px solid var(--border);padding:5px 10px;border-radius:4px;font-family:var(--mono);font-size:.78rem">
+      <option value="today">오늘</option>
+      <option value="yesterday">어제</option>
+      <option value="7d">최근 7일</option>
+      <option value="30d">최근 30일</option>
+      <option value="all">전체 누적</option>
+    </select>
+  </label>
+  <span class="rule-badge" id="rule-badge">룰: long=과매도골든/short=과매수데드 · TP +3% / SL -1.5% / 12봉(=1h) hold · 양방향 수수료 0.034%</span>
+  <div class="meta" id="meta">로딩 중…</div>
+  <button class="refresh-btn" id="refresh-btn" onclick="forceRefresh()">↻ 캐시 무효화 + 재계산</button>
+</div>
+<div id="content"><div class="empty">데이터를 불러오는 중입니다…</div></div>
 <script>
-let W="7d";
-function esc(s){return String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}
-async function load(){
-  const r=await fetch('/api/ppp_signals?window='+W);const d=await r.json();
-  const c=document.getElementById('cards');
-  c.innerHTML=`<div class="card"><div class="k">기간 시그널</div><div class="v">${d.window_count}</div></div>
-   <div class="card"><div class="k">롱</div><div class="v long">${d.by_side.long||0}</div></div>
-   <div class="card"><div class="k">숏</div><div class="v short">${d.by_side.short||0}</div></div>
-   <div class="card"><div class="k">누적(전체)</div><div class="v">${d.total_store}</div></div>`;
-  document.getElementById('bysym').textContent='종목별: '+Object.entries(d.by_symbol).map(([k,v])=>k+' '+v).join(' · ')+(d.earliest_ts?('  |  최초 '+d.earliest_ts.slice(0,16)):'');
-  const tb=document.getElementById('rows');
-  if(!d.signals.length){tb.innerHTML='<tr><td colspan="7" class="empty">시그널이 아직 없습니다 — 데몬 미가동 또는 조건 미충족.</td></tr>';return;}
-  tb.innerHTML=d.signals.map(s=>{const cl=s.side==='long'?'long':'short';
-   return `<tr><td>${esc((s.ts||'').slice(0,16))}</td><td>${esc(s.symbol)}</td>
-   <td class="${cl}">${s.side==='long'?'롱':'숏'}</td><td>${s.close}</td>
-   <td>${s.qpp_main}</td><td>${s.qpp_sig}</td><td>${s.choppiness}</td></tr>`;}).join('');
+const KST = 'Asia/Seoul';
+function fmtKstFull(iso){
+  if(!iso) return '—';
+  try{
+    return new Intl.DateTimeFormat('ko-KR',{timeZone:KST,year:'2-digit',month:'2-digit',
+      day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date(iso));
+  }catch(e){ return iso; }
 }
-document.querySelectorAll('.win button').forEach(b=>b.onclick=()=>{
-  document.querySelectorAll('.win button').forEach(x=>x.classList.remove('on'));
-  b.classList.add('on');W=b.dataset.w;load();});
-load();setInterval(load,60000);
-</script></body></html>"""
+function fmtKstHm(iso){
+  if(!iso) return '—';
+  try{
+    return new Intl.DateTimeFormat('ko-KR',{timeZone:KST,hour:'2-digit',minute:'2-digit',
+      second:'2-digit',hour12:false}).format(new Date(iso));
+  }catch(e){ return iso; }
+}
+function esc(s){
+  return String(s==null?'':s).replace(/[&<>"']/g,c=>(
+    {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function pctColor(v){
+  if(v==null||isNaN(v)) return '';
+  return v > 0 ? 'pct-pos' : (v < 0 ? 'pct-neg' : '');
+}
+function fmtPct(v, dec){
+  if(v==null||isNaN(v)) return '—';
+  const n = Number(v);
+  const cls = pctColor(n);
+  const sign = n>0?'+':'';
+  return `<span class="${cls}">${sign}${n.toFixed(dec==null?2:dec)}%</span>`;
+}
+function fmtPctRaw(v, dec){
+  if(v==null||isNaN(v)) return '—';
+  const n = Number(v);
+  const sign = n>0?'+':'';
+  return sign + n.toFixed(dec==null?2:dec) + '%';
+}
+function fmtPrice(v){
+  if(v==null||isNaN(v)) return '—';
+  const n = Number(v);
+  return n.toLocaleString('ko-KR',{maximumFractionDigits:8});
+}
+
+function renderStats(d){
+  const sigs = d.signals_total ?? 0;
+  const tp = d.tp ?? 0, sl = (d.sl ?? 0) + (d.sl_first ?? 0);
+  const winPctTxt = d.win_rate != null ? (d.win_rate * 100).toFixed(1) + '%' : '—';
+  const pfTxt = d.pf != null ? Number(d.pf).toFixed(2) : '—';
+  const net = d.net_pct;
+  const netTxt = (net != null) ? (net >= 0 ? '+' : '') + Number(net).toFixed(2) + '%' : '—';
+  const netCls = net == null ? 'dim' : (net >= 0 ? 'green' : 'red');
+  const pfCls = (d.pf != null && d.pf >= 1.0) ? 'green' : (d.pf != null ? 'red' : 'dim');
+  const winCls = (d.win_rate != null && d.win_rate >= 0.5) ? 'green' :
+                 (d.win_rate != null ? 'red' : 'dim');
+  const heroCls = net == null ? '' : (net >= 0 ? 'is-hero' : 'is-hero-bad');
+  return `<div class="stat-grid">
+    <div class="stat-tile ${heroCls}">
+      <div class="stat-label">net (수수료 후·페이퍼)</div>
+      <div class="stat-val ${netCls}">${esc(netTxt)}</div>
+      <div class="stat-sub">gross ${fmtPctRaw(d.sum_pct, 2)} − fee ${((d.rule?.fee_pct ?? 0.034) * (d.sims_total ?? 0)).toFixed(2)}%</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-label">시그널</div>
+      <div class="stat-val">${esc(sigs)}</div>
+      <div class="stat-sub">sim ${d.sims_total ?? 0} / 봉 미수신 ${(sigs - (d.sims_total ?? 0))}</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-label">승률</div>
+      <div class="stat-val ${winCls}">${esc(winPctTxt)}</div>
+      <div class="stat-sub">TP ${tp} · SL ${sl} · timeout ${d.timeout ?? 0}</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-label">Profit Factor</div>
+      <div class="stat-val ${pfCls}">${esc(pfTxt)}</div>
+      <div class="stat-sub">손익비 1:2 (TP 3% / SL 1.5%)</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-label">평균 거래</div>
+      <div class="stat-val ${pctColor(d.mean_pct) || 'dim'}">${fmtPctRaw(d.mean_pct, 2)}</div>
+      <div class="stat-sub">trade 당 기대값</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-label">SL_first (보수)</div>
+      <div class="stat-val dim">${esc(d.sl_first ?? 0)}</div>
+      <div class="stat-sub">같은 봉에 TP·SL 동시 → SL 우선</div>
+    </div>
+  </div>`;
+}
+
+function renderSideCards(by_side){
+  function card(side, s){
+    const cls = side === 'long' ? 'is-long' : 'is-short';
+    const titleCls = side === 'long' ? 'side-long' : 'side-short';
+    const label = side === 'long' ? 'LONG (과매도 골든)' : 'SHORT (과매수 데드)';
+    const pfTxt = s.pf != null ? Number(s.pf).toFixed(2) : '—';
+    const winTxt = s.win_rate != null ? (s.win_rate * 100).toFixed(1) + '%' : '—';
+    return `<div class="side-card ${cls}">
+      <div class="side-card-hdr">
+        <div class="side-card-title ${titleCls}">${label}</div>
+        <div class="side-row" style="margin:0"><b>${esc(s.n)}</b> 건</div>
+      </div>
+      <div class="side-row"><span>TP / SL</span><b>${esc(s.tp)} / ${esc(s.sl)}</b></div>
+      <div class="side-row"><span>승률</span><b>${esc(winTxt)}</b></div>
+      <div class="side-row"><span>합산 gross%</span><b class="${pctColor(s.sum_pct)}">${fmtPctRaw(s.sum_pct, 2)}</b></div>
+      <div class="side-row"><span>Profit Factor</span><b>${esc(pfTxt)}</b></div>
+    </div>`;
+  }
+  const long = by_side?.long, short = by_side?.short;
+  if (!long && !short) return '';
+  const html = ['<div class="section-h2">⚖️ 방향별 (long / short) <span class="count">· 한쪽 편향 진단</span></div>',
+    '<div class="side-grid">'];
+  if (long)  html.push(card('long', long));
+  if (short) html.push(card('short', short));
+  html.push('</div>');
+  return html.join('');
+}
+
+function renderBucketTable(buckets){
+  if (!buckets || buckets.length === 0) {
+    return `<div class="section-h2">🕒 KST 시간대별 <span class="count">· 데이터 없음</span></div>
+      <div class="empty">시간대 분포를 보여줄 시그널이 없습니다.</div>`;
+  }
+  const trs = buckets.map(b => {
+    const winPct = (b.win_rate * 100).toFixed(0) + '%';
+    const pfTxt = b.pf != null ? Number(b.pf).toFixed(2) : '—';
+    return `<tr>
+      <td>${esc(b.bucket)}</td>
+      <td class="td-num">${esc(b.n)}</td>
+      <td class="td-num">${esc(b.tp)}</td>
+      <td class="td-num">${esc(b.sl)}</td>
+      <td class="td-num">${esc(winPct)}</td>
+      <td class="td-num">${fmtPct(b.sum_pct, 2)}</td>
+      <td class="td-num">${esc(pfTxt)}</td>
+    </tr>`;
+  }).join('');
+  return `<div class="section-h2">🕒 KST 시간대별 <span class="count">· 04구간 분포</span></div>
+    <table><thead><tr>
+      <th>KST 구간</th><th class="td-num">n</th><th class="td-num">TP</th><th class="td-num">SL</th>
+      <th class="td-num">승률</th><th class="td-num">합산</th><th class="td-num">PF</th>
+    </tr></thead><tbody>${trs}</tbody></table>`;
+}
+
+function renderSignalsTable(sims){
+  if (!sims || sims.length === 0) {
+    return `<div class="section-h2">✚ 개별 시그널 상세 <span class="count">· 0건</span></div>
+      <div class="empty">시그널이 아직 없습니다 — daemon 미가동 또는 조건 미충족.</div>`;
+  }
+  const rows = [...sims].sort((a,b) => String(b.ts || '').localeCompare(String(a.ts || '')));
+  const trs = rows.map(r => {
+    const sideCls = r.side === 'short' ? 'is-short' : 'is-long';
+    const sideTxt = r.side === 'short' ? 'SHORT' : 'LONG';
+    const outcome = r.outcome || '—';
+    const barTxt = r.bar_idx != null ? `봉${r.bar_idx}` : '—';
+    return `<tr>
+      <td>${esc(fmtKstHm(r.ts))}</td>
+      <td class="sym-cell">${esc((r.symbol||'').replace(/USDT$/,''))}</td>
+      <td><span class="side-badge ${sideCls}">${esc(sideTxt)}</span></td>
+      <td class="td-num">${esc(fmtPrice(r.close))}</td>
+      <td class="td-num" style="color:var(--text3)">${esc(r.qpp_main!=null?r.qpp_main:'—')}/${esc(r.qpp_sig!=null?r.qpp_sig:'—')}</td>
+      <td class="td-num" style="color:var(--text3)">${esc(r.choppiness!=null?r.choppiness:'—')}</td>
+      <td><span class="outcome-badge outcome-${esc(outcome)}">${esc(outcome)}</span></td>
+      <td class="td-num">${r.pct != null ? fmtPct(r.pct, 2) : '<span style="color:var(--text3)">—</span>'}</td>
+      <td class="td-num" style="color:var(--text3)">${esc(barTxt)}</td>
+    </tr>`;
+  }).join('');
+  return `<div class="section-h2">✚ 개별 시그널 상세 <span class="count">· ${rows.length}건 (최신순)</span></div>
+    <table><thead><tr>
+      <th>시각 (KST)</th><th>Symbol</th><th>방향</th>
+      <th class="td-num">진입가</th><th class="td-num">QPP 본/시</th><th class="td-num">Chop</th>
+      <th>결과</th><th class="td-num">pct</th><th class="td-num">도달봉</th>
+    </tr></thead><tbody>${trs}</tbody></table>
+    <div class="note">
+      결과 — <b>TP</b>: 시뮬 +3% 익절. <b>SL</b>: 시뮬 −1.5% 손절. <b>SL_first</b>: 같은 5m 봉에서 high·low 가 둘 다 닿음 → 보수적으로 SL 부터 체결됐다고 가정. <b>timeout</b>: 12봉(=1h) 동안 TP/SL 둘 다 미도달 → 마지막 close 로 청산. <b>no_bars</b>: binance 봉 fetch 실패 / 너무 최근 시그널이라 봉이 아직 안 닫힘.<br>
+      pct 는 gross (수수료 미반영) — 상단 net 카드는 fee 0.034% × sim n 차감. long=과매도 골든 / short=과매수 데드. <b>전부 페이퍼(가상) — 실발주 아님.</b>
+    </div>`;
+}
+
+function render(d){
+  const out = [renderStats(d)];
+  out.push(renderSideCards(d.by_side || {}));
+  out.push(renderBucketTable(d.by_kst_bucket || []));
+  out.push(renderSignalsTable(d.sims || []));
+  return out.join('');
+}
+
+let CURRENT_WINDOW = (new URL(location.href).searchParams.get('window')) || 'today';
+
+function _windowLabel(w){
+  const map = {
+    'today':     '오늘 (KST 자정~지금)',
+    'yesterday': '어제 (KST 어제 자정~오늘 자정)',
+    '7d':        '최근 7일 누적',
+    '30d':       '최근 30일 누적',
+    'all':       '전체 누적',
+  };
+  return map[w] || w;
+}
+
+async function refresh(){
+  try{
+    const r = await fetch('/api/ppp_metrics?window=' + encodeURIComponent(CURRENT_WINDOW));
+    const j = await r.json();
+    const meta = document.getElementById('meta');
+    const content = document.getElementById('content');
+    if (j.error){
+      content.innerHTML = `<div class="error">${esc(j.error)}</div>`;
+      return;
+    }
+    const sigs = j.signals_total ?? 0;
+    const cachedTxt = j.cached ? '(5분 캐시)' : '(방금 갱신)';
+    const storeInfo = j.store_count ? ` · store=${j.store_count}` : '';
+    const earliest = j.store_earliest ? ` (가장 옛 ${fmtKstFull(j.store_earliest)})` : '';
+    meta.innerHTML =
+      `<b>${esc(_windowLabel(j.window || CURRENT_WINDOW))}</b> · `
+      + `${fmtKstFull(j.window_start_utc)} ~ ${fmtKstFull(j.window_end_utc)} · `
+      + `시그널 <b>${sigs}</b> · ${cachedTxt}${storeInfo}${earliest}`;
+    content.innerHTML = render(j);
+  }catch(e){
+    document.getElementById('content').innerHTML =
+      `<div class="error">로딩 실패: ${esc(String(e))} — 잠시 후 자동 재시도</div>`;
+  }
+}
+
+function changeWindow(value){
+  CURRENT_WINDOW = value;
+  const url = new URL(location.href);
+  url.searchParams.set('window', value);
+  history.replaceState(null, '', url.toString());
+  refresh();
+}
+
+async function forceRefresh(){
+  const btn = document.getElementById('refresh-btn');
+  btn.disabled = true;
+  btn.textContent = '재계산 중…';
+  try{
+    const r = await fetch('/api/ppp_metrics?window=' + encodeURIComponent(CURRENT_WINDOW)
+        + '&_=' + Date.now());
+    const j = await r.json();
+    const content = document.getElementById('content');
+    const meta = document.getElementById('meta');
+    if (j.error){
+      content.innerHTML = `<div class="error">${esc(j.error)}</div>`;
+      return;
+    }
+    const sigs = j.signals_total ?? 0;
+    const cachedTxt = j.cached ? '(5분 캐시)' : '(방금 갱신)';
+    const storeInfo = j.store_count ? ` · store=${j.store_count}` : '';
+    meta.innerHTML =
+      `<b>${esc(_windowLabel(j.window || CURRENT_WINDOW))}</b> · `
+      + `${fmtKstFull(j.window_start_utc)} ~ ${fmtKstFull(j.window_end_utc)} · `
+      + `시그널 <b>${sigs}</b> · ${cachedTxt}${storeInfo}`;
+    content.innerHTML = render(j);
+  }catch(e){
+    alert('재계산 실패: ' + e);
+  }finally{
+    btn.disabled = false;
+    btn.textContent = '↻ 캐시 무효화 + 재계산';
+  }
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  const sel = document.getElementById('window-selector');
+  if (sel) sel.value = CURRENT_WINDOW;
+});
+refresh();
+setInterval(refresh, 60000);
+</script>
+</body>
+</html>"""
 
 
 def create_app(state: DashboardState | None = None) -> FastAPI:
@@ -5413,6 +5918,175 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
             "by_symbol": by_symbol,
             "signals": list(reversed(sigs))[:500],  # 최신순, 최대 500
         })
+
+    # ── PPP 반전 스캘핑 적중 메트릭 — ma-cross 미러 ──────────────────────────
+    # store(데몬이 직접 적재) 의 시그널을 binance fapi 5m 봉으로 TP/SL 시뮬 →
+    # 적중률·PF·net% 집계. ma_cross_metrics 흐름과 동일하되 docker-logs 백필이
+    # 없다(데몬이 store 에 직접 씀 — volume 공유). raw 단일 모드 (레짐필터 없음).
+    _ppp_metrics_cache: dict[str, dict[str, Any]] = {}
+    PPP_METRICS_CACHE_TTL = 300.0  # 5분
+
+    async def _fetch_5m_bars_after(
+        client: Any, symbol: str, sig_ts_iso: str,
+        limit: int = PPP_HOLD_BARS,
+    ) -> list[dict]:
+        """Binance fapi `/fapi/v1/klines` — 시그널 *다음* 봉부터 5m 봉.
+
+        데몬과 동일 데이터원(binance fapi). 시그널 ts 는 확정봉 open_time 이므로
+        entry(그 봉 close) 이후 봉만 보려면 startTime = ts + 5m. REST 실패는 빈 list.
+        Binance klines row: [openTime, o, h, l, c, v, closeTime, ...].
+        """
+        try:
+            ts = datetime.fromisoformat(sig_ts_iso.replace("Z", "+00:00"))
+            start_ms = int(ts.timestamp() * 1000) + PPP_BAR_MS_5M
+        except (ValueError, TypeError):
+            return []
+        try:
+            r = await client.get(
+                "https://fapi.binance.com/fapi/v1/klines",
+                params={"symbol": symbol, "interval": "5m",
+                        "startTime": str(start_ms), "limit": str(min(limit, 1500))},
+                timeout=10.0,
+            )
+            r.raise_for_status()
+            rows = r.json()
+        except Exception:  # noqa: BLE001 — 봉 fetch 실패가 페이지를 죽이면 안 됨
+            return []
+        if not isinstance(rows, list):
+            return []
+        bars: list[dict] = []
+        for row in rows:
+            try:
+                bars.append({
+                    "open_time": int(row[0]),
+                    "open": float(row[1]), "high": float(row[2]),
+                    "low": float(row[3]), "close": float(row[4]),
+                    "close_time": int(row[6]),
+                })
+            except (IndexError, ValueError, TypeError):
+                continue
+        bars.sort(key=lambda b: b["open_time"])
+        return bars
+
+    @app.get("/api/ppp_metrics")
+    async def api_ppp_metrics(
+        window: str = Query(
+            "7d", description="today | yesterday | all | 7d | 30d",
+        ),
+    ) -> JSONResponse:
+        """PPP 반전 시그널의 TP/SL 시뮬레이션 메트릭 — 누적 윈도우.
+
+        long=과매도 골든 / short=과매수 데드. TP +3% / SL -1.5% (손익비 1:2) /
+        12봉(=1h) hold. store(데몬이 직접 적재) load_since → binance 5m 봉 시뮬 →
+        집계. ma_cross_metrics 와 동일 흐름 (docker-logs 백필만 없음).
+
+        Windows (모두 KST 자정 기준): today/yesterday/7d/30d/all.
+        """
+        import time as _time
+        import httpx as _httpx
+
+        now = _time.time()
+        cache_entry = _ppp_metrics_cache.get(window)
+        if (cache_entry is not None
+                and now - cache_entry["ts"] < PPP_METRICS_CACHE_TTL
+                and cache_entry["data"] is not None):
+            return JSONResponse({**cache_entry["data"], "cached": True})
+
+        # ── 윈도우 → since_utc / until_utc (ma-cross 와 동일) ──────────────
+        kst_now = datetime.now(_KST)
+        kst_midnight = kst_now.replace(hour=0, minute=0, second=0, microsecond=0)
+        utc_midnight = kst_midnight.astimezone(timezone.utc)
+        utc_now = datetime.now(timezone.utc)
+
+        if window == "today":
+            since_utc, until_utc = utc_midnight, utc_now
+        elif window == "yesterday":
+            since_utc, until_utc = utc_midnight - timedelta(days=1), utc_midnight
+        elif window == "7d":
+            since_utc, until_utc = utc_midnight - timedelta(days=7), utc_now
+        elif window == "30d":
+            since_utc, until_utc = utc_midnight - timedelta(days=30), utc_now
+        elif window == "all":
+            since_utc = datetime(2000, 1, 1, tzinfo=timezone.utc)
+            until_utc = utc_now
+        else:
+            return JSONResponse(
+                {"error": f"unknown window={window!r}, allowed: today/yesterday/7d/30d/all"},
+                status_code=400,
+            )
+
+        # ── 윈도우 시그널 store 에서 load + until 컷오프 ────────────────────
+        store = _get_ppp_signal_store()
+        sigs = store.load_since(since_utc)
+
+        def _within(ts_iso: str) -> bool:
+            try:
+                ts = datetime.fromisoformat(str(ts_iso).replace("Z", "+00:00"))
+                if ts.tzinfo is None:
+                    ts = ts.replace(tzinfo=timezone.utc)
+                return since_utc <= ts < until_utc
+            except (ValueError, TypeError):
+                return False
+        sigs = [s for s in sigs if _within(s.get("ts", ""))]
+
+        # ── 영속 sim cache 활용 (cache miss 만 binance 봉 fetch + 시뮬) ─────
+        sim_cache = _get_ppp_sim_cache()
+        cached_sims, missing = sim_cache.split(sigs)
+
+        new_sims: list[dict] = []
+        if missing:
+            sem = asyncio.Semaphore(20)
+            async with _httpx.AsyncClient() as client:
+                async def _sim_one(sig: dict) -> dict | None:
+                    async with sem:
+                        bars = await _fetch_5m_bars_after(
+                            client, sig["symbol"], sig["ts"],
+                        )
+                    out = _simulate_ppp(sig, bars)
+                    if out is None:
+                        return None
+                    return {**sig, **out}
+
+                results = await asyncio.gather(
+                    *(_sim_one(s) for s in missing),
+                    return_exceptions=False,
+                )
+            new_sims = [r for r in results if r is not None]
+            if new_sims:
+                sim_cache.put_many(new_sims)
+
+        sims = cached_sims + new_sims
+        agg = _aggregate_ppp_sims(sims)
+        sim_keys = {(s["ts"], s["symbol"], s.get("side")) for s in sims}
+        no_bar = [
+            {**s, "outcome": "no_bars", "pct": None, "bar_idx": None}
+            for s in sigs
+            if (s["ts"], s["symbol"], s.get("side")) not in sim_keys
+        ]
+        payload = {
+            "date_kst": kst_now.strftime("%Y-%m-%d"),
+            "window": window,
+            "window_start_utc": since_utc.isoformat(),
+            "window_end_utc": until_utc.isoformat(),
+            "now_kst": kst_now.isoformat(),
+            "store_count": store.count(),
+            "store_earliest": store.earliest_ts(),
+            "sim_cache_count": sim_cache.count(),
+            "sim_cache_hits": len(cached_sims),
+            "sim_cache_misses": len(missing),
+            "signals_total": len(sigs),
+            "sims_total": len(sims),
+            **agg,
+            "sims": sims + no_bar,  # per-signal 상세
+            "rule": {
+                "name": "default",
+                "tp_pct": PPP_TP_PCT, "sl_pct": PPP_SL_PCT,
+                "hold_bars": PPP_HOLD_BARS, "fee_pct": PPP_FEE_PCT,
+            },
+            "cached": False,
+        }
+        _ppp_metrics_cache[window] = {"ts": now, "data": payload}
+        return JSONResponse(payload)
 
     @app.get("/ppp", response_class=HTMLResponse)
     async def ppp_page() -> HTMLResponse:
