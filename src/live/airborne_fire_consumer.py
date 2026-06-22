@@ -145,6 +145,24 @@ class AirborneFireConsumer:
         # skip. SKYAI/SIREN류 초고변동 코인은 -1% SL 이 무의미(노이즈로 뚫고 stop
         # 슬립 -19%). 실거래 검증: >5%/h 코인 PF 0.16/net -278(슬립). 0=비활성.
         self._max_vol_pct = float(_os.environ.get("AIRBORNE_MAX_VOL_PCT", "5") or 5)
+        # 2026-06-22 실험 토글 — AIRBORNE_NO_ENTRY_FILTERS=1 이면 진입 콘텐츠 필터
+        # 전부 우회(타임게이트·btc_downtrend·숏차단시각·고변동·펌핑·폭락). 4소스
+        # (리포트·실거래CSV·airborne sim·skip로그) 대조상 이 필터들의 차단 바스켓이
+        # sim net+ (=좋은 신호를 더 많이 거름, anti-select) 적발 → 무필터 raw 검증용.
+        # freshness(stale)·universe·capital·dedup 은 데이터/안전 가드라 유지.
+        # 기본 off(현행 byte-identical). 롤백 = env 미설정.
+        self._no_entry_filters = _os.environ.get(
+            "AIRBORNE_NO_ENTRY_FILTERS", "",
+        ).strip().lower() in ("1", "true", "yes", "on")
+        if self._no_entry_filters:
+            self._max_vol_pct = 0.0
+            self._short_pump_skip = 0.0
+            self._long_crash_skip = 0.0
+            logger.warning(
+                "AirborneFireConsumer: AIRBORNE_NO_ENTRY_FILTERS=ON — "
+                "타임게이트·btc·숏차단시각·고변동·펌핑·폭락 필터 전부 우회 "
+                "(freshness/universe/capital 만 유지)",
+            )
         # symbol → (stamp, df|None). 1h 캔들 5분 캐시 — 24h 변화·평균변동폭 공용.
         self._klines_cache: dict[str, tuple] = {}
 
@@ -372,7 +390,8 @@ class AirborneFireConsumer:
         # 숏 차단 시간대 (2026-06-15) — KST 07시 등에 숏 다발 = 상승추세 신호로
         # 보고 SHORT 진입 안 함. LONG 은 통과. short-whitelist·kst-hours 양쪽
         # 07 숏을 단일 지점에서 차단(07 롱은 kst-hours 게이트로 그대로 진입).
-        if side == "short" and hour_kst in self._short_block_hours:
+        if (side == "short" and hour_kst in self._short_block_hours
+                and not self._no_entry_filters):
             self._record_skip(symbol, side, hour_kst, bar_open_key, "숏차단시각")
             return False
 
@@ -427,7 +446,7 @@ class AirborneFireConsumer:
         for spec in self._specs:
             if side not in spec.allowed_sides:
                 continue
-            if hour_kst not in spec.kst_entry_hours:
+            if not self._no_entry_filters and hour_kst not in spec.kst_entry_hours:
                 hour_blocked = True
                 continue
             any_passed_hour = True
@@ -438,7 +457,8 @@ class AirborneFireConsumer:
                 )
                 spec_block_reason = spec_block_reason or "유니버스밖"
                 continue
-            if side == "long" and spec.btc_filter and self._btc_down_cached():
+            if (side == "long" and spec.btc_filter and self._btc_down_cached()
+                    and not self._no_entry_filters):
                 logger.info(
                     "airborne fire skip sid=%s sym=%s side=long reason=btc_downtrend",
                     spec.id, symbol,
