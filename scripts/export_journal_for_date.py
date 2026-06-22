@@ -37,7 +37,11 @@ KST = ZoneInfo("Asia/Seoul")
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("date_kst", help="YYYY-MM-DD (KST)")
-    ap.add_argument("--log-dir", default=str(REPO_ROOT / "logs" / "live"))
+    # 2026-06-22: logs/live (5월 이후 죽은 디렉토리) → logs/shadow-bitget.
+    # 실거래 트레이더(호스트 live_run.py)의 WAL 기본 경로가 logs/shadow-bitget/
+    # {run_id}/wal.jsonl 이라, 기존 logs/live 스캔은 auto_fills=0 만 내놨다
+    # (0619~0621 리포트 3일 연속 갭의 원인). live_run.py 의 --log-dir 기본값과 일치.
+    ap.add_argument("--log-dir", default=str(REPO_ROOT / "logs" / "shadow-bitget"))
     ap.add_argument("--container", default="qta-airborne-daemon",
                     help="Docker container with airborne FIRE logs")
     ap.add_argument("--out", default=None,
@@ -137,6 +141,15 @@ def main() -> int:
     except Exception as exc:  # noqa: BLE001 — 검산은 보조, export 차단 금지
         account_reconciliation = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
 
+    # ── 일일손익 (auto_pnl_ledger) — history-position netProfit (규칙 4 단일 진실) ──
+    # 클라우드 routine 은 Bitget API 불가 → 이 로컬 export 가 JSON 에 굳혀둔다.
+    # WAL auto_fills 가 0(경로 갭)이어도 일일손익은 이 필드로 정확히 채워진다.
+    try:
+        from scripts.bitget_account_reconcile import fetch_position_history_pnl
+        auto_pnl_ledger = fetch_position_history_pnl(args.date_kst)
+    except Exception as exc:  # noqa: BLE001 — 보조, export 차단 금지
+        auto_pnl_ledger = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+
     for arr in (auto_fills, auto_signals, manual):
         arr.sort(key=lambda r: str(r.get("ts") or ""))
 
@@ -156,6 +169,7 @@ def main() -> int:
         "airborne_fires": airborne_fires,
         "cs_tsmom_top10": cs_tsmom_top10,
         "account_reconciliation": account_reconciliation,
+        "auto_pnl_ledger": auto_pnl_ledger,
         "_backfill_meta": {
             "generated_by": "scripts/export_journal_for_date.py",
             "generated_at_kst": datetime.now(KST).isoformat(),

@@ -6591,8 +6591,33 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
         for arr in (auto_fills, auto_signals, manual):
             arr.sort(key=lambda r: str(r.get("ts") or ""))
 
+        # ── 거래소 ledger 일일손익 + 잔고검산 (로컬 전용 — 규칙 4·7) ──
+        # 클라우드 routine 은 Bitget API 직접 접근 불가하므로, *이 로컬 대시보드*가
+        # history-position netProfit(일일손익 단일 진실) + bill 검산을 JSON 에 굳혀
+        # routine 이 읽게 한다. WAL auto_fills 가 부정확/0 이어도 손익은 정확.
+        # creds 없거나 실패 시 graceful (None/error) — journal 빌드 자체는 안 막음.
+        date_kst_str = kst_now.strftime("%Y-%m-%d")
+        account_reconciliation: dict | None = None
+        auto_pnl_ledger: dict | None = None
+        try:
+            import asyncio as _asyncio3
+            import sys as _sys
+            # scripts/ 는 namespace 패키지(__init__.py 없음) — repo root 가 path 에
+            # 있어야 import 됨. cwd 의존 없이 명시 보장 (parents[2] = repo root).
+            _repo_root = str(Path(__file__).resolve().parents[2])
+            if _repo_root not in _sys.path:
+                _sys.path.insert(0, _repo_root)
+            from scripts.bitget_account_reconcile import (
+                fetch_position_history_pnl as _fetch_pnl,
+                reconcile as _reconcile,
+            )
+            auto_pnl_ledger = await _asyncio3.to_thread(_fetch_pnl, date_kst_str)
+            account_reconciliation = await _asyncio3.to_thread(_reconcile, date_kst_str)
+        except Exception as err:  # noqa: BLE001 — ledger 보조, journal 빌드 차단 금지
+            auto_pnl_ledger = {"ok": False, "error": f"{type(err).__name__}: {err}"}
+
         return {
-            "date_kst": kst_now.strftime("%Y-%m-%d"),
+            "date_kst": date_kst_str,
             "kst_window_start": kst_midnight.isoformat(),
             "now_kst": kst_now.isoformat(),
             "counts": {
@@ -6606,6 +6631,8 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
             "manual_trades": manual,
             "airborne_fires": airborne_fires,
             "cs_tsmom_top10": cs_tsmom_top10,
+            "account_reconciliation": account_reconciliation,
+            "auto_pnl_ledger": auto_pnl_ledger,
         }
 
     # ── airborne 적중 메트릭 (오늘 KST 자정~지금, 실시간 시뮬레이션) ──────────
