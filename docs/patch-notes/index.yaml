@@ -15,6 +15,24 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.89"
+    date: "2026-06-22"
+    title: "에어본 TP 승자 포착 — 유니버스 100→200 + 펌핑숏 임계 20→30"
+    tags: [feature, safety]
+    summary: >
+      실거래 2주 대조에서 에어본 TP 신호의 68%(0620+0621 19건 중 13건)를 게이트가
+      거르고 있던 걸 적발. 차단 바스켓의 sim net 이 +인 두 필터만 완화: ①유니버스
+      top-100→200 (not_in_universe 차단 4주 net +19.1%/PF 1.56, n=65) ②펌핑 숏차단
+      임계 +20%→+30% (4주 net +7.9%/PF 1.85, n=29 — 펌핑 후 BB되돌림 숏=전략 핵심).
+      둘 다 env 로 롤백 가능. 보호 작동 중인 high_volatility(net −)는 유지.
+    items:
+      - "get_universe: top-100 하드코딩 → env AIRBORNE_UNIVERSE_TOP_N(기본 200). 트레이더+알림 데몬 동기(docker --top-n 200)."
+      - "momentum_pump: AIRBORNE_SHORT_PUMP_SKIP_PCT 기본 20→30 (consumer + 데몬)."
+      - "근거: 4개소스(리포트·실거래 CSV·airborne sim·텔레그램) 대조 — 차단 바스켓 net 양수 필터만 완화, 음수(보호)는 유지."
+      - "⚠️ 표본 4주 — 실거래 5일+ 누적으로 net 재확인 필요. env 로 즉시 롤백(=100/20)."
+    refs:
+      - "docs/specs/strategies/live-airborne-short-whitelist-v1.md"
+      - "docs/journal/2026-06-21.md"
   - version: "v0.6.88"
     date: "2026-06-19"
     title: "MA-크로스 confluence 필터 — ADX·기울기 + 숏-집중 opt-in 스택 (candidate)"

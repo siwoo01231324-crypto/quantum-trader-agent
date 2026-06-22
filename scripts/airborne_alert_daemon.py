@@ -96,9 +96,21 @@ BB_WINDOW = 20
 BB_STD = 2.0
 MAX_LOOKBACK = 50
 MIN_HISTORY = BB_WINDOW + 2
-DEFAULT_TOP_N = 100  # 2026-05-22: 50 → 100. SKYAI 처럼 거래량 변동 큰 종목이
-                     # top-50 in/out 을 반복하며 빠진 동안 시그널이 통째로
-                     # 누락되던 사고 (#airborne-watchlist) 완화.
+def _universe_top_n() -> int:
+    """알림·트레이더 공용 유니버스 크기 (env AIRBORNE_UNIVERSE_TOP_N, 기본 200).
+
+    2026-06-22 — 트레이더 get_universe 와 동일 env. 100→200 확장으로 알림 온 TP
+    승자가 trader 에서 ``not_in_universe`` 로 거부되던 누수 차단 (4주 차단 바스켓
+    net +19.1%). 롤백 = env=100.
+    """
+    try:
+        return max(1, int(os.environ.get("AIRBORNE_UNIVERSE_TOP_N", "200") or 200))
+    except ValueError:
+        return 200
+
+
+DEFAULT_TOP_N = _universe_top_n()  # 2026-05-22: 50→100. 2026-06-22: env 연동(기본 200).
+                     # top-N in/out 으로 시그널 누락되던 종목 커버 (#airborne-watchlist).
 COOLDOWN_HOURS = 4  # suppress repeat (symbol, side) fires within this window
 BAR_MS_1H = 3_600_000
 
@@ -127,7 +139,7 @@ _KST_HOURS_SHORT_WL: frozenset[int] = frozenset(
 # 진입 필터 임계 (트레이더 consumer 와 동일 — 알림이 실제 진입과 일치하도록).
 # env 로 트레이더와 함께 튜닝. 0 이면 해당 필터 비활성(표시 안 함).
 _MAX_VOL_PCT: float = float(os.environ.get("AIRBORNE_MAX_VOL_PCT", "5") or 5)
-_SHORT_PUMP_PCT: float = float(os.environ.get("AIRBORNE_SHORT_PUMP_SKIP_PCT", "20") or 20)
+_SHORT_PUMP_PCT: float = float(os.environ.get("AIRBORNE_SHORT_PUMP_SKIP_PCT", "30") or 30)  # 2026-06-22 20→30 (펌핑 숏 TP 복구)
 _LONG_CRASH_PCT: float = float(os.environ.get("AIRBORNE_LONG_CRASH_SKIP_PCT", "10") or 10)
 # whitelist 활성 종목 lazy cache — daemon 수명 동안 1회 로드. weekly refresh
 # 시 daemon 재시작 필요.
@@ -177,7 +189,7 @@ def _in_trading_universe(symbol: str) -> bool:
     후 비교). 조회 실패 시 보수적으로 True (오알림보다 누락-경고 회피)."""
     try:
         from portfolio.bitget_top_dynamic import get_top_n_symbols
-        universe = get_top_n_symbols(100)
+        universe = get_top_n_symbols(_universe_top_n())
     except Exception:  # noqa: BLE001
         return True
     target = _norm_symbol(symbol)

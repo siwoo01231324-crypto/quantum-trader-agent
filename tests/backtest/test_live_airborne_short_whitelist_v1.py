@@ -151,8 +151,23 @@ class TestUniverse:
     """#380 — 고정 whitelist 제거. get_universe 는 부모의 거래량 top-100 상속
     (venue-routing). yaml active 집합 미사용."""
 
-    def test_get_universe_inherits_binance_top100_by_default(self, monkeypatch) -> None:
+    def test_get_universe_inherits_binance_top_n_by_default(self, monkeypatch) -> None:
+        # 2026-06-22: 기본 top-N 100 → 200 (env AIRBORNE_UNIVERSE_TOP_N).
         monkeypatch.delenv("QTA_BROKER_VENUE", raising=False)
+        monkeypatch.delenv("AIRBORNE_UNIVERSE_TOP_N", raising=False)
+        import src.portfolio.binance_top_dynamic as btd
+        monkeypatch.setattr(
+            btd, "get_top_n_symbols",
+            lambda n=100: [f"SYM{i}USDT" for i in range(n)],
+        )
+        u = LiveAirborneShortWhitelistV1.get_universe()
+        assert len(u) == 200  # 기본값 확장
+        assert u[0] == "SYM0USDT"
+
+    def test_get_universe_top_n_env_override(self, monkeypatch) -> None:
+        """env AIRBORNE_UNIVERSE_TOP_N 으로 크기 조절 (롤백=100)."""
+        monkeypatch.delenv("QTA_BROKER_VENUE", raising=False)
+        monkeypatch.setenv("AIRBORNE_UNIVERSE_TOP_N", "100")
         import src.portfolio.binance_top_dynamic as btd
         monkeypatch.setattr(
             btd, "get_top_n_symbols",
@@ -160,7 +175,6 @@ class TestUniverse:
         )
         u = LiveAirborneShortWhitelistV1.get_universe()
         assert len(u) == 100
-        assert u[0] == "SYM0USDT"
 
     def test_get_universe_routes_to_bitget_when_venue_set(self, monkeypatch) -> None:
         monkeypatch.setenv("QTA_BROKER_VENUE", "bitget")

@@ -132,8 +132,11 @@ class AirborneFireConsumer:
         # (0 이면 해당 방향 비활성). 토큰 OHLCV 미가용 시 fail-open(허용).
         import os as _os
         self._klines_fetcher = klines_fetcher
+        # 2026-06-22: 펌핑 숏차단 임계 +20 → +30. +20 룰이 펌핑 후 BB되돌림 숏
+        # (이 전략의 핵심)을 죽였음 — 4주 차단 바스켓 net +7.9% / PF 1.85, n=29
+        # (거른 게 순이득 신호). +30 으로 완화. 롤백 = env=20.
         self._short_pump_skip = float(
-            _os.environ.get("AIRBORNE_SHORT_PUMP_SKIP_PCT", "20") or 20
+            _os.environ.get("AIRBORNE_SHORT_PUMP_SKIP_PCT", "30") or 30
         )
         self._long_crash_skip = float(
             _os.environ.get("AIRBORNE_LONG_CRASH_SKIP_PCT", "10") or 10
