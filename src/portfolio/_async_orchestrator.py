@@ -806,6 +806,23 @@ class AsyncStrategyOrchestrator:
             )
             return None
 
+        # 2b) cross-airborne 종목 dedup (2026-06-22) — 한 종목은 airborne 전 전략
+        # 통틀어 1 포지션. 두 airborne 전략(kst-hours + short-whitelist)이 같은
+        # 종목에 겹쳐 진입하면 거래소 네팅으로 holders=2 desync + 증거금 2배
+        # (FARTCOIN store -2940 vs broker -880 등 40804 폭주의 뿌리). 어느
+        # airborne 이든 이미 보유 중인 종목은 진입 차단 → 종목당 1 포지션 보장.
+        # KR/타슬리브는 심볼체계가 달라(6자리/다른 universe) 자연 비충돌 →
+        # ``live-airborne`` prefix 로 한정해 크로스-슬리브 영향 0 (보수적 스코프).
+        if any(
+            _sym == symbol and _s != strategy_id and _s.startswith("live-airborne")
+            for (_s, _sym) in self._live_entered
+        ):
+            self._emit_strategy_evaluated(
+                strategy_id, symbol=symbol, decision="hold",
+                reason="symbol_held_cross_airborne", ts=ts,
+            )
+            return None
+
         # 3) stop cooldown — 청산 직후 재진입 차단 (run_bar 와 동일).
         cooldown_until = self._stop_cooldown_until.get(key, 0.0)
         if cooldown_until > 0.0:
