@@ -391,6 +391,10 @@ class LivePositionRiskManager:
             # register 되거나 (override 미설정 시) 정적 policy 로 fallback.
             self._high_water.pop((strategy_id, symbol), None)
             self._dynamic_policies.pop((strategy_id, symbol), None)
+            # 2026-06-22 — entry_ts 도 함께 리셋. 발화 후 잔존하면 청산이 거래소
+            # reject(40804) 되거나 틱이 안 와 held==0 평가가 안 돌 때 stale 값이
+            # 영구 잔존 → 같은 종목 재진입이 즉시 timeout (진입직후 청산 churn).
+            self._entry_ts.pop((strategy_id, symbol), None)
             # 2026-05-21 — in-flight exit guard. broker fill 이 도착해 store
             # 가 held=0 으로 갱신되기 전까지 같은 (sid, symbol) 추가 stop
             # 평가 차단. held=0 진입 시 위쪽 분기에서 자동 cleanup.
@@ -487,6 +491,10 @@ class LivePositionRiskManager:
                 )
                 self._high_water.pop(key, None)
                 self._dynamic_policies.pop(key, None)
+                # 2026-06-22 — entry_ts 리셋(evaluate 경로와 동일). 미리셋 시
+                # stale entry_ts 가 재진입에 물려 즉시 timeout (churn) → 청산
+                # reject/틱부재로 held==0 cleanup 이 안 도는 종목에서 영구 잔존.
+                self._entry_ts.pop(key, None)
                 self._pending_exit[key] = now
         return intents
 

@@ -16,7 +16,8 @@ from src.portfolio.live_position_risk import LivePositionRiskManager
 _T0 = datetime(2026, 6, 15, 0, 0, 0, tzinfo=timezone.utc)
 
 
-def _mgr(*, side="sell", entry=100.0, qty=1.0, max_hold_sec=3600.0, native=None):
+def _mgr(*, side="sell", entry=100.0, qty=1.0, max_hold_sec=3600.0, native=None,
+         pending_exit_timeout_sec=None):
     store = StrategyPositionStore()
     pnl = PnLAggregator()
     pnl.record_fill(strategy_id="sid", symbol="X", side=side,
@@ -25,6 +26,7 @@ def _mgr(*, side="sell", entry=100.0, qty=1.0, max_hold_sec=3600.0, native=None)
     mgr = LivePositionRiskManager(
         position_store=store, pnl_aggregator=pnl,
         max_hold_sec=max_hold_sec, native_tpsl_check=native,
+        pending_exit_timeout_sec=pending_exit_timeout_sec,
     )
     mgr.register_strategy_policy("sid", stop_loss_pct=0.005, take_profit_pct=0.011)
     return mgr, store, pnl
@@ -141,6 +143,55 @@ def test_sweep_fallback_price_is_avg_cost_when_lookup_none():
     intents = mgr.sweep_timeouts(_T0 + timedelta(seconds=3601), lambda s: None)
     assert len(intents) == 1
     assert "last=100" in intents[0].reason  # avg_cost fallback
+
+
+def test_sweep_timeout_fire_clears_entry_ts():
+    """sweep timeout 발화 시 _entry_ts 도 (high_water/dynamic 처럼) 리셋된다.
+
+    회귀 방지(2026-06-22): 발화 후 _entry_ts 가 남으면, 청산이 거래소 reject
+    (40804) 되거나 틱이 안 와 held==0 평가가 안 돌 때 stale entry_ts 가 영구
+    잔존 → 같은 종목 재진입이 즉시 timeout (BZUSDT/ALLOUSDT 등 진입직후 청산 churn).
+    """
+    mgr, _s, _p = _mgr(side="sell", entry=100.0, max_hold_sec=3600.0)
+    mgr.evaluate("X", Decimal("100.0"), _T0)                 # stamp T0
+    intents = mgr.sweep_timeouts(_T0 + timedelta(seconds=3601), lambda s: None)
+    assert len(intents) == 1 and "time_exit" in intents[0].reason
+    assert ("sid", "X") not in mgr._entry_ts, "sweep 발화 후 _entry_ts 잔존 — stale 재진입 churn"
+
+
+def test_evaluate_timeout_fire_clears_entry_ts():
+    """tick(evaluate) timeout 발화 시에도 _entry_ts 리셋."""
+    mgr, _s, _p = _mgr(side="sell", entry=100.0, max_hold_sec=3600.0)
+    mgr.evaluate("X", Decimal("100.0"), _T0)                 # stamp T0
+    intents = mgr.evaluate("X", Decimal("100.0"), _T0 + timedelta(seconds=3601))
+    assert len(intents) == 1 and "time_exit" in intents[0].reason
+    assert ("sid", "X") not in mgr._entry_ts
+
+
+def test_reentry_after_sweep_close_no_instant_timeout():
+    """sweep 청산 후 (틱 없이) 재진입 — stale entry_ts 안 물려 즉시 청산 안 됨.
+
+    BZUSDT repro: 첫 사이클이 sweep 으로 닫히고 held==0 평가가 한 번도 안 돌면
+    (저유동/틱멈춤), 버그 버전은 옛 entry_ts 를 그대로 써 재진입 즉시 timeout.
+    """
+    mgr, store, pnl = _mgr(side="sell", entry=100.0, max_hold_sec=3600.0,
+                           pending_exit_timeout_sec=5.0)
+    mgr.evaluate("X", Decimal("100.0"), _T0)                 # stamp T0
+    assert len(mgr.sweep_timeouts(_T0 + timedelta(seconds=3601), lambda s: None)) == 1
+    # 청산 체결 → flat. 단, 틱이 없어 held==0 evaluate 는 안 돈다(핵심 조건).
+    store.force_sync_position(strategy_id="sid", symbol="X", qty=Decimal("0"))
+    if hasattr(pnl, "reset_cost_basis"):
+        pnl.reset_cost_basis("sid", "X")
+    # 한참 뒤 재진입 (T0+1만초).
+    pnl.record_fill(strategy_id="sid", symbol="X", side="sell",
+                    qty=Decimal("1"), price=Decimal("100"))
+    store.record_fill(strategy_id="sid", symbol="X", side="sell", qty=Decimal("1"))
+    # 재진입 직후 sweep — 버그면 stale T0 로 held_sec 거대 → 즉시 발화. 고치면 baseline.
+    instant = mgr.sweep_timeouts(_T0 + timedelta(seconds=10000), lambda s: None)
+    assert instant == [], "재진입 직후 stale entry_ts 로 즉시 timeout (churn 버그)"
+    # 새 baseline(=T0+10000) 기준 max_hold 경과해야 정상 발화.
+    later = mgr.sweep_timeouts(_T0 + timedelta(seconds=10000 + 3601), lambda s: None)
+    assert len(later) == 1 and "time_exit" in later[0].reason
 
 
 def test_entry_ts_resets_on_flat_reentry():
