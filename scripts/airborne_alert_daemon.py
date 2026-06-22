@@ -82,7 +82,7 @@ log = logging.getLogger("airborne_alert_daemon")
 # production.yaml(오후 역알파 제외)과 동기화 + 숏 미거래 시각 표기.
 # v0.6.85 (2026-06-19): 1h fetch limit 100→250 — BTC EMA200 trend filter 가 200봉
 # 필요했는데 100만 받아 "BTC 하락추세 LONG 차단" 알림이 절대 안 뜨던 버그 수정.
-DAEMON_VERSION = "v0.6.85"
+DAEMON_VERSION = "v0.6.90"  # 2026-06-22: 무필터 토글(AIRBORNE_NO_ENTRY_FILTERS) 알림 반영
 
 # 2026-06-07 — Bitget venue 지원 (#airborne-bitget-venue). 실거래 트레이더가
 # Bitget top-100 을 거래하는데 알림 데몬은 Binance fapi top-100 을 봐서 알림과
@@ -141,6 +141,14 @@ _KST_HOURS_SHORT_WL: frozenset[int] = frozenset(
 _MAX_VOL_PCT: float = float(os.environ.get("AIRBORNE_MAX_VOL_PCT", "5") or 5)
 _SHORT_PUMP_PCT: float = float(os.environ.get("AIRBORNE_SHORT_PUMP_SKIP_PCT", "30") or 30)  # 2026-06-22 20→30 (펌핑 숏 TP 복구)
 _LONG_CRASH_PCT: float = float(os.environ.get("AIRBORNE_LONG_CRASH_SKIP_PCT", "10") or 10)
+# 2026-06-22 — consumer 와 동일 무필터 토글. 켜면 알림도 게이트/변동성/모멘텀/btc
+# 우회를 반영해 "진입 예정" 으로 표시(실제 진입과 일치). universe/side 제약은 유지.
+# 매 호출 env 읽음 — .env autoload(import 시) 가 테스트를 오염시키지 않도록
+# 모듈전역 아닌 함수로(monkeypatch 로 제어 가능). 라이브는 프로세스 1회 import 라 동일.
+def _no_entry_filters() -> bool:
+    return os.environ.get(
+        "AIRBORNE_NO_ENTRY_FILTERS", "",
+    ).strip().lower() in ("1", "true", "yes", "on")
 # whitelist 활성 종목 lazy cache — daemon 수명 동안 1회 로드. weekly refresh
 # 시 daemon 재시작 필요.
 _WHITELIST_ACTIVE_CACHE: frozenset[str] | None = None
@@ -292,7 +300,10 @@ def _format_strategy_notice(*, side: str, kst_hour: int, symbol: str, history=No
     filt = _filter_block()
 
     # kst-hours: bidir + KST gate + 변동성/모멘텀 + BTC trend(long)
-    if not in_kst4:
+    # 무필터 토글 ON 이면 게이트/변동성/모멘텀/btc 우회 → 항상 진입 예정.
+    if _no_entry_filters():
+        kst_line = "✅ 진입 예정 (무필터)"
+    elif not in_kst4:
         kst_line = f"❌ KST {kst_hour}시 — 게이트 외 (매매 {hours_label}시만)"
     elif filt is not None:
         kst_line = filt
@@ -302,10 +313,13 @@ def _format_strategy_notice(*, side: str, kst_hour: int, symbol: str, history=No
         kst_line = "✅ 진입 예정"
 
     # short-whitelist: SHORT only + top-100 + 숏게이트 + 변동성/모멘텀
+    # 무필터 토글 ON 이어도 side(LONG 미지원)·universe(top-100) 제약은 유지.
     if side.lower() == "long":
         wl_line = "❌ LONG 미지원 (숏 전용 전략)"
     elif not in_wl:
         wl_line = "❌ TOP100 외 종목"
+    elif _no_entry_filters():
+        wl_line = "✅ 진입 예정 (무필터)"
     elif not in_kst19:
         wl_line = f"❌ KST {kst_hour}시 — 숏 미거래 시각 (미거래 {wl_off_label}시)"
     elif filt is not None:

@@ -350,6 +350,15 @@ def test_kst_hour_from_open_time_returns_korean_time():
     assert daemon._kst_hour_from_open_time(open_time_ms) == 9
 
 
+def test_strategy_notice_no_entry_filters_shows_will_enter(monkeypatch):
+    """토글 ON → 게이트 외 시각(4시) 롱도 '진입 예정 (무필터)'."""
+    monkeypatch.setenv("AIRBORNE_NO_ENTRY_FILTERS", "1")
+    notice = daemon._format_strategy_notice(
+        side="long", kst_hour=4, symbol="SOLUSDT", history=None,
+    )
+    assert "진입 예정" in notice and "무필터" in notice
+
+
 def test_strategy_notice_long_fires_kst_hours_only_at_gate():
     # KST 7시 LONG — v3 게이트 내 진입 예정, short-whitelist 는 LONG 미지원
     notice = daemon._format_strategy_notice(

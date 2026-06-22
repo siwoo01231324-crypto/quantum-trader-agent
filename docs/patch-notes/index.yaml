@@ -15,6 +15,22 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.90"
+    date: "2026-06-22"
+    title: "에어본 진입 churn 수정 + 무필터 마스터 토글 + ORDIUSDT 봇 제외"
+    tags: [fix, feature, safety]
+    summary: >
+      실거래 2주 ledger 분해로 세 가지 적발·수정: ①진입직후 청산 churn(stale
+      entry_ts) ②진입 콘텐츠 필터의 anti-select(좋은 신호를 더 많이 거름) ③수동
+      보유 ORDIUSDT 네팅 충돌. TP/SL(2%/1%)는 미변경.
+    items:
+      - "fix(churn): 청산 발화 시 _entry_ts 리셋 — 옛 진입시각(held_sec 8만초) 물려 진입 3초 만에 즉시 time_exit 하던 버그. 보유 ≤60초 조기청산 출혈 차단 (#466)."
+      - "feat(toggle): AIRBORNE_NO_ENTRY_FILTERS=1 — 타임게이트·btc_downtrend·숏차단시각·고변동·펌핑·폭락 전부 우회(consumer+데몬 알림 동기). 롱 필터 차단바스켓이 죄다 sim net+(btc_downtrend +18.57/n58 등)=anti-select 적발. freshness/universe/capital 유지. 기본 off (#469)."
+      - "fix(universe): ORDIUSDT 봇 유니버스 제외 — 수동 보유분 네팅 충돌 차단. env BITGET_UNIVERSE_EXCLUDE (#467)."
+      - "⚠️ 무필터는 sim net+ 이나 라이브는 실행드래그(sim/라이브 TP·SL 불일치 1%/0.5% vs 2%/1%·슬립) 별도 — 켜고 실거래 누적 재확인 필요."
+    refs:
+      - "src/live/.ai.md"
+      - "src/portfolio/.ai.md"
   - version: "v0.6.89"
     date: "2026-06-22"
     title: "에어본 TP 승자 포착 — 유니버스 100→200 + 펌핑숏 임계 20→30"

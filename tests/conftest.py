@@ -29,3 +29,16 @@ def _isolate_manual_trade_store(tmp_path, monkeypatch):
     미래 테스트 자동 보호. autouse 라 opt-in 불필요.
     """
     monkeypatch.setenv("QTA_MANUAL_TRADE_DIR", str(tmp_path / "manual_trade_isolated"))
+
+
+@pytest.fixture(autouse=True)
+def _isolate_airborne_no_entry_filters(monkeypatch):
+    """모든 테스트를 실 ``.env`` 의 ``AIRBORNE_NO_ENTRY_FILTERS`` 로부터 격리 (2026-06-22).
+
+    데몬(``scripts/airborne_alert_daemon.py``)이 import 시 ``_autoload_dotenv`` 로
+    ``.env`` 를 ``os.environ`` 에 로드 → 한 pytest 프로세스에서 데몬을 import 하면
+    그 env 가 전역에 남아, 토글이 켜진 .env 면 consumer·데몬의 진입필터 표시
+    테스트가 전부 "무필터(진입 예정)" 로 깨진다. 매 테스트 전 제거 → 토글을 *원하는*
+    테스트만 명시적으로 ``monkeypatch.setenv`` 로 켠다. autouse 라 opt-in 불필요.
+    """
+    monkeypatch.delenv("AIRBORNE_NO_ENTRY_FILTERS", raising=False)
