@@ -99,9 +99,17 @@ CLI:
 이 repo 의 `docs/journal_data/{date_kst}.json` (가장 최근 파일) 을 읽어라.
 구조:
 - `date_kst` — 분석 대상 날짜 (KST)
-- `auto_fills` — **자동 매매 시스템이 실제로 체결한 거래** (list).
-  각 item: strategy_id, symbol, side, qty, price, ts. 이것이 "오늘 자동
-  거래 결과" 의 단일 진실. 분석/카운트의 base.
+- `auto_pnl_ledger` — **일일손익의 단일 진실** (거래소 청산이력 history-position,
+  로컬 export). 필드: `ok`, `total_net`(=오늘 net USDT), `wins`/`losses`,
+  `gross_win`/`gross_loss`, `profit_factor`, `n_positions`, `positions`
+  ([{symbol, side, net, open_kst, close_kst}]). **자동 계좌의 손익·승패·PF·종목별
+  실현손익은 전부 이 필드로 산출** (규칙 4). `ok:false` 면 "ledger 데이터 없음
+  (로컬 export 누락)" 1줄로 넘긴다. ⚠️ **체결가(entry/exit price)·수량(qty)·명목
+  금액은 이 필드에 없다** — history-position 은 netProfit 만 제공. 그 칸은 리포트에
+  "(미기재 — API 제약)" 으로 둔다 (WAL auto_fills 는 금지 소스라 가격도 신뢰 불가).
+- `auto_fills` — 자동 체결 WAL 이벤트 (list, strategy_id/symbol/side/qty/price/ts).
+  ⚠️ **손익 계산 금지** (규칙 4 — 유령/누락 fill 로 방향·금액 틀림). **체결 시각·
+  종목·신호 대조용 참고로만** 사용. 카운트·PnL 의 base 는 `auto_pnl_ledger`.
 - `auto_signals` — 자동 strategy 가 발생시킨 **신호 이벤트** (list).
   reason 필드에 "왜 진입/청산 신호를 냈는지" 가 들어있음. 신호가 났다고
   반드시 발주된 건 아니다 (메타라벨러·리스크 게이트가 막을 수 있음).

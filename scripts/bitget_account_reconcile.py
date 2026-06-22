@@ -142,10 +142,86 @@ def reconcile(date_kst: str) -> dict:
     }
 
 
+def fetch_position_history_pnl(date_kst: str) -> dict:
+    """거래소 청산이력(`history-position`) 의 포지션별 netProfit → 일일손익 집계.
+
+    **저널 일일손익의 단일 진실** (규칙 4 — WAL round-trip 금지). 클라우드 routine
+    은 Bitget API 직접 접근 불가하므로, 이 *로컬* 함수가 결과를 JSON 의
+    ``auto_pnl_ledger`` 필드로 굳혀 routine 이 읽게 한다.
+
+    반환 dict:
+      ok / date_kst / source / total_net / wins / losses / gross_win /
+      gross_loss / profit_factor / n_positions /
+      positions: [{symbol, side, net, open_kst, close_kst}]  (open 시각 오름차순)
+
+    creds 없거나 API 실패 시 ``{"ok": False, "error": ...}`` (graceful — export
+    전체를 막지 않음).
+    """
+    _autoload_env()
+    creds = _creds()
+    if creds is None:
+        return {"ok": False, "error": "Bitget 자격증명 누락(.env)"}
+    target = datetime.strptime(date_kst, "%Y-%m-%d").replace(tzinfo=_KST)
+    start_ms = int(target.timestamp() * 1000)
+    end_ms = int((target + timedelta(days=1)).timestamp() * 1000)
+    try:
+        r = _signed_get(creds, "/api/v2/mix/position/history-position", {
+            "productType": "USDT-FUTURES", "startTime": str(start_ms),
+            "endTime": str(end_ms), "limit": "100",
+        })
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+    if str(r.get("code")) not in ("00000", "0", "None", "none"):
+        return {"ok": False, "error": f"code={r.get('code')} msg={r.get('msg')}"}
+    rows = (r.get("data") or {}).get("list") or []
+
+    def _hk(ms) -> str:
+        try:
+            return _kst(ms).strftime("%H:%M")
+        except Exception:  # noqa: BLE001
+            return ""
+
+    positions = []
+    for p in sorted(rows, key=lambda x: int(x.get("ctime") or x.get("cTime") or 0)):
+        net = float(p.get("netProfit") or 0)
+        positions.append({
+            "symbol": p.get("symbol"),
+            "side": p.get("holdSide") or p.get("posSide"),
+            "net": round(net, 4),
+            "open_kst": _hk(p.get("ctime") or p.get("cTime") or 0),
+            "close_kst": _hk(p.get("utime") or p.get("uTime") or 0),
+        })
+    nets = [pp["net"] for pp in positions]
+    gross_win = round(sum(n for n in nets if n > 0), 4)
+    gross_loss = round(-sum(n for n in nets if n < 0), 4)
+    return {
+        "ok": True, "date_kst": date_kst,
+        "source": "bitget-exchange-history-position",
+        "total_net": round(sum(nets), 4),
+        "wins": sum(1 for n in nets if n > 0),
+        "losses": sum(1 for n in nets if n < 0),
+        "gross_win": gross_win, "gross_loss": gross_loss,
+        "profit_factor": round(gross_win / gross_loss, 4) if gross_loss > 0 else None,
+        "n_positions": len(positions),
+        "positions": positions,
+    }
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("date_kst", help="YYYY-MM-DD (KST)")
+    ap.add_argument("--pnl", action="store_true",
+                    help="잔고검산 대신 history-position 일일손익(auto_pnl_ledger) 출력")
     args = ap.parse_args()
+    if args.pnl:
+        r = fetch_position_history_pnl(args.date_kst)
+        if not r.get("ok"):
+            print(f"손익 조회 실패: {r.get('error')}")
+            return 1
+        print(f"=== {r['date_kst']} 일일손익 (history-position) ===")
+        print(f"net {r['total_net']:+.3f} USDT  승{r['wins']}/패{r['losses']}  "
+              f"PF {r['profit_factor']}  ({r['n_positions']} 청산)")
+        return 0
     r = reconcile(args.date_kst)
     if not r.get("ok"):
         print(f"검산 실패: {r.get('error')}")
