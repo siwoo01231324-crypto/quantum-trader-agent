@@ -645,10 +645,19 @@ def _mom_setup(side, chg_pct):
 
 
 def test_momentum_skips_pumped_short():
-    """직전24h +25% 펌핑 토큰 숏 → momentum_pump skip (기본 임계 +20%)."""
-    c, orch, _ = _mom_setup("short", 25.0)
+    """직전24h +35% 펌핑 토큰 숏 → momentum_pump skip (기본 임계 +30%, 2026-06-22)."""
+    c, orch, _ = _mom_setup("short", 35.0)
     assert asyncio.run(c.sweep_once()) == 0
     assert orch.calls == []
+
+
+def test_momentum_allows_25pct_pump_after_relax():
+    """2026-06-22 완화: +25% (옛 임계 20 초과, 새 임계 30 미만) 숏 → 이제 진입.
+
+    펌핑 후 BB되돌림 숏(전략 핵심)이 옛 +20 임계에 죽던 TP 승자를 복구."""
+    c, orch, _ = _mom_setup("short", 25.0)
+    assert asyncio.run(c.sweep_once()) == 1
+    assert len(orch.calls) == 1
 
 
 def test_momentum_allows_mild_short():

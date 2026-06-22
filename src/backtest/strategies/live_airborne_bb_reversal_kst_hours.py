@@ -136,22 +136,37 @@ class LiveAirborneBbReversalKstHours(LiveAirborneBbReversalKstMorning):
     def get_interval(cls) -> str:
         return "1h"
 
+    # 유니버스 크기 — env ``AIRBORNE_UNIVERSE_TOP_N`` (기본 200).
+    # 2026-06-22 — 100 → 200 확장. top-100 이 알림 온 TP 승자를 ``not_in_universe``
+    # 로 거부하던 문제(4주 차단 바스켓 net +19.1% / PF 1.56, n=65 — 거른 게 순이득
+    # 신호였음). 알림 데몬도 같은 env 를 읽어 유니버스 정합. 롤백 = env=100.
+    @staticmethod
+    def _universe_top_n() -> int:
+        import os
+        try:
+            return max(1, int(os.environ.get("AIRBORNE_UNIVERSE_TOP_N", "200") or 200))
+        except ValueError:
+            return 200
+
     @classmethod
     def get_universe(cls) -> list[str]:
-        """24h 거래량 top-100 USDT-perp — venue 자동 라우팅.
+        """24h 거래량 top-N USDT-perp (env AIRBORNE_UNIVERSE_TOP_N, 기본 200) —
+        venue 자동 라우팅.
 
         2026-06-05 — Binance / Bitget 동시 운영. env ``QTA_BROKER_VENUE`` 가
         ``bitget`` 이면 Bitget 거래량 기준 (Bitget 미상장 종목 사전 제외 →
         ``status=400`` 폭주 + API rate-limit 낭비 차단). 그 외 (기본/binance)
-        는 기존 Binance 동작 byte-identical.
+        는 기존 Binance 동작.
+        2026-06-22 — top-N 을 env 로 확장(기본 100→200). 상세는 위 주석.
         """
         import os
+        n = cls._universe_top_n()
         venue = os.environ.get("QTA_BROKER_VENUE", "").strip().lower()
         if venue == "bitget":
             from src.portfolio.bitget_top_dynamic import get_top_n_symbols
-            return get_top_n_symbols(100)
+            return get_top_n_symbols(n)
         from src.portfolio.binance_top_dynamic import get_top_n_symbols
-        return get_top_n_symbols(100)
+        return get_top_n_symbols(n)
 
     def _bar_interval_sec(self) -> int:
         iv = str(self.get_interval())

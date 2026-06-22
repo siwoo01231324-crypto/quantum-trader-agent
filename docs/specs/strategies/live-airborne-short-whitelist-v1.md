@@ -58,7 +58,7 @@ tags:
 | retrace_ratio | 0.6 (Hard-OOS) | **0.4** (base airborne) | OOS te_PF 1.214 는 0.6 기준 — 0.4 미검증 |
 | atr_body_mult | 0.3 (Hard-OOS) | **0.6** (base airborne) | 위와 동일 — 진입 품질필터 해제(신호 ↑) |
 | KST 게이트 | 19h {제외 4,6,7,8,13} | **24h** (전 시간) | te_PF 1.214 는 19h 기준 — 24h 미검증 |
-| Universe | 19종 고정 whitelist | **거래량 top-100 동적** | top-100 = 텔레그램 알림 universe. get_universe override 제거 → 부모 venue-routing top-100 (Bitget/Binance) 상속. whitelist yaml 미사용 |
+| Universe | 19종 고정 whitelist | **거래량 top-N 동적 (env `AIRBORNE_UNIVERSE_TOP_N`, 기본 200)** | get_universe override 제거 → 부모 venue-routing top-N 상속. 2026-06-22 100→200 확장: top-100 이 알림 온 TP 승자를 `not_in_universe` 로 거부(4주 차단 바스켓 net +19.1%/PF 1.56, n=65). 알림 데몬 `--top-n` 도 200 동기. 롤백=env 100 |
 | 종목당 비중 | default_size 0.16 (명목 16%) | **0.50 (명목 50%)** | 사용자 요청 = 종목당 *증거금* 5% + 10x → 명목 50%. 사이징 공식 명목=default_size×자본 이라 0.50 (10x 에서 증거금 = 50%/10 = 자본 5%/종목) |
 | 동시 보유 | 캡 없음 (~60종까지 가능) | **max_concurrent 18** | orchestrator 강제. 19번째 fire 부터 hold → 최악 명목노출 18×50%=**900%**, 증거금 18×5%=**90% (버퍼 10%)** |
 | 레버리지 | UI 수동 (실제 1x 방치) | **코드 강제 10x** (`QTA_TARGET_LEVERAGE`) | 1x 방치로 5000$ 중 70% margin 소진 사고 |

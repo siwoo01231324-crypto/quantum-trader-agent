@@ -284,6 +284,9 @@ services:
       dockerfile: Dockerfile
     image: qta-phase2:latest
     container_name: qta-universe-rebal-cron
+    # 2026-06-19: 페이퍼 리밸 digest 가 텔레그램 노이즈("0 제출/N 거부")만 발생시켜
+    # 기본 기동에서 제외. 다시 켜려면 `docker compose --profile universe-rebal up -d`.
+    profiles: ["universe-rebal"]
     entrypoint: ["/bin/bash", "/app/scripts/universe_rebal_loop.sh"]
     env_file:
       - ./.env
@@ -343,12 +346,12 @@ services:
       # WS streams 수 무관 (1개로도 stuck 검증됨).
       - "--mode"
       - "polling"
-      # 2026-05-23: top-50 → 100. top-50 은 WS 201-stream 과부하 오진 때
-      # 임시로 줄였던 값 — 실제 원인은 region-block 이었고 polling 모드는
-      # WS streams 제약이 아예 없다. REST 100종목 × 2 interval = 200 콜/시간
-      # 으로 rate limit 한참 아래. 커버리지 2배 (SKYAI·ONDO in/out 누락 감소).
+      # 2026-05-23: top-50 → 100. polling 모드는 WS streams 제약 없음.
+      # 2026-06-22: 100 → 200. 알림 온 TP 승자가 trader 에서 not_in_universe 로
+      # 거부되던 누수 차단(4주 차단 바스켓 net +19.1%). trader get_universe 와
+      # 동일 크기. REST 200종목 × 2 interval = 400 콜/시간으로 rate limit 아래.
       - "--top-n"
-      - "100"
+      - "200"
     env_file:
       - ./.env
     environment:
