@@ -15,6 +15,7 @@ strategy.get_universe() 가 절대 빈 list 안 받음 (graceful, 매매 정지 
 from __future__ import annotations
 
 import logging
+import os
 import threading
 import time
 from typing import Any
@@ -42,8 +43,24 @@ BITGET_USDT_TOP30: list[str] = [
 _EXCLUDE_PREFIXES = ("USDC", "BUSD", "USDT_", "FDUSD")
 _EXCLUDE_SUFFIXES = ("UPUSDT", "DOWNUSDT", "BULLUSDT", "BEARUSDT")
 
+# 종목 단위 제외 — 봇이 절대 진입하면 안 되는 심볼.
+# 2026-06-22: ORDIUSDT 는 사용자가 수동으로 보유·관리하는 포지션. 같은 Bitget
+# 계좌(one-way/cross)에서 봇이 진입하면 네팅 충돌로 수동 물량이 차감/뒤집힘 →
+# 진입 자체를 차단(라이브 두 게이트 모두 get_universe→본 함수 경유). env
+# ``BITGET_UNIVERSE_EXCLUDE`` (콤마구분) 로 런타임 추가 가능.
+_EXCLUDE_SYMBOLS: frozenset[str] = frozenset(
+    {"ORDIUSDT"}
+    | {
+        s.strip().upper()
+        for s in os.environ.get("BITGET_UNIVERSE_EXCLUDE", "").split(",")
+        if s.strip()
+    }
+)
+
 
 def _is_excluded(symbol: str) -> bool:
+    if symbol in _EXCLUDE_SYMBOLS:
+        return True
     if any(symbol.startswith(p) for p in _EXCLUDE_PREFIXES):
         return True
     if any(symbol.endswith(s) for s in _EXCLUDE_SUFFIXES):
@@ -74,7 +91,7 @@ def _store(n: int, symbols: list[str]) -> None:
 
 
 def _fallback_universe() -> list[str]:
-    return list(BITGET_USDT_TOP30)
+    return [s for s in BITGET_USDT_TOP30 if not _is_excluded(s)]
 
 
 def _fetch_tickers_sync(n: int) -> list[str]:
