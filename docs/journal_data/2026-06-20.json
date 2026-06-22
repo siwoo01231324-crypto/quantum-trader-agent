@@ -1,0 +1,573 @@
+{
+  "date_kst": "2026-06-20",
+  "kst_window_start": "2026-06-20T00:00:00+09:00",
+  "now_kst": "2026-06-22T09:59:54.022815+09:00",
+  "counts": {
+    "auto_fills": 0,
+    "auto_signals": 0,
+    "manual_trades": 0,
+    "airborne_fires": 65
+  },
+  "auto_fills": [],
+  "auto_signals": [],
+  "manual_trades": [],
+  "airborne_fires": [
+    {
+      "ts": "2026-06-19T15:00:15+00:00",
+      "symbol": "EPICUSDT",
+      "side": "long",
+      "fire_close": 0.4489,
+      "trigger": 0.4489
+    },
+    {
+      "ts": "2026-06-19T16:00:16+00:00",
+      "symbol": "XMRUSDT",
+      "side": "long",
+      "fire_close": 316.66,
+      "trigger": 313.976
+    },
+    {
+      "ts": "2026-06-19T16:00:17+00:00",
+      "symbol": "HBARUSDT",
+      "side": "short",
+      "fire_close": 0.08131,
+      "trigger": 0.08137
+    },
+    {
+      "ts": "2026-06-19T16:00:18+00:00",
+      "symbol": "VIRTUALUSDT",
+      "side": "short",
+      "fire_close": 0.6132,
+      "trigger": 0.6148
+    },
+    {
+      "ts": "2026-06-19T17:00:14+00:00",
+      "symbol": "BSBUSDT",
+      "side": "long",
+      "fire_close": 0.29489,
+      "trigger": 0.291364
+    },
+    {
+      "ts": "2026-06-19T17:00:15+00:00",
+      "symbol": "FOLKSUSDT",
+      "side": "short",
+      "fire_close": 2.5005,
+      "trigger": 2.50718
+    },
+    {
+      "ts": "2026-06-19T19:00:16+00:00",
+      "symbol": "BSBUSDT",
+      "side": "short",
+      "fire_close": 0.48099,
+      "trigger": 0.482778
+    },
+    {
+      "ts": "2026-06-19T19:00:17+00:00",
+      "symbol": "AMDUSDT",
+      "side": "short",
+      "fire_close": 539.63,
+      "trigger": 539.852
+    },
+    {
+      "ts": "2026-06-19T19:00:18+00:00",
+      "symbol": "EPICUSDT",
+      "side": "long",
+      "fire_close": 0.428,
+      "trigger": 0.42622
+    },
+    {
+      "ts": "2026-06-19T20:00:17+00:00",
+      "symbol": "JTOUSDT",
+      "side": "short",
+      "fire_close": 0.773,
+      "trigger": 0.77984
+    },
+    {
+      "ts": "2026-06-19T20:00:18+00:00",
+      "symbol": "XMRUSDT",
+      "side": "long",
+      "fire_close": 306.71,
+      "trigger": 306.21
+    },
+    {
+      "ts": "2026-06-19T22:00:15+00:00",
+      "symbol": "CLUSDT",
+      "side": "short",
+      "fire_close": 77.8,
+      "trigger": 77.9924
+    },
+    {
+      "ts": "2026-06-19T22:00:16+00:00",
+      "symbol": "BZUSDT",
+      "side": "short",
+      "fire_close": 81.39,
+      "trigger": 81.62
+    },
+    {
+      "ts": "2026-06-19T23:00:14+00:00",
+      "symbol": "ZECUSDT",
+      "side": "short",
+      "fire_close": 466.39,
+      "trigger": 466.7
+    },
+    {
+      "ts": "2026-06-19T23:00:15+00:00",
+      "symbol": "BTWUSDT",
+      "side": "short",
+      "fire_close": 0.094158,
+      "trigger": 0.0958082
+    },
+    {
+      "ts": "2026-06-19T23:00:16+00:00",
+      "symbol": "ASTERUSDT",
+      "side": "short",
+      "fire_close": 0.6337,
+      "trigger": 0.63472
+    },
+    {
+      "ts": "2026-06-20T00:00:16+00:00",
+      "symbol": "NEARUSDT",
+      "side": "short",
+      "fire_close": 2.1853,
+      "trigger": 2.1875
+    },
+    {
+      "ts": "2026-06-20T01:00:13+00:00",
+      "symbol": "XLMUSDT",
+      "side": "long",
+      "fire_close": 0.21467,
+      "trigger": 0.214604
+    },
+    {
+      "ts": "2026-06-20T01:00:14+00:00",
+      "symbol": "SAMSUNGUSDT",
+      "side": "short",
+      "fire_close": 238.06,
+      "trigger": 238.27
+    },
+    {
+      "ts": "2026-06-20T01:00:15+00:00",
+      "symbol": "WDCUSDT",
+      "side": "short",
+      "fire_close": 756.62,
+      "trigger": 758.282
+    },
+    {
+      "ts": "2026-06-20T01:00:16+00:00",
+      "symbol": "BIOUSDT",
+      "side": "long",
+      "fire_close": 0.03379,
+      "trigger": 0.033778
+    },
+    {
+      "ts": "2026-06-20T01:00:17+00:00",
+      "symbol": "METUSDT",
+      "side": "short",
+      "fire_close": 0.1518,
+      "trigger": 0.15762
+    },
+    {
+      "ts": "2026-06-20T02:00:16+00:00",
+      "symbol": "NBISUSDT",
+      "side": "short",
+      "fire_close": 285.73,
+      "trigger": 286.174
+    },
+    {
+      "ts": "2026-06-20T02:00:18+00:00",
+      "symbol": "DEXEUSDT",
+      "side": "long",
+      "fire_close": 16.384,
+      "trigger": 16.3056
+    },
+    {
+      "ts": "2026-06-20T03:00:14+00:00",
+      "symbol": "DRAMUSDT",
+      "side": "short",
+      "fire_close": 78.74,
+      "trigger": 79.472
+    },
+    {
+      "ts": "2026-06-20T03:00:16+00:00",
+      "symbol": "CHIPUSDT",
+      "side": "long",
+      "fire_close": 0.03277,
+      "trigger": 0.032748
+    },
+    {
+      "ts": "2026-06-20T04:00:15+00:00",
+      "symbol": "INTCUSDT",
+      "side": "short",
+      "fire_close": 136.86,
+      "trigger": 136.874
+    },
+    {
+      "ts": "2026-06-20T05:00:14+00:00",
+      "symbol": "SOLUSDT",
+      "side": "short",
+      "fire_close": 70.872,
+      "trigger": 70.9608
+    },
+    {
+      "ts": "2026-06-20T05:00:15+00:00",
+      "symbol": "FARTCOINUSDT",
+      "side": "short",
+      "fire_close": 0.1246,
+      "trigger": 0.12462
+    },
+    {
+      "ts": "2026-06-20T06:00:15+00:00",
+      "symbol": "ETHUSDT",
+      "side": "short",
+      "fire_close": 1725.85,
+      "trigger": 1730.15
+    },
+    {
+      "ts": "2026-06-20T06:00:16+00:00",
+      "symbol": "BTWUSDT",
+      "side": "short",
+      "fire_close": 0.115887,
+      "trigger": 0.117682
+    },
+    {
+      "ts": "2026-06-20T06:00:17+00:00",
+      "symbol": "SUIUSDT",
+      "side": "short",
+      "fire_close": 0.7195,
+      "trigger": 0.72048
+    },
+    {
+      "ts": "2026-06-20T06:00:18+00:00",
+      "symbol": "SOXLUSDT",
+      "side": "short",
+      "fire_close": 281.1,
+      "trigger": 281.928
+    },
+    {
+      "ts": "2026-06-20T06:00:19+00:00",
+      "symbol": "PEPEUSDT",
+      "side": "short",
+      "fire_close": 2.8537e-06,
+      "trigger": 2.86088e-06
+    },
+    {
+      "ts": "2026-06-20T06:00:21+00:00",
+      "symbol": "LINKUSDT",
+      "side": "short",
+      "fire_close": 7.981,
+      "trigger": 7.9972
+    },
+    {
+      "ts": "2026-06-20T06:00:22+00:00",
+      "symbol": "AAVEUSDT",
+      "side": "short",
+      "fire_close": 74.9,
+      "trigger": 75.15
+    },
+    {
+      "ts": "2026-06-20T06:00:23+00:00",
+      "symbol": "SAMSUNGUSDT",
+      "side": "short",
+      "fire_close": 241.78,
+      "trigger": 241.804
+    },
+    {
+      "ts": "2026-06-20T06:00:24+00:00",
+      "symbol": "TSLAUSDT",
+      "side": "short",
+      "fire_close": 402.21,
+      "trigger": 402.95
+    },
+    {
+      "ts": "2026-06-20T07:00:17+00:00",
+      "symbol": "MUUSDT",
+      "side": "short",
+      "fire_close": 1154.12,
+      "trigger": 1154.61
+    },
+    {
+      "ts": "2026-06-20T07:00:18+00:00",
+      "symbol": "SNDKUSDT",
+      "side": "short",
+      "fire_close": 2233.4,
+      "trigger": 2234.06
+    },
+    {
+      "ts": "2026-06-20T07:00:19+00:00",
+      "symbol": "BNBUSDT",
+      "side": "short",
+      "fire_close": 587.05,
+      "trigger": 587.876
+    },
+    {
+      "ts": "2026-06-20T07:00:21+00:00",
+      "symbol": "PENGUUSDT",
+      "side": "short",
+      "fire_close": 0.006799,
+      "trigger": 0.0068
+    },
+    {
+      "ts": "2026-06-20T08:00:16+00:00",
+      "symbol": "ALLOUSDT",
+      "side": "long",
+      "fire_close": 0.37656,
+      "trigger": 0.376426
+    },
+    {
+      "ts": "2026-06-20T08:00:17+00:00",
+      "symbol": "ASTERUSDT",
+      "side": "short",
+      "fire_close": 0.6539,
+      "trigger": 0.6549
+    },
+    {
+      "ts": "2026-06-20T08:00:18+00:00",
+      "symbol": "SKYAIUSDT",
+      "side": "short",
+      "fire_close": 0.36895,
+      "trigger": 0.369616
+    },
+    {
+      "ts": "2026-06-20T09:00:17+00:00",
+      "symbol": "SPCXUSDT",
+      "side": "short",
+      "fire_close": 181.26,
+      "trigger": 181.74
+    },
+    {
+      "ts": "2026-06-20T09:00:19+00:00",
+      "symbol": "WDCUSDT",
+      "side": "short",
+      "fire_close": 785.35,
+      "trigger": 787.21
+    },
+    {
+      "ts": "2026-06-20T10:00:15+00:00",
+      "symbol": "SYNUSDT",
+      "side": "short",
+      "fire_close": 0.15239,
+      "trigger": 0.153008
+    },
+    {
+      "ts": "2026-06-20T11:00:14+00:00",
+      "symbol": "REUSDT",
+      "side": "short",
+      "fire_close": 0.98415,
+      "trigger": 1.02757
+    },
+    {
+      "ts": "2026-06-20T11:00:15+00:00",
+      "symbol": "BICOUSDT",
+      "side": "short",
+      "fire_close": 0.04535,
+      "trigger": 0.04594
+    },
+    {
+      "ts": "2026-06-20T11:00:16+00:00",
+      "symbol": "UBUSDT",
+      "side": "long",
+      "fire_close": 0.0777,
+      "trigger": 0.076824
+    },
+    {
+      "ts": "2026-06-20T11:00:17+00:00",
+      "symbol": "SIRENUSDT",
+      "side": "long",
+      "fire_close": 0.03719,
+      "trigger": 0.033744
+    },
+    {
+      "ts": "2026-06-20T11:00:18+00:00",
+      "symbol": "CBRSUSDT",
+      "side": "long",
+      "fire_close": 232.04,
+      "trigger": 232.032
+    },
+    {
+      "ts": "2026-06-20T11:00:19+00:00",
+      "symbol": "QNTSTOCKUSDT",
+      "side": "long",
+      "fire_close": 68.864,
+      "trigger": 68.6264
+    },
+    {
+      "ts": "2026-06-20T11:00:20+00:00",
+      "symbol": "STGUSDT",
+      "side": "long",
+      "fire_close": 0.2051,
+      "trigger": 0.20472
+    },
+    {
+      "ts": "2026-06-20T12:00:14+00:00",
+      "symbol": "TRXUSDT",
+      "side": "short",
+      "fire_close": 0.32446,
+      "trigger": 0.324632
+    },
+    {
+      "ts": "2026-06-20T13:00:14+00:00",
+      "symbol": "ALLOUSDT",
+      "side": "short",
+      "fire_close": 0.40383,
+      "trigger": 0.419706
+    },
+    {
+      "ts": "2026-06-20T13:00:15+00:00",
+      "symbol": "SLXUSDT",
+      "side": "short",
+      "fire_close": 0.2202,
+      "trigger": 0.2229
+    },
+    {
+      "ts": "2026-06-20T14:00:16+00:00",
+      "symbol": "CLUSDT",
+      "side": "short",
+      "fire_close": 78.357,
+      "trigger": 78.681
+    },
+    {
+      "ts": "2026-06-20T14:00:17+00:00",
+      "symbol": "BZUSDT",
+      "side": "short",
+      "fire_close": 81.99,
+      "trigger": 82.316
+    },
+    {
+      "ts": "2026-06-20T14:00:18+00:00",
+      "symbol": "TRUMPUSDT",
+      "side": "long",
+      "fire_close": 1.799,
+      "trigger": 1.7968
+    },
+    {
+      "ts": "2026-06-20T14:00:19+00:00",
+      "symbol": "INJUSDT",
+      "side": "long",
+      "fire_close": 4.961,
+      "trigger": 4.9436
+    },
+    {
+      "ts": "2026-06-20T14:00:20+00:00",
+      "symbol": "TIAUSDT",
+      "side": "long",
+      "fire_close": 0.3704,
+      "trigger": 0.36878
+    },
+    {
+      "ts": "2026-06-20T14:00:21+00:00",
+      "symbol": "LITEUSDT",
+      "side": "long",
+      "fire_close": 840.67,
+      "trigger": 836.26
+    },
+    {
+      "ts": "2026-06-20T14:00:22+00:00",
+      "symbol": "FETUSDT",
+      "side": "long",
+      "fire_close": 0.1865,
+      "trigger": 0.18612
+    }
+  ],
+  "cs_tsmom_top10": {
+    "available": false,
+    "fetched_at": null,
+    "pin_date": "",
+    "top10": [],
+    "note": "Backfill at 2026-06-22T09:59:51.291306+09:00 — historical snapshot for 2026-06-20 23:50 KST was not captured. Routine 가 'today TOP10' 으로 쓰면 부정확할 수 있음. auto_fills + auto_signals 를 primary source 로 활용."
+  },
+  "account_reconciliation": {
+    "ok": true,
+    "date_kst": "2026-06-20",
+    "open_balance": 239.88623414,
+    "close_balance": 243.12852682,
+    "balance_delta": 3.2422926799999914,
+    "trade_flow": 3.2422927899999996,
+    "fees": -3.04739561,
+    "transfers_deposits": 0,
+    "business_types": {
+      "contract_settle_fee": 11,
+      "buy": 53,
+      "sell": 59
+    },
+    "n_bills": 123,
+    "no_external_flow": true
+  },
+  "_backfill_meta": {
+    "generated_by": "scripts/export_journal_for_date.py",
+    "generated_at_kst": "2026-06-22T09:59:54.022820+09:00",
+    "utc_window": [
+      "2026-06-19T15:00:00+00:00",
+      "2026-06-20T15:00:00+00:00"
+    ],
+    "wal_files_scanned": [
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T053027Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T053140Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T060929Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T061046Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T093227Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T101328Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T102433Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T104643Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T104813Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T104943Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T111836Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T115043Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T151213Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T160723Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T163902Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T170440Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260521T173552Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260522T050551Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260522T054610Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260522T060335Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260522T065545Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260522T132418Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260522T180859Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260524T133741Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260525T163022Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260525T165359Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260526T033417Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260526T154834Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260527T044926Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260527T150208Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260527T162624Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260527T173656Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260528T061600Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260529T053303Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260601T104229Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260601T104350Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260601T123943Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260601T143805Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260601T151112Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260601T164850Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260601T191650Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260601T193617Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260602T065341Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260602T155350Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260602T171556Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260602T172019Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260602T175026Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260602T182844Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260602T190031Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260602T194817Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260602T200631Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260602T201705Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260602T201851Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260602T202238Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260602T202626Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260602T203026Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260602T203816Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260602T211051Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260602T211200Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260603T155523Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260604T161718Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260604T172408Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260604T200240Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260604T200309Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260604T203930Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260604T210702Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\live\\20260605T053735Z\\wal.jsonl"
+    ],
+    "docker_error": null
+  }
+}
