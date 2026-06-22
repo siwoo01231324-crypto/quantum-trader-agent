@@ -284,6 +284,66 @@ def _btc_downtrend_hist() -> pd.DataFrame:
     )
 
 
+# ── AIRBORNE_NO_ENTRY_FILTERS 마스터 토글 (2026-06-22, 무필터 raw 검증) ──────────
+# 켜면 타임게이트·btc_downtrend·숏차단시각·고변동·펌핑·폭락 전부 우회.
+# freshness/universe/capital 은 유지. 기본 off = 현행 byte-identical.
+
+
+def test_no_entry_filters_bypasses_hour_gate(monkeypatch):
+    """토글 ON → 게이트 밖 시간도 진입."""
+    monkeypatch.setenv("AIRBORNE_NO_ENTRY_FILTERS", "1")
+    ts = _recent_iso(minutes_ago=1)
+    fk = int(pd.Timestamp(ts).tz_convert("Asia/Seoul").floor("1h").hour)
+    bad = frozenset({(fk + 5) % 24})  # fire hour 를 게이트에서 제외
+    orch = _FakeOrch()
+    c, routed = _consumer(
+        _FakeStore([_fire("SOLUSDT", "long", ts)]), orch, [_spec(hours=bad)],
+    )
+    assert asyncio.run(c.sweep_once()) == 1  # 게이트 밖인데도 진입
+    assert len(orch.calls) == 1
+
+
+def test_no_entry_filters_bypasses_btc_downtrend(monkeypatch):
+    """토글 ON → BTC 하락추세 + btc_filter 여도 롱 진입."""
+    monkeypatch.setenv("AIRBORNE_NO_ENTRY_FILTERS", "1")
+    ts = _recent_iso(minutes_ago=1)
+    h = int(pd.Timestamp(ts).tz_convert("Asia/Seoul").floor("1h").hour)
+    orch = _FakeOrch()
+    c, _ = _consumer(
+        _FakeStore([_fire("SOLUSDT", "long", ts)]), orch,
+        [_spec(hours=frozenset({h}), btc_filter=True)],
+        btc_ohlcv_provider=lambda: _btc_downtrend_hist(),
+    )
+    assert asyncio.run(c.sweep_once()) == 1  # 하락추세인데도 진입
+
+
+def test_no_entry_filters_bypasses_momentum_and_vol(monkeypatch):
+    """토글 ON → 폭락(-30%)·고변동(10%/h) 롱도 진입 (crash/vol 필터 0 처리)."""
+    monkeypatch.setenv("AIRBORNE_NO_ENTRY_FILTERS", "1")
+    ts = _recent_iso(minutes_ago=1)
+    h = int(pd.Timestamp(ts).tz_convert("Asia/Seoul").floor("1h").hour)
+    orch = _FakeOrch()
+    c, _ = _consumer(
+        _FakeStore([_fire("SOLUSDT", "long", ts)]), orch,
+        [_spec(hours=frozenset({h}))],
+        klines_fetcher=_stub_fetcher(-30.0, range_pct=10.0),  # 폭락+고변동
+    )
+    assert asyncio.run(c.sweep_once()) == 1
+
+
+def test_no_entry_filters_default_off_keeps_gate(monkeypatch):
+    """env 미설정(기본 off) → 게이트 그대로 차단 (현행 불변)."""
+    monkeypatch.delenv("AIRBORNE_NO_ENTRY_FILTERS", raising=False)
+    ts = _recent_iso(minutes_ago=1)
+    fk = int(pd.Timestamp(ts).tz_convert("Asia/Seoul").floor("1h").hour)
+    bad = frozenset({(fk + 5) % 24})
+    orch = _FakeOrch()
+    c, _ = _consumer(
+        _FakeStore([_fire("SOLUSDT", "long", ts)]), orch, [_spec(hours=bad)],
+    )
+    assert asyncio.run(c.sweep_once()) == 0  # 게이트 차단 = 기본 동작
+
+
 def test_btc_downtrend_blocks_long_not_short():
     ts = _recent_iso(minutes_ago=1)
     h = int(pd.Timestamp(ts).tz_convert("Asia/Seoul").floor("1h").hour)
