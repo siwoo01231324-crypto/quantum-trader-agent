@@ -94,6 +94,41 @@ def test_second_call_same_sid_symbol_returns_none_live_entered():
     assert second is None, "이미 진입한 (sid,symbol) → None (1포지션)"
 
 
+def test_cross_airborne_symbol_dedup_blocks_second_strategy():
+    """다른 airborne 전략이 보유한 종목은 진입 차단 (2026-06-22, 네팅 desync 방지).
+
+    kst-hours 가 SUI 숏 보유 중이면 short-whitelist 가 같은 SUI 진입 못 함 →
+    거래소 네팅 holders=2 (store -2940 vs broker -880, 40804 폭주) 차단.
+    """
+    orch = _orch()
+    orch.register_strategy("live-airborne-a", _BidirScanner())
+    orch.register_strategy("live-airborne-b", _BidirScanner())
+    first = orch.dispatch_fire_entry(
+        "live-airborne-a", "SUIUSDT", "short",
+        price=100.0, ts=_TS, equity_usdt=10_000.0,
+    )
+    assert first is not None
+    second = orch.dispatch_fire_entry(
+        "live-airborne-b", "SUIUSDT", "short",
+        price=100.0, ts=_TS, equity_usdt=10_000.0,
+    )
+    assert second is None, "다른 airborne 보유 종목 → 차단"
+    assert ("live-airborne-b", "SUIUSDT") not in orch._live_entered
+
+
+def test_cross_airborne_dedup_scoped_to_airborne_only():
+    """비-airborne(cs-tsmom 등) 보유 종목은 airborne 진입 안 막음 (크로스슬리브 영향 0)."""
+    orch = _orch()
+    orch.register_strategy("live-airborne-a", _BidirScanner())
+    # 다른 슬리브가 SOL 보유 중 (다른 계좌/심볼체계 — 차단 대상 아님)
+    orch._live_entered.add(("cs-tsmom-crypto-daily", "SOLUSDT"))
+    intent = orch.dispatch_fire_entry(
+        "live-airborne-a", "SOLUSDT", "short",
+        price=100.0, ts=_TS, equity_usdt=10_000.0,
+    )
+    assert intent is not None, "비-airborne 보유는 airborne 진입 안 막음"
+
+
 def test_qty_none_path_returns_none_and_releases_live_entered():
     """사이징 drop(min-notional 미달) → None + live_entered 미잔존(재시도 허용)."""
     orch = _orch()
