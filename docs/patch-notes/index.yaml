@@ -16,21 +16,23 @@
 
 versions:
   - version: "v0.6.91"
-    date: "2026-06-22"
-    title: "cross-airborne 종목 dedup — 두 전략 중복진입/네팅 desync 차단"
+    date: "2026-06-23"
+    title: "cross-airborne dedup (동시+순차) — 두 전략 중복진입/네팅 desync 차단"
     tags: [fix, safety]
     summary: >
       두 airborne 전략(kst-hours + short-whitelist)이 같은 종목에 겹쳐 진입 →
       거래소 네팅으로 holders=2 desync(store −2940 vs broker −880 = 40804 폭주)의
-      뿌리. dispatch_fire_entry 에 "어느 airborne 이든 보유 중인 종목은 진입 차단"
-      추가 → 종목당 1 포지션 보장. 무필터(AIRBORNE_NO_ENTRY_FILTERS)로 발화 급증
-      시 증거금 중복·desync 동시 차단.
+      뿌리. ①동시보유 ②순차 재진입(A 청산 후 B 가 같은 fire 재진입) 둘 다 차단 →
+      종목-봉당 1 포지션 보장. 무필터(AIRBORNE_NO_ENTRY_FILTERS)로 발화 급증 시
+      증거금 중복·desync 차단.
     items:
-      - "fix: dispatch_fire_entry 에 cross-airborne 종목 dedup (reason=symbol_held_cross_airborne). (sid,symbol) 1포지션에 더해 종목 단위로 airborne 전 전략 통틀어 1포지션."
+      - "fix(동시): dispatch_fire_entry 에 cross-airborne 종목 dedup (reason=symbol_held_cross_airborne) — 어느 airborne 이든 *보유 중*인 종목은 진입 차단."
+      - "fix(순차): consumer 에 cross-spec 봉 dedup (_entered_bar 공유 dict) — 한 종목-봉 fire 는 airborne 전체 통틀어 1회. A 진입→청산 후 B 가 같은 fire 재진입하던 사고(DEXE 10:01 진입·10:05 청산→10:05:48 재숏) 차단. per-spec dedup 파일은 cross-strategy 못 봐서 공유 dict 로 보완."
       - "스코프: live-airborne prefix 한정 → KR(6자리)·타슬리브 비충돌, cross-sleeve 영향 0."
-      - "사이징은 미변경(default_size 0.50 유지) — 23시 27종·07시 40종 피크는 용량 18 초과분 일부 드롭 감수(사용자 결정). 후속 사이즈 튜닝 별도."
+      - "사이징은 미변경(default_size 0.50 유지) — 피크 용량 18 초과분 일부 드롭 감수(사용자 결정). 후속 사이즈 튜닝 별도."
     refs:
       - "src/portfolio/.ai.md"
+      - "src/live/.ai.md"
       - "docs/specs/airborne-fire-driven-consume.md"
   - version: "v0.6.90"
     date: "2026-06-22"

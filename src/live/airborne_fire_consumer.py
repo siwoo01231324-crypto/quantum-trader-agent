@@ -165,6 +165,10 @@ class AirborneFireConsumer:
             )
         # symbol → (stamp, df|None). 1h 캔들 5분 캐시 — 24h 변화·평균변동폭 공용.
         self._klines_cache: dict[str, tuple] = {}
+        # cross-airborne 봉 dedup (2026-06-23): symbol → 마지막 진입 bar_open_key.
+        # 전 airborne 전략 공유 → 한 종목-봉 fire 는 통틀어 1회만 진입(순차 재진입
+        # 차단). 종목당 1개라 메모리 바운드(per-spec _fired_bar_ts 미러).
+        self._entered_bar: dict[str, str] = {}
 
     # ── BTC trend filter (long 차단) ──────────────────────────────────────────
 
@@ -465,6 +469,14 @@ class AirborneFireConsumer:
                 )
                 spec_block_reason = spec_block_reason or "BTC하락추세"
                 continue
+            # cross-airborne 봉 dedup (2026-06-23) — 한 종목-봉 fire 는 airborne 전체
+            # 통틀어 1회만 진입. A 가 진입 후 *청산해도* B 가 같은 fire 재진입 못 함
+            # (DEXE 10:00봉: bb-reversal 진입→10:05 청산 → short-whitelist 10:05:48
+            # 같은 fire 재숏 사고). per-spec _dedup_already 는 전략별 dedup 파일이라
+            # cross-strategy 를 못 봄 → 공유 dict ``_entered_bar`` 로 차단. #471 의
+            # _live_entered "동시보유" 차단을 봉 단위로 보완(순차 재진입까지 커버).
+            if self._entered_bar.get(symbol) == bar_open_key:
+                continue
             if self._dedup_already(spec, symbol, bar_open_key):
                 continue
             intent = self._orch.dispatch_fire_entry(
@@ -485,6 +497,7 @@ class AirborneFireConsumer:
             # _live_entered 는 dispatch_fire_entry 가 이미 잡음 — 중복 진입 방지).
             await self._route([intent])
             self._dedup_mark(spec, symbol, bar_open_key)
+            self._entered_bar[symbol] = bar_open_key  # cross-airborne 봉 dedup 마크
             logger.info(
                 "airborne fire entry sid=%s sym=%s side=%s price=%s kst=%d",
                 spec.id, symbol, side, fire_close, hour_kst,
