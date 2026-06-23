@@ -202,6 +202,16 @@ class LivePositionRiskManager:
         None 이면 등록 자체를 skip (정적 policy 그대로 사용). 다음 stop/TP 시
         자동 cleanup → 같은 (sid, symbol) 의 새 진입은 다시 호출되어야 함.
         """
+        # 2026-06-23 — 진입 시 _entry_ts 무조건 새로 stamp(overwrite). stale
+        # entry_ts churn 근본 fix. orch._on_entry 가 모든 진입에 본 메서드 호출
+        # (live_run 배선). #466(청산측 pop)은 거래소 *네이티브 TP/SL* 청산(봇이
+        # 청산 발화 안 함)을 못 잡아 _entry_ts 가 옛 값으로 잔존했고, 재진입이
+        # evaluate 의 setdefault 로 그 옛 값을 물려 held_sec 거대 → 즉시 time_exit
+        # (GRAM 15:01 숏 네이티브청산 → 18:01 롱 재진입 held_sec=10812 사고).
+        # 진입측 overwrite 면 청산 경로 무관하게 항상 fresh. override 미설정(전부
+        # None)이어도 stamp 는 함 (early-return 前). 발주는 fill 직전이라 ~수초 오차
+        # 무시(max_hold 3600s 대비). 발주 실패 시 다음 evaluate 의 held==0 pop 정리.
+        self._entry_ts[(strategy_id, symbol)] = datetime.now(timezone.utc)
         if (stop_loss_pct is None
                 and take_profit_pct is None
                 and trailing_stop_pct is None):

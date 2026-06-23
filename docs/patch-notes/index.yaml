@@ -15,6 +15,22 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.92"
+    date: "2026-06-23"
+    title: "진입측 _entry_ts stamp — 네이티브청산 후 재진입 churn 근본 fix"
+    tags: [fix, safety]
+    summary: >
+      #466(청산측 _entry_ts pop)이 거래소 네이티브 TP/SL 청산을 못 잡아 churn 재발.
+      봇이 청산 발화를 안 하면(STOP-FIRE/SWEEP 없음) _entry_ts 가 옛 값으로 잔존 →
+      재진입이 setdefault 로 그 옛 값을 물려 held_sec 거대 → 진입 즉시 time_exit.
+      진입 훅에서 _entry_ts 를 now 로 overwrite → 청산 경로 무관하게 항상 fresh.
+    items:
+      - "fix: register_entry_override(=orch._on_entry, 모든 진입마다 호출)가 진입 시 _entry_ts[(sid,sym)]=now 로 overwrite (override pct 전부 None 이어도 early-return 前 stamp)."
+      - "근거(실거래): GRAM 15:01 숏 네이티브 TP/SL 청산(봇 청산발화 없음) → _entry_ts 미pop → 18:01 롱 재진입 held_sec=10812(3h) → 즉시 −1% time_exit. #466 의 청산측 pop 으론 네이티브 청산을 못 잡음 → 진입측에서 근본 차단."
+      - "#466(청산측 pop)은 유지(봇 발화 청산 즉시 정리). 진입측 overwrite 가 native-close 경로 보완 = 이중 방어."
+    refs:
+      - "src/portfolio/.ai.md"
+      - "tests/portfolio/test_live_position_timeout.py"
   - version: "v0.6.91"
     date: "2026-06-23"
     title: "cross-airborne dedup (동시+순차) — 두 전략 중복진입/네팅 desync 차단"
