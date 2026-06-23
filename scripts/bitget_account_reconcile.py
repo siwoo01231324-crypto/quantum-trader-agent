@@ -164,16 +164,43 @@ def fetch_position_history_pnl(date_kst: str) -> dict:
     target = datetime.strptime(date_kst, "%Y-%m-%d").replace(tzinfo=_KST)
     start_ms = int(target.timestamp() * 1000)
     end_ms = int((target + timedelta(days=1)).timestamp() * 1000)
-    try:
-        r = _signed_get(creds, "/api/v2/mix/position/history-position", {
-            "productType": "USDT-FUTURES", "startTime": str(start_ms),
-            "endTime": str(end_ms), "limit": "100",
-        })
-    except Exception as exc:  # noqa: BLE001
-        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
-    if str(r.get("code")) not in ("00000", "0", "None", "none"):
-        return {"ok": False, "error": f"code={r.get('code')} msg={r.get('msg')}"}
-    rows = (r.get("data") or {}).get("list") or []
+    # 2026-06-24 — 페이지네이션. limit=100 단일 호출은 고거래량일(예: 6/23 108청산)에
+    # 가장 최근 100건만 받아 *오래된* 청산을 누락 → 일일손익이 통째로 틀림(6/23
+    # -25.63 잘림 vs 실제 -14.45). endTime 을 가장 오래된 ctime 직전으로 되감으며
+    # 윈도우 전체를 수집, positionId 로 dedup, day 윈도우로 필터.
+    def _ck(p) -> int:
+        return int(p.get("ctime") or p.get("cTime") or 0)
+    raw: list[dict] = []
+    cur_end = end_ms
+    for _ in range(40):  # 4000건 상한 (40×100) — 하루 청산수 한참 위
+        try:
+            r = _signed_get(creds, "/api/v2/mix/position/history-position", {
+                "productType": "USDT-FUTURES", "startTime": str(start_ms),
+                "endTime": str(cur_end), "limit": "100",
+            })
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+        if str(r.get("code")) not in ("00000", "0", "None", "none"):
+            return {"ok": False, "error": f"code={r.get('code')} msg={r.get('msg')}"}
+        page = (r.get("data") or {}).get("list") or []
+        if not page:
+            break
+        raw += page
+        oldest = min(_ck(p) for p in page)
+        if oldest <= start_ms or len(page) < 100:
+            break
+        cur_end = oldest - 1  # 다음 페이지는 더 과거로
+        time.sleep(0.15)  # rate-limit 여유
+    # positionId(없으면 sym+ctime+utime) 로 dedup. 윈도우는 API 의 startTime/endTime
+    # 파라미터가 이미 보장(모든 호출이 startTime=start_ms 고정) → 추가 필터 불필요.
+    seen: set = set()
+    rows: list[dict] = []
+    for p in raw:
+        pid = p.get("positionId") or (p.get("symbol"), _ck(p), p.get("utime") or p.get("uTime"))
+        if pid in seen:
+            continue
+        seen.add(pid)
+        rows.append(p)
 
     def _hk(ms) -> str:
         try:
