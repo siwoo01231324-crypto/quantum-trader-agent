@@ -1,10 +1,10 @@
-"""Unit tests for LiveAirborneBbReversalKstHours (KST {1,2,3,5,6,7,8,23} hours gate, v3).
+"""Unit tests for LiveAirborneBbReversalKstHours (KST {1,3,5,7,9,14,18,21,22,23} hours gate, v3).
 
 대부분의 v1.2 bidir 동작은 [[test_live_airborne_bb_reversal_kst_morning]] 가
 이미 박제. 본 모듈은 *시각 게이트 차이* 만 검증:
-  - kst_entry_hours = {1, 2, 3, 5, 6, 7, 8, 23} (v3, 13일 1m 기반)
-  - {1,2,3,5,6,7,8,23} 만 진입 통과, 다른 시각 차단
-  - 22시 (v2 에서는 통과) → v3 에서 차단 확인 (set 이 다름)
+  - kst_entry_hours = {1,3,5,7,9,14,18,21,22,23} (v3, 한 달 신호 sim 기반)
+  - 위 set 만 진입 통과, 다른 시각 차단
+  - 22시 (v3 에서 신규 포함) 통과 확인
   - 1시 (KST_MORNING 에서는 차단) → v3 에서 통과 확인
   - 부모 클래스 ClassVar 미오염 (instance shadow 작동)
 """
@@ -69,16 +69,16 @@ class TestInheritance:
         assert s.is_live_scanner is True
 
     def test_kst_entry_hours_is_top5(self):
-        """v3 set (2026-06-06) — 13일 1m 실측 기반 새벽~아침+23시 {1,2,3,5,6,7,8,23}."""
+        """v3 set (2026-06-23) — 한 달 신호 sim 기반 롱+양수 시각 {1,3,5,7,9,14,18,21,22,23}."""
         s = LiveAirborneBbReversalKstHours()
-        assert s.kst_entry_hours == frozenset({1, 2, 3, 5, 6, 7, 8, 23})
+        assert s.kst_entry_hours == frozenset({1, 3, 5, 7, 9, 14, 18, 21, 22, 23})
 
     def test_parent_classvar_not_polluted(self):
         """Subclass override 가 parent ClassVar 를 변경하면 안 됨."""
         # Parent 의 default (morning block) 보존
         assert LiveAirborneBbReversalKstMorning.kst_entry_hours == frozenset({6, 7, 8, 9, 10, 11})
-        # Subclass 만 새 set (v3 — 새벽~아침+23시 {1,2,3,5,6,7,8,23})
-        assert LiveAirborneBbReversalKstHours.kst_entry_hours == frozenset({1, 2, 3, 5, 6, 7, 8, 23})
+        # Subclass 만 새 set (v3 — 한 달 신호 sim 기반 {1,3,5,7,9,14,18,21,22,23})
+        assert LiveAirborneBbReversalKstHours.kst_entry_hours == frozenset({1, 3, 5, 7, 9, 14, 18, 21, 22, 23})
 
     def test_stop_tp_inherited(self):
         s = LiveAirborneBbReversalKstHours()
@@ -87,17 +87,19 @@ class TestInheritance:
 
 
 class TestTimeGate:
-    """v3 set (2026-06-06) — {1,2,3,5,6,7,8,23}만 통과. 13일 1m 실측 기반."""
+    """v3 set (2026-06-23) — {1,3,5,7,9,14,18,21,22,23}만 통과. 한 달 신호 sim 기반."""
 
     @pytest.mark.parametrize("utc_hour, kst_hour", [
-        (16, 1),    # UTC 16 = KST 1 → PASS (v3 새벽)
-        (17, 2),    # UTC 17 = KST 2 → PASS (v3 새벽)
-        (18, 3),    # UTC 18 = KST 3 → PASS (v3 새벽)
-        (20, 5),    # UTC 20 = KST 5 → PASS (v3+5시, 라이브 롱 PF 2.22)
-        (21, 6),    # UTC 21 = KST 6 → PASS (v3 아침)
-        (22, 7),    # UTC 22 = KST 7 → PASS (v3 아침)
-        (23, 8),    # UTC 23 = KST 8 → PASS (v3 아침)
-        (14, 23),   # UTC 14 = KST 23 → PASS (v3 신규, 23시 숏 PF 2.09)
+        (16, 1),    # UTC 16 = KST 1 → PASS
+        (18, 3),    # UTC 18 = KST 3 → PASS
+        (20, 5),    # UTC 20 = KST 5 → PASS
+        (22, 7),    # UTC 22 = KST 7 → PASS
+        (0,  9),    # UTC 0  = KST 9 → PASS
+        (5,  14),   # UTC 5  = KST 14 → PASS
+        (9,  18),   # UTC 9  = KST 18 → PASS
+        (12, 21),   # UTC 12 = KST 21 → PASS
+        (13, 22),   # UTC 13 = KST 22 → PASS
+        (14, 23),   # UTC 14 = KST 23 → PASS
     ])
     def test_passes_top_hours(self, utc_hour, kst_hour):
         s = LiveAirborneBbReversalKstHours()
@@ -108,11 +110,11 @@ class TestTimeGate:
         )
 
     @pytest.mark.parametrize("utc_hour, kst_hour", [
-        (7,  16),   # KST 16 — v2 에선 통과, v3 에서 차단
-        (11, 20),   # KST 20 — v2 에선 통과, v3 에서 차단
-        (13, 22),   # KST 22 — v2 에선 통과, v3 에서 차단
-        (2,  11),   # KST 11 — 둘 다 차단
-        (15, 0),    # KST 0 — 둘 다 차단
+        (7,  16),   # KST 16 — v3 에서 차단
+        (11, 20),   # KST 20 — v3 에서 차단
+        (2,  11),   # KST 11 — 차단
+        (15, 0),    # KST 0  — 차단
+        (17, 2),    # KST 2  — v3 에서 차단
     ])
     def test_blocks_other_hours(self, utc_hour, kst_hour):
         s = LiveAirborneBbReversalKstHours()
@@ -126,7 +128,7 @@ class TestTimeGate:
 
 
 class TestDifferenceFromMorning:
-    """v3 set 의 morning 과의 차이 — KST 7/8 양쪽 통과 + KST 22 hours 만 차단."""
+    """v3 set 의 morning 과의 차이 — KST 7 통과, KST 8 제외(새 set), KST 22 신규 포함."""
 
     def test_kst7_morning_passes(self):
         s = LiveAirborneBbReversalKstMorning()
@@ -135,7 +137,7 @@ class TestDifferenceFromMorning:
         assert signal.action == "buy"
 
     def test_kst7_hours_passes_v3(self):
-        """v3 (2026-06-06) — KST 7 포함. UTC 22 = KST 7."""
+        """v3 (2026-06-23) — KST 7 포함. UTC 22 = KST 7."""
         s = LiveAirborneBbReversalKstHours()
         history = _long_fire_frame_at_utc("2026-01-02T22:00:00")  # KST 7
         signal = _run(s, _ctx(history))
@@ -148,7 +150,7 @@ class TestDifferenceFromMorning:
         assert signal.action == "buy"
 
     def test_kst11_hours_blocks_v3(self):
-        """v3 (2026-06-06) — KST 11 제외 (v2 에서도 제외였음)."""
+        """v3 (2026-06-23) — KST 11 제외."""
         s = LiveAirborneBbReversalKstHours()
         history = _long_fire_frame_at_utc("2026-01-02T02:00:00")  # KST 11
         signal = _run(s, _ctx(history))
@@ -162,12 +164,12 @@ class TestDifferenceFromMorning:
         assert signal.action == "hold"
 
     def test_kst22_hours_blocks_v3(self):
-        """v3 (2026-06-06) — KST 22 제외. v2 에선 통과였으나 v3 에서 차단."""
+        """v3 (2026-06-23) — KST 22 포함(신규). KST 2(UTC 17) 는 차단."""
         s = LiveAirborneBbReversalKstHours()
-        history = _long_fire_frame_at_utc("2026-01-02T13:00:00")  # KST 22
+        history = _long_fire_frame_at_utc("2026-01-02T17:00:00")  # KST 2 → 차단
         signal = _run(s, _ctx(history))
         assert signal.action == "hold"
-        assert "time_filter:kst_hour=22" in signal.reason
+        assert "time_filter:kst_hour=2" in signal.reason
 
 
 class TestCtorOverride:
@@ -194,7 +196,8 @@ from backtest.strategies.live_airborne_bb_reversal_kst_morning import (
     LiveAirborneBbReversalKstMorning as _Parent,
 )
 
-_IDX = _pd.date_range("2026-06-07T17:00:00Z", periods=6, freq="1h")
+_IDX = _pd.date_range("2026-06-07T18:00:00Z", periods=6, freq="1h")
+# index: 18,19,20,21,22,23Z. ts=23:27Z → 23:00봉 형성중 trim → closed=22:00Z → KST 7시 (새 set 포함)
 _HIST = _pd.DataFrame(
     {"open": 1.0, "high": 1.0, "low": 1.0, "close": [1, 2, 3, 4, 5, 6]}, index=_IDX
 )
@@ -211,25 +214,25 @@ def test_gate_backtest_no_live_run_is_unchanged():
 def test_gate_live_forming_bar_trims_to_closed():
     st = _S()
     ctx = {
-        "ts": _pd.Timestamp("2026-06-07T22:27:00Z"),  # 22:00봉 형성 중
+        "ts": _pd.Timestamp("2026-06-07T23:27:00Z"),  # 23:00봉 형성 중
         "live_run": True,
         "market_snapshot": {"symbol": "X", "history": _HIST},
     }
     gated, closed_ts = st._bar_close_gate(ctx)
     assert len(gated["market_snapshot"]["history"]) == 5  # 미완성봉 제거
-    assert closed_ts == _pd.Timestamp("2026-06-07T21:00:00Z")  # 마감봉
+    assert closed_ts == _pd.Timestamp("2026-06-07T22:00:00Z")  # 마감봉
 
 
 def test_gate_live_closed_bar_no_trim():
     st = _S()
     ctx = {
-        "ts": _pd.Timestamp("2026-06-07T23:05:00Z"),  # 22:00봉 이미 마감
+        "ts": _pd.Timestamp("2026-06-08T00:05:00Z"),  # 23:00봉 이미 마감
         "live_run": True,
         "market_snapshot": {"symbol": "X", "history": _HIST},
     }
     gated, closed_ts = st._bar_close_gate(ctx)
     assert len(gated["market_snapshot"]["history"]) == 6
-    assert closed_ts == _pd.Timestamp("2026-06-07T22:00:00Z")
+    assert closed_ts == _pd.Timestamp("2026-06-07T23:00:00Z")
 
 
 async def _fake_buy(self, ctx):
@@ -249,27 +252,31 @@ def _isolated(st, tmp_path, *, fires=None):
     """dedup 영속 tmp 격리 + 데몬 fire store stub.
 
     fires=None → store None(fail-open, 게이트 무력화). fires 지정 시 그 fire 목록.
+    _fire_consumer_active 를 False 로 mock — env AIRBORNE_FIRE_CONSUMER=1 이
+    CI/로컬에 설정돼 있어도 on_bar consume 경로가 비활성화되지 않도록.
     """
     st._dedup_path = lambda: tmp_path / "dedup.json"
     st._get_fire_store = (lambda: None) if fires is None else (lambda: _FakeFireStore(fires))
+    st._fire_consumer_active = lambda: False
 
 
-# _HIST: index 17..22:00Z, ts=22:27 → 22:00봉 형성중 trim → 마감봉 closed=21:00Z.
-# 데몬 fire 매칭 = floor(fire_ts)==closed+1h==22:00Z, side=long(buy).
+# _HIST: index 18..23:00Z, ts=23:27 → 23:00봉 형성중 trim → 마감봉 closed=22:00Z → KST 7시 (새 set 포함).
+# 데몬 fire 매칭 = floor(fire_ts)==closed+1h==23:00Z, side=long(buy).
 _LIVE_CTX = {
-    "ts": _pd.Timestamp("2026-06-07T22:27:00Z"),
+    "ts": _pd.Timestamp("2026-06-07T23:27:00Z"),
     "live_run": True,
     "market_snapshot": {"symbol": "X", "history": _HIST},
 }
-_MATCHING_FIRE = {"symbol": "X", "side": "long", "ts": "2026-06-07T22:00:30+00:00"}
+_MATCHING_FIRE = {"symbol": "X", "side": "long", "ts": "2026-06-07T23:00:30+00:00"}
 
 
 @_pytest.mark.asyncio
 async def test_on_bar_dedup_one_entry_per_closed_bar(tmp_path):
-    """같은 마감봉엔 한 번만 진입 (재진입 폭주 방지). 게이트 fail-open."""
+    """같은 마감봉엔 한 번만 진입 (재진입 폭주 방지). matching fire 제공."""
     st = _S(btc_trend_filter_enabled=False)
-    _isolated(st, tmp_path)  # fail-open
-    with _mock.patch.object(_Parent, "on_bar", _fake_buy):
+    _isolated(st, tmp_path, fires=[_MATCHING_FIRE])
+    with _mock.patch.object(_Parent, "on_bar", _fake_buy), \
+         _mock.patch.object(_S, "_fire_consumer_active", new=lambda *_: False):
         sig1 = await st.on_bar(_LIVE_CTX)
         sig2 = await st.on_bar(_LIVE_CTX)
     assert sig1.action == "buy"
@@ -280,11 +287,12 @@ async def test_on_bar_dedup_one_entry_per_closed_bar(tmp_path):
 async def test_daemon_fire_gate_suppresses_without_alert(tmp_path):
     """데몬이 발화 안 한 종목·봉 → 진입 차단 (XAG 8시 사고 = 알림없는 매수)."""
     st = _S(btc_trend_filter_enabled=False)
-    # store 에 다른 봉(21:00 close) fire 만 있음 → 현재 봉(22:00 close) 매칭 X
+    # store 에 다른 봉(22:00 close) fire 만 있음 → 현재 봉(23:00 close) 매칭 X
     _isolated(st, tmp_path, fires=[
-        {"symbol": "X", "side": "long", "ts": "2026-06-07T21:00:30+00:00"},
+        {"symbol": "X", "side": "long", "ts": "2026-06-07T22:00:30+00:00"},
     ])
-    with _mock.patch.object(_Parent, "on_bar", _fake_buy):
+    with _mock.patch.object(_Parent, "on_bar", _fake_buy), \
+         _mock.patch.object(_S, "_fire_consumer_active", new=lambda *_: False):
         sig = await st.on_bar(_LIVE_CTX)
     assert sig.action == "hold" and "no_daemon_fire" in sig.reason
 
@@ -294,7 +302,8 @@ async def test_daemon_fire_gate_allows_with_matching_alert(tmp_path):
     """데몬이 이 종목·이 봉 발화함 → 진입 허용 (알림==거래)."""
     st = _S(btc_trend_filter_enabled=False)
     _isolated(st, tmp_path, fires=[_MATCHING_FIRE])
-    with _mock.patch.object(_Parent, "on_bar", _fake_buy):
+    with _mock.patch.object(_Parent, "on_bar", _fake_buy), \
+         _mock.patch.object(_S, "_fire_consumer_active", new=lambda *_: False):
         sig = await st.on_bar(_LIVE_CTX)
     assert sig.action == "buy"
 
@@ -305,7 +314,8 @@ async def test_gate_suppress_does_not_record_dedup_retries(tmp_path):
     st = _S(btc_trend_filter_enabled=False)
     _isolated(st, tmp_path)  # 처음엔 fail-open... 아니라 차단 케이스로
     st._get_fire_store = lambda: _FakeFireStore([])  # fire 없음 → 차단
-    with _mock.patch.object(_Parent, "on_bar", _fake_buy):
+    with _mock.patch.object(_Parent, "on_bar", _fake_buy), \
+         _mock.patch.object(_S, "_fire_consumer_active", new=lambda *_: False):
         sig1 = await st.on_bar(_LIVE_CTX)              # 차단 (no_daemon_fire)
         assert sig1.action == "hold"
         st._get_fire_store = lambda: _FakeFireStore([_MATCHING_FIRE])  # store 갱신
@@ -316,10 +326,11 @@ async def test_gate_suppress_does_not_record_dedup_retries(tmp_path):
 @_pytest.mark.asyncio
 async def test_reentry_persists_across_restart(tmp_path):
     """재시작(새 인스턴스)해도 dedup 디스크 복원 → 같은 봉 재매수 안 함."""
-    with _mock.patch.object(_Parent, "on_bar", _fake_buy):
-        st1 = _S(btc_trend_filter_enabled=False); _isolated(st1, tmp_path)
+    with _mock.patch.object(_Parent, "on_bar", _fake_buy), \
+         _mock.patch.object(_S, "_fire_consumer_active", new=lambda *_: False):
+        st1 = _S(btc_trend_filter_enabled=False); _isolated(st1, tmp_path, fires=[_MATCHING_FIRE])
         sig1 = await st1.on_bar(_LIVE_CTX)
-        st2 = _S(btc_trend_filter_enabled=False); _isolated(st2, tmp_path)
+        st2 = _S(btc_trend_filter_enabled=False); _isolated(st2, tmp_path, fires=[_MATCHING_FIRE])
         sig2 = await st2.on_bar(_LIVE_CTX)
     assert sig1.action == "buy"
     assert sig2.action == "hold"  # 재시작해도 같은 봉은 차단

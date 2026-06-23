@@ -130,12 +130,10 @@ except ImportError:
     # daemon-only 환경 (전략 코드 미배포) 안전 fallback. v3 set.
     _KST_HOURS_KSTHOURS: frozenset[int] = frozenset({1, 2, 3, 6, 7, 8, 23})
 
-# 2026-06-17 — production.yaml short-whitelist kst_entry_hours 와 동기화. 24h(stale)
-# → 오후 역알파 제외(13·14·16·17) + short_block(7) 반영한 실제 게이트. 알림이
-# 실제 진입과 일치하도록. production.yaml 변경 시 같이 갱신 (drift 주의).
-_KST_HOURS_SHORT_WL: frozenset[int] = frozenset(
-    {0, 1, 2, 3, 5, 6, 8, 9, 10, 11, 12, 15, 18, 19, 20, 21, 22, 23}
-)
+# 2026-06-23 — short-whitelist 24시각 전부 진입 + 7시차단 해제. 알림 "진입 예정"
+# 숏 표시도 전 시각 ✓ 로 동기 (production.yaml kst_entry_hours = 0..23, loop.py
+# short_block 기본 "" 와 일치). production.yaml 변경 시 같이 갱신 (drift 주의).
+_KST_HOURS_SHORT_WL: frozenset[int] = frozenset(range(24))
 # 진입 필터 임계 (트레이더 consumer 와 동일 — 알림이 실제 진입과 일치하도록).
 # env 로 트레이더와 함께 튜닝. 0 이면 해당 필터 비활성(표시 안 함).
 _MAX_VOL_PCT: float = float(os.environ.get("AIRBORNE_MAX_VOL_PCT", "5") or 5)
@@ -299,15 +297,18 @@ def _format_strategy_notice(*, side: str, kst_hour: int, symbol: str, history=No
         return None
     filt = _filter_block()
 
-    # kst-hours: bidir + KST gate + 변동성/모멘텀 + BTC trend(long)
-    # 무필터 토글 ON 이면 게이트/변동성/모멘텀/btc 우회 → 항상 진입 예정.
-    if _no_entry_filters():
+    # kst-hours: LONG 전용(2026-06-23) + KST gate(롱·숏 둘 다 양수 시각) + 변동성/
+    # 모멘텀 + BTC trend. SHORT 는 미지원(short-whitelist 가 24h 담당).
+    # 무필터 토글 ON 이어도 side(SHORT 미지원) 제약은 유지.
+    if is_short:
+        kst_line = "❌ SHORT 미지원 (롱 전용 전략)"
+    elif _no_entry_filters():
         kst_line = "✅ 진입 예정 (무필터)"
     elif not in_kst4:
-        kst_line = f"❌ KST {kst_hour}시 — 게이트 외 (매매 {hours_label}시만)"
+        kst_line = f"❌ KST {kst_hour}시 — 게이트 외 (롱 매매 {hours_label}시만)"
     elif filt is not None:
         kst_line = filt
-    elif side.lower() == "long" and _BTC_DOWNTREND_STATE is True:
+    elif _BTC_DOWNTREND_STATE is True:
         kst_line = f"❌ BTC 하락추세 LONG 차단 ({_BTC_DOWNTREND_REASON or 'downtrend'})"
     else:
         kst_line = "✅ 진입 예정"
@@ -329,7 +330,7 @@ def _format_strategy_notice(*, side: str, kst_hour: int, symbol: str, history=No
 
     return (
         "🤖 봇 진입 가능성:\n"
-        f"   • kst-hours (양방향): {kst_line}\n"
+        f"   • kst-hours (롱 전용): {kst_line}\n"
         f"   • short-whitelist (숏 전용): {wl_line}"
     )
 

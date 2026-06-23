@@ -109,20 +109,22 @@ class TestInheritance:
         assert s.shorts_allowed is True
 
     def test_19_hour_gate(self) -> None:
+        """ClassVar 기본값은 19h set. production.yaml 은 kwarg 로 24h override.
+        소스 ClassVar 그대로 보존 확인 (orchestra가 ctor kwarg로 덮어씀)."""
         s = LiveAirborneShortWhitelistV1()
+        # ClassVar 기본값 = 19h set (_KST_HOURS_19)
         expected = frozenset(
             {0, 1, 2, 3, 5, 9, 10, 11, 12, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23}
         )
         assert s.kst_entry_hours == expected
-        # train_PF<1 시간 제외 확인
-        for excluded in (4, 6, 7, 8, 13):
-            assert excluded not in s.kst_entry_hours
+        # production override 확인: kwarg 로 24h 전부 넘기면 반영됨
+        s24 = LiveAirborneShortWhitelistV1(kst_entry_hours=list(range(24)))
+        assert s24.kst_entry_hours == frozenset(range(24))
 
     def test_parent_classvars_not_polluted(self) -> None:
-        # 부모 kst-hours gate v3 보존 (#375 이후 {1,2,3,5,6,7,8,23}).
-        # 이전엔 {8,11,16,22} 단정 → #375 부터 stale, #380 에서 정정.
+        # 부모 kst-hours gate v3 보존 (2026-06-23 갱신 {1,3,5,7,9,14,18,21,22,23}).
         assert LiveAirborneBbReversalKstHours.kst_entry_hours == frozenset(
-            {1, 2, 3, 5, 6, 7, 8, 23}
+            {1, 3, 5, 7, 9, 14, 18, 21, 22, 23}
         )
         # 부모 morning 6-hour gate 보존
         assert LiveAirborneBbReversalKstMorning.kst_entry_hours == frozenset(
@@ -225,13 +227,17 @@ class TestSideFilter:
 
 
 class TestTimeGate:
+    """short-whitelist ClassVar 기본값 = 19h set. 제외: {4,6,7,8,13}.
+    production.yaml 은 ctor kwarg 로 24h override."""
+
     @pytest.mark.parametrize("utc_hour, kst_hour", [
-        (23, 8),    # KST 8 → train PF<1 시간이라 차단
-        (21, 6),    # KST 6 → 차단
-        (22, 7),    # KST 7 → 차단
+        (23, 8),    # KST 8  → ClassVar 기본 19h 에서 차단
+        (21, 6),    # KST 6  → 차단
+        (22, 7),    # KST 7  → 차단
         (4, 13),    # KST 13 → 차단
     ])
     def test_excluded_hours_return_hold(self, utc_hour, kst_hour) -> None:
+        """ClassVar 기본 19h set 기준 — 제외 시각은 time_filter 차단."""
         s = LiveAirborneShortWhitelistV1()
         history = _short_fire_frame_at_utc(f"2026-01-02T{utc_hour:02d}:00:00")
         sig = _run(s, _ctx(history))
@@ -244,9 +250,10 @@ class TestTimeGate:
         (3, 12),    # KST 12 → 19h gate 통과
         (9, 18),    # KST 18 → 통과
         (11, 20),   # KST 20 → 통과
-        (15, 0),    # KST 0 → 통과
+        (15, 0),    # KST 0  → 통과
     ])
     def test_included_hours_pass_gate(self, utc_hour, kst_hour) -> None:
+        """ClassVar 기본 19h set 기준 — 포함 시각은 time_filter 차단 없음."""
         s = LiveAirborneShortWhitelistV1()
         history = _short_fire_frame_at_utc(f"2026-01-02T{utc_hour:02d}:00:00")
         sig = _run(s, _ctx(history))

@@ -44,7 +44,15 @@ from backtest.strategies.live_airborne_bb_reversal_kst_morning import (
 # ⚠️ CAVEAT: 13일 in-sample 선정 — 5y bench 미검증이며 5y hourly 분석은
 # 다른 시각({8,11,16,22})을 선호. hour-of-day 알파가 윈도우마다 불안정 →
 # 과적합 위험. 운영자 직접 판단으로 적용, 5y walk-forward 검증 전까지 모니터링 필요.
-_KST_TOP_HOURS_V3: frozenset[int] = frozenset({1, 2, 3, 5, 6, 7, 8, 23})
+#
+# 2026-06-23 (v4 — long-only gate): 이 전략은 이제 **롱 전용**. 게이트 시각은
+# "롱·숏 둘 다 양수" 인 시각만 — 한 달(05-24~06-23) 에어본 신호 sim(+2%/-1%,
+# 게이트·수동·슬립 無, n=2763) 기준 롱net>0 AND 숏net>0 인 10개 시각. 옛 v3
+# {1,2,3,5,6,7,8,23} 은 2·6·8(롱 약/음수)을 포함하고 14(롱 PF 5.55!)·9·18·20·21
+# 을 놓쳤음. 숏은 short-whitelist 전략이 24h 전부 커버하므로 여기선 롱만 본다.
+# 데몬 알림(_KST_HOURS_KSTHOURS)도 이 상수를 import 해 동기. production.yaml 도
+# 동일 override. 롤백: 옛 set 복원.
+_KST_TOP_HOURS_V3: frozenset[int] = frozenset({1, 3, 5, 7, 9, 14, 18, 21, 22, 23})
 
 # BTC trend filter (2026-06-05) — airborne 이 시장 전체 하락추세에서 LONG 잡는
 # 사고 차단. 6/04 incident: bb-reversal 보유 14 LONG 종목이 새벽~오전에 전량
@@ -108,6 +116,11 @@ class LiveAirborneBbReversalKstHours(LiveAirborneBbReversalKstMorning):
     BTC trend filter 는 default 활성 (instance kwarg ``btc_trend_filter_enabled``
     로 끄기 가능 — 옛 동작 byte-identical 회귀 가드용).
     """
+
+    # 2026-06-23 — 롱 전용. 부모(morning)의 shorts_allowed=True 를 override 해 숏 차단.
+    # 숏은 short-whitelist 전략(24시각)이 전담. fire consumer·on_bar 양쪽이 이 플래그로
+    # side 를 {long} 으로 제한.
+    shorts_allowed: ClassVar[bool] = False
 
     # ClassVar 명시 — completeness check (static AST scan) 가 inheritance 추적
     # 안 하므로 stop/TP 도 명시. 값은 부모와 동일 (instance ctor 가 override 가능).
@@ -463,8 +476,9 @@ class LiveAirborneBbReversalKstHours(LiveAirborneBbReversalKstMorning):
             _sym = _snap.get("symbol") if isinstance(_snap, dict) else None
             if _hist is None or _sym is None:
                 return Signal(action="hold", size=0.0, reason="consume_no_data")
+            _sides = {"long", "short"} if self.shorts_allowed else {"long"}
             sig = self._consume_daemon_fire_on_bar(
-                ctx, closed_ts, _hist, _sym, {"long", "short"},
+                ctx, closed_ts, _hist, _sym, _sides,
             )
             if (self.btc_trend_filter_enabled
                     and getattr(sig, "action", None) == "buy"

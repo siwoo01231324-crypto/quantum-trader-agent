@@ -1552,8 +1552,11 @@ def _start_airborne_fire_consumer(
 
     freshness = float(os.environ.get("AIRBORNE_FIRE_FRESHNESS_SEC", "600") or 600)
     long_freshness = float(os.environ.get("AIRBORNE_LONG_FRESHNESS_SEC", "90") or 90)
-    # 숏 차단 시간대 — KST 07시 기본 (유럽장 상승추세 가드, 2026-06-15). csv.
-    _sbh_env = os.environ.get("AIRBORNE_SHORT_BLOCK_HOURS", "7")
+    # 숏 차단 시간대 — 2026-06-23 기본값 "7" → "" (차단 없음). short-whitelist 가
+    # 이제 24시각 전부 숏 진입(하나도 안 놓침) 방침이라 7시 차단 해제. 한 달 신호
+    # sim 에서 7시 숏 PF 1.36(+7.6%)로 양수 — 옛 07시 가드(2026-06-15 유럽장)는
+    # 그날 표본 기반이라 폐기. 롤백/재활성: env AIRBORNE_SHORT_BLOCK_HOURS=7.
+    _sbh_env = os.environ.get("AIRBORNE_SHORT_BLOCK_HOURS", "")
     short_block_hours = frozenset(
         int(h) for h in _sbh_env.split(",") if h.strip().isdigit()
     )

@@ -142,9 +142,10 @@ def _new_orchestrator() -> AsyncStrategyOrchestrator:
 # Step ④/⑤ — KST gate ON 시각엔 BUY emit, OFF 시각엔 hold
 # ──────────────────────────────────────────────────────────────────────────
 
-# KST 8:00 = UTC 23:00 → gate v3 ∈ {1,2,3,5,6,7,8,23} 에 포함
-_GATE_ON_LAST_UTC = "2026-05-30T23:00:00"
-# KST 13:00 = UTC 04:00 → gate v3 미포함
+# 2026-06-23: 롱 게이트 v4 = {1,3,5,7,9,14,18,21,22,23} (kst-hours 롱 전용).
+# KST 7:00 = UTC 22:00 → 게이트 ON (7 ∈ v4). (옛 KST8 은 v4 에서 제외됨)
+_GATE_ON_LAST_UTC = "2026-05-30T22:00:00"
+# KST 13:00 = UTC 04:00 → 게이트 OFF (13 ∉ v4)
 _GATE_OFF_LAST_UTC = "2026-05-30T04:00:00"
 
 # airborne 의 universe 안에 들어있는 symbol — top-30 의 BTCUSDT 는 항상 포함.
