@@ -211,6 +211,47 @@ def test_entry_ts_resets_on_flat_reentry():
     assert mgr.evaluate("X", Decimal("100.0"), _T0 + timedelta(seconds=1820)) == []
 
 
+# ── 진입측 _entry_ts stamp (2026-06-23, 네이티브청산 churn 근본 fix) ──────────
+# register_entry_override(= orch._on_entry, 모든 진입마다 호출)가 _entry_ts 를
+# overwrite. #466(청산측 pop)이 못 잡는 거래소 네이티브 TP/SL 청산 경로를 진입측
+# 에서 차단 (GRAM 15:01 숏 네이티브청산 → 18:01 롱 재진입 held_sec=10812 사고).
+
+
+def test_register_entry_override_overwrites_stale_entry_ts():
+    """진입 훅이 stale _entry_ts 를 now 로 overwrite (setdefault 미적용)."""
+    mgr, _s, _p = _mgr(side="sell", entry=100.0, max_hold_sec=3600.0)
+    stale = _T0 - timedelta(seconds=99999)
+    mgr._entry_ts[("sid", "X")] = stale          # 네이티브청산으로 안 지워진 옛 값
+    mgr.register_entry_override("sid", "X", stop_loss_pct=0.005, take_profit_pct=0.011)
+    stamped = mgr._entry_ts[("sid", "X")]
+    assert stamped != stale, "진입 훅이 stale entry_ts 를 덮어써야 함"
+    now = datetime.now(timezone.utc)
+    assert abs((now - stamped).total_seconds()) < 60, "now 근처로 stamp"
+
+
+def test_register_entry_override_stamps_even_with_no_override():
+    """override pct 전부 None(정적 policy) 이어도 _entry_ts 는 stamp (early-return 前)."""
+    mgr, _s, _p = _mgr(side="sell", entry=100.0, max_hold_sec=3600.0)
+    mgr._entry_ts.clear()
+    mgr.register_entry_override("sid", "X")       # 전부 None → override 미등록
+    assert ("sid", "X") in mgr._entry_ts, "override 없어도 _entry_ts stamp"
+
+
+def test_native_close_reentry_no_instant_timeout():
+    """GRAM repro: 네이티브청산으로 entry_ts 잔존 → 진입 훅이 재진입 시 리셋 → 즉시청산 X.
+
+    봇 청산발화 없이 (= 네이티브 TP/SL) entry_ts 가 옛 값으로 남은 상태에서
+    재진입하면, 진입 훅(register_entry_override)이 _entry_ts 를 now 로 덮어쓰므로
+    held_sec 거대 계산이 안 일어남.
+    """
+    mgr, _s, _p = _mgr(side="sell", entry=100.0, max_hold_sec=3600.0)
+    # 3시간 전 entry_ts 가 잔존(네이티브청산은 pop 안 함) → 재진입 훅 호출.
+    mgr._entry_ts[("sid", "X")] = datetime.now(timezone.utc) - timedelta(seconds=10812)
+    mgr.register_entry_override("sid", "X", stop_loss_pct=0.005, take_profit_pct=0.011)
+    # 진입 직후 sweep — fresh entry_ts(now) 라 held_sec≈0 → 즉시청산 안 됨.
+    assert mgr.sweep_timeouts(datetime.now(timezone.utc), lambda s: None) == []
+
+
 # ── per-strategy max_hold 오버라이드 (2026-06-18, MA크로스 time-stop 면제) ──
 # 핵심: airborne(미선언)은 global 1h 그대로(영향 0), MA크로스류만 면제/별도.
 
