@@ -89,6 +89,9 @@ def test_production_yaml_registers_all_strategies():
         # Live-scanner — airborne v1.2 bidir + KST 4 시각 게이트 (#327, v0.6.5):
         # 5y bench PF 1.081 / Sharpe 0.96 / exp +0.163%. spec status=active.
         "live-airborne-bb-reversal-kst-hours",
+        # Short-whitelist (#380, active) — 숏 전용, 24시각 전부(2026-06-23).
+        # kst-hours(롱)와 짝 운영. 이전엔 expected set 누락으로 회귀실패였음.
+        "live-airborne-short-whitelist-v1",
         # Smoke 통로 검증 (#236, env-gated — hold only without SMOKE_TEST_ENABLED)
         "smoke-1m-roundtrip-kis",
         "smoke-1m-roundtrip-binance",

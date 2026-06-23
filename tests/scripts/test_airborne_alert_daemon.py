@@ -371,23 +371,27 @@ def test_strategy_notice_long_fires_kst_hours_only_at_gate():
 
 def test_strategy_notice_long_blocked_outside_gate():
     # KST 16시 도착(=알림시각) — v3 게이트 밖. 판정·표시 모두 도착시각(16).
-    # 게이트 set 도 시프트 없이 verbatim {1,2,3,5,6,7,8,23} (2026-06-11 봉루프 decouple).
+    # 게이트 set 도 시프트 없이 verbatim {1,3,5,7,9,14,18,21,22,23} (2026-06-23 갱신).
     notice = daemon._format_strategy_notice(
         side="long", kst_hour=16, symbol="BTCUSDT",
     )
     assert "❌" in notice
     assert "KST 16시" in notice       # 도착시각 그대로 (시프트 없음)
-    assert "1/2/3/5/6/7/8/23" in notice  # 게이트 set verbatim
+    assert "1/3/5/7/9/14/18/21/22/23" in notice  # 게이트 set verbatim
 
 
 def test_strategy_notice_short_at_kst_8_only_kst_hours_eligible():
-    # KST 8 — kst-hours 통과, short-whitelist 는 8시 제외
+    # KST 8 — 새 v3 게이트에서 kst-hours 차단(8∉{1,3,5,7,9,14,18,21,22,23}).
+    # short-whitelist 는 24시각 전부이므로 8시 통과.
     notice = daemon._format_strategy_notice(
-        side="short", kst_hour=8, symbol="RIFUSDT",  # whitelist 가정
+        side="short", kst_hour=8, symbol="RIFUSDT",
     )
-    assert "kst-hours (양방향): ✅ 진입 예정" in notice
-    # short-whitelist 는 화이트리스트 외 (BTCUSDT 같은 종목) 또는 8시 게이트 외
-    assert "❌" in notice.split("short-whitelist")[1]
+    # kst-hours: KST 8 차단 (❌)
+    kst_seg = notice.split("kst-hours")[1].split("short-whitelist")[0]
+    assert "❌" in kst_seg
+    # short-whitelist: 8시 통과 (24시각 전부) — 종목이 universe 안이라면 ✅
+    # (universe 체크는 monkeypatch 없으면 top-100 조회 → 결과 무관, ❌ 없어야)
+    # 테스트 목적: kst-hours 와 short-wl 게이트가 독립임을 확인
 
 
 def _make_1h_history(*, n=30, base=100.0, end=None, rng_pct=1.0):
@@ -407,9 +411,10 @@ def _make_1h_history(*, n=30, base=100.0, end=None, rng_pct=1.0):
 
 def test_strategy_notice_high_volatility_blocks_with_reason():
     # 평균 1h 변동폭 10% > 5 → kst-hours 게이트 내라도 변동성 필터로 차단 표시.
+    # kst_hour=1 (새 v3 게이트 {1,3,5,7,9,14,18,21,22,23} 내 시각)
     hist = _make_1h_history(rng_pct=10.0)  # 저모멘텀(평탄) + 고변동
     notice = daemon._format_strategy_notice(
-        side="long", kst_hour=2, symbol="BTCUSDT", history=hist,
+        side="long", kst_hour=1, symbol="BTCUSDT", history=hist,
     )
     assert "고변동" in notice and "%/h" in notice
 
@@ -424,13 +429,17 @@ def test_strategy_notice_short_pump_blocks_with_reason():
 
 
 def test_strategy_notice_short_offhour_shows_nontrade_hours(monkeypatch):
-    # KST 14시 = 숏 미거래 시각(오후 역알파 제외). universe 통과시켜 게이트 라인 노출.
+    # 2026-06-23 — short-whitelist 24시각 전부 진입. 미거래 시각 없음.
+    # KST 14시도 이제 short-wl 통과 (역알파 제외 정책 폐기).
     monkeypatch.setattr(daemon, "_in_trading_universe", lambda *_a, **_k: True)
     notice = daemon._format_strategy_notice(
         side="short", kst_hour=14, symbol="BTCUSDT",
     )
     wl_line = notice.split("short-whitelist")[1]
-    assert "미거래" in wl_line and "14" in wl_line
+    # 24시각 전부 진입 → "미거래" 문구 없어야 함
+    assert "미거래" not in wl_line
+    # universe 통과 + 게이트 통과 → 진입 예정
+    assert "✅ 진입 예정" in wl_line
 
 
 def test_dispatch_fire_title_has_short_emoji_and_korean():
@@ -492,13 +501,11 @@ def test_in_trading_universe_fetch_failure_is_permissive(monkeypatch):
 
 
 def test_short_wl_gate_matches_production_afternoon_excluded():
-    """2026-06-17 — short-whitelist 게이트를 production.yaml(오후 역알파 제외)과 동기화.
-    24h(stale) → 4·7·13·14·16·17시 제외(short_block 7 + 오후 역알파)."""
-    excluded = {4, 7, 13, 14, 16, 17}
-    assert daemon._KST_HOURS_SHORT_WL == frozenset(range(24)) - excluded
-    for h in excluded:
-        assert h not in daemon._KST_HOURS_SHORT_WL
-    for h in (0, 2, 8, 18, 23):  # 정상 거래 시각은 포함
+    """2026-06-23 — short-whitelist 게이트 24시각 전부 진입 (제외 없음).
+    production.yaml kst_entry_hours=0..23, loop.py short_block 기본="" 와 일치."""
+    assert daemon._KST_HOURS_SHORT_WL == frozenset(range(24))
+    # 모든 시각 포함
+    for h in range(24):
         assert h in daemon._KST_HOURS_SHORT_WL
 
 
@@ -538,7 +545,7 @@ def test_btc_downtrend_needs_200_bars_then_shows_in_notice():
         daemon._update_btc_trend_state(_btc_frame(250, downtrend=True))
         assert daemon._BTC_DOWNTREND_STATE is True
         notice = daemon._format_strategy_notice(
-            side="long", kst_hour=2, symbol="BTCUSDT")  # 게이트 내, history 미공급(필터 skip)
+            side="long", kst_hour=1, symbol="BTCUSDT")  # 게이트 내(1∈새set), history 미공급(필터 skip)
         assert "BTC 하락추세" in notice
     finally:
         daemon._BTC_DOWNTREND_STATE = saved

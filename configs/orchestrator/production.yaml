@@ -239,6 +239,13 @@ strategies:
       # 2배(-10% ROE)라 동시보유 캡과 같이 봐야. 23일·86% 하락장 샘플, 5y 미검증. R/R 1:2.
       # stop 청산 직후 같은 (sid, symbol) 재진입 15분 차단 — churn 방지.
       cooldown_after_stop_sec: 900
+      # 2026-06-23 — 롱 전용 게이트(롱·숏 둘 다 양수인 시각만). 이 전략은 consumer
+      # 에서 이미 long-only({long}); 숏은 short-whitelist 가 24시각 전부 담당.
+      # 시각 = 한 달(5/24~6/23) 에어본 신호 sim(+2%/-1%, 게이트·수동·슬립 無, n=2763)
+      # 에서 롱net>0 AND 숏net>0 인 10개. 옛 v3 {1,2,3,5,6,7,8,23} 은 2·6·8(롱
+      # 약/음수) 포함 + 14(롱 PF 5.55)·9·18·20·21 누락이었음. 롤백: 본 줄 제거(클래스
+      # 기본 _KST_TOP_HOURS_V3 사용) 또는 옛 set 으로 복원.
+      kst_entry_hours: [1, 3, 5, 7, 9, 14, 18, 21, 22, 23]
 
   # ── live-airborne-short-whitelist-v1 (2026-06-02, PR #341+#343 후속) ─────────
   # SHORT-only airborne + 21종 동적 whitelist + KST 19시간 게이트.
@@ -286,14 +293,13 @@ strategies:
       # 비용에서 +2/-1 우위(수수료 희석). R/R 1:2. 손실 2배라 동시보유 캡 병행 권장.
       retrace_ratio: 0.4         # base airborne (RETRACE_RATIO) — 알림과 동일 포착
       atr_body_mult: 0.6         # base airborne (DEFAULT_ATR_BODY_MULT_V11)
-      # 2026-06-14 오후 역알파 시간대 제외 — 최근 22일(5/24~6/14) airborne SHORT
-      # sim 시간대별 PF: 14시 PF 0.18(WR 12%, net -9.14%) 명백한 역알파,
-      # 13/16/17/04시도 net 음수(PF 0.92~1.07). {4,13,14,16,17} 제외 → 19시간 진입.
-      # ⚠️ band-aid 주의: 본 전략 spec 의 5y bench 는 "TP1%/SL0.5% 에선 시간게이트가
-      # PF<1 근본결함(0.5% 노이즈 손절)을 못 살림"(spec L89) 으로 기록 — 근본해결은
-      # TP/SL 재설계(Hard-OOS 6%/3%). 본 trim 은 #380 라이브누적우선 방침하에서
-      # 명백 역알파(특히 14시)만 우선 차단하는 모니터링 조치. (24h→19h)
-      kst_entry_hours: [0, 1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 15, 18, 19, 20, 21, 22, 23]
+      # 2026-06-23 — 24시각 전부 진입 (시간게이트 제거). short-whitelist 는 이제
+      # "숏은 하나도 안 놓친다" 전담: 한 달(5/24~6/23) 에어본 신호 sim(+2%/-1%,
+      # n=1287 숏)에서 숏은 PF 1.54 로 대부분 시각 양수 — 시각 제한이 승자를 놓침.
+      # 시각 선별(롱·숏 둘 다 양수 시각)은 kst-hours 전략(롱 전용)이 담당하고,
+      # 숏은 여기서 전 시각 커버. 옛 19h trim({4,13,14,16,17} 제외)은 폐기.
+      # 롤백: 아래 리스트를 옛 19h 로 복원.
+      kst_entry_hours: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
       cooldown_after_stop_sec: 900
 
   # cs-bb-macd-kr 는 5y bench Sharpe -0.32 → status: inactive, production 미등록.

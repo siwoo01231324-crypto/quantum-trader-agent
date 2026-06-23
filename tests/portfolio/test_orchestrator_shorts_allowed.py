@@ -109,8 +109,8 @@ async def test_bidir_buy_reduce_only_remains_false():
 
 
 def test_airborne_strategy_declares_shorts_allowed():
-    """LiveAirborneBbReversalKstMorning + 자식 KstHours 가 shorts_allowed=True
-    명시해야 함 — 자식이 부모 ClassVar 상속받는지도 검증."""
+    """Morning(bidir base) = shorts_allowed True. 2026-06-23: 자식 KstHours 는
+    롱 전용 전환 → shorts_allowed=False override (숏은 short-whitelist 가 담당)."""
     from backtest.strategies.live_airborne_bb_reversal_kst_morning import (
         LiveAirborneBbReversalKstMorning,
     )
@@ -119,4 +119,5 @@ def test_airborne_strategy_declares_shorts_allowed():
     )
 
     assert LiveAirborneBbReversalKstMorning.shorts_allowed is True
-    assert LiveAirborneBbReversalKstHours.shorts_allowed is True
+    # 2026-06-23 — kst-hours 롱 전용: 부모 True override → False.
+    assert LiveAirborneBbReversalKstHours.shorts_allowed is False

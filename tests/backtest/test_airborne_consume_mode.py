@@ -75,11 +75,14 @@ async def test_consume_dedup_once_per_bar(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_consume_kst_hours_enters_daemon_short(tmp_path, monkeypatch):
+async def test_consume_kst_hours_blocks_daemon_short(tmp_path, monkeypatch):
+    """2026-06-23 — kst-hours 는 롱 전용(shorts_allowed=False). 숏 발화 차단.
+
+    숏은 short-whitelist 전략(24시각)이 전담. kst-hours 는 롱만."""
     monkeypatch.setenv("AIRBORNE_CONSUME_DAEMON_FIRES", "1")
     kh = KH(btc_trend_filter_enabled=False); _setup(kh, tmp_path, _SHORT_FIRE)
     sig = await kh.on_bar(_CTX)
-    assert sig.action == "sell"
+    assert sig.action == "hold"  # 롱 전용 → 숏 미진입
 
 
 @pytest.mark.asyncio
