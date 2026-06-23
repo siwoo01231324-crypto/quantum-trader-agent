@@ -344,6 +344,45 @@ def test_no_entry_filters_default_off_keeps_gate(monkeypatch):
     assert asyncio.run(c.sweep_once()) == 0  # 게이트 차단 = 기본 동작
 
 
+# ── cross-airborne 봉 dedup (2026-06-23, 순차 재진입 차단) ──────────────────────
+# 한 종목-봉 fire 는 airborne 전 전략 통틀어 1회만 진입. A 진입·청산 후 B 가 같은
+# fire 재진입하던 사고(DEXE) 차단. #471(_live_entered 동시보유)을 봉 단위로 보완.
+
+
+def test_cross_airborne_bar_dedup_blocks_second_strategy_same_fire():
+    """같은 fire(종목-봉)를 두 전략이 순차 진입 못 함 — A 청산 후에도 B 차단."""
+    ts = _recent_iso(minutes_ago=1)
+    h = int(pd.Timestamp(ts).tz_convert("Asia/Seoul").floor("1h").hour)
+    orch = _FakeOrch()
+    # 두 airborne spec — 같은 hour 게이트, 같은 fire 를 둘 다 받음.
+    c, _ = _consumer(
+        _FakeStore([_fire("DEXEUSDT", "short", ts)]), orch,
+        [_spec(sid="live-airborne-a", hours=frozenset({h})),
+         _spec(sid="live-airborne-b", hours=frozenset({h}))],
+    )
+    entered = asyncio.run(c.sweep_once())
+    assert entered == 1, "같은 종목-봉은 한 전략만 진입 (cross-airborne 봉 dedup)"
+    assert len(orch.calls) == 1
+
+
+def test_cross_airborne_bar_dedup_persists_across_sweeps():
+    """A 진입(첫 sweep) 후 다음 sweep 에서 B 가 같은 fire 재진입 시도해도 차단."""
+    ts = _recent_iso(minutes_ago=1)
+    h = int(pd.Timestamp(ts).tz_convert("Asia/Seoul").floor("1h").hour)
+    store = _FakeStore([_fire("DEXEUSDT", "short", ts)])
+    orch = _FakeOrch()
+    c, _ = _consumer(
+        store, orch,
+        [_spec(sid="live-airborne-a", hours=frozenset({h})),
+         _spec(sid="live-airborne-b", hours=frozenset({h}))],
+    )
+    assert asyncio.run(c.sweep_once()) == 1   # 첫 sweep — a 진입, _entered_bar 마크
+    # 같은 fire 가 store 에 남아 다음 sweep 에 재평가돼도 _entered_bar 가 차단.
+    # (consumer 가 _entered_bar 를 보유 → A 청산 여부와 무관하게 봉 단위 1회.)
+    again = asyncio.run(c.sweep_once())        # 두번째 sweep — 같은 fire 재평가
+    assert again == 0, "같은 종목-봉 fire 는 다음 sweep 에도 재진입 차단(순차)"
+
+
 def test_btc_downtrend_blocks_long_not_short():
     ts = _recent_iso(minutes_ago=1)
     h = int(pd.Timestamp(ts).tz_convert("Asia/Seoul").floor("1h").hour)
