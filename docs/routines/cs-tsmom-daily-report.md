@@ -7,7 +7,7 @@ target: Claude Code Routines
 schedule: "daily 23:55 KST"
 owner: siwoo
 created: 2026-05-21
-last_updated: 2026-06-19
+last_updated: 2026-06-25
 tags:
 - routine
 - daily-report
@@ -129,6 +129,20 @@ CLI:
   컨테이너) — 사용자 의사결정 보조용 채널. 매일 적중률을 분석해 신호 품질을
   모니터링한다. `cand-c-2026-05-20-live-breakout-with-atr-stop` 같은 자동 전략
   fill 과 혼동하지 말 것.
+  > ✅ **소스는 영속 store(`logs/airborne_fires/history.jsonl`) — 종일 전수**.
+  > 과거 export 가 ephemeral `docker logs` 만 읽어 컨테이너 재생성/rotation 시
+  > 그 이후 발화만 잡혀 "저녁 100% 집중" 잘림 착시가 났던 버그는 수정됨
+  > (2026-06-25). fire 가 특정 시간대에만 몰려 보이면 컨테이너 재생성 의심 —
+  > auto_fills 분포(종일)와 대조해 검증.
+- `airborne_sim` — **airborne fire 적중 sim 집계** (dashboard 영속 캐시
+  `logs/airborne_fires/sim_cache.jsonl` 에서 export 가 미리 계산해 넣음). 필드:
+  `ok`, `rule`(적용 룰 문자열), `fires_total`/`fires_simulated`/`fires_uncached`
+  (커버리지), `n`/`tp`/`sl`/`sl_first`/`timeout`, `win_rate`(0-1), `sum_pct`(gross),
+  `net_pct`(fee 차감), `pf`, `mean_pct`, `by_side`{long/short}, `by_kst_bucket`[].
+  **규칙 6 의 적중 분석은 이 필드를 그대로 읽어 표로 옮긴다 — 직접 klines fetch +
+  sim 하지 말 것** (클라우드는 Binance proxy 403 으로 어차피 실패, 그래서 N/A 였음).
+  `ok:false` 거나 `fires_simulated=0` 이면 "적중 sim 데이터 없음 (캐시 미수록)"
+  1줄로 넘긴다.
 
 JSON 파일이 없거나 비어있으면 PR 만들지 말고 종료.
 
@@ -171,6 +185,11 @@ JSON 파일이 없거나 비어있으면 PR 만들지 말고 종료.
 - **언제 어떤 전략이 진입했나**: auto_signals.reason + auto_fills 시각
 - **익절/손절 여부**: 거래소 ledger 의 포지션별 netProfit (방향·금액 신뢰). 일별
   합·승패·PF 는 ledger 기준.
+- **방향별(long/short) 분해 — 필수**: `auto_pnl_ledger.positions` 를 `side` 로 묶어
+  long·short 각각 n / 승·패 / net 합 / PF 를 낸다 (klines 불필요, 항상 산출 가능).
+  손실/이익이 **한 방향에 쏠려 있으면** 그게 시간대보다 1차 변수다 — 명시하고 "내일을
+  위한 한 줄"에 반영. (2026-06-24 실측: 롱 net −21.84/PF0.47 vs 숏 +1.62/PF1.06 —
+  손실 전액이 롱. airborne_sim.by_side 와 방향 결론이 일치하면 교차검증으로 강조.)
 - **잘한 점/못한 점**:
   - 익절: 전략 규율대로 stop_loss / take_profit 발동? entry timing 합리적?
   - 손절: 신호 자체가 noise? stop_loss_pct 너무 빡빡? 메타라벨러가 막았어야?
@@ -215,40 +234,37 @@ JSON 파일이 없거나 비어있으면 PR 만들지 말고 종료.
 지표명 / 우리 repo 의 spec md 경로 / 외부 URL — 정확히 알면).
 모르는 자료를 fabricate 금지 — "공식 docs 참조" 같은 안전한 추천 OK.
 
-### 규칙 6 — airborne 알림 적중 분석 (2026-05-26 추가)
-`airborne_fires` 가 비어있지 않으면 매일 적중률을 다음 룰로 시뮬레이션해 분석
-섹션에 포함한다.
+### 규칙 6 — airborne 알림 적중 분석 (2026-05-26 추가, 2026-06-25 sim 소스 전환)
 
-> ⚠️ **sim 룰은 *현재 라이브 룰*과 일치시켜라 (2026-06-17 widening 정정)**.
-> 라이브 청산 룰이 바뀌면 sim 도 따라간다 — sim 과 실거래를 비교하는 게 목적이므로.
-> **현재 라이브 = widening TP +2.0% / SL −1.0% / hold 1h (1시간봉 평가)** (STOP-FIRE
-> `sl_pct=0.01 tp_pct=0.02`). 아래 +1%/−0.5%/15m 은 widening 이전(~6/16)의 기존
-> default — 그날 입력 데이터의 라이브 룰을 따르고, 표 헤더에 실제 적용 룰을 명시할 것.
+`airborne_fires` 가 비어있지 않으면 적중 분석 섹션을 넣는다.
 
-**검증 룰** (~6/16 까지의 기존 default. PF 2.04 / win 51% — 2026-05-23~25 3일 검증):
-- 진입가 = `fire_close` (알림 시점 1h close)
-- TP = +1.0% / SL = -0.5% (LONG 기준; SHORT 는 부호 반전)
-- hold 기간 = 다음 15분봉 4개 (총 1h). 각 봉 high/low 가 TP/SL 닿는지 평가.
-- 한 봉 안에서 둘 다 닿으면 보수적으로 SL 우선 (SL_first)
-- 4봉 안에 둘 다 안 닿으면 4번째 봉 close 로 청산 (timeout)
-- 봉 데이터: Binance USDM Futures `/fapi/v1/klines?interval=15m`
+> ✅ **적중 수치는 `airborne_sim` 필드를 그대로 읽는다 — 직접 klines fetch·시뮬 금지**
+> (2026-06-25 전환). 클라우드 routine 은 Binance FAPI proxy 403 으로 봉을 못 받아
+> 적중 수치가 통째로 N/A 였다. 이제 **로컬 export 가 dashboard 영속 sim 캐시
+> (`logs/airborne_fires/sim_cache.jsonl`, 이미 Binance 봉으로 계산된 결과) 를 집계해
+> `airborne_sim` 으로 JSON 에 넣는다**. routine 은 그 필드를 표로 옮기기만 하면 된다.
+> `airborne_sim.rule` 에 그날 적용된 룰 문자열이 들어있으니 표 헤더에 그대로 명시.
+> `ok:false`/`fires_simulated=0` → "적중 sim 데이터 없음 (캐시 미수록)" 1줄로 끝.
+> ⚠️ 커버리지(`fires_simulated`/`fires_total`)가 100% 미만이면 표에 "sim N/M" 명시.
+> ⚠️ net%/PF 는 *알림 신호 자체* 의 sim 품질 — 실제 계좌 손익(ledger)과 별개임을 1줄로 구분.
 
-**시간대 컨텍스트** (3일 검증 결과 — 표본 짧으나 강한 패턴):
-- 00–06 KST 새벽: win 70%, PF 4.61 (최고)
-- 06–18 KST 오전·오후: win 54%, PF 2.0~2.4
-- **18–24 KST 저녁: win 23%, PF 0.56 (손실)** — 이 시간대 신호는 신뢰도 낮다는 가설
-- 첫 15분봉 안에서 96% 결판 (hold 30분으로 단축 가능)
+**`airborne_sim` → 표 매핑**:
+- 요약: `fires_total`/`fires_simulated`, `tp`/`sl`/`sl_first`/`timeout`, `win_rate`,
+  `net_pct`, `pf`, `mean_pct`.
+- 방향별: `by_side.long` / `by_side.short` (각 n/tp/sl/win_rate/sum_pct/pf). **롱·숏
+  PF 비대칭이 크면 강조** — 보통 손실의 1차 변수. ledger 방향 분해(규칙 4)와 교차검증.
+- 시간대별: `by_kst_bucket[]` (bucket/n/tp/sl/win_rate/sum_pct/pf) 4구간 표로.
 
-**분석 항목**:
-- 오늘 fire 개수 / TP / SL / timeout 분포
-- KST 시간대별 (4구간) win% + sum%
-- side 별 (long vs short) 통계
-- 종목별 top/bottom 3 (n≥2)
-- 어제·그제 누적과 비교 (가능하면)
-- 패턴 한 줄: "오늘 18-24 시간대 fire 3건 모두 SL — 가설 부합" 등
+**시간대 컨텍스트** (3일 검증 기준선 — 표본 짧음, 참고용):
+- 00–06 KST 새벽: 과거 win 70% / PF 4.6 (최고). | 06–18: win 54% / PF 2.0~2.4.
+- **18–24 KST 저녁: win 23% / PF 0.56 (손실)** — 저녁 신호 신뢰도 낮다는 가설.
+- 오늘 `by_kst_bucket` 가 이 기준선과 부합/이탈하는지 한 줄.
 
-분석은 정성적으로 짧게, 수치 표는 markdown table 로. 매일 누적되면 일주일치
-는 routine 이 직접 비교 가능.
+**분석 항목**: 위 3개 표 + 종목 다발 발화 상위(`airborne_fires` 빈도, n≥2) + 패턴 한 줄
+("저녁·롱이 손실 본체" 등) + 가능하면 어제·그제 누적 비교.
+
+분석은 정성적으로 짧게, 수치 표는 markdown table. (참고: net%/PF 는 합산 기반이라
+fee 차감률은 `airborne_sim.rule` 에 박혀 있음 — 보통 왕복 0.034%.)
 
 ### 규칙 7 — 잔고 검산 (bill 원장, 2026-06-19 추가)
 
@@ -297,11 +313,15 @@ airborne_fires 시뮬 결과(규칙 6)를 *현재 라이브에 적용 중인 필
 4. **게이트**: 게이트 *안* vs *밖* 시각의 win%/net 비교. 밖이 더 좋으면 "게이트
    재검토 플래그" + 어느 시각이 좋은지.
 
-**데이터** (sim klines fetch 재사용):
-- KST hour: fire `ts` 로 직접.
-- BTC 추세: Binance `BTCUSDT` 1h klines (EMA200 + 직전 24h 변화).
-- 모멘텀/변동성: 각 코인 1h klines (24h 변화% + 평균 `(high-low)/close`%).
-- 데이터 못 받으면 해당 필터 "데이터 부족 — 감사 skip".
+**데이터**:
+- **시간게이트 안/밖 비교**: `airborne_sim.by_kst_bucket` 의 구간별 win%/net 으로 한다
+  (klines 불필요). ⚠️ auto_fills 로 "게이트 밖 진입 N건" 을 세지 말 것 — 진입·청산 fill 이
+  섞여 있고(청산은 게이트 무관) 전략별 게이트 룰이 달라(bb-reversal 만 시각 제한,
+  short-whitelist 24h) confound 다. 정량 위반 판정 보류, 구간 win/net 패턴만 본다.
+- **BTC 추세 / 모멘텀 / 변동성**: BTC·코인 1h klines 가 필요한데 **클라우드 routine 은
+  Binance proxy 403 으로 못 받는다**. 입력 JSON 에 이 수치가 따로 없으면 해당 필터는
+  "데이터 부족(klines 차단) — 감사 skip" 으로 둔다. (사후 재구성 캐시 대상도 아님 —
+  그 시점 게이트 차단 여부는 별도 export 가 생기기 전까지 정량화 불가.)
 
 ⚠️ **단일일로 필터/게이트 바꾸지 말 것** — 7일 미만 누적은 "참고(표본 작음)" 명시.
 **5일+ 연속 같은 방향**(예: BTC롱차단이 5일째 TP 거름)일 때만 조정 신호로 제안.
@@ -324,10 +344,10 @@ loss_count: <outcome=loss 또는 realized_pnl<0 count>
 total_pnl_usdt: <거래소 ledger netProfit 합산 (규칙4 — WAL 금지)>
 total_pnl_krw: <KIS 통화 합산>
 pnl_source: bitget-exchange-history-position
-airborne_fires: <airborne_fires 개수>
-airborne_tp: <시뮬레이션 TP 도달 건수>
-airborne_sl: <시뮬레이션 SL 도달 건수>
-airborne_net_pct: <시뮬레이션 누적 수익률 (수수료 0.08% 차감)>
+airborne_fires: <airborne_fires 개수 (store 기준 종일)>
+airborne_tp: <airborne_sim.tp (없으면 N/A)>
+airborne_sl: <airborne_sim.sl + sl_first (없으면 N/A)>
+airborne_net_pct: <airborne_sim.net_pct, 소수 2자리 (없으면 N/A)>
 created: {date_kst}
 tags:
 - trading-journal
@@ -340,11 +360,11 @@ tags:
 # {date_kst} 거래 리포트
 
 ## 한눈에
-- 자동: 체결 N건 → 익절 N / 손절 N (총 X USDT)
+- 자동: 청산 N건 → 익절 N / 손절 N (net X USDT, PF X). **롱 net X(PF X) vs 숏 net X(PF X)** — 손실 쏠린 방향 명시.
 - 수동: 체결 N건 → 익절 N / 손절 N (총 Y KRW + Z USDT)
-- 알림: airborne FIRE N건 → 시뮬 TP N / SL N (net X%)
-- 필터 감사: (역효과 필터 있으면 "⚠️ BTC롱차단이 이기는 롱 N건(+X%) 거름" / 없으면 "필터 정상")
-- 오늘의 핵심 패턴: (잘한 거래 1, 못한 거래 1 의 공통점 1-2줄)
+- 알림: airborne FIRE N건(종일) → sim N/M 적중 승률 X% / PF X / net X%. 롱·숏 PF 비대칭 1줄.
+- 필터 감사: (klines 차단 시 "BTC/모멘텀/변동성 감사 skip"; 시간대 win/net 패턴은 한 줄)
+- 오늘의 핵심 패턴: (방향·시간대 중 손실 1차 변수 1-2줄 — sim·ledger 교차검증)
 
 ## 자동 계좌
 
@@ -362,6 +382,15 @@ cs_tsmom_top10 1줄 참조. 끝.)
   - 개선 여지: (구체적으로)
 
 (거래 N건 반복)
+
+### 방향별 PnL (ledger — 규칙 4, 항상 산출)
+
+| 방향 | n | 승 | 패 | net USDT | PF |
+|---|---:|---:|---:|---:|---:|
+| long | N | N | N | +X | X |
+| short | N | N | N | +X | X |
+
+(손실/이익 쏠린 방향 1줄 + airborne_sim.by_side 와 일치 여부.)
 
 ### cs_tsmom 시그널 ↔ 실제 발주 대조
 - 시그널 ENTER: [...]
@@ -419,31 +448,38 @@ cs_tsmom_top10 1줄 참조. 끝.)
 
 (있으면 규칙 6 의 시뮬레이션 룰로 분석:)
 
-### 시뮬레이션 요약 (그날 라이브 룰 명시 — 예: widening TP +2% / SL −1% / 1h)
+### 시뮬레이션 요약 (`airborne_sim` 그대로 — 헤더에 `airborne_sim.rule` 명시)
 
 | 항목 | 값 |
 |---|---|
-| FIRE 총 건수 | N |
-| TP 도달 | N (X%) |
-| SL 도달 | N (Y%) |
-| timeout | N (Z%) |
-| net 누적 (수수료 0.08% 차감) | +X.XX% |
-| PF | X.XX |
+| FIRE 총 건수 | {fires_total} (store 종일) |
+| sim 커버리지 | {fires_simulated}/{fires_total} |
+| TP / SL / timeout | {tp} / {sl+sl_first} / {timeout} |
+| 승률 / PF / net% | {win_rate}% / {pf} / {net_pct}% (fee {rule}) |
 
-### KST 시간대별
+> net%/PF 는 *알림 신호 sim 품질* — 실제 계좌 손익(ledger)과 별개.
 
-| 구간 | n | win% | sum% | PF | 비고 |
-|---|---:|---:|---:|---:|---|
-| 00-06 새벽 | N | X% | +X% | X | 3일치 기준선 70% / PF 4.6 |
-| 06-12 오전 | N | X% | +X% | X | |
-| 12-18 오후 | N | X% | +X% | X | |
-| 18-24 저녁 | N | X% | +X% | X | **기준선 23% / PF 0.56 — 신호 회피 권고** |
+### 방향별 (`airborne_sim.by_side`) — 손실의 1차 변수
 
-### side · 종목별 핵심
-- long N / short N (mean +X% vs +X%)
-- TOP 3 종목: [...]
-- BOTTOM 3 종목: [...]
-- 패턴 한 줄: (예 "18-24 KST fire 3건 모두 SL — 시간대 기각 가설 부합")
+| 방향 | n | TP | SL | 승률 | sum% | PF |
+|---|---:|---:|---:|---:|---:|---:|
+| long | N | N | N | X% | +X% | X |
+| short | N | N | N | X% | +X% | X |
+
+→ 롱·숏 PF 비대칭 강조 + 규칙 4 ledger 방향 분해와 일치 여부(교차검증).
+
+### KST 시간대별 (`airborne_sim.by_kst_bucket`)
+
+| 구간 | n | TP | SL | 승률 | sum% | PF | 비고 |
+|---|---:|---:|---:|---:|---:|---:|---|
+| 00-06 새벽 | N | N | N | X% | +X% | X | 기준선 70% / PF 4.6 |
+| 06-12 오전 | N | N | N | X% | +X% | X | |
+| 12-18 오후 | N | N | N | X% | +X% | X | |
+| 18-24 저녁 | N | N | N | X% | +X% | X | **기준선 23% / PF 0.56** |
+
+### 종목 · 패턴
+- 종목 다발 발화 상위 (`airborne_fires` 빈도, n≥2)
+- 패턴 한 줄: (예 "저녁·롱이 손실 본체 — sim·ledger 양쪽 일치")
 
 ## 필터·게이트 일일 감사
 
