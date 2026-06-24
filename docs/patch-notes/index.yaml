@@ -15,6 +15,26 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.94"
+    date: "2026-06-24"
+    title: "에어본 적중 sim 실거래 정합 — Bitget history-candles 1m + 진입 슬리피지 앵커"
+    tags: [fix]
+    summary: >
+      에어본 적중 대시보드 sim 이 실거래와 어긋나던(sim TP↔real SL) 원인을 진단·수정.
+      봉 소스를 Binance fapi 15m → Bitget history-candles 1m 로 전환(실거래 거래소
+      정합 + 토큰화주식 no_bars 해소 + 봉내부 TP/SL 순서 정합), 진입 슬리피지 앵커
+      도입(발화가 → 실체결 추정가, 롱 +0.04%·숏 −0.15%, fill 역산 n=124 평균).
+      집계 검증: 오늘 발화 sim sum_pct ~+10% → +7.4% 로 실거래 방향 수렴, SL 정확도↑,
+      no_bars 0. 남은 격차는 모델링 아닌 anti-select(발화 45 vs 체결 ~30).
+    items:
+      - "src/dashboard/app.py: _fetch_15m_bars(Binance 15m) → _fetch_airborne_bars(Bitget history-candles 1m, startTime+endTime). ⚠️ Bitget /candles 는 옛 startTime 무시 → history-candles 필수."
+      - "AIRBORNE_HOLD_BARS 4→60(1m×60=1h), AIRBORNE_SLIPPAGE_LONG/SHORT 신설(0.0004/0.0015)."
+      - "_simulate_airborne_fire(slip_long/slip_short) 추가 — 기본 0(byte-identical), endpoint 가 측정 보정값 명시 전달."
+      - "캐시 파일명 bump sim_cache_bg1m_slip.jsonl — 옛 Binance-15m·무슬리피지 결과 무효화(dedup 잔존 방지)."
+      - "테스트: 슬리피지 앵커 가드 3건(롱/숏 flip + default-zero byte-identical) 추가, 상수·캐시경로·hold 테스트 갱신. 38건 통과."
+      - "한계: 평면 haircut 은 거래당 슬리피지 분산(0~2%) 못 잡음 — 집계 기대값만 정합. 사용자 '평균값 유지 + 집계검증' 선택."
+    refs:
+      - "src/dashboard/.ai.md"
   - version: "v0.6.93"
     date: "2026-06-23"
     title: "에어본 시간게이트 재설계 — kst-hours 롱전용(둘다양수 시각) + short-wl 24h"
