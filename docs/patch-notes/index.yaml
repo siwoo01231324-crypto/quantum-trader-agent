@@ -15,6 +15,27 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.96"
+    date: "2026-06-24"
+    title: "reconciler 반대방향 유령 자동해소 — CL -13.6% 무방비 사고 근본수정"
+    tags: [fix, safety]
+    summary: >
+      CL 2026-06-19 라이브 포지션이 -13.6% 무방비로 간 근본원인 수정. store 가
+      한 종목을 두 전략이 보유한다고 오인(bb-reversal long +0.56 진짜 + short-
+      whitelist short -1.52 유령, 19:48 재시작 시 옛 WAL/store 에서 복원·미발화)
+      → broker net +1.66 과 desync → reconciler 가 multi-holder 라며 ALERT-ONLY
+      로 포기 → 유령이 양 보호계층(native SL 재배치 43023·STOP-FIRE close 22002)
+      오염 → 무방비. Bitget one-way 불변식으로 반대방향 holder=유령을 STORE-ONLY
+      로 0 정합해 안전 자동해소.
+    items:
+      - "position_reconciler else 브랜치(holders≥2 & broker≠0): broker net 방향과 반대인 holder 를 force_sync_position(qty=0)로 0 정합(증명상 유령, one-way 모드). 반대유령 제거 후 같은방향 holder 정확히 1명이면 broker_net 에 정합(MULTI→SINGLE), ≥2명이면 ALERT-ONLY 유지."
+      - "STORE-ONLY 안전: force_sync_position 은 in-memory store 만 변경, 거래소 주문 0건(네팅 위험 없음)."
+      - "제외종목 가드(방어심층): bitget_top_dynamic._EXCLUDE_SYMBOLS(ORDIUSDT 사용자 수동분 + env BITGET_UNIVERSE_EXCLUDE)는 어떤 branch 도 force-sync 안 함 — 알림만."
+      - "TODO(Part B): 봇 보유분 중 native SL/TP 없는 무방비 종목 텔레그램 능동알림(ALERT-ONLY) — protective_coordinator 적합, 후속 PR."
+      - "테스트 tests/live/test_position_reconciler.py +6건(CL 정확재현·전원반대유령·같은방향2명 ALERT·혼합·ORDI 수동·ORDI holder 있어도 제외). 기존 26건 + 회귀 green."
+    refs:
+      - "src/live/.ai.md"
+      - "src/live/position_reconciler.py"
   - version: "v0.6.95"
     date: "2026-06-24"
     title: "에어본 적중 날짜별 달력 — 월 그리드로 어떤날 몇% 보기"
