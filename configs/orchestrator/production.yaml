@@ -66,6 +66,21 @@ strategies:
   #   class: backtest.strategies.meanrev_pairs.MeanrevPairs
   #   kwargs: {}
 
+  # ── Crypto sleeve (Binance top-N, daily Turtle trend) — CANDIDATE, 비활성 ─
+  # live-turtle-trend-daily — CANDIDATE (2026-06-24). 대규모 신호 리서치에서
+  # 유일하게 5y·random-vs-signal·생존편향·포트폴리오 4관문 전부 통과한 전략.
+  # reports/eval_turtle_trend_daily_5y.json: PF 2.35 / 기대값 +8.74%/trade /
+  # CAGR +24.8% / MDD 22.7% / Sharpe 0.68. 롱전용 터틀(Donchian 20/10 + 200MA +
+  # 2×ATR스톱), top_n=6, 위험1%/거래. spec: docs/specs/strategies/live-turtle-trend-daily.md.
+  # 비활성 사유: universe-scan broker 통합(동적 universe OHLCV 공급) 선결 +
+  # 실거래 페이퍼 모니터링 후 별도 PR 로 활성화 판단. broker 미연동 상태에선
+  # market_snapshot["ohlcv_history"] 에 universe OHLCV 가 없어 graceful hold.
+  # - id: live-turtle-trend-daily
+  #   class: backtest.strategies.live_turtle_trend_daily.LiveTurtleTrendDaily
+  #   kwargs:
+  #     top_n: 6
+  #     risk_per_trade: 0.01
+
   # ── KRX sleeve (KOSPI200 basket, EOD donchian breakout) ──────────────────
   - id: breakout-donchian
     class: backtest.strategies.breakout_donchian.BreakoutDonchian
