@@ -121,14 +121,16 @@ BAR_MS_1H = 3_600_000
 # 이 hardcoded set 이라 strategy 가 바뀌면 텔레그램 안내가 거짓. 사용자 지적:
 # "원래는 텔레그램에서 kst hours 거래 예정 알림 와도 실제론 필터링돼서 안 살 수도
 # 있잖아". 다음에 또 바뀌어도 daemon 코드 안 만져도 자동 동기.
-# 2026-06-06 — v3 {1,2,3,6,7,8,23} 로 갱신. _KST_TOP_HOURS_V3 import.
+# 2026-06-23 — v3 {1,3,5,7,9,14,18,21,22,23} (롱전용, 롱·숏 둘 다 양수 시각).
+# _KST_TOP_HOURS_V3 import — 전략이 바뀌면 데몬 알림도 자동 동기(#475).
 try:
     from backtest.strategies.live_airborne_bb_reversal_kst_hours import (
         _KST_TOP_HOURS_V3 as _KST_HOURS_KSTHOURS,
     )
 except ImportError:
-    # daemon-only 환경 (전략 코드 미배포) 안전 fallback. v3 set.
-    _KST_HOURS_KSTHOURS: frozenset[int] = frozenset({1, 2, 3, 6, 7, 8, 23})
+    # daemon-only 환경 (전략 코드 미배포) 안전 fallback. 전략 _KST_TOP_HOURS_V3 와
+    # 동일하게 유지할 것 (import 실패 시 옛 set 쓰면 알림↔거래 불일치).
+    _KST_HOURS_KSTHOURS: frozenset[int] = frozenset({1, 3, 5, 7, 9, 14, 18, 21, 22, 23})
 
 # 2026-06-23 — short-whitelist 24시각 전부 진입 + 7시차단 해제. 알림 "진입 예정"
 # 숏 표시도 전 시각 ✓ 로 동기 (production.yaml kst_entry_hours = 0..23, loop.py
