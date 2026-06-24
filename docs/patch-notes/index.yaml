@@ -15,6 +15,25 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.94"
+    date: "2026-06-24"
+    title: "에어본 적중 sim 실거래 정합 — 진입 슬리피지 앵커 + 미체결 종목 제외"
+    tags: [fix]
+    summary: >
+      에어본 적중 대시보드 sim 이 실거래보다 낙관적이던(+9% vs 실제~0%) 두 원인 수정.
+      ①진입 슬리피지 앵커: sim 진입가를 발화가→실체결추정가로 이동(롱 +0.04%·숏 −0.15%,
+      실거래 fill 역산 n=124 평균) — AXTI 처럼 경계거래가 sim timeout↔real SL 로 뒤집히던
+      원인. ②미체결 종목 제외: SKHYNIX·SAMSUNG 등 거래소 40092 진입거절 RWA 는 발화해도
+      못 사므로 집계 제외(표엔 untradeable). 봉 소스는 Binance 유지(Bitget 전환은 #478 revert).
+      배포규모 검증: 오늘 발화 sim sum +9%→+2.1%, no_bars 정상(16%, Binance baseline).
+    items:
+      - "AIRBORNE_SLIPPAGE_LONG/SHORT(0.0004/0.0015) 신설, _simulate_airborne_fire(slip_long/slip_short) — 기본 0(byte-identical), endpoint 전달."
+      - "AIRBORNE_UNTRADEABLE_SYMBOLS(env, 기본 SKHYNIXUSDT,SAMSUNGUSDT) — 40092 ground-truth(진입성공 0회). CBRS 는 거래성공이라 제외 안 함."
+      - "api_airborne_metrics: 미체결 fire 분리 → outcome 'untradeable', 집계(승률/PF/sum) 제외, sims 표엔 노출. untradeable_total 응답 추가."
+      - "봉 소스 Binance fapi 15m 유지 — Bitget history-candles 전환(#478)은 콜드캐시 2891 fire 동시호출 rate-limit 으로 no_bars 폭증, revert(545560c). 격차 원인은 봉소스 아님(슬리피지+미체결)."
+      - "테스트: 슬리피지 앵커 3건 + 미체결 집합 1건 추가, 배포규모(오늘 전체 발화) 검증."
+    refs:
+      - "src/dashboard/.ai.md"
   - version: "v0.6.93"
     date: "2026-06-23"
     title: "에어본 시간게이트 재설계 — kst-hours 롱전용(둘다양수 시각) + short-wl 24h"

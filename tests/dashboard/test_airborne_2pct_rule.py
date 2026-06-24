@@ -36,6 +36,59 @@ def _long_fire(entry: float = 100.0) -> dict:
             "side": "long", "fire_close": entry}
 
 
+def _short_fire(entry: float = 100.0) -> dict:
+    return {"ts": "2026-06-04T00:00:00+00:00", "symbol": "BTCUSDT",
+            "side": "short", "fire_close": entry}
+
+
+# ── 진입 슬리피지 앵커 (2026-06-24 AXTI flip 회귀) ──────────────────────────
+
+def test_slippage_default_zero_byte_identical():
+    """slip 미지정 = 0.0 → 발화가 그대로 앵커 (순수 함수 byte-identical)."""
+    bars = [_bar(100, 100.3, 99.02, 100.0)] + [_bar(100, 100.3, 99.5, 100.0)] * 3
+    out = _simulate_airborne_fire(
+        _long_fire(100.0), bars, tp_pct=0.02, sl_pct=0.01, hold_bars=4)
+    assert out["outcome"] == "timeout"  # 무슬리피지 SL=99.00, low 99.02 > 99.00
+
+
+def test_slippage_anchor_flips_borderline_long():
+    """롱 슬리피지가 SL 트리거를 올려 timeout→SL 로 뒤집는다 (AXTI 패턴)."""
+    # low 99.02: 무슬리피지 SL(99.00) 안 닿음, 슬리피지 앵커 SL(100.04×0.99=99.0396) 닿음.
+    bars = [_bar(100, 100.3, 99.02, 100.0)] + [_bar(100, 100.3, 99.5, 100.0)] * 3
+    out = _simulate_airborne_fire(
+        _long_fire(100.0), bars, tp_pct=0.02, sl_pct=0.01, hold_bars=4,
+        slip_long=0.0004)
+    assert out["outcome"] == "SL"
+    assert out["bar_idx"] == 1
+
+
+def test_slippage_anchor_flips_borderline_short():
+    """숏 슬리피지(더 낮게 체결)가 SL 트리거를 내려 timeout→SL 로 뒤집는다."""
+    # 숏 무슬리피지 SL=101.00. 앵커 entry=99.85, SL=100.8485. high 100.95 가 앵커만 닿음.
+    bars = [_bar(100, 100.95, 99.7, 100.0)] + [_bar(100, 100.5, 99.7, 100.0)] * 3
+    assert _simulate_airborne_fire(
+        _short_fire(100.0), bars, tp_pct=0.02, sl_pct=0.01, hold_bars=4,
+    )["outcome"] == "timeout"
+    out = _simulate_airborne_fire(
+        _short_fire(100.0), bars, tp_pct=0.02, sl_pct=0.01, hold_bars=4,
+        slip_short=0.0015)
+    assert out["outcome"] == "SL"
+    assert out["bar_idx"] == 1
+
+
+# ── 미체결(거래소 진입불가) 제외 ────────────────────────────────────────────
+
+def test_untradeable_default_set():
+    """기본 미체결 집합 = SKHYNIX·SAMSUNG (40092 ground-truth, 진입성공 0회)."""
+    from src.dashboard.app import AIRBORNE_UNTRADEABLE_SYMBOLS
+    assert "SKHYNIXUSDT" in AIRBORNE_UNTRADEABLE_SYMBOLS
+    assert "SAMSUNGUSDT" in AIRBORNE_UNTRADEABLE_SYMBOLS
+    # CBRS 는 1회 거절됐으나 거래성공 → 제외 안 함
+    assert "CBRSUSDT" not in AIRBORNE_UNTRADEABLE_SYMBOLS
+    # 암호화폐(거래가능)는 미포함
+    assert "BTCUSDT" not in AIRBORNE_UNTRADEABLE_SYMBOLS
+
+
 # ── 룰 상수 검증 ────────────────────────────────────────────────────────────
 
 def test_rule_constants():
