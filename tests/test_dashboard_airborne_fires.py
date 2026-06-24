@@ -172,12 +172,14 @@ class TestSimulateAirborneFire:
         assert out["outcome"] == "TP"
 
     def test_timeout_uses_last_close(self):
-        # 4봉 모두 TP/SL 미도달 — 마지막 close 로 청산
+        # 4봉 모두 TP/SL 미도달 — 마지막 close 로 청산.
+        # 2026-06-24 기본 hold_bars 60(1m×60=1h)이라 timeout 의미만 검증하려고
+        # hold_bars=4 명시 (timeout=마지막 close 청산 로직은 봉 개수와 무관).
         bars = [_bar(high=100.5, low=99.7, close=100.3),
                 _bar(high=100.6, low=99.8, close=100.2),
                 _bar(high=100.7, low=99.9, close=100.4),
                 _bar(high=100.8, low=99.8, close=100.4)]
-        out = _simulate_airborne_fire(_fire("long", 100.0), bars)
+        out = _simulate_airborne_fire(_fire("long", 100.0), bars, hold_bars=4)
         assert out["outcome"] == "timeout"
         assert out["bar_idx"] == 4
         # +0.4% gross (TP threshold 1% 미달)
