@@ -1,7 +1,7 @@
 {
   "date_kst": "2026-06-24",
   "kst_window_start": "2026-06-24T00:00:00+09:00",
-  "now_kst": "2026-06-25T01:02:45.057763+09:00",
+  "now_kst": "2026-06-25T01:15:25.945727+09:00",
   "counts": {
     "auto_fills": 366,
     "auto_signals": 5467,
@@ -50454,12 +50454,86 @@
       "trigger": 0.050674
     }
   ],
+  "airborne_sim": {
+    "ok": true,
+    "rule": "TP +1.0% / SL -0.5% / 4bar(1h) hold, fee 0.034%",
+    "source": "airborne_sim_cache(sim_cache.jsonl)",
+    "fires_total": 176,
+    "fires_simulated": 145,
+    "fires_uncached": 31,
+    "n": 145,
+    "tp": 27,
+    "sl": 79,
+    "sl_first": 14,
+    "timeout": 25,
+    "win_rate": 0.30344827586206896,
+    "sum_pct": -14.817574876142169,
+    "net_pct": -19.74757487614217,
+    "pf": 0.688918512112909,
+    "mean_pct": -0.10219017155960117,
+    "by_side": {
+      "long": {
+        "n": 106,
+        "tp": 12,
+        "sl": 72,
+        "win_rate": 0.24528301886792453,
+        "sum_pct": -20.46775296653303,
+        "pf": 0.44879073741932046
+      },
+      "short": {
+        "n": 39,
+        "tp": 15,
+        "sl": 21,
+        "win_rate": 0.46153846153846156,
+        "sum_pct": 5.650178090390862,
+        "pf": 1.538112199084844
+      }
+    },
+    "by_kst_bucket": [
+      {
+        "bucket": "00-06 새벽",
+        "n": 16,
+        "tp": 6,
+        "sl": 8,
+        "win_rate": 0.5,
+        "sum_pct": 2.162632646220498,
+        "pf": 1.5406581615551245
+      },
+      {
+        "bucket": "06-12 오전",
+        "n": 16,
+        "tp": 4,
+        "sl": 9,
+        "win_rate": 0.4375,
+        "sum_pct": 0.638404862085522,
+        "pf": 1.141867747130116
+      },
+      {
+        "bucket": "12-18 오후",
+        "n": 28,
+        "tp": 5,
+        "sl": 17,
+        "win_rate": 0.25,
+        "sum_pct": -3.3155370453834205,
+        "pf": 0.6393026713181044
+      },
+      {
+        "bucket": "18-24 저녁",
+        "n": 85,
+        "tp": 12,
+        "sl": 59,
+        "win_rate": 0.25882352941176473,
+        "sum_pct": -14.303075339064769,
+        "pf": 0.5222823092017174
+      }
+    ]
+  },
   "cs_tsmom_top10": {
     "available": false,
     "fetched_at": null,
     "pin_date": "",
     "top10": [],
-    "note": "Backfill at 2026-06-25T01:02:37.110278+09:00 — historical snapshot for 2026-06-24 23:50 KST was not captured. Routine 가 'today TOP10' 으로 쓰면 부정확할 수 있음. auto_fills + auto_signals 를 primary source 로 활용."
+    "note": "Backfill at 2026-06-25T01:15:18.386793+09:00 — historical snapshot for 2026-06-24 23:50 KST was not captured. Routine 가 'today TOP10' 으로 쓰면 부정확할 수 있음. auto_fills + auto_signals 를 primary source 로 활용."
   },
   "account_reconciliation": {
     "ok": true,
@@ -51139,7 +51213,7 @@
   },
   "_backfill_meta": {
     "generated_by": "scripts/export_journal_for_date.py",
-    "generated_at_kst": "2026-06-25T01:02:45.057769+09:00",
+    "generated_at_kst": "2026-06-25T01:15:25.945733+09:00",
     "utc_window": [
       "2026-06-23T15:00:00+00:00",
       "2026-06-24T15:00:00+00:00"

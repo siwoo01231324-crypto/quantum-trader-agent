@@ -127,6 +127,29 @@ def main() -> int:
     store_count = store.count()
     store_earliest = store.earliest_ts()
 
+    # ── airborne 적중 sim — 영속 cache(sim_cache.jsonl) 재사용, klines fetch 없음 ──
+    # dashboard 가 Binance 봉으로 미리 계산해둔 outcome/pct 를 읽어 집계만 한다.
+    # cache miss(아직 sim 안 된) fire 는 skip → klines 차단 환경에서도 graceful.
+    # 이전엔 이 환경에서 TP/SL/net 이 통째로 N/A 였던 칸을 cache 로 채운다.
+    try:
+        from src.dashboard.airborne_sim_cache import AirborneSimCache
+        from src.dashboard.app import _aggregate_airborne_sims
+        _sim_cache = AirborneSimCache(
+            str(REPO_ROOT / "logs" / "airborne_fires" / "sim_cache.jsonl"),
+        )
+        cached_sims, missing_sims = _sim_cache.split(airborne_fires)
+        airborne_sim: dict = {
+            "ok": True,
+            "rule": "TP +1.0% / SL -0.5% / 4bar(1h) hold, fee 0.034%",
+            "source": "airborne_sim_cache(sim_cache.jsonl)",
+            "fires_total": len(airborne_fires),
+            "fires_simulated": len(cached_sims),
+            "fires_uncached": len(missing_sims),
+            **_aggregate_airborne_sims(cached_sims),
+        }
+    except Exception as exc:  # noqa: BLE001 — 보조, export 차단 금지
+        airborne_sim = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+
     # ── cs_tsmom_top10 — historical snapshot missing ──
     cs_tsmom_top10 = {
         "available": False,
@@ -176,6 +199,7 @@ def main() -> int:
         "auto_signals": auto_signals,
         "manual_trades": manual,
         "airborne_fires": airborne_fires,
+        "airborne_sim": airborne_sim,
         "cs_tsmom_top10": cs_tsmom_top10,
         "account_reconciliation": account_reconciliation,
         "auto_pnl_ledger": auto_pnl_ledger,
