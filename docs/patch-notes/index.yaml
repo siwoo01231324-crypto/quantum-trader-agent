@@ -15,6 +15,23 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.96"
+    date: "2026-06-24"
+    title: "터틀 추세추종 일봉 전략 candidate — 리서치 첫 5y 유효 전략"
+    tags: [feature]
+    summary: >
+      2026-06-24 대규모 신호 리서치(에어본=랜덤·TOTAL3 실패·마틴게일 파산·폭락바운스
+      생존편향 등 전부 탈락)에서 유일하게 5y·random-vs-signal·생존편향·포트폴리오 4관문을
+      모두 통과한 live-turtle-trend-daily(롱전용 터틀, Donchian 20/10 + 200MA + 2×ATR스톱)을
+      candidate 로 추가. production.yaml 비활성(주석) — 실거래 모니터링 후 활성화 판단.
+    items:
+      - "신규 전략 src/backtest/strategies/live_turtle_trend_daily.py (universe-scan 일봉, 롱전용, top_n=6, 위험1%/거래)."
+      - "5y bench scripts/bench_turtle_trend_daily_5y.py → reports/eval_turtle_trend_daily_5y.json: PF 2.35 / 기대값 +8.74%/trade / CAGR +24.8% / MDD 22.7% / Sharpe 0.68 (게이트 PASS)."
+      - "random 대비 기대값 13배, 생존편향 breakeven 사망률 16.6%(폭락바운스 2.3%의 7.2배 강건), 매년 PF>1."
+      - "spec docs/specs/strategies/live-turtle-trend-daily.md (status: candidate) + 단위테스트 5건. production.yaml 비활성 주석 등록."
+    refs:
+      - "docs/specs/strategies/live-turtle-trend-daily.md"
+      - "reports/eval_turtle_trend_daily_5y.json"
   - version: "v0.6.95"
     date: "2026-06-24"
     title: "에어본 적중 날짜별 달력 — 월 그리드로 어떤날 몇% 보기"

@@ -1,0 +1,63 @@
+{
+  "strategy_id": "live-turtle-trend-daily",
+  "paradigm": "universe-scan",
+  "side": "long-only",
+  "data": "binance top-30 → daily resample",
+  "years": 4.42,
+  "cost_bps": 16.0,
+  "params": {
+    "entry_window": 20,
+    "exit_window": 10,
+    "atr_window": 20,
+    "atr_mult": 2.0,
+    "ma_window": 200,
+    "top_n": 6,
+    "risk_per_trade": 0.01
+  },
+  "trustworthy": {
+    "n_trades": 295,
+    "win_pct": 32.54,
+    "profit_factor": 2.349,
+    "expectancy_pct_per_trade": 8.7408,
+    "portfolio_cagr_pct": 24.79,
+    "portfolio_mdd_pct": 22.7,
+    "portfolio_sharpe": 0.683
+  },
+  "by_year": {
+    "2021": {
+      "n": 2,
+      "pf": 0.0,
+      "exp_pct": -17.738
+    },
+    "2022": {
+      "n": 22,
+      "pf": 0.079,
+      "exp_pct": -10.504
+    },
+    "2023": {
+      "n": 91,
+      "pf": 2.256,
+      "exp_pct": 7.419
+    },
+    "2024": {
+      "n": 99,
+      "pf": 3.995,
+      "exp_pct": 15.926
+    },
+    "2025": {
+      "n": 70,
+      "pf": 2.26,
+      "exp_pct": 8.895
+    },
+    "2026": {
+      "n": 11,
+      "pf": 0.562,
+      "exp_pct": -2.67
+    }
+  },
+  "gate": {
+    "rule": "PF>1.0 AND expectancy>0",
+    "passed": true
+  },
+  "note": "random-vs-signal 13× / 생존편향 breakeven 사망률 16.6% / status=candidate(비활성)"
+}
