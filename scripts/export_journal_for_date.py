@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -27,7 +26,10 @@ from zoneinfo import ZoneInfo
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
-from src.dashboard.app import _parse_airborne_fire_line  # noqa: E402
+from src.dashboard.airborne_fire_store import AirborneFireStore  # noqa: E402
+from src.dashboard.app import (  # noqa: E402
+    _parse_airborne_fires_from_docker_logs,
+)
 from src.live.trade_history import discover_wal_files  # noqa: E402
 from src.live.wal import replay as wal_replay  # noqa: E402
 
@@ -96,27 +98,34 @@ def main() -> int:
             pl = rec.get("payload") or {}
             manual.append({"ts": rec.get("ts"), **pl})
 
-    # ── airborne FIRE via docker logs --since/--until ──
-    since_iso = utc_start.strftime("%Y-%m-%dT%H:%M:%SZ")
-    until_iso = utc_end_excl.strftime("%Y-%m-%dT%H:%M:%SZ")
-    airborne_fires: list[dict] = []
+    # ── airborne FIRE — 영속 store(history.jsonl) 가 단일 진실 ──
+    # 과거: docker logs --since/--until 만 읽어, 컨테이너 재생성/rotation 시
+    # 그 인스턴스 이후 fire 만 잡혀 "저녁 100% 집중" 같은 잘림 착시 발생
+    # (qta-airborne-daemon 06-24 19:53 KST 재생성 → 종일 176건 중 106건만 포착,
+    #  새벽~오후 100건 유실). dashboard 가 store 에 연속 append 해 rotation 을
+    # 견디므로, store 를 primary 로 읽고 docker logs 는 store 가 아직 못 본
+    # fire 만 best-effort backfill 하는 보조 소스로 강등.
+    store = AirborneFireStore(
+        str(REPO_ROOT / "logs" / "airborne_fires" / "history.jsonl"),
+    )
     docker_err: str | None = None
+    docker_backfilled = 0
     try:
-        cp = subprocess.run(
-            ["docker", "logs", args.container,
-             "--since", since_iso, "--until", until_iso],
-            capture_output=True, text=True, timeout=60,
-            encoding="utf-8", errors="replace",
+        since_4d = (utc_start - timedelta(days=4)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        live_fires = _parse_airborne_fires_from_docker_logs(
+            since_4d, container_name=args.container,
         )
-        if cp.returncode == 0:
-            for line in ((cp.stdout or "") + (cp.stderr or "")).splitlines():
-                rec = _parse_airborne_fire_line(line)
-                if rec is not None and _in_window(rec.get("ts", "")):
-                    airborne_fires.append(rec)
-        else:
-            docker_err = f"docker logs returned {cp.returncode}: {cp.stderr[:200]}"
-    except (FileNotFoundError, subprocess.TimeoutExpired, OSError) as exc:
+        if live_fires:
+            docker_backfilled = store.append_many(live_fires)
+    except Exception as exc:  # noqa: BLE001 — backfill 은 보조, export 차단 금지
         docker_err = f"{type(exc).__name__}: {exc}"
+
+    airborne_fires = [
+        f for f in store.load_since(utc_start) if _in_window(f.get("ts", ""))
+    ]
+    airborne_fires.sort(key=lambda r: str(r.get("ts") or ""))
+    store_count = store.count()
+    store_earliest = store.earliest_ts()
 
     # ── cs_tsmom_top10 — historical snapshot missing ──
     cs_tsmom_top10 = {
@@ -176,6 +185,10 @@ def main() -> int:
             "utc_window": [utc_start.isoformat(), utc_end_excl.isoformat()],
             "wal_files_scanned": [str(p) for p in wal_paths],
             "docker_error": docker_err,
+            "airborne_source": "airborne_fire_store(history.jsonl)",
+            "airborne_store_count": store_count,
+            "airborne_store_earliest": store_earliest,
+            "airborne_docker_backfilled": docker_backfilled,
         },
     }
 

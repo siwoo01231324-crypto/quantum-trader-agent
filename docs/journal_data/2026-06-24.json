@@ -1,12 +1,12 @@
 {
   "date_kst": "2026-06-24",
   "kst_window_start": "2026-06-24T00:00:00+09:00",
-  "now_kst": "2026-06-24T23:30:21.927681+09:00",
+  "now_kst": "2026-06-25T01:02:45.057763+09:00",
   "counts": {
     "auto_fills": 366,
-    "auto_signals": 5349,
+    "auto_signals": 5467,
     "manual_trades": 0,
-    "airborne_fires": 106
+    "airborne_fires": 176
   },
   "auto_fills": [
     {
@@ -48273,10 +48273,1444 @@
       "side": "buy",
       "qty": "0.17",
       "reason": "live_take_profit:entry=599.69,last=569.95,pct=-0.0496"
+    },
+    {
+      "ts": "2026-06-24T14:30:41.084360+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=570.69,pct=-0.0510"
+    },
+    {
+      "ts": "2026-06-24T14:30:41.088431+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=570.69,pct=-0.0484"
+    },
+    {
+      "ts": "2026-06-24T14:31:11.328580+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=571.1,pct=-0.0503"
+    },
+    {
+      "ts": "2026-06-24T14:31:11.332979+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=571.1,pct=-0.0477"
+    },
+    {
+      "ts": "2026-06-24T14:31:41.366985+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=570.51,pct=-0.0513"
+    },
+    {
+      "ts": "2026-06-24T14:31:41.371668+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=570.51,pct=-0.0487"
+    },
+    {
+      "ts": "2026-06-24T14:32:11.723091+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=571.17,pct=-0.0502"
+    },
+    {
+      "ts": "2026-06-24T14:32:11.727262+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=571.17,pct=-0.0476"
+    },
+    {
+      "ts": "2026-06-24T14:32:41.534211+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=571.04,pct=-0.0504"
+    },
+    {
+      "ts": "2026-06-24T14:32:41.538021+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=571.04,pct=-0.0478"
+    },
+    {
+      "ts": "2026-06-24T14:33:11.655612+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=570.66,pct=-0.0510"
+    },
+    {
+      "ts": "2026-06-24T14:33:11.662966+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=570.66,pct=-0.0484"
+    },
+    {
+      "ts": "2026-06-24T14:33:41.833493+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=570.71,pct=-0.0509"
+    },
+    {
+      "ts": "2026-06-24T14:33:41.838969+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=570.71,pct=-0.0483"
+    },
+    {
+      "ts": "2026-06-24T14:34:13.797554+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=570.48,pct=-0.0513"
+    },
+    {
+      "ts": "2026-06-24T14:34:13.838458+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=570.48,pct=-0.0487"
+    },
+    {
+      "ts": "2026-06-24T14:34:42.242986+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=570.64,pct=-0.0511"
+    },
+    {
+      "ts": "2026-06-24T14:34:42.246769+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=570.64,pct=-0.0484"
+    },
+    {
+      "ts": "2026-06-24T14:35:12.525100+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=569.61,pct=-0.0528"
+    },
+    {
+      "ts": "2026-06-24T14:35:12.529221+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=569.61,pct=-0.0502"
+    },
+    {
+      "ts": "2026-06-24T14:35:42.584520+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=570.07,pct=-0.0520"
+    },
+    {
+      "ts": "2026-06-24T14:35:42.592803+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=570.07,pct=-0.0494"
+    },
+    {
+      "ts": "2026-06-24T14:36:12.776152+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=570.37,pct=-0.0515"
+    },
+    {
+      "ts": "2026-06-24T14:36:12.780458+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=570.37,pct=-0.0489"
+    },
+    {
+      "ts": "2026-06-24T14:36:43.099124+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=570.15,pct=-0.0519"
+    },
+    {
+      "ts": "2026-06-24T14:36:43.102665+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=570.15,pct=-0.0493"
+    },
+    {
+      "ts": "2026-06-24T14:37:13.203547+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=569.78,pct=-0.0525"
+    },
+    {
+      "ts": "2026-06-24T14:37:13.209220+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=569.78,pct=-0.0499"
+    },
+    {
+      "ts": "2026-06-24T14:37:44.254551+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=569.86,pct=-0.0523"
+    },
+    {
+      "ts": "2026-06-24T14:37:44.259300+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=569.86,pct=-0.0497"
+    },
+    {
+      "ts": "2026-06-24T14:38:14.346772+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=569.9,pct=-0.0523"
+    },
+    {
+      "ts": "2026-06-24T14:38:14.353226+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=569.9,pct=-0.0497"
+    },
+    {
+      "ts": "2026-06-24T14:38:44.504058+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=569.3,pct=-0.0533"
+    },
+    {
+      "ts": "2026-06-24T14:38:44.507191+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=569.3,pct=-0.0507"
+    },
+    {
+      "ts": "2026-06-24T14:39:14.717217+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=568.87,pct=-0.0540"
+    },
+    {
+      "ts": "2026-06-24T14:39:14.719929+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=568.87,pct=-0.0514"
+    },
+    {
+      "ts": "2026-06-24T14:39:44.951940+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=568.79,pct=-0.0541"
+    },
+    {
+      "ts": "2026-06-24T14:39:44.956664+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=568.79,pct=-0.0515"
+    },
+    {
+      "ts": "2026-06-24T14:40:15.257481+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=568.68,pct=-0.0543"
+    },
+    {
+      "ts": "2026-06-24T14:40:15.267545+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=568.68,pct=-0.0517"
+    },
+    {
+      "ts": "2026-06-24T14:40:45.317423+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=568.78,pct=-0.0541"
+    },
+    {
+      "ts": "2026-06-24T14:40:45.320961+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=568.78,pct=-0.0515"
+    },
+    {
+      "ts": "2026-06-24T14:41:15.566152+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=569.08,pct=-0.0536"
+    },
+    {
+      "ts": "2026-06-24T14:41:15.569428+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=569.08,pct=-0.0510"
+    },
+    {
+      "ts": "2026-06-24T14:41:45.893263+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=569.09,pct=-0.0536"
+    },
+    {
+      "ts": "2026-06-24T14:41:45.897718+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=569.09,pct=-0.0510"
+    },
+    {
+      "ts": "2026-06-24T14:42:15.913136+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=568.95,pct=-0.0539"
+    },
+    {
+      "ts": "2026-06-24T14:42:15.917467+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=568.95,pct=-0.0513"
+    },
+    {
+      "ts": "2026-06-24T14:42:46.289680+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=568.8,pct=-0.0541"
+    },
+    {
+      "ts": "2026-06-24T14:42:46.293032+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=568.8,pct=-0.0515"
+    },
+    {
+      "ts": "2026-06-24T14:43:16.631926+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=568.71,pct=-0.0543"
+    },
+    {
+      "ts": "2026-06-24T14:43:16.635847+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=568.71,pct=-0.0517"
+    },
+    {
+      "ts": "2026-06-24T14:43:46.708597+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=568.52,pct=-0.0546"
+    },
+    {
+      "ts": "2026-06-24T14:43:46.712106+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=568.52,pct=-0.0520"
+    },
+    {
+      "ts": "2026-06-24T14:44:16.784208+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=569.05,pct=-0.0537"
+    },
+    {
+      "ts": "2026-06-24T14:44:16.787985+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=569.05,pct=-0.0511"
+    },
+    {
+      "ts": "2026-06-24T14:44:46.950804+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=569.52,pct=-0.0529"
+    },
+    {
+      "ts": "2026-06-24T14:44:46.953519+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=569.52,pct=-0.0503"
+    },
+    {
+      "ts": "2026-06-24T14:45:17.135316+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=569.33,pct=-0.0532"
+    },
+    {
+      "ts": "2026-06-24T14:45:17.139047+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=569.33,pct=-0.0506"
+    },
+    {
+      "ts": "2026-06-24T14:45:47.534388+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=569.21,pct=-0.0534"
+    },
+    {
+      "ts": "2026-06-24T14:45:47.538019+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=569.21,pct=-0.0508"
+    },
+    {
+      "ts": "2026-06-24T14:46:17.736635+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=569.6,pct=-0.0528"
+    },
+    {
+      "ts": "2026-06-24T14:46:17.739532+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=569.6,pct=-0.0502"
+    },
+    {
+      "ts": "2026-06-24T14:46:49.404543+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=570.17,pct=-0.0518"
+    },
+    {
+      "ts": "2026-06-24T14:46:49.408451+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=570.17,pct=-0.0492"
+    },
+    {
+      "ts": "2026-06-24T14:47:19.471851+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=569.85,pct=-0.0524"
+    },
+    {
+      "ts": "2026-06-24T14:47:19.475774+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=569.85,pct=-0.0498"
+    },
+    {
+      "ts": "2026-06-24T14:47:49.649922+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=570.35,pct=-0.0515"
+    },
+    {
+      "ts": "2026-06-24T14:47:49.653833+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=570.35,pct=-0.0489"
+    },
+    {
+      "ts": "2026-06-24T14:48:19.856082+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=570.31,pct=-0.0516"
+    },
+    {
+      "ts": "2026-06-24T14:48:19.859070+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=570.31,pct=-0.0490"
+    },
+    {
+      "ts": "2026-06-24T14:48:49.889593+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=570.18,pct=-0.0518"
+    },
+    {
+      "ts": "2026-06-24T14:48:49.895073+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=570.18,pct=-0.0492"
+    },
+    {
+      "ts": "2026-06-24T14:49:20.201623+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=569.94,pct=-0.0522"
+    },
+    {
+      "ts": "2026-06-24T14:49:20.205112+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=569.94,pct=-0.0496"
+    },
+    {
+      "ts": "2026-06-24T14:49:50.368862+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=569.78,pct=-0.0525"
+    },
+    {
+      "ts": "2026-06-24T14:49:50.373744+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=569.78,pct=-0.0499"
+    },
+    {
+      "ts": "2026-06-24T14:50:20.590856+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=569.8,pct=-0.0524"
+    },
+    {
+      "ts": "2026-06-24T14:50:20.602340+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=569.8,pct=-0.0498"
+    },
+    {
+      "ts": "2026-06-24T14:50:50.944962+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=570.07,pct=-0.0520"
+    },
+    {
+      "ts": "2026-06-24T14:50:50.949439+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=570.07,pct=-0.0494"
+    },
+    {
+      "ts": "2026-06-24T14:54:59.680402+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=568.86,pct=-0.0540"
+    },
+    {
+      "ts": "2026-06-24T14:54:59.686574+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=568.86,pct=-0.0514"
+    },
+    {
+      "ts": "2026-06-24T14:55:28.589455+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=568.27,pct=-0.0550"
+    },
+    {
+      "ts": "2026-06-24T14:55:28.597776+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=568.27,pct=-0.0524"
+    },
+    {
+      "ts": "2026-06-24T14:55:58.652264+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=568.48,pct=-0.0546"
+    },
+    {
+      "ts": "2026-06-24T14:55:58.655361+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=568.48,pct=-0.0520"
+    },
+    {
+      "ts": "2026-06-24T14:56:28.653842+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=568.91,pct=-0.0539"
+    },
+    {
+      "ts": "2026-06-24T14:56:28.658178+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=568.91,pct=-0.0513"
+    },
+    {
+      "ts": "2026-06-24T14:56:43.836634+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=569.1,pct=-0.0536"
+    },
+    {
+      "ts": "2026-06-24T14:56:43.845398+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=569.1,pct=-0.0510"
+    },
+    {
+      "ts": "2026-06-24T14:56:58.694906+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=568.81,pct=-0.0541"
+    },
+    {
+      "ts": "2026-06-24T14:56:58.698300+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=568.81,pct=-0.0515"
+    },
+    {
+      "ts": "2026-06-24T14:57:14.049003+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=569.24,pct=-0.0534"
+    },
+    {
+      "ts": "2026-06-24T14:57:14.055957+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=569.24,pct=-0.0508"
+    },
+    {
+      "ts": "2026-06-24T14:57:28.866569+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=568.83,pct=-0.0541"
+    },
+    {
+      "ts": "2026-06-24T14:57:28.870798+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=568.83,pct=-0.0515"
+    },
+    {
+      "ts": "2026-06-24T14:57:44.239468+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=569.62,pct=-0.0527"
+    },
+    {
+      "ts": "2026-06-24T14:57:44.247201+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=569.62,pct=-0.0501"
+    },
+    {
+      "ts": "2026-06-24T14:57:59.066443+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=569.32,pct=-0.0532"
+    },
+    {
+      "ts": "2026-06-24T14:57:59.070453+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=569.32,pct=-0.0506"
+    },
+    {
+      "ts": "2026-06-24T14:58:14.410391+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=569.45,pct=-0.0530"
+    },
+    {
+      "ts": "2026-06-24T14:58:14.417680+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=569.45,pct=-0.0504"
+    },
+    {
+      "ts": "2026-06-24T14:58:29.161714+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=569.5,pct=-0.0529"
+    },
+    {
+      "ts": "2026-06-24T14:58:29.165134+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=569.5,pct=-0.0503"
+    },
+    {
+      "ts": "2026-06-24T14:58:44.548425+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=569.66,pct=-0.0527"
+    },
+    {
+      "ts": "2026-06-24T14:58:44.556544+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=569.66,pct=-0.0501"
+    },
+    {
+      "ts": "2026-06-24T14:58:59.541292+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=569.53,pct=-0.0529"
+    },
+    {
+      "ts": "2026-06-24T14:58:59.543872+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=569.53,pct=-0.0503"
+    },
+    {
+      "ts": "2026-06-24T14:59:14.654868+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=569.76,pct=-0.0525"
+    },
+    {
+      "ts": "2026-06-24T14:59:14.667157+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=569.76,pct=-0.0499"
+    },
+    {
+      "ts": "2026-06-24T14:59:29.560699+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=569.64,pct=-0.0527"
+    },
+    {
+      "ts": "2026-06-24T14:59:29.563312+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=569.64,pct=-0.0501"
+    },
+    {
+      "ts": "2026-06-24T14:59:44.989840+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=569.87,pct=-0.0523"
+    },
+    {
+      "ts": "2026-06-24T14:59:44.996450+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=569.87,pct=-0.0497"
+    },
+    {
+      "ts": "2026-06-24T14:59:59.996622+00:00",
+      "strategy_id": "live-airborne-bb-reversal-kst-hours",
+      "symbol": "BNBUSDT",
+      "side": "sell",
+      "qty": "0.17",
+      "reason": "live_stop_loss:entry=601.34000000000000000000000,last=569.96,pct=-0.0522"
+    },
+    {
+      "ts": "2026-06-24T14:59:59.999096+00:00",
+      "strategy_id": "live-airborne-short-whitelist-v1",
+      "symbol": "BNBUSDT",
+      "side": "buy",
+      "qty": "0.17",
+      "reason": "live_take_profit:entry=599.69,last=569.96,pct=-0.0496"
     }
   ],
   "manual_trades": [],
   "airborne_fires": [
+    {
+      "ts": "2026-06-23T15:00:46+00:00",
+      "symbol": "QCOMUSDT",
+      "side": "long",
+      "fire_close": 199.85,
+      "trigger": 199.274
+    },
+    {
+      "ts": "2026-06-23T15:00:48+00:00",
+      "symbol": "TSLAUSDT",
+      "side": "long",
+      "fire_close": 386.71,
+      "trigger": 386.126
+    },
+    {
+      "ts": "2026-06-23T15:00:49+00:00",
+      "symbol": "DYDXUSDT",
+      "side": "short",
+      "fire_close": 0.1396,
+      "trigger": 0.1417
+    },
+    {
+      "ts": "2026-06-23T16:01:22+00:00",
+      "symbol": "AAOIUSDT",
+      "side": "long",
+      "fire_close": 151.99,
+      "trigger": 151.802
+    },
+    {
+      "ts": "2026-06-23T17:00:53+00:00",
+      "symbol": "HUSDT",
+      "side": "long",
+      "fire_close": 0.10777,
+      "trigger": 0.105854
+    },
+    {
+      "ts": "2026-06-23T17:00:55+00:00",
+      "symbol": "DELLUSDT",
+      "side": "short",
+      "fire_close": 432.31,
+      "trigger": 432.812
+    },
+    {
+      "ts": "2026-06-23T17:00:56+00:00",
+      "symbol": "BASEDUSDT",
+      "side": "short",
+      "fire_close": 0.10095,
+      "trigger": 0.102064
+    },
+    {
+      "ts": "2026-06-23T17:00:58+00:00",
+      "symbol": "NATGASUSDT",
+      "side": "long",
+      "fire_close": 3.179,
+      "trigger": 3.176
+    },
+    {
+      "ts": "2026-06-23T18:00:56+00:00",
+      "symbol": "SYNUSDT",
+      "side": "short",
+      "fire_close": 0.32117,
+      "trigger": 0.330558
+    },
+    {
+      "ts": "2026-06-23T18:00:57+00:00",
+      "symbol": "CBRSUSDT",
+      "side": "short",
+      "fire_close": 232.48,
+      "trigger": 235.166
+    },
+    {
+      "ts": "2026-06-23T18:00:59+00:00",
+      "symbol": "AXTIUSDT",
+      "side": "long",
+      "fire_close": 77.33,
+      "trigger": 77.242
+    },
+    {
+      "ts": "2026-06-23T18:01:00+00:00",
+      "symbol": "ORCLUSDT",
+      "side": "long",
+      "fire_close": 166.33,
+      "trigger": 166.14
+    },
+    {
+      "ts": "2026-06-23T19:00:49+00:00",
+      "symbol": "EPICUSDT",
+      "side": "short",
+      "fire_close": 0.4574,
+      "trigger": 0.45918
+    },
+    {
+      "ts": "2026-06-23T20:00:44+00:00",
+      "symbol": "GRASSUSDT",
+      "side": "short",
+      "fire_close": 0.45443,
+      "trigger": 0.455294
+    },
+    {
+      "ts": "2026-06-23T20:00:45+00:00",
+      "symbol": "BIOUSDT",
+      "side": "short",
+      "fire_close": 0.03042,
+      "trigger": 0.030468
+    },
+    {
+      "ts": "2026-06-23T20:00:46+00:00",
+      "symbol": "DYDXUSDT",
+      "side": "short",
+      "fire_close": 0.1442,
+      "trigger": 0.14468
+    },
+    {
+      "ts": "2026-06-23T21:00:49+00:00",
+      "symbol": "BLESSUSDT",
+      "side": "long",
+      "fire_close": 0.008261,
+      "trigger": 0.0081564
+    },
+    {
+      "ts": "2026-06-23T21:00:51+00:00",
+      "symbol": "WLFIUSDT",
+      "side": "short",
+      "fire_close": 0.05998,
+      "trigger": 0.060024
+    },
+    {
+      "ts": "2026-06-23T22:00:49+00:00",
+      "symbol": "CBRSUSDT",
+      "side": "long",
+      "fire_close": 203.4,
+      "trigger": 202.664
+    },
+    {
+      "ts": "2026-06-23T22:00:51+00:00",
+      "symbol": "SIRENUSDT",
+      "side": "short",
+      "fire_close": 0.04539,
+      "trigger": 0.046398
+    },
+    {
+      "ts": "2026-06-24T00:00:43+00:00",
+      "symbol": "IPUSDT",
+      "side": "short",
+      "fire_close": 0.3215,
+      "trigger": 0.32618
+    },
+    {
+      "ts": "2026-06-24T00:00:44+00:00",
+      "symbol": "SAHARAUSDT",
+      "side": "short",
+      "fire_close": 0.01252,
+      "trigger": 0.012578
+    },
+    {
+      "ts": "2026-06-24T01:00:49+00:00",
+      "symbol": "SKHYNIXUSDT",
+      "side": "short",
+      "fire_close": 1763.03,
+      "trigger": 1779.48
+    },
+    {
+      "ts": "2026-06-24T01:00:50+00:00",
+      "symbol": "REUSDT",
+      "side": "long",
+      "fire_close": 0.76932,
+      "trigger": 0.767322
+    },
+    {
+      "ts": "2026-06-24T01:00:51+00:00",
+      "symbol": "LABUSDT",
+      "side": "long",
+      "fire_close": 13.844,
+      "trigger": 13.7948
+    },
+    {
+      "ts": "2026-06-24T01:00:52+00:00",
+      "symbol": "SAMSUNGUSDT",
+      "side": "short",
+      "fire_close": 220.36,
+      "trigger": 222.444
+    },
+    {
+      "ts": "2026-06-24T01:00:54+00:00",
+      "symbol": "EWYUSDT",
+      "side": "short",
+      "fire_close": 199.75,
+      "trigger": 200.504
+    },
+    {
+      "ts": "2026-06-24T01:00:55+00:00",
+      "symbol": "BEUSDT",
+      "side": "short",
+      "fire_close": 330.57,
+      "trigger": 331.082
+    },
+    {
+      "ts": "2026-06-24T01:00:56+00:00",
+      "symbol": "FARTCOINUSDT",
+      "side": "short",
+      "fire_close": 0.1307,
+      "trigger": 0.1309
+    },
+    {
+      "ts": "2026-06-24T02:00:41+00:00",
+      "symbol": "ARXUSDT",
+      "side": "long",
+      "fire_close": 0.30714,
+      "trigger": 0.302862
+    },
+    {
+      "ts": "2026-06-24T02:00:43+00:00",
+      "symbol": "RENDERUSDT",
+      "side": "short",
+      "fire_close": 1.6107,
+      "trigger": 1.6132
+    },
+    {
+      "ts": "2026-06-24T02:00:44+00:00",
+      "symbol": "BABAUSDT",
+      "side": "long",
+      "fire_close": 100.5,
+      "trigger": 100.5
+    },
+    {
+      "ts": "2026-06-24T02:00:45+00:00",
+      "symbol": "KIOXIAUSDT",
+      "side": "short",
+      "fire_close": 591.52,
+      "trigger": 592.108
+    },
+    {
+      "ts": "2026-06-24T03:01:03+00:00",
+      "symbol": "XAUUSDT",
+      "side": "long",
+      "fire_close": 4070.58,
+      "trigger": 4062.07
+    },
+    {
+      "ts": "2026-06-24T03:01:04+00:00",
+      "symbol": "SKHYNIXUSDT",
+      "side": "long",
+      "fire_close": 1638.52,
+      "trigger": 1631.31
+    },
+    {
+      "ts": "2026-06-24T03:01:05+00:00",
+      "symbol": "XAUTUSDT",
+      "side": "long",
+      "fire_close": 4057.35,
+      "trigger": 4048.82
+    },
+    {
+      "ts": "2026-06-24T03:01:06+00:00",
+      "symbol": "CLUSDT",
+      "side": "long",
+      "fire_close": 72.301,
+      "trigger": 72.2924
+    },
+    {
+      "ts": "2026-06-24T03:01:07+00:00",
+      "symbol": "PAXGUSDT",
+      "side": "long",
+      "fire_close": 4060.23,
+      "trigger": 4054.04
+    },
+    {
+      "ts": "2026-06-24T03:01:09+00:00",
+      "symbol": "ALLOUSDT",
+      "side": "short",
+      "fire_close": 0.4332,
+      "trigger": 0.43473
+    },
+    {
+      "ts": "2026-06-24T03:01:10+00:00",
+      "symbol": "BZUSDT",
+      "side": "long",
+      "fire_close": 75.93,
+      "trigger": 75.918
+    },
+    {
+      "ts": "2026-06-24T03:01:11+00:00",
+      "symbol": "MMTUSDT",
+      "side": "long",
+      "fire_close": 0.169,
+      "trigger": 0.16716
+    },
+    {
+      "ts": "2026-06-24T04:00:48+00:00",
+      "symbol": "IDUSDT",
+      "side": "short",
+      "fire_close": 0.03742,
+      "trigger": 0.03803
+    },
+    {
+      "ts": "2026-06-24T04:00:49+00:00",
+      "symbol": "BTWUSDT",
+      "side": "short",
+      "fire_close": 0.112792,
+      "trigger": 0.113467
+    },
+    {
+      "ts": "2026-06-24T04:00:51+00:00",
+      "symbol": "SLXUSDT",
+      "side": "short",
+      "fire_close": 0.2411,
+      "trigger": 0.24196
+    },
+    {
+      "ts": "2026-06-24T04:00:52+00:00",
+      "symbol": "CRVUSDT",
+      "side": "long",
+      "fire_close": 0.1994,
+      "trigger": 0.19904
+    },
+    {
+      "ts": "2026-06-24T05:00:54+00:00",
+      "symbol": "QCOMUSDT",
+      "side": "short",
+      "fire_close": 211.24,
+      "trigger": 213.734
+    },
+    {
+      "ts": "2026-06-24T06:00:47+00:00",
+      "symbol": "TAOUSDT",
+      "side": "short",
+      "fire_close": 224.36,
+      "trigger": 225.304
+    },
+    {
+      "ts": "2026-06-24T06:00:48+00:00",
+      "symbol": "XMRUSDT",
+      "side": "short",
+      "fire_close": 324.56,
+      "trigger": 325.444
+    },
+    {
+      "ts": "2026-06-24T06:00:49+00:00",
+      "symbol": "TNSRUSDT",
+      "side": "short",
+      "fire_close": 0.03575,
+      "trigger": 0.03616
+    },
+    {
+      "ts": "2026-06-24T06:00:50+00:00",
+      "symbol": "EPICUSDT",
+      "side": "long",
+      "fire_close": 0.4343,
+      "trigger": 0.43062
+    },
+    {
+      "ts": "2026-06-24T06:00:52+00:00",
+      "symbol": "AEROUSDT",
+      "side": "short",
+      "fire_close": 0.5316,
+      "trigger": 0.5316
+    },
+    {
+      "ts": "2026-06-24T06:00:53+00:00",
+      "symbol": "LITUSDT",
+      "side": "short",
+      "fire_close": 1.58,
+      "trigger": 1.5802
+    },
+    {
+      "ts": "2026-06-24T06:00:54+00:00",
+      "symbol": "AEHRUSDT",
+      "side": "short",
+      "fire_close": 107.14,
+      "trigger": 108.372
+    },
+    {
+      "ts": "2026-06-24T07:00:45+00:00",
+      "symbol": "UBUSDT",
+      "side": "long",
+      "fire_close": 0.06197,
+      "trigger": 0.061498
+    },
+    {
+      "ts": "2026-06-24T07:00:46+00:00",
+      "symbol": "RESOLVUSDT",
+      "side": "long",
+      "fire_close": 0.02107,
+      "trigger": 0.020902
+    },
+    {
+      "ts": "2026-06-24T07:00:48+00:00",
+      "symbol": "VELVETUSDT",
+      "side": "long",
+      "fire_close": 0.44162,
+      "trigger": 0.440498
+    },
+    {
+      "ts": "2026-06-24T07:00:49+00:00",
+      "symbol": "SKYAIUSDT",
+      "side": "long",
+      "fire_close": 0.31219,
+      "trigger": 0.310586
+    },
+    {
+      "ts": "2026-06-24T08:00:45+00:00",
+      "symbol": "CLUSDT",
+      "side": "long",
+      "fire_close": 72.109,
+      "trigger": 72.101
+    },
+    {
+      "ts": "2026-06-24T08:00:46+00:00",
+      "symbol": "NEARUSDT",
+      "side": "long",
+      "fire_close": 1.9557,
+      "trigger": 1.95146
+    },
+    {
+      "ts": "2026-06-24T08:00:47+00:00",
+      "symbol": "BZUSDT",
+      "side": "long",
+      "fire_close": 75.71,
+      "trigger": 75.688
+    },
+    {
+      "ts": "2026-06-24T08:00:48+00:00",
+      "symbol": "GUSDT",
+      "side": "short",
+      "fire_close": 0.003253,
+      "trigger": 0.0034026
+    },
+    {
+      "ts": "2026-06-24T08:00:50+00:00",
+      "symbol": "SAHARAUSDT",
+      "side": "short",
+      "fire_close": 0.01323,
+      "trigger": 0.013382
+    },
+    {
+      "ts": "2026-06-24T09:00:46+00:00",
+      "symbol": "TSEMUSDT",
+      "side": "short",
+      "fire_close": 289.04,
+      "trigger": 289.04
+    },
+    {
+      "ts": "2026-06-24T09:00:47+00:00",
+      "symbol": "NOWUSDT",
+      "side": "long",
+      "fire_close": 95.1,
+      "trigger": 94.378
+    },
+    {
+      "ts": "2026-06-24T10:00:46+00:00",
+      "symbol": "PEPEUSDT",
+      "side": "long",
+      "fire_close": 2.646e-06,
+      "trigger": 2.64424e-06
+    },
+    {
+      "ts": "2026-06-24T10:00:47+00:00",
+      "symbol": "ESPORTSUSDT",
+      "side": "long",
+      "fire_close": 0.02989,
+      "trigger": 0.029426
+    },
+    {
+      "ts": "2026-06-24T10:00:48+00:00",
+      "symbol": "HUSDT",
+      "side": "long",
+      "fire_close": 0.08604,
+      "trigger": 0.085524
+    },
+    {
+      "ts": "2026-06-24T10:00:50+00:00",
+      "symbol": "BSBUSDT",
+      "side": "long",
+      "fire_close": 0.31242,
+      "trigger": 0.310678
+    },
+    {
+      "ts": "2026-06-24T10:00:51+00:00",
+      "symbol": "FIDAUSDT",
+      "side": "long",
+      "fire_close": 0.022288,
+      "trigger": 0.0222324
+    },
+    {
+      "ts": "2026-06-24T10:00:52+00:00",
+      "symbol": "XANUSDT",
+      "side": "long",
+      "fire_close": 0.010533,
+      "trigger": 0.0104094
+    },
     {
       "ts": "2026-06-24T11:01:02+00:00",
       "symbol": "XRPUSDT",
@@ -49021,47 +50455,11 @@
     }
   ],
   "cs_tsmom_top10": {
-    "fetched_at": "2026-06-24T14:30:23.140162+00:00",
-    "pin_date": "2026-05-21",
-    "available": true,
-    "top10": [
-      {
-        "symbol": "ZECUSDT",
-        "last_close": 412.94,
-        "last_ts": "2026-06-24T00:00:00",
-        "score": 0.9924672804698467,
-        "rank": 1,
-        "in_top_today": true,
-        "in_top_yday": true,
-        "liquid": true,
-        "signal": "HOLD",
-        "reason": "ok"
-      },
-      {
-        "symbol": "NEARUSDT",
-        "last_close": 1.939,
-        "last_ts": "2026-06-24T00:00:00",
-        "score": 0.19195244985491597,
-        "rank": 2,
-        "in_top_today": true,
-        "in_top_yday": true,
-        "liquid": true,
-        "signal": "HOLD",
-        "reason": "ok"
-      },
-      {
-        "symbol": "TRXUSDT",
-        "last_close": 0.3292,
-        "last_ts": "2026-06-24T00:00:00",
-        "score": 0.04352510474103983,
-        "rank": 3,
-        "in_top_today": true,
-        "in_top_yday": true,
-        "liquid": true,
-        "signal": "HOLD",
-        "reason": "ok"
-      }
-    ]
+    "available": false,
+    "fetched_at": null,
+    "pin_date": "",
+    "top10": [],
+    "note": "Backfill at 2026-06-25T01:02:37.110278+09:00 — historical snapshot for 2026-06-24 23:50 KST was not captured. Routine 가 'today TOP10' 으로 쓰면 부정확할 수 있음. auto_fills + auto_signals 를 primary source 로 활용."
   },
   "account_reconciliation": {
     "ok": true,
@@ -49069,16 +50467,16 @@
     "open_balance": 253.38884516,
     "close_balance": 255.29147808,
     "balance_delta": 1.902632920000002,
-    "trade_flow": -20.3073664,
-    "fees": -8.92538472,
+    "trade_flow": -20.297831679999998,
+    "fees": -8.91585,
     "transfers_deposits": 22.21,
     "business_types": {
       "buy": 185,
-      "sell": 184,
+      "sell": 183,
       "contract_settle_fee": 13,
       "trans_from_exchange": 1
     },
-    "n_bills": 383,
+    "n_bills": 382,
     "no_external_flow": false
   },
   "auto_pnl_ledger": {
@@ -49738,5 +51136,56 @@
         "close_kst": "23:16"
       }
     ]
+  },
+  "_backfill_meta": {
+    "generated_by": "scripts/export_journal_for_date.py",
+    "generated_at_kst": "2026-06-25T01:02:45.057769+09:00",
+    "utc_window": [
+      "2026-06-23T15:00:00+00:00",
+      "2026-06-24T15:00:00+00:00"
+    ],
+    "wal_files_scanned": [
+      "D:\\project\\quantum-trader-agent\\logs\\shadow-bitget\\20260614T175511Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\shadow-bitget\\20260615T031810Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\shadow-bitget\\20260615T143300Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\shadow-bitget\\20260615T143957Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\shadow-bitget\\20260615T144956Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\shadow-bitget\\20260615T185628Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\shadow-bitget\\20260616T011143Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\shadow-bitget\\20260616T011536Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\shadow-bitget\\20260616T154213Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\shadow-bitget\\20260616T162603Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\shadow-bitget\\20260617T094021Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\shadow-bitget\\20260617T124341Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\shadow-bitget\\20260617T151148Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\shadow-bitget\\20260618T062407Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\shadow-bitget\\20260618T140312Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\shadow-bitget\\20260619T072704Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\shadow-bitget\\20260619T072907Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\shadow-bitget\\20260620T065227Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\shadow-bitget\\20260620T082718Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\shadow-bitget\\20260622T022216Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\shadow-bitget\\20260622T022417Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\shadow-bitget\\20260622T104928Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\shadow-bitget\\20260622T112321Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\shadow-bitget\\20260622T161617Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\shadow-bitget\\20260623T031643Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\shadow-bitget\\20260623T102136Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\shadow-bitget\\20260623T121316Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\shadow-bitget\\20260623T153455Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\shadow-bitget\\20260624T052314Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\shadow-bitget\\20260624T081905Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\shadow-bitget\\20260624T103024Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\shadow-bitget\\20260624T103750Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\shadow-bitget\\20260624T104813Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\shadow-bitget\\20260624T124903Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\shadow-bitget\\20260624T145437Z\\wal.jsonl",
+      "D:\\project\\quantum-trader-agent\\logs\\shadow-bitget\\20260624T145623Z\\wal.jsonl"
+    ],
+    "docker_error": null,
+    "airborne_source": "airborne_fire_store(history.jsonl)",
+    "airborne_store_count": 3135,
+    "airborne_store_earliest": "2026-05-23T17:00:33+00:00",
+    "airborne_docker_backfilled": 0
   }
 }
