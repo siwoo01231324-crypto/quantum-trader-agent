@@ -4079,6 +4079,15 @@ function fmtKstHm(iso){
       second:'2-digit',hour12:false}).format(new Date(iso));
   }catch(e){ return iso; }
 }
+function fmtKstDt(iso){
+  if(!iso) return '—';
+  try{
+    const p = new Intl.DateTimeFormat('en-GB',{timeZone:KST,month:'2-digit',day:'2-digit',
+      hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false})
+      .formatToParts(new Date(iso)).reduce(function(o,x){o[x.type]=x.value;return o;},{});
+    return p.month+'-'+p.day+' '+p.hour+':'+p.minute+':'+p.second;
+  }catch(e){ return iso; }
+}
 function esc(s){
   return String(s==null?'':s).replace(/[&<>"']/g,c=>(
     {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -4216,7 +4225,7 @@ function renderFiresTable(sims){
     const outcome = r.outcome || '—';
     const barTxt = r.bar_idx != null ? `봉${r.bar_idx}` : '—';
     return `<tr>
-      <td>${esc(fmtKstHm(r.ts))}</td>
+      <td>${esc(fmtKstDt(r.ts))}</td>
       <td class="sym-cell">${esc((r.symbol||'').replace(/USDT$/,''))}</td>
       <td><span class="side-badge ${sideCls}">${esc((r.side||'').toUpperCase())}</span></td>
       <td class="td-num">${esc(fmtPrice(r.fire_close))}</td>
@@ -4227,7 +4236,7 @@ function renderFiresTable(sims){
   }).join('');
   return `<div class="section-h2">🔥 개별 FIRE 상세 <span class="count">· ${rows.length}건 (최신순)</span></div>
     <table><thead><tr>
-      <th>시각 (KST)</th><th>Symbol</th><th>방향</th>
+      <th>일시 (KST)</th><th>Symbol</th><th>방향</th>
       <th class="td-num">진입가</th><th>결과</th><th class="td-num">pct</th><th class="td-num">도달봉</th>
     </tr></thead><tbody>${trs}</tbody></table>
     <div class="note">
@@ -4574,6 +4583,15 @@ function fmtKstHm(iso){
       second:'2-digit',hour12:false}).format(new Date(iso));
   }catch(e){ return iso; }
 }
+function fmtKstDt(iso){
+  if(!iso) return '—';
+  try{
+    const p = new Intl.DateTimeFormat('en-GB',{timeZone:KST,month:'2-digit',day:'2-digit',
+      hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false})
+      .formatToParts(new Date(iso)).reduce(function(o,x){o[x.type]=x.value;return o;},{});
+    return p.month+'-'+p.day+' '+p.hour+':'+p.minute+':'+p.second;
+  }catch(e){ return iso; }
+}
 function esc(s){
   return String(s==null?'':s).replace(/[&<>"']/g,c=>(
     {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -4712,7 +4730,7 @@ function renderCrossesTable(sims){
     const outcome = r.outcome || '—';
     const barTxt = r.bar_idx != null ? `봉${r.bar_idx}` : '—';
     return `<tr>
-      <td>${esc(fmtKstHm(r.ts))}</td>
+      <td>${esc(fmtKstDt(r.ts))}</td>
       <td class="sym-cell">${esc((r.symbol||'').replace(/USDT$/,''))}</td>
       <td><span class="side-badge ${crossCls}">${esc(crossTxt)}</span></td>
       <td class="td-num">${esc(fmtPrice(r.close))}</td>
@@ -4723,7 +4741,7 @@ function renderCrossesTable(sims){
   }).join('');
   return `<div class="section-h2">✚ 개별 CROSS 상세 <span class="count">· ${rows.length}건 (최신순)</span></div>
     <table><thead><tr>
-      <th>시각 (KST)</th><th>Symbol</th><th>크로스</th>
+      <th>일시 (KST)</th><th>Symbol</th><th>크로스</th>
       <th class="td-num">진입가</th><th>결과</th><th class="td-num">pct</th><th class="td-num">도달봉</th>
     </tr></thead><tbody>${trs}</tbody></table>
     <div class="note">
@@ -4744,7 +4762,7 @@ function renderExcluded(d){
     const crossCls = r.cross === 'death' ? 'is-short' : 'is-long';
     const crossTxt = r.cross === 'death' ? 'DEATH' : 'GOLDEN';
     return `<tr>
-      <td>${esc(fmtKstHm(r.ts))}</td>
+      <td>${esc(fmtKstDt(r.ts))}</td>
       <td class="sym-cell">${esc((r.symbol||'').replace(/USDT$/,''))}</td>
       <td><span class="side-badge ${crossCls}">${esc(crossTxt)}</span></td>
       <td class="td-num">${esc(fmtPrice(r.close))}</td>
@@ -4754,7 +4772,7 @@ function renderExcluded(d){
   }).join('');
   return `<div class="section-h2">⊘ confluence 로 걸러낸 CROSS <span class="count">· ${rows.length}건 (최신순)</span></div>${note}
     <table><thead><tr>
-      <th>시각 (KST)</th><th>Symbol</th><th>크로스</th>
+      <th>일시 (KST)</th><th>Symbol</th><th>크로스</th>
       <th class="td-num">진입가</th><th>제외 사유</th><th class="td-num">pct(raw)</th>
     </tr></thead><tbody>${trs}</tbody></table>
     <div class="note">pct(raw) = 그 CROSS 를 그대로 잡았다면의 시뮬 손익(gross) — 걸렀을 때 피한/놓친 손익 참고용.</div>`;
@@ -5037,6 +5055,15 @@ function fmtKstHm(iso){
       second:'2-digit',hour12:false}).format(new Date(iso));
   }catch(e){ return iso; }
 }
+function fmtKstDt(iso){
+  if(!iso) return '—';
+  try{
+    const p = new Intl.DateTimeFormat('en-GB',{timeZone:KST,month:'2-digit',day:'2-digit',
+      hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false})
+      .formatToParts(new Date(iso)).reduce(function(o,x){o[x.type]=x.value;return o;},{});
+    return p.month+'-'+p.day+' '+p.hour+':'+p.minute+':'+p.second;
+  }catch(e){ return iso; }
+}
 function esc(s){
   return String(s==null?'':s).replace(/[&<>"']/g,c=>(
     {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -5175,7 +5202,7 @@ function renderSignalsTable(sims){
     const outcome = r.outcome || '—';
     const barTxt = r.bar_idx != null ? `봉${r.bar_idx}` : '—';
     return `<tr>
-      <td>${esc(fmtKstHm(r.ts))}</td>
+      <td>${esc(fmtKstDt(r.ts))}</td>
       <td class="sym-cell">${esc((r.symbol||'').replace(/USDT$/,''))}</td>
       <td><span class="side-badge ${sideCls}">${esc(sideTxt)}</span></td>
       <td class="td-num">${esc(fmtPrice(r.close))}</td>
@@ -5188,7 +5215,7 @@ function renderSignalsTable(sims){
   }).join('');
   return `<div class="section-h2">✚ 개별 시그널 상세 <span class="count">· ${rows.length}건 (최신순)</span></div>
     <table><thead><tr>
-      <th>시각 (KST)</th><th>Symbol</th><th>방향</th>
+      <th>일시 (KST)</th><th>Symbol</th><th>방향</th>
       <th class="td-num">진입가</th><th class="td-num">QPP 본/시</th><th class="td-num">Chop</th>
       <th>결과</th><th class="td-num">pct</th><th class="td-num">도달봉</th>
     </tr></thead><tbody>${trs}</tbody></table>

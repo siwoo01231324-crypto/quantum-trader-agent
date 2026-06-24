@@ -344,6 +344,164 @@ def test_no_entry_filters_default_off_keeps_gate(monkeypatch):
     assert asyncio.run(c.sweep_once()) == 0  # 게이트 차단 = 기본 동작
 
 
+# ── AIRBORNE_TIME_GATE_ONLY (2026-06-25, 무필터+타임게이트만 복원) ──────────────
+# 콘텐츠 필터(btc/숏차단시각/고변동/펌핑/폭락)는 우회하되 타임게이트는 유지.
+# no_entry_filters 와 달리 *시간대 밖 fire 는 여전히 차단*.
+
+
+def test_time_gate_only_blocks_out_of_hour(monkeypatch):
+    """TIME_GATE_ONLY ON → 게이트 밖 시간은 여전히 차단 (no_entry_filters 와 차이)."""
+    monkeypatch.setenv("AIRBORNE_TIME_GATE_ONLY", "1")
+    monkeypatch.delenv("AIRBORNE_NO_ENTRY_FILTERS", raising=False)
+    ts = _recent_iso(minutes_ago=1)
+    fk = int(pd.Timestamp(ts).tz_convert("Asia/Seoul").floor("1h").hour)
+    bad = frozenset({(fk + 5) % 24})  # fire hour 를 게이트에서 제외
+    orch = _FakeOrch()
+    c, _ = _consumer(
+        _FakeStore([_fire("SOLUSDT", "long", ts)]), orch, [_spec(hours=bad)],
+    )
+    assert asyncio.run(c.sweep_once()) == 0  # 타임게이트 살아있음 → 차단
+    assert orch.calls == []
+
+
+def test_time_gate_only_enters_in_hour(monkeypatch):
+    """TIME_GATE_ONLY ON → 게이트 안 시간은 진입."""
+    monkeypatch.setenv("AIRBORNE_TIME_GATE_ONLY", "1")
+    ts = _recent_iso(minutes_ago=1)
+    h = int(pd.Timestamp(ts).tz_convert("Asia/Seoul").floor("1h").hour)
+    orch = _FakeOrch()
+    c, _ = _consumer(
+        _FakeStore([_fire("SOLUSDT", "long", ts)]), orch, [_spec(hours=frozenset({h}))],
+    )
+    assert asyncio.run(c.sweep_once()) == 1
+
+
+def test_time_gate_only_bypasses_btc_downtrend(monkeypatch):
+    """TIME_GATE_ONLY ON → 게이트 안이면 BTC 하락추세 롱필터는 우회(진입)."""
+    monkeypatch.setenv("AIRBORNE_TIME_GATE_ONLY", "1")
+    ts = _recent_iso(minutes_ago=1)
+    h = int(pd.Timestamp(ts).tz_convert("Asia/Seoul").floor("1h").hour)
+    orch = _FakeOrch()
+    c, _ = _consumer(
+        _FakeStore([_fire("SOLUSDT", "long", ts)]), orch,
+        [_spec(hours=frozenset({h}), btc_filter=True)],
+        btc_ohlcv_provider=lambda: _btc_downtrend_hist(),
+    )
+    assert asyncio.run(c.sweep_once()) == 1  # 하락추세인데도 진입 (콘텐츠 필터 우회)
+
+
+def test_time_gate_only_bypasses_momentum_and_vol(monkeypatch):
+    """TIME_GATE_ONLY ON → 게이트 안이면 폭락(-30%)·고변동(10%/h) 롱도 진입."""
+    monkeypatch.setenv("AIRBORNE_TIME_GATE_ONLY", "1")
+    ts = _recent_iso(minutes_ago=1)
+    h = int(pd.Timestamp(ts).tz_convert("Asia/Seoul").floor("1h").hour)
+    orch = _FakeOrch()
+    c, _ = _consumer(
+        _FakeStore([_fire("SOLUSDT", "long", ts)]), orch,
+        [_spec(hours=frozenset({h}))],
+        klines_fetcher=_stub_fetcher(-30.0, range_pct=10.0),  # 폭락+고변동
+    )
+    assert asyncio.run(c.sweep_once()) == 1
+
+
+def test_no_entry_filters_precedence_over_time_gate_only(monkeypatch):
+    """둘 다 ON → no_entry_filters 우선(타임게이트까지 우회 = 게이트 밖도 진입)."""
+    monkeypatch.setenv("AIRBORNE_NO_ENTRY_FILTERS", "1")
+    monkeypatch.setenv("AIRBORNE_TIME_GATE_ONLY", "1")
+    ts = _recent_iso(minutes_ago=1)
+    fk = int(pd.Timestamp(ts).tz_convert("Asia/Seoul").floor("1h").hour)
+    bad = frozenset({(fk + 5) % 24})
+    orch = _FakeOrch()
+    c, _ = _consumer(
+        _FakeStore([_fire("SOLUSDT", "long", ts)]), orch, [_spec(hours=bad)],
+    )
+    assert asyncio.run(c.sweep_once()) == 1  # 게이트 밖인데도 진입 = no_entry 우선
+
+
+# ── 개별 필터 ENV 토글 (2026-06-25, AIRBORNE_FILTER_*) ─────────────────────────
+# 6 필터(time_gate/btc_downtrend/short_block/high_vol/short_pump/long_crash) 각각
+# AIRBORNE_FILTER_<NAME>=1/0. 매크로 기본값을 개별 토글이 덮어씀.
+
+
+def test_filter_time_gate_only_plus_btc_restored(monkeypatch):
+    """TIME_GATE_ONLY 위에 BTC 필터만 개별 복원 → 게이트 안인데 BTC하락 롱 차단."""
+    monkeypatch.setenv("AIRBORNE_TIME_GATE_ONLY", "1")
+    monkeypatch.setenv("AIRBORNE_FILTER_BTC_DOWNTREND", "1")  # btc 만 다시 ON
+    monkeypatch.delenv("AIRBORNE_NO_ENTRY_FILTERS", raising=False)
+    ts = _recent_iso(minutes_ago=1)
+    h = int(pd.Timestamp(ts).tz_convert("Asia/Seoul").floor("1h").hour)
+    orch = _FakeOrch()
+    c, _ = _consumer(
+        _FakeStore([_fire("SOLUSDT", "long", ts)]), orch,
+        [_spec(hours=frozenset({h}), btc_filter=True)],
+        btc_ohlcv_provider=lambda: _btc_downtrend_hist(),
+    )
+    assert asyncio.run(c.sweep_once()) == 0  # btc 필터만 살아남 → 하락추세 롱 차단
+    assert orch.calls == []
+
+
+def test_filter_individual_disable_time_gate_only(monkeypatch):
+    """기본(전부 ON)에서 타임게이트만 개별 OFF → 게이트 밖 진입, BTC필터는 여전히 작동."""
+    monkeypatch.delenv("AIRBORNE_NO_ENTRY_FILTERS", raising=False)
+    monkeypatch.delenv("AIRBORNE_TIME_GATE_ONLY", raising=False)
+    monkeypatch.setenv("AIRBORNE_FILTER_TIME_GATE", "0")  # 타임게이트만 끔
+    ts = _recent_iso(minutes_ago=1)
+    fk = int(pd.Timestamp(ts).tz_convert("Asia/Seoul").floor("1h").hour)
+    bad = frozenset({(fk + 5) % 24})
+    orch = _FakeOrch()
+    c, _ = _consumer(
+        _FakeStore([_fire("SOLUSDT", "long", ts)]), orch, [_spec(hours=bad)],
+    )
+    assert asyncio.run(c.sweep_once()) == 1  # 타임게이트 꺼져 게이트 밖도 진입
+
+
+def test_filter_btc_disable_alone(monkeypatch):
+    """기본(전부 ON)에서 BTC 필터만 개별 OFF → 게이트 안 BTC하락 롱 진입 (나머지 ON)."""
+    monkeypatch.delenv("AIRBORNE_NO_ENTRY_FILTERS", raising=False)
+    monkeypatch.delenv("AIRBORNE_TIME_GATE_ONLY", raising=False)
+    monkeypatch.setenv("AIRBORNE_FILTER_BTC_DOWNTREND", "0")  # btc 만 끔
+    ts = _recent_iso(minutes_ago=1)
+    h = int(pd.Timestamp(ts).tz_convert("Asia/Seoul").floor("1h").hour)
+    orch = _FakeOrch()
+    c, _ = _consumer(
+        _FakeStore([_fire("SOLUSDT", "long", ts)]), orch,
+        [_spec(hours=frozenset({h}), btc_filter=True)],
+        btc_ohlcv_provider=lambda: _btc_downtrend_hist(),
+    )
+    assert asyncio.run(c.sweep_once()) == 1  # btc 필터만 꺼져 하락추세 롱 진입
+
+
+def test_filter_high_vol_disable_alone(monkeypatch):
+    """기본(전부 ON)에서 고변동 필터만 OFF → 고변동 코인 진입 (폭락 필터는 ON 유지)."""
+    monkeypatch.delenv("AIRBORNE_NO_ENTRY_FILTERS", raising=False)
+    monkeypatch.delenv("AIRBORNE_TIME_GATE_ONLY", raising=False)
+    monkeypatch.setenv("AIRBORNE_FILTER_HIGH_VOL", "0")  # 고변동만 끔
+    ts = _recent_iso(minutes_ago=1)
+    h = int(pd.Timestamp(ts).tz_convert("Asia/Seoul").floor("1h").hour)
+    orch = _FakeOrch()
+    c, _ = _consumer(
+        _FakeStore([_fire("SOLUSDT", "long", ts)]), orch,
+        [_spec(hours=frozenset({h}))],
+        klines_fetcher=_stub_fetcher(0.0, range_pct=10.0),  # 고변동(10%/h)만, 폭락無
+    )
+    assert asyncio.run(c.sweep_once()) == 1  # 고변동 필터 꺼져 진입
+
+
+def test_filter_default_all_on_unchanged(monkeypatch):
+    """매크로·개별 토글 전부 미설정 → 6개 다 ON (현행 production 불변)."""
+    for k in ("AIRBORNE_NO_ENTRY_FILTERS", "AIRBORNE_TIME_GATE_ONLY",
+              "AIRBORNE_FILTER_TIME_GATE", "AIRBORNE_FILTER_BTC_DOWNTREND"):
+        monkeypatch.delenv(k, raising=False)
+    ts = _recent_iso(minutes_ago=1)
+    fk = int(pd.Timestamp(ts).tz_convert("Asia/Seoul").floor("1h").hour)
+    bad = frozenset({(fk + 5) % 24})
+    orch = _FakeOrch()
+    c, _ = _consumer(
+        _FakeStore([_fire("SOLUSDT", "long", ts)]), orch, [_spec(hours=bad)],
+    )
+    assert asyncio.run(c.sweep_once()) == 0  # 타임게이트 ON → 차단 (현행 동작)
+
+
 # ── cross-airborne 봉 dedup (2026-06-23, 순차 재진입 차단) ──────────────────────
 # 한 종목-봉 fire 는 airborne 전 전략 통틀어 1회만 진입. A 진입·청산 후 B 가 같은
 # fire 재진입하던 사고(DEXE) 차단. #471(_live_entered 동시보유)을 봉 단위로 보완.
