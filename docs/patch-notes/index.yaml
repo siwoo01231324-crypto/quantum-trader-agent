@@ -15,6 +15,21 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.95"
+    date: "2026-06-24"
+    title: "에어본 적중 날짜별 달력 — 월 그리드로 어떤날 몇% 보기"
+    tags: [feature]
+    summary: >
+      에어본 적중 페이지에 window(오늘/7d/30d) 외 날짜별 달력 추가. 월 그리드에서
+      각 날의 net%(초록=익절/빨강=손실)+건수를 한눈에, ◀/▶/이번달 네비, hover 시
+      승률/PF/TP·SL·TO. 신규 `/api/airborne_calendar?month=YYYY-MM` 가 metrics 와
+      동일 sim 경로(슬리피지·미체결 제외 포함) 재사용 후 KST 일자로 grouping.
+    items:
+      - "GET /api/airborne_calendar?month=YYYY-MM&rule=default|2pct → {month, days:{date:{n,sum_pct,net_pct,win_rate,pf,tp,sl,timeout}}, ...}. 5분 캐시, 잘못된 month→400."
+      - "/airborne 페이지 하단 달력 UI(loadCalendar/calNav/renderCalendar), default·2pct 룰 분리(CAL_RULE)."
+      - "테스트 tests/dashboard/test_airborne_calendar.py 5건. 검증: 2026-06 24일 집계(06-19 +25.4%·06-23 −8.1%·06-24 −7.9%)."
+    refs:
+      - "src/dashboard/.ai.md"
   - version: "v0.6.94"
     date: "2026-06-24"
     title: "에어본 적중 sim 실거래 정합 — 진입 슬리피지 앵커 + 미체결 종목 제외"
