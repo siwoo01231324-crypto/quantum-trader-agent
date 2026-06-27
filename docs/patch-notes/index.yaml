@@ -28,8 +28,8 @@ versions:
       - "이익목표(profit lock): 당일 +PCT%(기본 3.5%, of equity) 도달 시 당일 신규진입 정지 — 오른 날 익절 잠금(06-26 고점+16.67→마감+11.05류)."
       - "고점반납(give-back lock): 매 sweep(~15s) intraday 고점이익 추적, 고점이 ARM_PCT%(기본 1%) 도달 후 GIVEBACK_PCT%(기본 40%) 반납 시 정지 — '벌었던 거 토해냄'에 정통 대응."
       - "손실한도(loss lock): 매크로 제외, 명시 opt-in(AIRBORNE_DAILY_LOSS_LOCK=1)만. 27일류(초반부터 흘러내림) 대비 코드 보존."
-      - "전부 % of equity, KST 자정 리셋, 정지 시 텔레그램 1회. provider 미주입/equity≤0 → fail-open(거래 허용)."
-      - "caveat: native TP/SL·수동청산(숫자 coid) 미귀속분은 aggregator daily 누락 가능 → 게이트가 약간 늦게 걸릴 수 있음. 후속 ledger 정합 보강 예정."
+      - "전부 % of equity, KST 자정(00:00 KST 달력) 리셋, 정지 시 텔레그램 1회. provider 미주입/equity≤0 → fail-open."
+      - "소스 = 거래소 ledger(fetch_position_history_pnl) 단일 진실. WAL aggregator 는 재시작 시 유령 체결로 +12.3% 오발동(실제 −5.01)해 소스 금지. loop.py 백그라운드 태스크가 TTL(기본 150s)마다 ledger 캐시 → 게이트는 캐시값만 읽음(논블로킹)."
       - "테스트 tests/live/test_airborne_fire_consumer_daily_guard.py 15건 + 기존 consumer 56건 회귀 green."
     refs:
       - "docs/specs/airborne-daily-pnl-guards.md"

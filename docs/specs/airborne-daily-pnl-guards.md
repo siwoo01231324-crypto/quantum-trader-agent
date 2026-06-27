@@ -38,18 +38,27 @@ created: 2026-06-27
 
 ### 동작 규칙
 - **신규 진입만 차단**. 미청산 포지션은 기존 TP/SL 그대로 진행(강제청산 안 함).
-- **KST 자정 리셋**. daily PnL 은 `PnLAggregator.daily`(KST business-date 리셋)
-  주입. intraday 고점도 KST date 로 키잉 → 날 바뀌면 리셋. **다음날 자동 재개**
-  (별도 unlock 불필요 — 기존 `--unlock-daily-kill` 같은 수동 해제 없음).
+- **KST 자정 리셋**(00:00 KST, 달력 자정 — 2026-06-27 사용자 결정). daily PnL 은
+  **거래소 ledger**(`fetch_position_history_pnl`, history-position netProfit,
+  KST 자정 윈도우)에서 읽는다. intraday 고점도 KST date 로 키잉 → 날 바뀌면
+  리셋. **다음날 자동 재개**(별도 unlock 불필요).
 - **정지 시 텔레그램 1회/일 통지** ("🛑 당일 거래 정지 — <사유>").
 - **fail-open**: `daily_pnl_provider` 미주입 또는 `equity ≤ 0`(자본 미확보) 이면
   게이트 비활성(거래 허용) — 자본 미확보로 전량 보류되는 사고 방지.
 
-### caveat (정확도)
-native TP/SL·수동청산(숫자 broker coid)은 strategy_id 귀속 실패로 aggregator
-`daily` 집계에서 누락될 수 있음(`pnl_aggregator.ingest_fill_event` 주석 참조).
-→ 게이트가 실제 ledger 대비 약간 **늦게** 걸릴 수 있다. 후속 보강안:
-주기적으로 거래소 `fetch_position_history_pnl` 로 in-process daily 를 정합.
+### 소스 = 거래소 ledger (WAL aggregator 금지)
+**daily PnL 소스는 거래소 ledger(`fetch_position_history_pnl`) 단일 진실.**
+초기 구현은 `PnLAggregator.daily`(WAL replay 기반)를 썼으나, 재시작 시 유령
+체결로 당일 손익을 부풀리는 사고 발생(2026-06-27: aggregator +12.3% vs 실제
+ledger −5.01 → 이익목표 오발동). WAL round-trip 금지 규칙(저널 일일손익 규칙 4)과
+동일 — ledger netProfit 은 합산 기반이라 유령·중복 없음. native TP/SL·수동청산도
+ledger 엔 다 잡혀 누락 문제도 없음.
+
+배선: `loop.py` 백그라운드 태스크(`_daily_pnl_refresh_loop`)가 `AIRBORNE_DAILY_
+PNL_TTL_SEC`(기본 150s)마다 `asyncio.to_thread(fetch_position_history_pnl,
+today_kst)` 로 ledger 를 읽어 scalar 캐시 → 게이트는 캐시값만 읽음(논블로킹).
+첫 성공 전/실패 시 None → fail-open. **staleness ≤ TTL(기본 150s)** — 일 단위
+가드라 무방. 게이트 enable 시에만 태스크 가동(불필요 API 회피).
 
 ## ENV 토글
 
@@ -79,8 +88,8 @@ native TP/SL·수동청산(숫자 broker coid)은 strategy_id 귀속 실패로 a
 - 코드: `src/live/airborne_fire_consumer.py`
   (`_evaluate_daily_halt` / `_maybe_notify_halt` / `sweep_once` 훅).
 - 배선: `src/live/loop.py::_start_airborne_fire_consumer`
-  (`daily_pnl_provider = lambda: pnl_aggregator.daily`),
-  `scripts/live_run.py` (`config.pnl_aggregator = pnl_aggregator`).
+  (`_daily_pnl_refresh_loop` 백그라운드 태스크 → ledger 캐시 → `daily_pnl_provider`).
+  ENV `AIRBORNE_DAILY_PNL_TTL_SEC`(기본 150) 갱신 주기.
 - 테스트: `tests/live/test_airborne_fire_consumer_daily_guard.py` (13건 —
   3종 발동/미발동 경계, 고점반납 arm·KST 리셋, fail-open, 매크로, sweep 단락).
 

@@ -1584,12 +1584,59 @@ def _start_airborne_fire_consumer(
         from src.brokers.binance.market_ws import fetch_klines_rest
         return await fetch_klines_rest(symbol=symbol, interval="1h", limit=100)
 
-    # 당일 손익 정지 게이트용 daily PnL provider — PnLAggregator.daily (KST 자정
-    # 리셋). aggregator 미주입이면 None → consumer 가 게이트 fail-open(거래 허용).
+    # 당일 손익 정지 게이트용 daily PnL — **거래소 ledger(history-position
+    # netProfit, KST 자정 윈도우) 단일 진실**. WAL aggregator(PnLAggregator.daily)
+    # 는 재시작 시 유령 체결로 당일 손익을 부풀려(2026-06-27 +12.3% 오발동, 실제
+    # ledger -5.01) 게이트 소스로 부적합. 백그라운드 태스크가 주기적으로 ledger 를
+    # 읽어 캐시하고, 게이트는 캐시값(scalar)만 읽는다(논블로킹). 첫 성공 전/실패 시
+    # None → consumer 가 fail-open(거래 허용). native TP/SL·수동청산도 ledger 엔
+    # 다 잡혀 aggregator 의 미귀속 누락 문제도 없음.
+    _daily_pnl_cache: dict = {"val": None}
+
+    def _daily_guards_on() -> bool:
+        keys = (
+            "AIRBORNE_DAILY_GUARDS", "AIRBORNE_DAILY_PROFIT_LOCK",
+            "AIRBORNE_DAILY_GIVEBACK_LOCK", "AIRBORNE_DAILY_LOSS_LOCK",
+        )
+        return any(
+            os.environ.get(k, "").strip().lower() in ("1", "true", "yes", "on")
+            for k in keys
+        )
+
     _daily_pnl_provider = (
-        (lambda: float(pnl_aggregator.daily))
-        if pnl_aggregator is not None else None
+        (lambda: _daily_pnl_cache["val"]) if _daily_guards_on() else None
     )
+
+    async def _daily_pnl_refresh_loop() -> None:
+        """거래소 ledger 당일 실현손익(KST 자정 기준)을 주기 갱신 → _daily_pnl_cache.
+        blocking REST 는 asyncio.to_thread. 실패 시 직전 값 유지(flap 방지)."""
+        from datetime import datetime as _dt
+        from zoneinfo import ZoneInfo as _ZI
+        _kst = _ZI("Asia/Seoul")
+        ttl = float(os.environ.get("AIRBORNE_DAILY_PNL_TTL_SEC", "150") or 150)
+        while not stop_event.is_set():
+            try:
+                from scripts.bitget_account_reconcile import (
+                    fetch_position_history_pnl,
+                )
+                date_kst = _dt.now(_kst).strftime("%Y-%m-%d")
+                r = await asyncio.to_thread(fetch_position_history_pnl, date_kst)
+                if isinstance(r, dict) and r.get("ok"):
+                    _daily_pnl_cache["val"] = float(r["total_net"])
+                    logger.info(
+                        "daily pnl ledger refresh: %s net=%.2f (게이트 소스)",
+                        date_kst, _daily_pnl_cache["val"],
+                    )
+                else:
+                    logger.warning(
+                        "daily pnl ledger refresh not ok: %s", r,
+                    )
+            except Exception as err:  # noqa: BLE001 — 게이트 갱신 실패는 fail-open
+                logger.warning("daily pnl ledger refresh failed: %s", err)
+            try:
+                await asyncio.wait_for(stop_event.wait(), timeout=ttl)
+            except asyncio.TimeoutError:
+                pass
 
     consumer = AirborneFireConsumer(
         fire_store=fire_store,
@@ -1615,6 +1662,15 @@ def _start_airborne_fire_consumer(
     asyncio.create_task(
         _btc_regime_refresh_loop(), name="btc-regime-refresh",
     )
+    # 당일 손익 게이트가 켜진 경우에만 ledger 갱신 태스크 가동(불필요 API 회피).
+    if _daily_guards_on():
+        asyncio.create_task(
+            _daily_pnl_refresh_loop(), name="daily-pnl-refresh",
+        )
+        logger.info(
+            "daily pnl guard 활성 — ledger 갱신 태스크 가동(%ss)",
+            os.environ.get("AIRBORNE_DAILY_PNL_TTL_SEC", "150"),
+        )
     # run_loop 자체가 "started (decoupled from bar loop)" 를 emit — 여기선 배선
     # 세부(specs/store)만 추가 기록.
     logger.info(
