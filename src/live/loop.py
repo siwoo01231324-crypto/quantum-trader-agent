@@ -786,6 +786,7 @@ async def run_shadow_loop(
                     wal=wal,
                     metrics=metrics,
                     position_store=config.position_store,
+                    pnl_aggregator=getattr(config, "pnl_aggregator", None),
                     release_live_entered=_release_live_entered,
                     stop_event=stop_event,
                 )
@@ -1457,6 +1458,7 @@ def _start_airborne_fire_consumer(
     position_store,
     release_live_entered: Callable[[str, str], None],
     stop_event: asyncio.Event,
+    pnl_aggregator=None,
 ) -> "asyncio.Task | None":
     """AirborneFireConsumer 구성 + run_loop 백그라운드 task 시작.
 
@@ -1582,6 +1584,13 @@ def _start_airborne_fire_consumer(
         from src.brokers.binance.market_ws import fetch_klines_rest
         return await fetch_klines_rest(symbol=symbol, interval="1h", limit=100)
 
+    # 당일 손익 정지 게이트용 daily PnL provider — PnLAggregator.daily (KST 자정
+    # 리셋). aggregator 미주입이면 None → consumer 가 게이트 fail-open(거래 허용).
+    _daily_pnl_provider = (
+        (lambda: float(pnl_aggregator.daily))
+        if pnl_aggregator is not None else None
+    )
+
     consumer = AirborneFireConsumer(
         fire_store=fire_store,
         orchestrator=orchestrator,
@@ -1596,6 +1605,7 @@ def _start_airborne_fire_consumer(
         interval_sec=interval,
         pace_sec=pace,
         klines_fetcher=_token_1h_fetcher,
+        daily_pnl_provider=_daily_pnl_provider,
     )
     task = asyncio.create_task(
         consumer.run_loop(stop_event), name="airborne-fire-consumer",
