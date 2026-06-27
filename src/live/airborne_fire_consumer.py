@@ -37,6 +37,10 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 _KST = "Asia/Seoul"
+# astimezone() 용 tzinfo 객체 (위 _KST 문자열은 pandas tz_convert 전용).
+from zoneinfo import ZoneInfo as _ZoneInfo  # noqa: E402
+
+_KST_TZ = _ZoneInfo("Asia/Seoul")
 _BTC_SYMBOL = "BTCUSDT"
 
 
@@ -84,6 +88,7 @@ class AirborneFireConsumer:
         interval_sec: float = 15.0,
         pace_sec: float = 0.15,
         klines_fetcher: "Callable[[str], Awaitable] | None" = None,
+        daily_pnl_provider: "Callable[[], float] | None" = None,
     ) -> None:
         self._store = fire_store
         self._orch = orchestrator
@@ -184,6 +189,50 @@ class AirborneFireConsumer:
             self._f_time_gate, self._f_btc_downtrend, self._f_short_block,
             self._f_high_vol, self._f_short_pump, self._f_long_crash,
         )
+        # ── 당일 손익 기반 전체 진입 정지 게이트 3종 (2026-06-27) ─────────────────
+        # 오전에 번 걸 오후·밤에 토해내는 패턴(24일~ 반복) 방어. 전부 % of equity
+        # 기준, KST 자정 리셋, *신규진입만* 차단(미청산 포지션은 TP/SL 그대로 유지),
+        # 다음날 자동 재개(별도 unlock 불필요). daily_pnl_provider 는 PnLAggregator.
+        # daily (KST business-date 리셋) 주입. provider 없거나 equity≤0 이면 fail-open.
+        #   AIRBORNE_DAILY_GUARDS=1  → 3종 전부 기본 ON (개별 토글로 덮어쓰기 가능)
+        #   개별: AIRBORNE_DAILY_PROFIT_LOCK / _GIVEBACK_LOCK / _LOSS_LOCK = 1/0
+        #   임계: _PROFIT_TARGET_PCT(3.5) / _GIVEBACK_PCT(40) / _GIVEBACK_ARM_PCT(1.0)
+        #         / _LOSS_LIMIT_PCT(3.0)
+        # caveat: native TP/SL·수동청산(숫자 coid)은 strategy_id 귀속 실패로
+        # aggregator daily 에서 누락될 수 있음 → 게이트가 약간 늦게 걸릴 수 있다.
+        # 매크로 AIRBORNE_DAILY_GUARDS=1 → 이익목표+고점반납 2종만 ON.
+        # 손실한도는 매크로 제외(2026-06-27 사용자 결정) — 명시 opt-in 만
+        # (AIRBORNE_DAILY_LOSS_LOCK=1). 코드는 27일류(초반부터 흘러내림) 대비 보존.
+        _all_guards = _flag("AIRBORNE_DAILY_GUARDS", False)
+        self._f_profit_lock = _flag("AIRBORNE_DAILY_PROFIT_LOCK", _all_guards)
+        self._f_giveback_lock = _flag("AIRBORNE_DAILY_GIVEBACK_LOCK", _all_guards)
+        self._f_daily_loss_lock = _flag("AIRBORNE_DAILY_LOSS_LOCK", False)
+
+        def _envf(name: str, default: float) -> float:
+            try:
+                return float(_os.environ.get(name, "") or default)
+            except (TypeError, ValueError):
+                return default
+
+        self._daily_profit_target_pct = _envf("AIRBORNE_DAILY_PROFIT_TARGET_PCT", 3.5)
+        self._giveback_pct = _envf("AIRBORNE_DAILY_GIVEBACK_PCT", 40.0)
+        self._giveback_arm_pct = _envf("AIRBORNE_DAILY_GIVEBACK_ARM_PCT", 1.0)
+        self._daily_loss_limit_pct = _envf("AIRBORNE_DAILY_LOSS_LIMIT_PCT", 3.0)
+        self._daily_pnl_provider = daily_pnl_provider
+        # intraday peak 추적 (KST date 로 키 — 날 바뀌면 리셋). give-back 락 전용.
+        self._intraday_peak_date: "date | None" = None
+        self._intraday_peak_pnl: float = 0.0
+        # 정지 텔레그램 1회/일 통지 dedup.
+        self._halt_notified_date: "date | None" = None
+        if self._f_profit_lock or self._f_giveback_lock or self._f_daily_loss_lock:
+            logger.warning(
+                "AirborneFireConsumer DAILY GUARDS — profit_lock=%s(%.1f%%) "
+                "giveback_lock=%s(%.0f%% peak≥%.1f%%) loss_lock=%s(-%.1f%%) "
+                "[%% of equity, KST 자정 리셋, 신규진입만 차단]",
+                self._f_profit_lock, self._daily_profit_target_pct,
+                self._f_giveback_lock, self._giveback_pct, self._giveback_arm_pct,
+                self._f_daily_loss_lock, self._daily_loss_limit_pct,
+            )
         # symbol → (stamp, df|None). 1h 캔들 5분 캐시 — 24h 변화·평균변동폭 공용.
         self._klines_cache: dict[str, tuple] = {}
         # cross-airborne 봉 dedup (2026-06-23): symbol → 마지막 진입 bar_open_key.
@@ -282,6 +331,81 @@ class AirborneFireConsumer:
             "key": (symbol, side, bar_open_key), "reason": reason,
         })
 
+    # ── 당일 손익 정지 게이트 ──────────────────────────────────────────────────
+
+    def _evaluate_daily_halt(self, now: datetime) -> "str | None":
+        """당일 손익 기반 전체 진입 정지 평가 (KST 자정 리셋).
+
+        반환: None=거래 허용, str=정지 사유(텔레그램/로그 라벨).
+        3종(손실한도→이익목표→고점반납) 순서로 평가. 전부 % of equity 기준.
+        매 sweep 호출되어 intraday peak 를 갱신하므로 give-back 락이 작동한다.
+        provider 미주입 또는 equity≤0(자본 미확보) 이면 fail-open(거래 허용).
+        """
+        if not (self._f_profit_lock or self._f_giveback_lock
+                or self._f_daily_loss_lock):
+            return None
+        if self._daily_pnl_provider is None:
+            return None
+        try:
+            daily = float(self._daily_pnl_provider())
+            equity = float(self._equity_provider() or 0.0)
+        except Exception:  # noqa: BLE001 — 게이트 계산 실패는 fail-open
+            return None
+        if equity <= 0:
+            return None
+
+        # KST date rollover → intraday peak 리셋(새 날 시작값 = 현재 daily).
+        kst_date = now.astimezone(_KST_TZ).date()
+        if self._intraday_peak_date != kst_date:
+            self._intraday_peak_date = kst_date
+            self._intraday_peak_pnl = daily
+        if daily > self._intraday_peak_pnl:
+            self._intraday_peak_pnl = daily
+
+        pnl_pct = daily / equity * 100.0
+        peak_pct = self._intraday_peak_pnl / equity * 100.0
+
+        # 1. 당일 손실 한도 — 흘러내리는 날(예: 27일) 방어.
+        if self._f_daily_loss_lock and self._daily_loss_limit_pct > 0:
+            if pnl_pct <= -self._daily_loss_limit_pct:
+                return (f"당일손실한도 {pnl_pct:+.1f}%≤-{self._daily_loss_limit_pct:.1f}% "
+                        f"(equity={equity:.0f})")
+        # 2. 당일 이익 목표 — 오른 날 익절 잠금.
+        if self._f_profit_lock and self._daily_profit_target_pct > 0:
+            if pnl_pct >= self._daily_profit_target_pct:
+                return (f"당일이익목표 {pnl_pct:+.1f}%≥{self._daily_profit_target_pct:.1f}% "
+                        f"(equity={equity:.0f})")
+        # 3. 고점 반납 락 — 고점이 arm 임계 도달 후, 고점이익의 X% 반납 시 정지.
+        if (self._f_giveback_lock and self._giveback_pct > 0
+                and peak_pct >= self._giveback_arm_pct
+                and self._intraday_peak_pnl > 0):
+            trigger = self._intraday_peak_pnl * (1.0 - self._giveback_pct / 100.0)
+            if daily <= trigger:
+                return (f"당일고점반납 peak={peak_pct:+.1f}%→now={pnl_pct:+.1f}% "
+                        f"({self._giveback_pct:.0f}% 반납)")
+        return None
+
+    async def _maybe_notify_halt(self, now: datetime, reason: str) -> None:
+        """정지 진입 시 텔레그램 1회/KST일 통지(로그는 항상). 절대 raise 안 함."""
+        kst_date = now.astimezone(_KST_TZ).date()
+        if self._halt_notified_date == kst_date:
+            return
+        self._halt_notified_date = kst_date
+        logger.warning(
+            "airborne fire consumer: DAILY HALT — %s. 당일 신규 진입 전면 중단 "
+            "(미청산 포지션 TP/SL 유지, 내일 자동 재개).", reason,
+        )
+        if self._notify is None:
+            return
+        try:
+            await asyncio.to_thread(
+                self._notify,
+                f"🛑 당일 거래 정지 — {reason}\n"
+                f"신규 진입 중단. 미청산 포지션은 TP/SL 그대로. 내일 자동 재개.",
+            )
+        except Exception as err:  # noqa: BLE001
+            logger.warning("airborne_fire_consumer halt notify failed: %s", err)
+
     # ── sweep ────────────────────────────────────────────────────────────────
 
     async def sweep_once(self) -> int:
@@ -291,6 +415,12 @@ class AirborneFireConsumer:
         않는다.
         """
         now = datetime.now(timezone.utc)
+        # 당일 손익 정지 게이트 — 트립 시 이번 sweep 진입 전면 skip(전략 무관).
+        # peak 추적 때문에 매 sweep 평가해야 한다(여기서 한 번만 호출).
+        halt_reason = self._evaluate_daily_halt(now)
+        if halt_reason is not None:
+            await self._maybe_notify_halt(now, halt_reason)
+            return 0
         since = now - timedelta(seconds=self._freshness_sec)
         try:
             fires = self._store.load_since(since)

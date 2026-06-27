@@ -1173,6 +1173,8 @@ async def _run_pipeline_attached(
     # the coid→(symbol, side, strategy_id) context it resolves. Harmless for
     # paper/kis (no fill-stream task is created without binance_adapter).
     config.position_store = position_store
+    # 당일 손익 정지 게이트(airborne_fire_consumer)용 — daily PnL 소스.
+    config.pnl_aggregator = pnl_aggregator
     # #238 follow-up — multi-symbol mark-price cache + manual close executor.
     # Same instance the mark-price feed writes and the dashboard reads. The
     # manual-close callback parks the executor closure (built by
@@ -1667,6 +1669,8 @@ async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
     # binance-testnet-shadow so `order_filled` events actually reach the WAL
     # (otherwise the live Binance path shows the submitted intent forever).
     config.position_store = position_store
+    # 당일 손익 정지 게이트(airborne_fire_consumer)용 — daily PnL 소스.
+    config.pnl_aggregator = pnl_aggregator
     _wire_balance_provider(config)  # #238 Item 9
 
     # #238 follow-up — multi-symbol mark-price cache + manual close executor.
