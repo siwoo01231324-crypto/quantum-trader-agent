@@ -170,6 +170,7 @@ def test_giveback_not_armed_below_arm_pct(monkeypatch):
 def test_giveback_peak_resets_next_kst_day(monkeypatch):
     monkeypatch.setenv("AIRBORNE_DAILY_GIVEBACK_LOCK", "1")
     monkeypatch.setenv("AIRBORNE_DAILY_GIVEBACK_PCT", "40")
+    monkeypatch.setenv("AIRBORNE_DAILY_GIVEBACK_ARM_PCT", "1.0")  # 리셋 로직 검증용 저임계
     cell = {"v": 20.0}
     c, _, _ = _build(daily_provider=lambda: cell["v"], equity=1000.0)
     c._evaluate_daily_halt(_NOW)            # day1 고점 20
@@ -178,6 +179,24 @@ def test_giveback_peak_resets_next_kst_day(monkeypatch):
     # 다음 KST 일 — peak 리셋(=현재 11). trigger=6.6, 11>6.6 → 허용.
     next_day = _NOW + timedelta(days=1)
     assert c._evaluate_daily_halt(next_day) is None
+
+
+def test_giveback_arm_default_is_3pct(monkeypatch):
+    # arm 미설정 → 코드 기본값 3.0 (1.0→3.0, 2026-06-28 사고 수정).
+    monkeypatch.setenv("AIRBORNE_DAILY_GIVEBACK_LOCK", "1")
+    c, _, _ = _build(daily_provider=lambda: 0.0, equity=1000.0)
+    assert c._giveback_arm_pct == 3.0
+
+
+def test_giveback_default_ignores_small_peak_2026_06_28(monkeypatch):
+    # 2026-06-28 사고 재현: +1.2% 고점→+0.4% 반납이 기본 arm(3.0)에선 미발동.
+    # (arm 1.0 이던 시절엔 여기서 종일 정지 latch 됐었음.)
+    monkeypatch.setenv("AIRBORNE_DAILY_GIVEBACK_LOCK", "1")  # arm 기본 3.0
+    cell = {"v": 12.0}  # +1.2% of 1000 — arm(3.0) 미달
+    c, _, _ = _build(daily_provider=lambda: cell["v"], equity=1000.0)
+    assert c._evaluate_daily_halt(_NOW) is None  # 미무장
+    cell["v"] = 4.0  # +0.4% (40%+ 반납했지만 애초에 미무장)
+    assert c._evaluate_daily_halt(_NOW) is None  # 여전히 미발동
 
 
 # ── fail-open / off ────────────────────────────────────────────────────────

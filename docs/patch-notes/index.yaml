@@ -15,6 +15,21 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.98"
+    date: "2026-06-28"
+    title: "give-back 락 arm 기본값 1.0→3.0 — 아침 노이즈 종일정지 사고 수정"
+    tags: [fix, safety]
+    summary: >
+      2026-06-28 10:13 give-back 락이 +1.2% 고점(arm 1.0 막 넘김)에 무장→+0.4%
+      반납(40%)으로 종일 진입정지 latch → 하루 거래 0. arm 1.0 은 하찮은 +1%대
+      노이즈에도 무장돼 너무 예민. arm 은 target(3.5%)보다 낮아야 give-back 이
+      의미(target 도달은 profit_lock 이 먼저 정지)이므로 1.0→3.0 으로 상향.
+    items:
+      - "AIRBORNE_DAILY_GIVEBACK_ARM_PCT 기본값 1.0 → 3.0 (% of equity). +3.0% 고점 넘어야 give-back 무장 → 아침 +1%대 노이즈엔 미발동, 목표 코앞(3.0~3.5%)에서 페이드하는 진짜 케이스만 잡음."
+      - "게이트 결정 로직 불변(arm 은 env/생성자 주입형). 06-28 사고 재현 회귀 테스트 추가."
+    refs:
+      - "docs/specs/airborne-daily-pnl-guards.md"
+      - "src/live/airborne_fire_consumer.py"
   - version: "v0.6.97"
     date: "2026-06-27"
     title: "에어본 당일 손익 정지 게이트 — 이익목표·고점반납(오전 벌고 밤에 토해냄 방어)"
