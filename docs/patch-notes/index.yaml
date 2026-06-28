@@ -15,6 +15,19 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.99"
+    date: "2026-06-29"
+    title: "당일 이익목표 기본값 3.5%→5% 상향"
+    tags: [chore, safety]
+    summary: >
+      당일 이익목표(profit lock) 기본값을 3.5% → 5%(of equity) 로 상향(사용자
+      결정). 더 벌고 잠그는 쪽. give-back arm(3.0)은 여전히 target 아래라
+      목표 근접 페이드 보호는 유지.
+    items:
+      - "AIRBORNE_DAILY_PROFIT_TARGET_PCT 기본값 3.5 → 5.0. give-back arm 3.0 < target 5.0 유지(arm 이 target 보다 낮아야 give-back 이 의미)."
+      - "회귀 테스트: 기본값 5.0 확인 + 매크로 테스트 임계 갱신. 18건 green."
+    refs:
+      - "docs/specs/airborne-daily-pnl-guards.md"
   - version: "v0.6.98"
     date: "2026-06-28"
     title: "give-back 락 arm 기본값 1.0→3.0 — 아침 노이즈 종일정지 사고 수정"
