@@ -130,3 +130,27 @@ orch.refresh_portfolio_risk()
 - status=candidate, production.yaml **commented**. 활성화 선결: ① **채널청산 ratchet 배선 + testnet 검증**
   (위), ② 투매반등과 **병렬 2-전략** 사이징 통합(앙상블 wrapper 금지 — 분산파괴 REJECTED 교훈).
 - CLAUDE.md 5y 게이트(PF>1·expectancy>0) 충족(채널청산판). 배선 전 라이브는 미검증 → 비활성 필수.
+
+## 활성화 선결 — 4h 피드 부재 (2026-06-30 발견)
+
+⚠️ **라이브 파이프라인은 `get_interval()` 을 소비하지 않는다** (loop/snapshot_builder/_async_orchestrator
+어디서도 안 읽음 — 전략 파일·대시보드 sim 에서만 참조). 전략이 받는 `market_snapshot["history"]`
+= `_universe_ohlcv[symbol]` = SnapshotBuilder `_universe_cache` = **universe_quote_provider 의 단일 인터벌**.
+`scripts/live_run.py::_build_universe_quote_provider` 가 `fetch_universe_klines(..., interval="1d")` 로
+**일봉 하드코딩** (binance/bitget 양쪽, cs-tsmom 일봉용).
+
+→ **스윙 4h 전략을 현 orchestrator 에 등록하면 일봉을 받아** Donchian20=20일·EMA200=200일·
+채널청산 Donchian10=10일 로 **silent 오작동**(4h 백테스트와 완전 불일치). 진입·청산 둘 다 깨짐.
+
+**활성화 선결(채널청산 배선보다 먼저)**:
+1. **4h 유니버스 피드** — 스윙용 `fetch_universe_klines(universe, interval="4h")`. 라이브가 orchestrator
+   당 단일 인터벌이라 (a) 스윙 전용 별도 orchestrator/process(interval=4h), 또는 (b) per-strategy
+   interval 피드(get_interval 소비 배선) 중 택1. **(a) 가 격리·저위험.**
+2. 그 위에 채널청산 sweep 배선 — `history_lookup` 은 그 4h 피드 또는 sweep 전용 4h fetch. env-guard
+   default-off + sweep_timeouts 회귀박제.
+3. testnet 검증 → 활성화.
+
+**유니버스/사이징 확정(2026-06-30, `swing-strategy-research-handoff.draft.md`)**: 돌파=동적 top-N broad
+(EMA200+BTC게이트 생존편향 면역) / 투매반등=유동성 메이저 고정(falling knife 회피). 공통 제외
+토큰화주식·스테이블·레버토큰·신규<60일·저유동. 전략별 사이징 버킷 분리(공유 basket MDD↑). A: 둘 다
+cost wall 통과(net 10bp 투매+1.95%/돌파+1.06%). D: 페어 CAGR30%/MDD46%(→majors+버킷분리로 제어).
