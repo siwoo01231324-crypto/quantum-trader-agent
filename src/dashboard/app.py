@@ -31,6 +31,11 @@ from src.dashboard.ma_cross_store import MaCrossStore
 from src.dashboard.ppp_signal_store import PppSignalStore
 from src.dashboard.ppp_sim_cache import PppSimCache
 from src.dashboard.swing_sim_cache import SwingSimCache
+from src.dashboard.swing_live import (
+    SWING_LIVE_STRATEGY_IDS,
+    aggregate_swing_live,
+    discover_swing_wal_files,
+)
 from src.dashboard.ops_counters import OpsCounters
 from src.dashboard.patch_notes import render_patch_notes_page
 from src.dashboard.shadow_runs import discover_shadow_runs, load_run_detail
@@ -5292,6 +5297,15 @@ tbody tr.is-total td{background:#11161b;font-weight:700;border-top:1px solid var
 .pct-pos{color:var(--green)}
 .pct-neg{color:var(--red)}
 .note{color:var(--text3);font-size:.72rem;margin-top:10px;font-family:var(--mono);line-height:1.55}
+.live-badge{display:inline-block;padding:2px 7px;border-radius:3px;font-size:.68rem;font-weight:700;letter-spacing:.4px;font-family:var(--mono)}
+.live-open{background:rgba(240,165,0,.16);color:var(--yellow)}
+.live-tp{background:rgba(14,203,129,.2);color:#11dd8c}
+.live-stop{background:rgba(246,70,93,.16);color:var(--red)}
+.live-other{background:rgba(132,142,156,.16);color:var(--text3)}
+.sd-badge{display:inline-block;padding:2px 6px;border-radius:3px;font-size:.66rem;font-weight:700;font-family:var(--mono);letter-spacing:.4px}
+.sd-long{background:rgba(14,203,129,.16);color:var(--green)}
+.sd-short{background:rgba(246,70,93,.16);color:var(--red)}
+.live-divider{margin-top:22px;border-top:1px solid var(--border);padding-top:16px}
 </style>
 </head>
 <body>
@@ -5306,6 +5320,29 @@ tbody tr.is-total td{background:#11161b;font-weight:700;border-top:1px solid var
   <a href="/signals">신호 목록</a>
   <a href="/strategies">전략 카탈로그</a>
 </div>
+
+<!-- ── 라이브 (testnet/demo 실거래) 섹션 ──────────────────────────────── -->
+<div class="section-h2" style="margin-top:4px">🟢 라이브 (testnet/demo 실거래)
+  <span class="count">· binance-testnet + bitget-demo WAL — 실제 신호/거래/NET 누적 추적</span></div>
+<div class="header-row">
+  <label style="font-size:.78rem;color:var(--text2)">윈도우:
+    <select id="live-window-selector" onchange="changeLiveWindow(this.value)"
+            style="background:var(--surface);color:var(--text);border:1px solid var(--border);padding:5px 10px;border-radius:4px;font-family:var(--mono);font-size:.78rem">
+      <option value="today">오늘</option>
+      <option value="yesterday">어제</option>
+      <option value="7d">최근 7일</option>
+      <option value="30d">최근 30일</option>
+      <option value="all">전체 누적</option>
+    </select>
+  </label>
+  <span class="rule-badge">binance-testnet + bitget-demo · 4h 롱전용 · 실현 NET=USDT(fill 기준)</span>
+  <div class="meta" id="live-meta">로딩 중…</div>
+</div>
+<div id="live-content"><div class="empty">라이브 데이터를 불러오는 중…</div></div>
+
+<!-- ── 백테스트 sim (5y) 섹션 ─────────────────────────────────────────── -->
+<div class="section-h2 live-divider">📉 백테스트 sim (5y)
+  <span class="count">· 과거 4h 봉에 전략 객체 직접 구동(sim==live) · 주문/리스크 미연동</span></div>
 <div class="header-row">
   <span class="rule-badge" id="rule-badge">손익비 2R · 손절 동적(꼬리/2ATR) · 최대보유 180봉(=30일) · 비용 0.10%/거래</span>
   <div class="meta" id="meta">로딩 중…</div>
@@ -5543,8 +5580,120 @@ async function forceRefresh(){
   finally{ btn.disabled = false; btn.textContent = '↻ 캐시 무효화 + 재구동'; }
 }
 
+// ── 라이브 뷰 (testnet/demo WAL 윈도우) ──────────────────────────────────────
+let LIVE_WINDOW = (new URL(location.href).searchParams.get('live_window')) || 'today';
+function _liveWindowLabel(w){
+  const map = {'today':'오늘 (KST 자정~지금)','yesterday':'어제 (KST 어제 자정~오늘 자정)',
+    '7d':'최근 7일 누적','30d':'최근 30일 누적','all':'전체 누적'};
+  return map[w] || w;
+}
+function changeLiveWindow(v){
+  LIVE_WINDOW = v;
+  const url = new URL(location.href);
+  url.searchParams.set('live_window', v);
+  history.replaceState(null, '', url.toString());
+  loadLive();
+}
+function _liveStatusBadge(t){
+  if(t.status === 'open') return '<span class="live-badge live-open">보유중</span>';
+  const r = String(t.reason || '').toLowerCase();
+  let cls = 'live-other';
+  if(r.includes('take_profit') || r.startsWith('tp')) cls = 'live-tp';
+  else if(r.includes('stop')) cls = 'live-stop';
+  return `<span class="live-badge ${cls}">${esc(t.status_label || '청산')}</span>`;
+}
+function _fmtPx(v){ return (v != null && !isNaN(v)) ? Number(v).toPrecision(6) : '—'; }
+function renderLiveHeadline(j){
+  const net = j.net_pnl;
+  const cur = j.net_currency || 'USDT';
+  const netTxt = (net != null) ? (net >= 0 ? '+' : '') + Number(net).toFixed(2) + ' ' + cur : '—';
+  const netCls = net == null ? 'dim' : (net > 0 ? 'green' : (net < 0 ? 'red' : 'dim'));
+  const heroCls = net == null ? '' : (net >= 0 ? 'is-hero' : 'is-hero-bad');
+  const wl = `${j.wins ?? 0}승 / ${j.losses ?? 0}패`;
+  return `<div class="stat-grid">
+    <div class="stat-tile ${heroCls}">
+      <div class="stat-label">실현 NET</div>
+      <div class="stat-val ${netCls}">${esc(netTxt)}</div>
+      <div class="stat-sub">청산거래 fill 합 (수수료 반영)</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-label">신호 (진입)</div>
+      <div class="stat-val ${(j.n_signals ? '' : 'dim')}">${esc(j.n_signals ?? 0)}</div>
+      <div class="stat-sub">signal_emitted (buy)</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-label">청산 거래</div>
+      <div class="stat-val ${(j.n_trades_closed ? '' : 'dim')}">${esc(j.n_trades_closed ?? 0)}</div>
+      <div class="stat-sub">${esc(wl)}</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-label">보유중</div>
+      <div class="stat-val ${(j.open_positions ? '' : 'dim')}">${esc(j.open_positions ?? 0)}</div>
+      <div class="stat-sub">미청산 포지션</div>
+    </div>
+  </div>`;
+}
+function renderLiveTable(trades){
+  const trs = trades.map(t => {
+    const sd = t.side === 'short' ? 'sd-short' : 'sd-long';
+    const sdTxt = t.side === 'short' ? 'SHORT' : 'LONG';
+    const when = t.exit_ts || t.entry_ts;
+    const exitTxt = (t.exit_price != null)
+      ? ` <span style="color:var(--text3)">@${_fmtPx(t.exit_price)}</span>` : '';
+    return `<tr>
+      <td>${esc(fmtKstFull(when))}</td>
+      <td class="sym-cell">${esc((t.symbol || '').replace(/USDT$/, ''))}</td>
+      <td><span class="sd-badge ${sd}">${sdTxt}</span></td>
+      <td style="color:var(--text3)">${esc(t.strategy_label || t.strategy || '')}</td>
+      <td class="td-num">${_fmtPx(t.entry_price)}</td>
+      <td>${_liveStatusBadge(t)}${exitTxt}</td>
+      <td class="td-num">${t.pct != null ? fmtPct(t.pct, 2) : '—'}</td>
+      <td style="color:var(--text3)">${esc(t.reason || '—')}</td>
+    </tr>`;
+  }).join('');
+  return `<div class="section-h2">📋 라이브 거래·보유 상세 <span class="count">· ${trades.length}건 (최신순)</span></div>
+    <table><thead><tr>
+      <th>일시 (KST)</th><th>Symbol</th><th>방향</th><th>전략</th>
+      <th class="td-num">진입가</th><th>상태/청산</th><th class="td-num">pct</th><th>사유</th>
+    </tr></thead><tbody>${trs}</tbody></table>
+    <div class="note">실현 NET 은 거래소 fill(수수료 포함)에서 페어링한 라운드트립 손익(USDT) 합. pct 는 진입·청산가 기준(부호 인지). 청산거래는 exit_ts, 보유중은 entry_ts 가 윈도우에 들어올 때 노출. READ-ONLY — 주문/리스크 미연동.</div>`;
+}
+function renderLive(j){
+  const out = [renderLiveHeadline(j)];
+  if((j.trades || []).length === 0){
+    out.push(`<div class="empty">아직 거래 없음 — 라이브 스윙(testnet/demo)이 이 윈도우에 체결한 신호/거래가 없습니다. 4h 스윙 신호는 드물어 한동안 비어 있을 수 있습니다.</div>`);
+  } else {
+    out.push(renderLiveTable(j.trades || []));
+  }
+  return out.join('');
+}
+async function loadLive(){
+  const meta = document.getElementById('live-meta');
+  const content = document.getElementById('live-content');
+  try{
+    const r = await fetch('/api/swing_live?window=' + encodeURIComponent(LIVE_WINDOW) + '&_=' + Date.now());
+    const j = await r.json();
+    if(j.error){ content.innerHTML = `<div class="error">${esc(j.error)}</div>`; return; }
+    const cachedTxt = j.cached ? '(캐시)' : '(방금 갱신)';
+    if(meta) meta.innerHTML =
+      `<b>${esc(_liveWindowLabel(j.window || LIVE_WINDOW))}</b> · `
+      + `신호 <b>${j.n_signals ?? 0}</b> · 청산 <b>${j.n_trades_closed ?? 0}</b> · `
+      + `보유 <b>${j.open_positions ?? 0}</b> · WAL ${j.wal_files_count ?? 0}개 · ${cachedTxt}`;
+    content.innerHTML = renderLive(j);
+  }catch(e){
+    content.innerHTML =
+      `<div class="error">라이브 로딩 실패: ${esc(String(e))} — 잠시 후 자동 재시도</div>`;
+  }
+}
+window.addEventListener('DOMContentLoaded', () => {
+  const s = document.getElementById('live-window-selector');
+  if(s) s.value = LIVE_WINDOW;
+});
+
 load(false);
 setInterval(() => load(false), 120000);
+loadLive();
+setInterval(loadLive, 60000);
 </script>
 </body>
 </html>"""
@@ -8137,6 +8286,78 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
         }
         _swing_metrics_cache["data"] = payload
         _swing_metrics_cache["ts"] = now
+        return JSONResponse(payload)
+
+    # ── swing 라이브(testnet/demo) 윈도우 메트릭 (read-only WAL 집계) ──────────
+    # 5y sim 과 달리 *실제 페이퍼 거래*(binance-testnet / bitget-demo) 의 WAL 을
+    # 읽어 윈도우(today/yesterday/7d/30d/all, KST 자정 경계) 별 신호·거래·실현
+    # NET 을 집계. WAL parse 는 싸므로 무거운 5y sim 은 건드리지 않는다. 각 윈도우
+    # 30초 in-memory 캐시. 데이터 없으면 graceful (n=0 → 페이지 빈 상태).
+    _swing_live_cache: dict[str, dict[str, Any]] = {}
+    SWING_LIVE_CACHE_TTL = 30.0
+
+    @app.get("/api/swing_live")
+    async def api_swing_live(
+        window: str = Query(
+            "today", description="today | yesterday | 7d | 30d | all",
+        ),
+    ) -> JSONResponse:
+        """라이브 스윙 2전략의 WAL 거래/신호 윈도우 집계 — airborne 윈도우 UX 미러.
+
+        ``logs/shadow-swing*/<run_id>/wal.jsonl`` (binance-testnet + bitget-demo)
+        를 스캔해 두 전략(live-capitulation-bounce · live-donchian-breakout-btcgate)
+        의 signal_emitted(신호) + order_filled 라운드트립(거래·실현 NET) 을 집계.
+        READ-ONLY — 주문/리스크/전략 미연동.
+        """
+        import time as _time
+
+        now = _time.time()
+        cache_entry = _swing_live_cache.get(window)
+        if (cache_entry is not None
+                and now - cache_entry["ts"] < SWING_LIVE_CACHE_TTL
+                and cache_entry["data"] is not None):
+            return JSONResponse({**cache_entry["data"], "cached": True})
+
+        kst_now = datetime.now(_KST)
+        kst_midnight = kst_now.replace(hour=0, minute=0, second=0, microsecond=0)
+        utc_midnight = kst_midnight.astimezone(timezone.utc)
+        utc_now = datetime.now(timezone.utc)
+
+        if window == "today":
+            since_utc, until_utc = utc_midnight, utc_now
+        elif window == "yesterday":
+            since_utc, until_utc = utc_midnight - timedelta(days=1), utc_midnight
+        elif window == "7d":
+            since_utc, until_utc = utc_midnight - timedelta(days=7), utc_now
+        elif window == "30d":
+            since_utc, until_utc = utc_midnight - timedelta(days=30), utc_now
+        elif window == "all":
+            since_utc, until_utc = datetime(2000, 1, 1, tzinfo=timezone.utc), utc_now
+        else:
+            return JSONResponse(
+                {"error": f"unknown window={window!r}, allowed: today/yesterday/7d/30d/all"},
+                status_code=400,
+            )
+
+        repo_root = _swing_repo_root()
+        wal_paths = discover_swing_wal_files(repo_root)
+        agg = await asyncio.to_thread(
+            aggregate_swing_live, wal_paths, since_utc, until_utc,
+            SWING_LIVE_STRATEGY_IDS,
+        )
+
+        payload = {
+            "window": window,
+            "window_start_utc": since_utc.isoformat(),
+            "window_end_utc": until_utc.isoformat(),
+            "now_kst": kst_now.isoformat(),
+            "wal_files": [str(p) for p in wal_paths],
+            "wal_files_count": len(wal_paths),
+            "strategy_ids": sorted(SWING_LIVE_STRATEGY_IDS),
+            **agg,
+            "cached": False,
+        }
+        _swing_live_cache[window] = {"ts": now, "data": payload}
         return JSONResponse(payload)
 
     @app.get("/api/journal/today")

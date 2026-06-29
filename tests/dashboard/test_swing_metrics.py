@@ -259,3 +259,176 @@ def test_swing_metrics_empty_graceful(tmp_path, monkeypatch):
     assert j["trade_count"] == 0
     assert j["combined"]["n"] == 0
     assert j["per_year"] == []
+
+
+# ── swing_live (라이브 testnet/demo WAL 윈도우 집계) ─────────────────────────
+import json as _json  # noqa: E402
+from datetime import datetime as _dt, timezone as _tz  # noqa: E402
+
+from src.dashboard.swing_live import (  # noqa: E402
+    aggregate_swing_live,
+    discover_swing_wal_files,
+    exit_reason_label,
+)
+
+
+def _wal_line(event_type, ts, **payload):
+    return _json.dumps(
+        {"ts": ts, "event_type": event_type, "schema_version": 1, "payload": payload}
+    )
+
+
+def _write_swing_wal(path, lines):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _swing_live_fixture(tmp_path):
+    """1 청산(tp 라운드트립) + 1 보유(미청산) + 진입신호 2 — 합성 WAL."""
+    wal = tmp_path / "logs" / "shadow-swing" / "run1" / "wal.jsonl"
+    lines = [
+        _wal_line("run_started", "2026-06-29T00:00:00+00:00", run_id="run1"),
+        # 투매반등: buy 진입 → sell tp 청산 (+10%)
+        _wal_line("signal_emitted", "2026-06-29T01:00:00+00:00",
+                  strategy_id="live-capitulation-bounce", symbol="ATOMUSDT",
+                  side="buy", reason="capitulation_bounce"),
+        _wal_line("order_filled", "2026-06-29T01:00:01+00:00",
+                  strategy_id="live-capitulation-bounce", symbol="ATOMUSDT",
+                  side="BUY", fill_qty="1", fill_price="100", fees="0"),
+        _wal_line("signal_emitted", "2026-06-29T05:00:00+00:00",
+                  strategy_id="live-capitulation-bounce", symbol="ATOMUSDT",
+                  side="sell", reason="live_take_profit"),
+        _wal_line("order_filled", "2026-06-29T05:00:01+00:00",
+                  strategy_id="live-capitulation-bounce", symbol="ATOMUSDT",
+                  side="SELL", fill_qty="1", fill_price="110", fees="0"),
+        # 돌파: buy 진입만 → 미청산(보유중)
+        _wal_line("signal_emitted", "2026-06-29T02:00:00+00:00",
+                  strategy_id="live-donchian-breakout-btcgate", symbol="DOTUSDT",
+                  side="buy", reason="donchian_breakout"),
+        _wal_line("order_filled", "2026-06-29T02:00:01+00:00",
+                  strategy_id="live-donchian-breakout-btcgate", symbol="DOTUSDT",
+                  side="BUY", fill_qty="2", fill_price="50", fees="0"),
+    ]
+    _write_swing_wal(wal, lines)
+    return wal
+
+
+_WIN_SINCE = _dt(2026, 6, 29, 0, 0, tzinfo=_tz.utc)
+_WIN_UNTIL = _dt(2026, 6, 30, 0, 0, tzinfo=_tz.utc)
+
+
+class TestSwingLiveAggregate:
+    def test_empty_no_paths(self):
+        agg = aggregate_swing_live([], _WIN_SINCE, _WIN_UNTIL)
+        assert agg["n_signals"] == 0
+        assert agg["n_trades_closed"] == 0
+        assert agg["open_positions"] == 0
+        assert agg["net_pnl"] == 0.0
+        assert agg["trades"] == []
+        assert agg["signals"] == []
+
+    def test_roundtrip_and_open(self, tmp_path):
+        wal = _swing_live_fixture(tmp_path)
+        agg = aggregate_swing_live([wal], _WIN_SINCE, _WIN_UNTIL)
+        # 진입 신호 2건 (투매 buy + 돌파 buy)
+        assert agg["n_signals"] == 2
+        # 청산 라운드트립 1건 (ATOM tp), 승 1 / 패 0
+        assert agg["n_trades_closed"] == 1
+        assert agg["wins"] == 1
+        assert agg["losses"] == 0
+        # 실현 NET = (110-100)*1 - 0 = +10
+        assert agg["net_pnl"] == pytest.approx(10.0)
+        # 보유중 1건 (DOT 미청산)
+        assert agg["open_positions"] == 1
+        # 표 2행 (청산 1 + 보유 1)
+        assert len(agg["trades"]) == 2
+        closed = next(t for t in agg["trades"] if t["status"] == "closed")
+        assert closed["symbol"] == "ATOMUSDT"
+        assert closed["pct"] == pytest.approx(10.0)
+        assert closed["side"] == "long"
+        # 청산 사유 매칭 (live_take_profit → 익절 라벨)
+        assert "익절" in closed["status_label"]
+        opened = next(t for t in agg["trades"] if t["status"] == "open")
+        assert opened["symbol"] == "DOTUSDT"
+        assert opened["status_label"] == "보유중"
+        assert opened["pct"] is None
+
+    def test_window_excludes_out_of_range(self, tmp_path):
+        wal = _swing_live_fixture(tmp_path)
+        # 어제(2026-06-28) 윈도우 → 거래 없음
+        prev_since = _dt(2026, 6, 28, 0, 0, tzinfo=_tz.utc)
+        prev_until = _dt(2026, 6, 29, 0, 0, tzinfo=_tz.utc)
+        agg = aggregate_swing_live([wal], prev_since, prev_until)
+        assert agg["n_signals"] == 0
+        assert agg["n_trades_closed"] == 0
+        # 보유중도 entry_ts(06-29) >= until(06-29 00:00) 이라 제외
+        assert agg["open_positions"] == 0
+        assert agg["trades"] == []
+
+    def test_filters_foreign_strategy(self, tmp_path):
+        wal = tmp_path / "logs" / "shadow-swing" / "runX" / "wal.jsonl"
+        _write_swing_wal(wal, [
+            _wal_line("order_filled", "2026-06-29T03:00:00+00:00",
+                      strategy_id="some-other-strategy", symbol="ETHUSDT",
+                      side="BUY", fill_qty="1", fill_price="2000", fees="0"),
+            _wal_line("signal_emitted", "2026-06-29T03:00:00+00:00",
+                      strategy_id="some-other-strategy", symbol="ETHUSDT",
+                      side="buy", reason="x"),
+        ])
+        agg = aggregate_swing_live([wal], _WIN_SINCE, _WIN_UNTIL)
+        assert agg["n_signals"] == 0
+        assert agg["open_positions"] == 0
+        assert agg["trades"] == []
+
+
+class TestSwingLiveDiscover:
+    def test_scans_both_dirs(self, tmp_path):
+        _write_swing_wal(tmp_path / "logs" / "shadow-swing" / "r1" / "wal.jsonl",
+                         [_wal_line("run_started", "2026-06-29T00:00:00+00:00")])
+        _write_swing_wal(tmp_path / "logs" / "shadow-swing-binance" / "r2" / "wal.jsonl",
+                         [_wal_line("run_started", "2026-06-29T00:00:00+00:00")])
+        found = discover_swing_wal_files(tmp_path)
+        assert len(found) == 2
+        names = {p.parent.name for p in found}
+        assert names == {"r1", "r2"}
+
+    def test_missing_dirs_empty(self, tmp_path):
+        assert discover_swing_wal_files(tmp_path) == []
+
+
+class TestExitReasonLabel:
+    def test_labels(self):
+        assert "익절" in exit_reason_label("live_take_profit")
+        assert "손절" in exit_reason_label("live_stop_loss")
+        assert "트레일" in exit_reason_label("live_trailing_stop")
+        assert "채널" in exit_reason_label("channel_exit")
+        assert exit_reason_label(None) == "청산"
+
+
+class TestSwingLiveEndpoint:
+    def test_endpoint_window_all_smoke(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(app_mod, "_swing_repo_root", lambda: tmp_path)
+        _swing_live_fixture(tmp_path)
+        j = _C.get("/api/swing_live?window=all&_=1").json()
+        assert "error" not in j
+        assert j["window"] == "all"
+        assert isinstance(j["trades"], list)
+        assert j["wal_files_count"] >= 1
+        # all 윈도우(2000~now) 는 2026-06-29 거래를 포함
+        assert j["n_signals"] == 2
+        assert j["n_trades_closed"] == 1
+        assert j["open_positions"] == 1
+
+    def test_endpoint_unknown_window_400(self):
+        r = _C.get("/api/swing_live?window=bogus")
+        assert r.status_code == 400
+        assert "unknown window" in r.json()["error"]
+
+    def test_endpoint_empty_graceful(self, tmp_path, monkeypatch):
+        # 빈 repo (WAL 없음) → 깨끗한 빈 집계 (에러/스피너 아님)
+        monkeypatch.setattr(app_mod, "_swing_repo_root", lambda: tmp_path)
+        j = _C.get("/api/swing_live?window=yesterday&_=2").json()
+        assert "error" not in j
+        assert j["n_signals"] == 0
+        assert j["trades"] == []
+        assert j["wal_files_count"] == 0
