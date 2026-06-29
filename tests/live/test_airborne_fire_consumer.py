@@ -376,6 +376,41 @@ def test_time_gate_only_enters_in_hour(monkeypatch):
     assert asyncio.run(c.sweep_once()) == 1
 
 
+def test_block_long_full_skips_long(monkeypatch):
+    """AIRBORNE_BLOCK_LONG=1 → 롱 전면 차단(숏은 영향 없음). 2026-06-29."""
+    monkeypatch.setenv("AIRBORNE_BLOCK_LONG", "1")
+    ts = _recent_iso(minutes_ago=1)
+    h = int(pd.Timestamp(ts).tz_convert("Asia/Seoul").floor("1h").hour)
+    orch = _FakeOrch()
+    c, _ = _consumer(
+        _FakeStore([_fire("SOLUSDT", "long", ts)]), orch, [_spec(hours=frozenset({h}))],
+    )
+    assert asyncio.run(c.sweep_once()) == 0
+    assert orch.calls == []
+
+
+def test_block_long_does_not_affect_short(monkeypatch):
+    monkeypatch.setenv("AIRBORNE_BLOCK_LONG", "1")
+    ts = _recent_iso(minutes_ago=1)
+    h = int(pd.Timestamp(ts).tz_convert("Asia/Seoul").floor("1h").hour)
+    orch = _FakeOrch()
+    c, _ = _consumer(
+        _FakeStore([_fire("SOLUSDT", "short", ts)]), orch, [_spec(hours=frozenset({h}))],
+    )
+    assert asyncio.run(c.sweep_once()) == 1
+
+
+def test_long_block_hours_skips_only_that_hour(monkeypatch):
+    ts = _recent_iso(minutes_ago=1)
+    h = int(pd.Timestamp(ts).tz_convert("Asia/Seoul").floor("1h").hour)
+    monkeypatch.setenv("AIRBORNE_LONG_BLOCK_HOURS", str(h))
+    orch = _FakeOrch()
+    c, _ = _consumer(
+        _FakeStore([_fire("SOLUSDT", "long", ts)]), orch, [_spec(hours=frozenset({h}))],
+    )
+    assert asyncio.run(c.sweep_once()) == 0
+
+
 def test_time_gate_only_bypasses_btc_downtrend(monkeypatch):
     """TIME_GATE_ONLY ON → 게이트 안이면 BTC 하락추세 롱필터는 우회(진입)."""
     monkeypatch.setenv("AIRBORNE_TIME_GATE_ONLY", "1")
