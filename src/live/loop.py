@@ -607,6 +607,15 @@ async def run_shadow_loop(
             # 2026-06-03 debug — consumer 가 tick 받는지 진단용
             _consumer_tick_count = 0
             _consumer_timeout_count = 0
+            # 2026-06-30 — 타이머 평가. 체결틱(aggTrade)이 죽은 환경(한국IP mainnet
+            # 지역차단 #238 / testnet 무거래량 / bitget demo stale)에서도 4h 전략이
+            # 주기적으로 universe 를 평가하도록. SWING_EVAL_TIMER_SEC>0 일 때만, 틱이
+            # 안 와도 ~N초마다 마지막 tick 을 재사용해 build_snapshot→run_bar 강제 평가.
+            # universe_ohlcv 는 TTL(300s) REST 갱신이라 신선 — 체결틱은 "깨우는 알람"
+            # 역할일 뿐 신호 내용은 4h봉(REST)에서 옴. 기본 0=off → byte-identical
+            # (airborne 등 틱 정상 환경 무영향). 4h 전략은 60s 평가로 차고 넘침.
+            _last_tick = None
+            _eval_timer_sec = int(os.environ.get("SWING_EVAL_TIMER_SEC", "0") or 0)
             while not stop_event.is_set():
                 try:
                     tick = await asyncio.wait_for(tick_queue.get(), timeout=1.0)
@@ -617,13 +626,23 @@ async def run_shadow_loop(
                             "consumer.NO_TICK %ds — producer may be stuck",
                             _consumer_timeout_count,
                         )
-                    continue
+                    if (_eval_timer_sec > 0 and _last_tick is not None
+                            and _consumer_timeout_count % _eval_timer_sec == 0):
+                        # 마지막 tick 재사용해 아래 run_bar 로 fall-through (강제 4h 평가).
+                        tick = _last_tick
+                        logger.info(
+                            "consumer.timer_eval (no-tick %ds) — run_bar 강제평가",
+                            _consumer_timeout_count,
+                        )
+                    else:
+                        continue
                 if _consumer_tick_count == 0:
                     logger.info(
                         "consumer.FIRST_TICK %s @ %s (after %d timeouts)",
                         tick.symbol, tick.price, _consumer_timeout_count,
                     )
                 _consumer_tick_count += 1
+                _last_tick = tick  # 타이머 평가용 — 마지막 실 tick 보존
                 try:
                     ms = _tick_to_market_state(tick)
                     paper_broker.update_market(ms)
