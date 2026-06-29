@@ -1064,6 +1064,14 @@ async def run_shadow_loop(
                         stop_event=stop_event,
                         live_price_cache=config.live_price_cache,
                         interval_sec=_sweep_sec,
+                        # 채널청산 sweep (2026-06-30) — SWING_CHANNEL_SWEEP=1 일 때만.
+                        # history_lookup 은 최신 universe ohlcv(4h 격리 프로세스 전제).
+                        channel_sweep_enabled=(
+                            os.environ.get("SWING_CHANNEL_SWEEP", "0") == "1"
+                        ),
+                        history_lookup=lambda sym: (
+                            _live_snapshot_cache.get("ohlcv_history") or {}
+                        ).get(sym),
                     ),
                     name="timeout-sweep",
                 )
@@ -1135,6 +1143,8 @@ async def _run_timeout_sweep(
     stop_event: asyncio.Event,
     live_price_cache=None,
     interval_sec: float = 30.0,
+    channel_sweep_enabled: bool = False,
+    history_lookup=None,
 ) -> None:
     """Feed-독립 주기 timeout sweep — 틱이 멈춘 종목도 max_hold 청산 보장.
 
@@ -1168,6 +1178,17 @@ async def _run_timeout_sweep(
         except Exception as err:  # noqa: BLE001 — sweep 에러로 루프 죽이지 않음
             logger.warning("timeout_sweep.evaluate_failed err=%s", err)
             continue
+        # 채널청산 sweep (2026-06-30, SWING_CHANNEL_SWEEP) — Donchian10 트레일링 청산.
+        # additive: sweep_timeouts 와 독립 경로, flag off / history_lookup 미주입 시 no-op
+        # (byte-identical). 격리(4h-only) 프로세스 전제 — ohlcv_history 가 4h 봉이어야 정확.
+        # 1h/1d 혼재(collision) 시 Donchian10 오작동하므로 격리 프로세스에서만 켤 것.
+        if channel_sweep_enabled and history_lookup is not None:
+            try:
+                intents = list(intents) + position_risk_manager.sweep_channel_exits(
+                    now, history_lookup,
+                )
+            except Exception as err:  # noqa: BLE001 — 채널 sweep 에러로 루프 죽이지 않음
+                logger.warning("channel_sweep.failed err=%s", err)
         for ri in intents:
             price = _price_lookup(ri.symbol)
             last = float(price) if price else 0.0
