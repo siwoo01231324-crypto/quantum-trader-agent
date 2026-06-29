@@ -973,6 +973,46 @@ def _build_mock_ticks(symbols: list[str], n_bars: int):
     return ticks
 
 
+_SWING_ALERT_SIDS = {"live-capitulation-bounce", "live-donchian-breakout-btcgate"}
+
+
+def _make_on_entry(risk_mgr, logger):
+    """``orchestrator._on_entry`` 래퍼 — 동적 stop/TP 등록(기존) + 스윙 진입 신호 텔레그램 알림.
+
+    ``SWING_SIGNAL_ALERT=1`` 일 때 스윙 2전략 진입마다 텔레그램 통지(데모 신호 확인용).
+    notify 는 hot path(run_bar) blocking 회피 위해 daemon thread fire-and-forget(fail-soft).
+    flag off 면 register_entry_override 만 호출 → 기존 동작 byte-identical.
+    """
+    import threading
+    alert_on = os.environ.get("SWING_SIGNAL_ALERT", "0") == "1"
+
+    def _on_entry(strategy_id, symbol, *, stop_loss_pct=None,
+                  take_profit_pct=None, trailing_stop_pct=None):
+        risk_mgr.register_entry_override(
+            strategy_id, symbol,
+            stop_loss_pct=stop_loss_pct,
+            take_profit_pct=take_profit_pct,
+            trailing_stop_pct=trailing_stop_pct,
+        )
+        if alert_on and strategy_id in _SWING_ALERT_SIDS:
+            def _send():
+                try:
+                    from src.observability.alerts import notify
+                    _sl = f"{stop_loss_pct:.2%}" if stop_loss_pct else "—"
+                    _tp = f"{take_profit_pct:.2%}" if take_profit_pct else "—"
+                    notify(
+                        "info",
+                        f"🐢 스윙 진입 신호 — {strategy_id}",
+                        f"{symbol} 진입\n손절 {_sl} / TP {_tp}",
+                        fields={"strategy_id": strategy_id, "symbol": symbol},
+                    )
+                except Exception as exc:  # noqa: BLE001 — 알림 실패가 거래 막지 않음
+                    logger.warning("swing_signal_alert failed sid=%s sym=%s err=%s",
+                                   strategy_id, symbol, exc)
+            threading.Thread(target=_send, daemon=True).start()
+    return _on_entry
+
+
 def _register_exit_policies(orch, risk_mgr, logger) -> int:
     """Register a LivePositionRiskManager StopTpPolicy for every strategy
     that needs auto stop/TP — returns the number registered.
@@ -1271,7 +1311,7 @@ async def _run_pipeline_attached(
         # 2026-05-21 — ATR 기반 동적 stop. Strategy 가 Signal 에 실어보낸 per-entry
         # stop/TP/trailing pct override 를 risk manager 의 (sid, sym) dynamic
         # policy 로 등록한다. 없으면 정적 policy fallback (기존 동작).
-        orch._on_entry = risk_mgr.register_entry_override
+        orch._on_entry = _make_on_entry(risk_mgr, logger)
         _register_exit_policies(orch, risk_mgr, logger)
 
     config.on_orchestrator_ready = _on_orchestrator_ready
@@ -1752,7 +1792,7 @@ async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
         # 2026-05-21 — ATR 기반 동적 stop. Strategy 가 Signal 에 실어보낸 per-entry
         # stop/TP/trailing pct override 를 risk manager 의 (sid, sym) dynamic
         # policy 로 등록한다. 없으면 정적 policy fallback.
-        orch._on_entry = risk_mgr.register_entry_override
+        orch._on_entry = _make_on_entry(risk_mgr, logger)
         _register_exit_policies(orch, risk_mgr, logger)
 
     config.on_orchestrator_ready = _on_orchestrator_ready
