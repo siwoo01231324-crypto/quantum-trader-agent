@@ -187,12 +187,23 @@ class LivePositionRiskManager:
         없으면 global. ``dict.get`` 이라 sid→None 등록 시 None(면제) 반환."""
         return self._max_hold_by_sid.get(strategy_id, self._max_hold_sec)
 
-    def effective_policy(self, strategy_id: str) -> tuple[float, float] | None:
+    def effective_policy(
+        self, strategy_id: str, symbol: str | None = None,
+    ) -> tuple[float, float] | None:
         """거래소 네이티브 TP/SL 코디네이터용 — (stop_loss_pct, take_profit_pct).
 
-        정적 정책 기준 *가격* pct (ROI 아님). 미등록 전략(cs-tsmom 등)은 None
-        → 코디네이터가 거래소 보호 대상에서 제외.
+        2026-06-30 — ``symbol`` 주어지면 진입 시 등록된 *동적* override(ATR/꼬리저점
+        기반, ``register_entry_override``) 를 우선 반환. 없으면 정적 정책 fallback.
+        ``symbol=None`` 은 구 호출 호환(정적). 이로써 거래소 네이티브 TP/SL 라인이
+        전략 정적 fallback(예: 돌파 8%/50%)이 아니라 *동적 의도값*(2ATR / 꼬리저점·2R)
+        으로 걸린다 — 봇 동적 청산(software primary)과 거래소 라인(backstop)이 일치.
+        airborne 등 fire 진입은 정적값을 override 로 등록하므로 동적=정적 → 동작 불변.
+        값은 *가격* pct (ROI 아님). 미등록 전략(cs-tsmom 등)은 None → 거래소 보호 제외.
         """
+        if symbol is not None:
+            dyn = self._dynamic_policies.get((strategy_id, symbol))
+            if dyn is not None:
+                return (dyn.stop_loss_pct, dyn.take_profit_pct)
         pol = self._policies.get(strategy_id)
         if pol is None:
             return None

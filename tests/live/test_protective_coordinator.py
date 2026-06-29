@@ -43,7 +43,7 @@ class _Store:
 
 
 _POL = {"sid-air": (0.005, 0.01)}  # (sl_pct, tp_pct)
-def _lookup(sid): return _POL.get(sid)
+def _lookup(sid, symbol=None): return _POL.get(sid)  # symbol 무시(정적 정책 테스트)
 
 
 def _coord(adapter, store):
