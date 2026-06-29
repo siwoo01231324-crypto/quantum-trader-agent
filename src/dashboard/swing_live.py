@@ -13,9 +13,17 @@ binance-testnet / bitget-demo 페이퍼로 라이브 구동되며 WAL 을 적재
 거래가 없는 윈도우(테스트넷 막 시작 / 4h 신호 희소)는 graceful 빈 집계(n=0) 를
 반환해 페이지가 "아직 거래 없음" 빈 상태를 그릴 수 있게 한다.
 
+2026-06-30 — 윈도우(오늘/어제/7일/30일)가 라이브만으로는 비기 쉬워, 같은 윈도우의
+*sim(백테스트) 거래*(과거 4h 봉 직접 구동, `app._swing_compute_all_trades` →
+`swing_sim_cache.jsonl`)를 entry_ts 기준으로 함께 끌어와 병합하는 경로를 추가했다
+(``window_sim_trades`` + ``aggregate_swing_window``). sim 은 gross-%(USDT 손익
+없음)이라 라이브(실현 NET USDT)와 별도 집계 블록으로 둔다.
+
 핵심 함수:
   - ``discover_swing_wal_files(repo_root)`` — 두 디렉토리의 모든 run WAL glob.
-  - ``aggregate_swing_live(wal_paths, since_utc, until_utc)`` — 순수 집계(테스트 대상).
+  - ``aggregate_swing_live(wal_paths, since_utc, until_utc)`` — 라이브 WAL 윈도우 집계.
+  - ``window_sim_trades(sim_trades, since, until)`` — entry_ts ∈ 윈도우 sim 거래 row.
+  - ``aggregate_swing_window(wal_paths, sim_trades, since, until)`` — sim+라이브 병합(테스트 대상).
 """
 from __future__ import annotations
 
@@ -39,6 +47,9 @@ SWING_LIVE_LABELS: dict[str, str] = {
     "live-capitulation-bounce": "투매반등 (평균회귀)",
     "live-donchian-breakout-btcgate": "돌파/터틀 (추세추종)",
 }
+
+# sim(백테스트) 거래당 왕복 실효비용 가정 (app.SWING_FEE_PCT 미러, net% 차감용).
+SWING_LIVE_FEE_PCT: float = 0.10
 
 
 def discover_swing_wal_files(repo_root: Path | str) -> list[Path]:
@@ -217,6 +228,7 @@ def aggregate_swing_live(
                 "status_label": exit_reason_label(reason),
                 "pct": _pct(t.side, t.entry_price, t.exit_price),
                 "pnl": pnl,
+                "source": "live",
             })
         else:  # open
             if _parse_ts(t.entry_ts) is not None and _parse_ts(t.entry_ts) < until_utc:
@@ -233,6 +245,7 @@ def aggregate_swing_live(
                     "status_label": "보유중",
                     "pct": None,
                     "pnl": None,
+                    "source": "live",
                 })
 
     # 표는 최신순(청산거래는 exit_ts, 보유는 entry_ts 기준).
@@ -250,3 +263,128 @@ def aggregate_swing_live(
         "trades": rows,
         "signals": entry_signals,
     }
+
+
+# ── sim(백테스트) 윈도우 병합 ────────────────────────────────────────────────
+# 라이브 WAL 만으로는 testnet/demo 가 막 시작해 윈도우(오늘/어제/7일/30일)가 비기
+# 쉽다(4h 신호 희소). 같은 윈도우의 *sim 합성 거래*(과거 4h 봉 직접 구동 결과,
+# `app._swing_compute_all_trades` → `swing_sim_cache.jsonl`)를 entry_ts 기준으로
+# 끌어와 함께 보여줘 페이지가 즉시 콘텐츠를 갖게 한다. sim 은 gross-% 기반(USDT
+# 실현손익 없음)이라 라이브(실현 NET USDT)와 *별도 집계*로 둔다.
+
+
+def _pf(pcts: list[float]) -> float | None:
+    wins = sum(p for p in pcts if p > 0)
+    losses = sum(p for p in pcts if p < 0)
+    return (wins / abs(losses)) if losses < 0 else None
+
+
+def _sim_trade_row(t: dict) -> dict:
+    """sim 거래 dict → 표 row (source=sim). sim 은 롱전용·%기반(USDT pnl 없음).
+
+    입력 schema 는 `app._swing_sim_symbol` / `swing_sim_cache` 의 row:
+    ``{strategy, symbol, entry_ts, exit_ts, entry, exit, ret, reason}``.
+    """
+    sid = str(t.get("strategy", ""))
+    entry = t.get("entry")
+    exit_ = t.get("exit")
+    reason = t.get("reason")
+    ret = t.get("ret")
+    pct = float(ret) if ret is not None else _pct("long", entry, exit_)
+    return {
+        "entry_ts": t.get("entry_ts"), "exit_ts": t.get("exit_ts"),
+        "symbol": t.get("symbol", ""), "side": "long",
+        "strategy": sid, "strategy_label": SWING_LIVE_LABELS.get(sid, sid),
+        "venue": "sim",
+        "entry_price": entry, "exit_price": exit_,
+        "qty": None,
+        "status": "closed",
+        "reason": reason,
+        "status_label": exit_reason_label(reason),
+        "pct": pct,
+        "pnl": None,
+        "source": "sim",
+    }
+
+
+def window_sim_trades(
+    sim_trades: Iterable[dict],
+    since_utc: datetime,
+    until_utc: datetime,
+    strategy_ids: frozenset[str] = SWING_LIVE_STRATEGY_IDS,
+) -> list[dict]:
+    """entry_ts ∈ [since, until) 인 sim 거래만 표 row(source=sim) 로 변환."""
+    rows: list[dict] = []
+    for t in sim_trades:
+        if t.get("strategy") not in strategy_ids:
+            continue
+        if not _in_window(t.get("entry_ts"), since_utc, until_utc):
+            continue
+        rows.append(_sim_trade_row(t))
+    return rows
+
+
+def _aggregate_sim_rows(rows: list[dict]) -> dict:
+    """sim row 들 → gross/net% 집계 (라이브 USDT 와 섞지 않음)."""
+    pcts = [float(r["pct"]) for r in rows if r.get("pct") is not None]
+    n = len(rows)
+    if n == 0:
+        return {
+            "n": 0, "wins": 0, "losses": 0, "win_rate": None,
+            "sum_pct": 0.0, "net_pct": 0.0, "mean_pct": None, "pf": None,
+        }
+    wins = sum(1 for p in pcts if p > 0)
+    losses = sum(1 for p in pcts if p < 0)
+    s = sum(pcts)
+    return {
+        "n": n, "wins": wins, "losses": losses,
+        "win_rate": (wins / n) if n else None,
+        "sum_pct": s,
+        "net_pct": s - SWING_LIVE_FEE_PCT * n,
+        "mean_pct": s / n,
+        "pf": _pf(pcts),
+    }
+
+
+def aggregate_swing_window(
+    wal_paths: list[Path] | list[str],
+    sim_trades: Iterable[dict],
+    since_utc: datetime,
+    until_utc: datetime,
+    strategy_ids: frozenset[str] = SWING_LIVE_STRATEGY_IDS,
+) -> dict:
+    """라이브 WAL + sim 백테스트를 한 윈도우로 합쳐 집계 (순수·테스트 대상).
+
+    - **live**: ``aggregate_swing_live`` 의 라운드트립(실현 NET USDT) + signal_emitted.
+    - **sim**: entry_ts ∈ 윈도우 인 과거 4h 봉 합성 거래(gross %). 라이브와 통화가
+      달라(USDT vs %) *별도 블록* 으로 둔다.
+    - ``trades[]``: 두 소스를 ``source`` 태그로 합쳐 최신순. 둘 다 비어야 진짜 빈 것
+      (``has_data=False``). sim 데이터가 윈도우에 있으면 절대 빈 상태 아님.
+
+    Returns: aggregate_swing_live 의 모든 키(하위호환) + ``sim`` / ``live`` 블록 +
+    병합된 ``trades`` + ``has_data``.
+    """
+    live = aggregate_swing_live(wal_paths, since_utc, until_utc, strategy_ids)
+    sim_rows = window_sim_trades(sim_trades, since_utc, until_utc, strategy_ids)
+    sim_agg = _aggregate_sim_rows(sim_rows)
+
+    merged = list(live["trades"]) + sim_rows
+    merged.sort(
+        key=lambda r: str(r.get("exit_ts") or r.get("entry_ts") or ""),
+        reverse=True,
+    )
+
+    out = dict(live)
+    out["trades"] = merged
+    out["sim"] = sim_agg
+    out["live"] = {
+        "n_signals": live["n_signals"],
+        "n_trades_closed": live["n_trades_closed"],
+        "wins": live["wins"],
+        "losses": live["losses"],
+        "net_pnl": live["net_pnl"],
+        "net_currency": live["net_currency"],
+        "open_positions": live["open_positions"],
+    }
+    out["has_data"] = bool(merged)
+    return out

@@ -267,8 +267,10 @@ from datetime import datetime as _dt, timezone as _tz  # noqa: E402
 
 from src.dashboard.swing_live import (  # noqa: E402
     aggregate_swing_live,
+    aggregate_swing_window,
     discover_swing_wal_files,
     exit_reason_label,
+    window_sim_trades,
 )
 
 
@@ -405,19 +407,143 @@ class TestExitReasonLabel:
         assert exit_reason_label(None) == "청산"
 
 
+# ── sim(백테스트) 윈도우 병합 ────────────────────────────────────────────────
+
+def _sim_trade(strategy="live-capitulation-bounce", symbol="ATOMUSDT",
+               entry_ts="2026-06-29T03:00:00+00:00",
+               exit_ts="2026-06-29T07:00:00+00:00", ret=3.0, reason="tp"):
+    return {
+        "strategy": strategy, "symbol": symbol,
+        "entry_ts": entry_ts, "exit_ts": exit_ts,
+        "entry": 100.0, "exit": 100.0 * (1 + ret / 100), "ret": ret, "reason": reason,
+    }
+
+
+class TestWindowSimTrades:
+    def test_filters_by_entry_ts(self):
+        sim = [
+            _sim_trade(entry_ts="2026-06-29T03:00:00+00:00", ret=3.0),          # in
+            _sim_trade(symbol="DOTUSDT",
+                       entry_ts="2025-01-01T00:00:00+00:00", ret=5.0),          # out
+        ]
+        rows = window_sim_trades(sim, _WIN_SINCE, _WIN_UNTIL)
+        assert len(rows) == 1
+        assert rows[0]["source"] == "sim"
+        assert rows[0]["symbol"] == "ATOMUSDT"
+        assert rows[0]["side"] == "long"
+        assert rows[0]["status"] == "closed"
+        assert rows[0]["pct"] == pytest.approx(3.0)
+        assert rows[0]["pnl"] is None  # sim 은 % 기반, USDT 손익 없음
+
+    def test_filters_foreign_strategy(self):
+        sim = [_sim_trade(strategy="other-strat",
+                          entry_ts="2026-06-29T03:00:00+00:00")]
+        assert window_sim_trades(sim, _WIN_SINCE, _WIN_UNTIL) == []
+
+
+class TestAggregateSwingWindow:
+    def test_merges_sim_and_live(self, tmp_path):
+        wal = _swing_live_fixture(tmp_path)  # 라이브: 2026-06-29 (청산1+보유1, 신호2)
+        sim = [
+            _sim_trade(symbol="FILUSDT",
+                       entry_ts="2026-06-29T03:00:00+00:00", ret=4.0, reason="tp"),
+            _sim_trade(symbol="ETCUSDT",
+                       entry_ts="2026-06-29T06:00:00+00:00", ret=-2.0, reason="stop"),
+        ]
+        agg = aggregate_swing_window([wal], sim, _WIN_SINCE, _WIN_UNTIL)
+        # sim 블록 (gross/net%)
+        assert agg["sim"]["n"] == 2
+        assert agg["sim"]["wins"] == 1 and agg["sim"]["losses"] == 1
+        assert agg["sim"]["sum_pct"] == pytest.approx(2.0)        # +4 −2
+        assert agg["sim"]["net_pct"] == pytest.approx(2.0 - 0.10 * 2)
+        # live 블록 보존
+        assert agg["live"]["n_signals"] == 2
+        assert agg["live"]["n_trades_closed"] == 1
+        assert agg["live"]["open_positions"] == 1
+        # 병합 trades = live(청산1+보유1) + sim 2 = 4, source 태그 존재
+        assert len(agg["trades"]) == 4
+        assert {t["source"] for t in agg["trades"]} == {"sim", "live"}
+        assert sum(1 for t in agg["trades"] if t["source"] == "sim") == 2
+        assert agg["has_data"] is True
+        # 하위호환: top-level live 키 유지
+        assert agg["n_signals"] == 2
+        assert agg["n_trades_closed"] == 1
+
+    def test_sim_only_not_empty(self):
+        # 라이브 WAL 전무 + sim 만 있어도 윈도우는 비지 않는다 (핵심 요구사항)
+        sim = [_sim_trade(entry_ts="2026-06-29T03:00:00+00:00", ret=1.5)]
+        agg = aggregate_swing_window([], sim, _WIN_SINCE, _WIN_UNTIL)
+        assert agg["sim"]["n"] == 1
+        assert agg["has_data"] is True
+        assert len(agg["trades"]) == 1
+        assert agg["trades"][0]["source"] == "sim"
+
+    def test_both_empty(self):
+        agg = aggregate_swing_window([], [], _WIN_SINCE, _WIN_UNTIL)
+        assert agg["has_data"] is False
+        assert agg["trades"] == []
+        assert agg["sim"]["n"] == 0
+        assert agg["live"]["n_signals"] == 0
+
+
 class TestSwingLiveEndpoint:
+    @staticmethod
+    def _patch_sim(monkeypatch, tmp_path, sim_trades=None):
+        """엔드포인트가 무거운 실 sim 구동을 안 하도록 임시 캐시 주입."""
+        cache = SwingSimCache(tmp_path / "sim_cache.jsonl")
+        if sim_trades:
+            cache.put_many(sim_trades)
+        monkeypatch.setattr(app_mod, "_SWING_SIM_CACHE", cache)
+        monkeypatch.setattr(app_mod, "_swing_compute_all_trades", lambda: [])
+
     def test_endpoint_window_all_smoke(self, tmp_path, monkeypatch):
         monkeypatch.setattr(app_mod, "_swing_repo_root", lambda: tmp_path)
+        self._patch_sim(monkeypatch, tmp_path)
         _swing_live_fixture(tmp_path)
-        j = _C.get("/api/swing_live?window=all&_=1").json()
+        j = _C.get("/api/swing_live?window=all&refresh=1").json()
         assert "error" not in j
         assert j["window"] == "all"
         assert isinstance(j["trades"], list)
         assert j["wal_files_count"] >= 1
-        # all 윈도우(2000~now) 는 2026-06-29 거래를 포함
+        # sim 블록 존재 (빈 캐시 → n=0)
+        assert j["sim"]["n"] == 0
+        # all 윈도우(2000~now) 는 2026-06-29 라이브 거래를 포함
         assert j["n_signals"] == 2
         assert j["n_trades_closed"] == 1
         assert j["open_positions"] == 1
+
+    def test_endpoint_merges_sim_and_live(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(app_mod, "_swing_repo_root", lambda: tmp_path)
+        _swing_live_fixture(tmp_path)
+        self._patch_sim(monkeypatch, tmp_path, sim_trades=[
+            _sim_trade(symbol="FILUSDT",
+                       entry_ts="2026-06-29T03:00:00+00:00", ret=4.0),
+            _sim_trade(symbol="ETCUSDT",
+                       entry_ts="2026-06-29T06:00:00+00:00", ret=-2.0),
+        ])
+        j = _C.get("/api/swing_live?window=all&refresh=1").json()
+        assert "error" not in j
+        assert j["sim"]["n"] == 2
+        assert j["sim_trades_total"] == 2
+        # 병합 trades 에 sim 행 포함 + 라이브 보존
+        assert any(t["source"] == "sim" for t in j["trades"])
+        assert any(t["source"] == "live" for t in j["trades"])
+        assert j["n_trades_closed"] == 1
+        assert j["has_data"] is True
+
+    def test_endpoint_sim_only_not_empty(self, tmp_path, monkeypatch):
+        # 라이브 WAL 없음 + sim 만 있어도 윈도우 비지 않음 (요구사항 검증)
+        monkeypatch.setattr(app_mod, "_swing_repo_root", lambda: tmp_path)
+        self._patch_sim(monkeypatch, tmp_path, sim_trades=[
+            _sim_trade(symbol="FILUSDT",
+                       entry_ts="2026-06-29T03:00:00+00:00", ret=2.5),
+        ])
+        j = _C.get("/api/swing_live?window=all&refresh=1").json()
+        assert j["wal_files_count"] == 0
+        assert j["sim"]["n"] == 1
+        assert j["has_data"] is True
+        assert len(j["trades"]) == 1
+        assert j["trades"][0]["source"] == "sim"
 
     def test_endpoint_unknown_window_400(self):
         r = _C.get("/api/swing_live?window=bogus")
@@ -425,10 +551,12 @@ class TestSwingLiveEndpoint:
         assert "unknown window" in r.json()["error"]
 
     def test_endpoint_empty_graceful(self, tmp_path, monkeypatch):
-        # 빈 repo (WAL 없음) → 깨끗한 빈 집계 (에러/스피너 아님)
+        # 빈 repo (WAL·sim 모두 없음) → 깨끗한 빈 집계 (에러/스피너 아님)
         monkeypatch.setattr(app_mod, "_swing_repo_root", lambda: tmp_path)
-        j = _C.get("/api/swing_live?window=yesterday&_=2").json()
+        self._patch_sim(monkeypatch, tmp_path)
+        j = _C.get("/api/swing_live?window=yesterday&refresh=1").json()
         assert "error" not in j
         assert j["n_signals"] == 0
         assert j["trades"] == []
+        assert j["has_data"] is False
         assert j["wal_files_count"] == 0
