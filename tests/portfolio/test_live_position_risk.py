@@ -499,3 +499,33 @@ class TestCostBasisSignMismatch:
         intents = mgr.evaluate("AVAXUSDT", Decimal("6.80"), _now())
         assert len(intents) == 1
         assert intents[0].side == "buy"
+
+
+def test_effective_policy_prefers_dynamic_override():
+    """fix(2026-06-30) — 거래소 네이티브 TP/SL 이 진입 동적 override(2ATR/꼬리저점·2R)를
+    쓰도록. symbol 주면 동적 우선, 없거나 다른 symbol/미등록이면 정적 fallback.
+    airborne 은 정적값을 override 로 등록하므로 동적=정적 → 무영향."""
+    store = StrategyPositionStore()
+    pnl = PnLAggregator()
+    mgr = LivePositionRiskManager(position_store=store, pnl_aggregator=pnl)
+    sid = "live-donchian-breakout-btcgate"
+    mgr.register_strategy_policy(sid, stop_loss_pct=0.08, take_profit_pct=0.50)
+
+    # override 전 — 정적
+    assert mgr.effective_policy(sid) == (0.08, 0.50)
+    assert mgr.effective_policy(sid, "BTCUSDT") == (0.08, 0.50)
+
+    # 진입 동적 override (2ATR 손절 3% / 6% 가정)
+    mgr.register_entry_override(sid, "BTCUSDT", stop_loss_pct=0.03, take_profit_pct=0.06)
+
+    assert mgr.effective_policy(sid, "BTCUSDT") == (0.03, 0.06)   # 동적 우선
+    assert mgr.effective_policy(sid, "ETHUSDT") == (0.08, 0.50)   # 다른 symbol → 정적
+    assert mgr.effective_policy(sid) == (0.08, 0.50)              # symbol 없음 → 정적(구호환)
+
+
+def test_effective_policy_none_for_unregistered_strategy():
+    mgr = LivePositionRiskManager(
+        position_store=StrategyPositionStore(), pnl_aggregator=PnLAggregator(),
+    )
+    assert mgr.effective_policy("cs-tsmom", "BTCUSDT") is None
+    assert mgr.effective_policy("cs-tsmom") is None

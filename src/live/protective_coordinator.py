@@ -26,7 +26,7 @@ from src.brokers.protective_orders import (
 
 logger = logging.getLogger(__name__)
 
-PolicyLookup = Callable[[str], "tuple[float, float] | None"]
+PolicyLookup = Callable[[str, str], "tuple[float, float] | None"]
 
 
 class ProtectiveOrderCoordinator:
@@ -111,7 +111,8 @@ class ProtectiveOrderCoordinator:
 
         policy = None
         try:
-            policy = self._policy_lookup(strategy_id)
+            # 2026-06-30 — symbol 전달 → 진입 동적 override(2ATR/꼬리저점·2R) 우선.
+            policy = self._policy_lookup(strategy_id, symbol)
         except Exception:  # noqa: BLE001
             policy = None
         if policy is None:
