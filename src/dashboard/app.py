@@ -30,6 +30,7 @@ from src.dashboard.ma_cross_sim_cache import MaCrossSimCache
 from src.dashboard.ma_cross_store import MaCrossStore
 from src.dashboard.ppp_signal_store import PppSignalStore
 from src.dashboard.ppp_sim_cache import PppSimCache
+from src.dashboard.swing_sim_cache import SwingSimCache
 from src.dashboard.ops_counters import OpsCounters
 from src.dashboard.patch_notes import render_patch_notes_page
 from src.dashboard.shadow_runs import discover_shadow_runs, load_run_detail
@@ -117,6 +118,23 @@ def _get_ppp_sim_cache() -> PppSimCache:
     if _PPP_SIM_CACHE is None:
         _PPP_SIM_CACHE = PppSimCache("logs/ppp/sim_cache.jsonl")
     return _PPP_SIM_CACHE
+
+
+# ── swing 2전략 (투매반등 + 돌파) 합성 거래 캐시 싱글톤 ───────────────────────
+# airborne/ma-cross 와 달리 라이브 데몬이 없다 — 두 스윙 전략 객체를 과거 4h 봉에
+# 직접 구동(sim==live, scripts/_swing_signal_returns_sim2.py)해 거래를 합성하고
+# logs/swing/sim_cache.jsonl 에 영속한다. 고정 과거 데이터라 한 번 채우면 재계산
+# 불필요 — force-refresh(?refresh=1) 시 clear 후 재구동.
+_SWING_SIM_CACHE: SwingSimCache | None = None
+
+
+def _get_swing_sim_cache() -> SwingSimCache:
+    global _SWING_SIM_CACHE
+    if _SWING_SIM_CACHE is None:
+        _SWING_SIM_CACHE = SwingSimCache("logs/swing/sim_cache.jsonl")
+    return _SWING_SIM_CACHE
+
+
 from src.live.trade_history import discover_wal_files, reconstruct_trades
 from src.live.wal import replay as wal_replay
 from src.observability.metrics import Metrics
@@ -671,6 +689,302 @@ def _aggregate_ma_cross_sims(sims: list[dict]) -> dict:
         "pf": pf, "mean_pct": sum_pct / n,
         "by_cross": by_cross, "by_kst_bucket": by_kst_bucket,
     }
+
+
+# ── swing 2전략 합성 거래 시뮬 + 집계 (read-only analytics) ───────────────────
+# 라이브 데몬 없음 — 두 스윙 전략 객체를 과거 4h 봉에 직접 구동(sim==live).
+# scripts/_swing_signal_returns_sim2.py 의 load_4h / sim_symbol / run_strategy
+# 로직을 그대로 옮긴다. 청산 자동분기:
+#   - channel_exit_level 있는 전략(돌파) → 2ATR 손절(intrabar) + 채널청산
+#   - 없는 전략(투매반등) → 꼬리저점 손절 + 2R TP (Signal override, intrabar)
+# 데이터: data/cache/binance_1h/*.parquet (volume 有) → 4h 리샘플. BTC게이트는
+# data/cache/binance_4h_btc.parquet. ⚠️ 전략 코드/주문/리스크 미수정 — 분석 전용.
+SWING_WIN: int = 260          # on_bar 에 넘기는 history 슬라이스 길이
+SWING_MAX_HOLD: int = 180     # 미청산 시 강제 청산까지 최대 보유 봉수
+SWING_FEE_PCT: float = 0.10   # 거래당 왕복 실효비용 가정 (net% 차감, %)
+# 캐시 가용 유동성 알트 (BTC 는 별도 parquet). 2021~2026 다중레짐.
+# scripts/_swing_signal_returns_sim2.py 의 UNIVERSE 와 동일.
+SWING_UNIVERSE: list[str] = [
+    "ATOMUSDT", "ALGOUSDT", "DOTUSDT", "ETCUSDT", "FILUSDT", "XLMUSDT", "ARUSDT",
+    "OPUSDT", "APTUSDT", "ARBUSDT", "1000PEPEUSDT", "WLDUSDT", "ICPUSDT", "FETUSDT",
+    "CRVUSDT", "AXSUSDT", "CHZUSDT", "HBARUSDT", "1000SHIBUSDT", "XMRUSDT",
+    "GMTUSDT", "STGUSDT", "PENDLEUSDT", "IDUSDT", "1000LUNCUSDT",
+]
+# 전략 id → 사람이 읽는 라벨 (페이지 카드 제목).
+SWING_STRATEGIES: dict[str, str] = {
+    "live-capitulation-bounce": "투매반등 (평균회귀)",
+    "live-donchian-breakout-btcgate": "돌파/터틀 (추세추종)",
+}
+
+
+def _swing_repo_root() -> Path:
+    """repo root = src/dashboard/app.py 의 parents[2]."""
+    return Path(__file__).resolve().parents[2]
+
+
+def _swing_load_4h(sym: str):
+    """binance_1h parquet → 4h OHLCV 리샘플. 없거나 volume 누락 시 None.
+
+    scripts/_swing_signal_returns_sim2.load_4h 미러.
+    """
+    import pandas as _pd
+
+    p = _swing_repo_root() / "data" / "cache" / "binance_1h" / f"{sym}.parquet"
+    if not p.exists():
+        return None
+    d = _pd.read_parquet(p)
+    if "volume" not in d.columns:
+        return None
+    o = d["open"].resample("4h").first()
+    h = d["high"].resample("4h").max()
+    low = d["low"].resample("4h").min()
+    c = d["close"].resample("4h").last()
+    v = d["volume"].resample("4h").sum()
+    return _pd.DataFrame(
+        {"open": o, "high": h, "low": low, "close": c, "volume": v}
+    ).dropna()
+
+
+def _swing_load_btc_4h():
+    """BTC 4h parquet (게이트 전용). 없으면 None."""
+    import pandas as _pd
+
+    p = _swing_repo_root() / "data" / "cache" / "binance_4h_btc.parquet"
+    if not p.exists():
+        return None
+    return _pd.read_parquet(p)[["open", "high", "low", "close", "volume"]]
+
+
+def _swing_sim_symbol(strat, strategy_id: str, sym: str, bars, btc) -> list[dict]:
+    """단일 종목에 전략 객체를 구동해 합성 거래 list 반환 (sim==live).
+
+    scripts/_swing_signal_returns_sim2.sim_symbol 와 동일 시맨틱.
+      - channel_exit_level 보유 전략(돌파): 2ATR 손절(intrabar) + 채널청산.
+      - 없는 전략(투매반등): 꼬리저점 손절 + 2R TP (Signal override, intrabar).
+    동시 손절·익절 도달 봉은 손절 우선(보수). 미청산은 SWING_MAX_HOLD 후 종가청산.
+    """
+    has_channel = hasattr(strat, "channel_exit_level")
+    trades: list[dict] = []
+    n = len(bars)
+    t = strat.MIN_HISTORY
+    while t < n - 1:
+        ts = bars.index[t]
+        ctx = {
+            "market_snapshot": {
+                "history": bars.iloc[max(0, t - SWING_WIN):t + 1],
+                "universe_ohlcv": {"BTCUSDT": btc.loc[:ts].tail(SWING_WIN)},
+            }
+        }
+        # on_bar 는 (사실상 동기) 코루틴 — 동기 헬퍼로 1회 구동 (이벤트루프 불필요).
+        sig = _swing_run_on_bar(strat, ctx)
+        if sig is None or sig.action != "buy":
+            t += 1
+            continue
+        entry = float(bars["close"].iloc[t])
+        sl_pct = sig.stop_loss_pct_override or strat.stop_loss_pct
+        stop_px = entry * (1 - sl_pct)
+        tp_px = (
+            entry * (1 + (sig.take_profit_pct_override or 9.0))
+            if not has_channel else None
+        )
+        exit_px = reason = exit_t = None
+        for j in range(t + 1, min(t + 1 + SWING_MAX_HOLD, n)):
+            low_j = float(bars["low"].iloc[j])
+            high_j = float(bars["high"].iloc[j])
+            close_j = float(bars["close"].iloc[j])
+            if low_j <= stop_px:                       # 손절 (intrabar, 보수 우선)
+                exit_px, reason, exit_t = stop_px, "stop", j
+                break
+            if has_channel:
+                lvl = strat.channel_exit_level(bars.iloc[:j + 1])
+                if lvl is not None and close_j < lvl:
+                    exit_px, reason, exit_t = close_j, "channel_exit", j
+                    break
+            else:
+                if tp_px is not None and high_j >= tp_px:   # 2R TP
+                    exit_px, reason, exit_t = tp_px, "tp", j
+                    break
+        if exit_px is None:
+            j = min(t + SWING_MAX_HOLD, n - 1)
+            exit_px, reason, exit_t = float(bars["close"].iloc[j]), "open_end", j
+        trades.append({
+            "strategy": strategy_id,
+            "symbol": sym,
+            "entry_ts": bars.index[t].isoformat(),
+            "exit_ts": bars.index[exit_t].isoformat(),
+            "entry": entry,
+            "exit": float(exit_px),
+            "ret": (float(exit_px) - entry) / entry * 100.0,
+            "reason": reason,
+        })
+        t = exit_t + 1
+    return trades
+
+
+def _swing_run_on_bar(strat, ctx):
+    """전략 on_bar(코루틴)을 동기 컨텍스트에서 1회 구동.
+
+    전략 on_bar 들은 내부 await 없이 즉시 반환하는 사실상 동기 코루틴이라
+    ``coro.send(None)`` 로 StopIteration.value 를 받아 안전하게 결과를 얻는다.
+    (compute 는 asyncio.to_thread 안에서 실행 — 별도 이벤트루프 없음).
+    """
+    coro = strat.on_bar(ctx)
+    try:
+        coro.send(None)
+    except StopIteration as stop:
+        return stop.value
+    finally:
+        coro.close()
+    return None
+
+
+def _swing_compute_all_trades() -> list[dict]:
+    """두 스윙 전략을 전 유니버스에 구동해 모든 합성 거래 list 반환.
+
+    동기 함수 — ``asyncio.to_thread`` 안에서 호출(이벤트루프 블록 방지).
+    데이터/전략 import 실패는 graceful (빈 list). scripts/_swing_signal_returns_sim2
+    의 run_strategy 미러.
+    """
+    # 전략 모듈은 `from backtest...` (top-level) 로 임포트하므로 repo_root/src 가
+    # sys.path 에 있어야 한다. 라이브 대시보드(uvicorn src.dashboard.app:app)는
+    # repo root 만 path 에 있을 수 있어 명시 보강 (pytest 는 pythonpath=["src","."]).
+    import sys as _sys
+    _src = str(_swing_repo_root() / "src")
+    if _src not in _sys.path:
+        _sys.path.insert(0, _src)
+    try:
+        try:
+            from backtest.strategies.live_capitulation_bounce import (
+                LiveCapitulationBounce,
+            )
+            from backtest.strategies.live_donchian_breakout_btcgate import (
+                LiveDonchianBreakoutBtcGate,
+            )
+        except ImportError:
+            from src.backtest.strategies.live_capitulation_bounce import (  # type: ignore[no-redef]
+                LiveCapitulationBounce,
+            )
+            from src.backtest.strategies.live_donchian_breakout_btcgate import (  # type: ignore[no-redef]
+                LiveDonchianBreakoutBtcGate,
+            )
+    except Exception as err:  # noqa: BLE001 — import 실패가 페이지를 죽이면 안 됨
+        import logging as _lg
+        _lg.getLogger(__name__).warning("[swing] strategy import failed: %s", err)
+        return []
+
+    btc = _swing_load_btc_4h()
+    if btc is None:
+        return []
+
+    b4: dict[str, Any] = {}
+    for sym in SWING_UNIVERSE:
+        d = _swing_load_4h(sym)
+        if d is not None and len(d) > 250:
+            b4[sym] = d
+    if not b4:
+        return []
+
+    strategies = [
+        ("live-capitulation-bounce", LiveCapitulationBounce()),
+        ("live-donchian-breakout-btcgate",
+         LiveDonchianBreakoutBtcGate(btc_regime_gate=True)),
+    ]
+    all_trades: list[dict] = []
+    for strategy_id, strat in strategies:
+        for sym, bars in b4.items():
+            if sym == "BTCUSDT" or len(bars) < strat.MIN_HISTORY + 5:
+                continue
+            all_trades += _swing_sim_symbol(strat, strategy_id, sym, bars, btc)
+    return all_trades
+
+
+def _swing_pf(pcts: list[float]) -> float | None:
+    wins = sum(p for p in pcts if p > 0)
+    losses = sum(p for p in pcts if p < 0)
+    return (wins / abs(losses)) if losses < 0 else None
+
+
+def _aggregate_swing_trades(trades: list[dict]) -> dict:
+    """합성 거래 list → 집계 통계 dict.
+
+    Returns:
+        {n, win_rate, mean_pct, pf, sum_pct (gross), net_pct (after fee),
+         by_reason: {reason: {n, sum_pct}}, by_symbol: [{symbol, n, sum_pct, pf}]}
+    """
+    n = len(trades)
+    if n == 0:
+        return {
+            "n": 0, "win_rate": None, "mean_pct": None, "pf": None,
+            "sum_pct": 0.0, "net_pct": 0.0,
+            "by_reason": {}, "by_symbol": [],
+        }
+    pcts = [float(t["ret"]) for t in trades]
+    wins = [p for p in pcts if p > 0]
+    sum_pct = sum(pcts)
+
+    by_reason: dict[str, dict] = {}
+    for t in trades:
+        r = str(t.get("reason", "?"))
+        slot = by_reason.setdefault(r, {"n": 0, "sum_pct": 0.0})
+        slot["n"] += 1
+        slot["sum_pct"] += float(t["ret"])
+
+    from collections import defaultdict
+    sym_acc: dict[str, list[float]] = defaultdict(list)
+    for t in trades:
+        sym_acc[str(t.get("symbol", "?"))].append(float(t["ret"]))
+    by_symbol = [
+        {"symbol": sym, "n": len(rs), "sum_pct": sum(rs), "pf": _swing_pf(rs)}
+        for sym, rs in sym_acc.items()
+    ]
+    by_symbol.sort(key=lambda x: x["sum_pct"], reverse=True)
+
+    return {
+        "n": n,
+        "win_rate": len(wins) / n,
+        "mean_pct": sum_pct / n,
+        "pf": _swing_pf(pcts),
+        "sum_pct": sum_pct,
+        "net_pct": sum_pct - SWING_FEE_PCT * n,
+        "by_reason": by_reason,
+        "by_symbol": by_symbol,
+    }
+
+
+def _swing_per_year(cap_trades: list[dict], don_trades: list[dict]) -> list[dict]:
+    """연도별 페어 분산 표 — 두 전략 + 합산을 나란히.
+
+    돌파가 죽는 베어에 투매반등이 + 면 페어 분산 가설 입증 (스토리의 핵심).
+    각 거래의 진입연도(entry_ts 앞 4자) 로 그룹. 반환은 연도 오름차순.
+    """
+    def _year(ts: str) -> str:
+        return str(ts)[:4]
+
+    def _by_year(trades: list[dict]) -> dict[str, list[float]]:
+        from collections import defaultdict
+        acc: dict[str, list[float]] = defaultdict(list)
+        for t in trades:
+            acc[_year(str(t.get("entry_ts", "")))].append(float(t["ret"]))
+        return acc
+
+    cap_y = _by_year(cap_trades)
+    don_y = _by_year(don_trades)
+    years = sorted(y for y in (set(cap_y) | set(don_y)) if y.isdigit())
+    rows: list[dict] = []
+    for y in years:
+        cs = cap_y.get(y, [])
+        ds = don_y.get(y, [])
+        rows.append({
+            "year": y,
+            "cap": {"n": len(cs), "sum_pct": sum(cs), "pf": _swing_pf(cs)},
+            "don": {"n": len(ds), "sum_pct": sum(ds), "pf": _swing_pf(ds)},
+            "combined": {
+                "n": len(cs) + len(ds),
+                "sum_pct": sum(cs) + sum(ds),
+                "pf": _swing_pf(cs + ds),
+            },
+        })
+    return rows
 
 
 # ── PPP 반전 스캘핑 시뮬 + 집계 — ma-cross 미러 ──────────────────────────────
@@ -1505,6 +1819,7 @@ body{{
     <a href="/cs-tsmom" class="nav-pill">cs-tsmom (90%)</a>
     <a href="/airborne" class="nav-pill">airborne 적중</a>
     <a href="/ma-cross" class="nav-pill">골든/데드크로스</a>
+    <a href="/swing" class="nav-pill">스윙 2전략</a>
     <a href="/ppp" class="nav-pill">PPP 반전(페이퍼)</a>
     <a href="/manual" class="nav-pill">수동 거래</a>
     <a href="/shadow_runs" class="nav-pill">Shadow Runs</a>
@@ -1546,6 +1861,14 @@ body{{
       <span class="quick-link-body">
         <span class="quick-link-title">골든/데드 크로스 적중</span>
         <span class="quick-link-sub">bitget top-100 SMA25/200 · TP/SL 시뮬 (1:6) · golden/death 분석</span>
+      </span>
+      <span class="quick-link-arrow">→</span>
+    </a>
+    <a href="/swing" class="quick-link-card quick-link-signals">
+      <span class="quick-link-icon">🌊</span>
+      <span class="quick-link-body">
+        <span class="quick-link-title">스윙 2전략 적중</span>
+        <span class="quick-link-sub">투매반등+돌파 4h · 합성 거래 (sim==live) · 연도별 페어 분산</span>
       </span>
       <span class="quick-link-arrow">→</span>
     </a>
@@ -4892,6 +5215,341 @@ setInterval(refresh, 60000);
 </html>"""
 
 
+def _render_swing_page() -> str:
+    """스윙 2전략 (투매반등 + 돌파) 신호 수익률 누적 분석 페이지.
+
+    ma-cross/airborne 페이지 레이아웃·톤을 그대로 미러 — 상단 stat 타일 +
+    전략별 분리 카드 + 연도별 페어 분산 표 + 청산사유 분해 + 종목 top/bottom.
+    ``/api/swing_metrics`` 한 endpoint 만 폴링 (서버 캐시). 라이브 데몬이 아닌
+    과거 4h 봉에 전략 객체를 직접 구동한 합성 거래(sim==live) — READ-ONLY 분석.
+    """
+    return """<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>QTA — 스윙 2전략 적중 (누적)</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#0b0e11;--surface:#161a1e;--surface2:#1e2329;--border:#2b3139;
+  --text:#eaecef;--text2:#b7bdc6;--text3:#848e9c;--green:#0ecb81;--red:#f6465d;--yellow:#f0a500;
+  --mono:'IBM Plex Mono','Consolas',monospace;--sans:'IBM Plex Sans KR','Segoe UI',sans-serif}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);padding:14px;font-size:13px}
+h1{font-size:1.05rem;color:var(--text);margin-bottom:6px;font-weight:600}
+.subtitle{font-size:.75rem;color:var(--text3);margin-bottom:10px;line-height:1.5}
+.nav{margin-bottom:14px}
+.nav a{color:var(--text2);text-decoration:none;margin-right:12px;font-size:.8rem;
+  background:var(--surface);padding:6px 12px;border-radius:4px;border:1px solid var(--border)}
+.nav a:hover{color:var(--text);background:var(--surface2)}
+.meta{font-size:.75rem;color:var(--text3);margin-bottom:8px;font-family:var(--mono)}
+.empty,.error{padding:30px;text-align:center;color:var(--text3);
+  background:var(--surface);border-radius:6px;border:1px solid var(--border)}
+.error{color:var(--red);border-color:rgba(246,70,93,.35)}
+.header-row{display:flex;align-items:center;gap:14px;margin-bottom:8px;flex-wrap:wrap}
+.rule-badge{background:var(--surface2);border:1px solid var(--border);color:var(--text2);
+  padding:3px 8px;border-radius:4px;font-size:.7rem;font-family:var(--mono)}
+.refresh-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text);
+  padding:6px 14px;border-radius:4px;font-size:.78rem;cursor:pointer;font-family:var(--sans);
+  margin-left:auto;transition:border-color .15s,color .15s}
+.refresh-btn:hover{border-color:var(--green);color:var(--green)}
+.refresh-btn:disabled{opacity:.4;cursor:wait}
+.section-h2{font-size:.85rem;color:var(--text);font-weight:600;margin:18px 0 10px 0;
+  display:flex;align-items:center;gap:10px}
+.section-h2 .count{font-size:.7rem;color:var(--text3);font-family:var(--mono);font-weight:400}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:8px}
+.stat-tile{background:var(--surface);border:1px solid var(--border);border-radius:6px;
+  padding:14px 14px;display:flex;flex-direction:column;gap:6px}
+.stat-tile.is-hero{background:linear-gradient(180deg,rgba(14,203,129,.04),transparent);
+  border-color:rgba(14,203,129,.25)}
+.stat-tile.is-hero-bad{background:linear-gradient(180deg,rgba(246,70,93,.05),transparent);
+  border-color:rgba(246,70,93,.25)}
+.stat-label{font-size:.7rem;color:var(--text3);font-weight:600;letter-spacing:.4px;text-transform:uppercase}
+.stat-val{font-size:1.5rem;font-weight:700;font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--text)}
+.stat-val.dim{color:var(--text3);font-size:1.1rem}
+.stat-val.green{color:var(--green)}
+.stat-val.red{color:var(--red)}
+.stat-sub{font-size:.7rem;color:var(--text3);font-family:var(--mono)}
+.side-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px;margin-bottom:16px}
+.side-card{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:14px}
+.side-card.is-long{border-color:rgba(14,203,129,.3)}
+.side-card.is-short{border-color:rgba(240,165,0,.3)}
+.side-card-hdr{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+.side-card-title{font-size:.85rem;font-weight:700;font-family:var(--mono);letter-spacing:.5px}
+.side-long{color:var(--green)}
+.side-short{color:var(--yellow)}
+.side-row{display:flex;justify-content:space-between;font-size:.78rem;padding:3px 0;color:var(--text2);font-family:var(--mono)}
+.side-row b{color:var(--text);font-variant-numeric:tabular-nums}
+table{width:100%;border-collapse:separate;border-spacing:0;
+  background:var(--surface);border-radius:6px;overflow:hidden;border:1px solid var(--border);margin-bottom:6px}
+thead th{position:sticky;top:0;background:var(--surface2);color:var(--text2);font-weight:600;
+  text-align:left;padding:8px 10px;font-size:.72rem;text-transform:uppercase;letter-spacing:.4px;
+  border-bottom:1px solid var(--border);z-index:5}
+tbody td{padding:7px 10px;font-size:.78rem;border-bottom:1px solid #20262d;
+  font-family:var(--mono);color:var(--text)}
+tbody tr:hover{background:#1c2229}
+tbody tr.is-total td{background:#11161b;font-weight:700;border-top:1px solid var(--border)}
+.td-num{text-align:right;font-variant-numeric:tabular-nums}
+.sym-cell{color:#f0b90b;font-weight:600}
+.pct-pos{color:var(--green)}
+.pct-neg{color:var(--red)}
+.note{color:var(--text3);font-size:.72rem;margin-top:10px;font-family:var(--mono);line-height:1.55}
+</style>
+</head>
+<body>
+<h1>QTA — 스윙 2전략 적중 (누적)</h1>
+<div class="meta">룰: <b>4h · 롱전용 · 투매반등=꼬리저점 손절+2R TP / 돌파=2ATR 손절+채널청산(Donchian10)</b></div>
+<div class="subtitle">두 라이브 스윙 전략 객체(<b>live-capitulation-bounce</b> 평균회귀 + <b>live-donchian-breakout-btcgate</b> 추세추종)를 과거 4h 봉(binance_1h→4h, volume 有)에 직접 구동한 합성 거래(sim==live). 페어 분산 가설 — 돌파가 죽는 베어에 투매반등이 +. ⚠️ gross 누적뷰(net 은 거래당 0.10% 비용 차감), 생존편향·random-vs-signal 별도. READ-ONLY 분석 — 주문/리스크 미연동.</div>
+<div class="nav">
+  <a href="/">← 대시보드</a>
+  <a href="/ma-cross">골든/데드크로스</a>
+  <a href="/airborne">airborne 적중</a>
+  <a href="/cs-tsmom">cs-tsmom</a>
+  <a href="/signals">신호 목록</a>
+  <a href="/strategies">전략 카탈로그</a>
+</div>
+<div class="header-row">
+  <span class="rule-badge" id="rule-badge">손익비 2R · 손절 동적(꼬리/2ATR) · 최대보유 180봉(=30일) · 비용 0.10%/거래</span>
+  <div class="meta" id="meta">로딩 중…</div>
+  <button class="refresh-btn" id="refresh-btn" onclick="forceRefresh()">↻ 캐시 무효화 + 재구동</button>
+</div>
+<div id="content"><div class="empty">데이터를 불러오는 중입니다… (최초 구동은 수십 초 걸릴 수 있습니다)</div></div>
+<script>
+const KST = 'Asia/Seoul';
+function fmtKstFull(iso){
+  if(!iso) return '—';
+  try{
+    return new Intl.DateTimeFormat('ko-KR',{timeZone:KST,year:'2-digit',month:'2-digit',
+      day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(iso));
+  }catch(e){ return iso; }
+}
+function esc(s){
+  return String(s==null?'':s).replace(/[&<>"']/g,c=>(
+    {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function pctColor(v){
+  if(v==null||isNaN(v)) return '';
+  return v > 0 ? 'pct-pos' : (v < 0 ? 'pct-neg' : '');
+}
+function fmtPct(v, dec){
+  if(v==null||isNaN(v)) return '—';
+  const n = Number(v); const cls = pctColor(n); const sign = n>0?'+':'';
+  return `<span class="${cls}">${sign}${n.toFixed(dec==null?2:dec)}%</span>`;
+}
+function fmtPctRaw(v, dec){
+  if(v==null||isNaN(v)) return '—';
+  const n = Number(v); const sign = n>0?'+':'';
+  return sign + n.toFixed(dec==null?2:dec) + '%';
+}
+function fmtPf(v){ return v != null ? Number(v).toFixed(2) : '—'; }
+function fmtWin(v){ return v != null ? (v*100).toFixed(1)+'%' : '—'; }
+
+function renderHeadline(c){
+  const n = c.n ?? 0;
+  const net = c.net_pct;
+  const netTxt = (net != null) ? (net >= 0 ? '+' : '') + Number(net).toFixed(0) + '%' : '—';
+  const netCls = net == null ? 'dim' : (net >= 0 ? 'green' : 'red');
+  const heroCls = net == null ? '' : (net >= 0 ? 'is-hero' : 'is-hero-bad');
+  const pfCls = (c.pf != null && c.pf >= 1.0) ? 'green' : (c.pf != null ? 'red' : 'dim');
+  const winCls = (c.win_rate != null && c.win_rate >= 0.5) ? 'green' :
+                 (c.win_rate != null ? 'red' : 'dim');
+  return `<div class="section-h2">📊 합산 (투매반등 + 돌파) <span class="count">· 페어 운용 기준</span></div>
+  <div class="stat-grid">
+    <div class="stat-tile ${heroCls}">
+      <div class="stat-label">누적 net (비용 후)</div>
+      <div class="stat-val ${netCls}">${esc(netTxt)}</div>
+      <div class="stat-sub">gross ${fmtPctRaw(c.sum_pct, 0)} − fee ${((c.fee_pct ?? 0.10) * n).toFixed(0)}%</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-label">신호(거래)</div>
+      <div class="stat-val">${esc(n)}</div>
+      <div class="stat-sub">두 전략 합산</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-label">승률</div>
+      <div class="stat-val ${winCls}">${esc(fmtWin(c.win_rate))}</div>
+      <div class="stat-sub">+수익 거래 비율</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-label">Profit Factor</div>
+      <div class="stat-val ${pfCls}">${esc(fmtPf(c.pf))}</div>
+      <div class="stat-sub">총이익 / 총손실</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-label">평균 거래</div>
+      <div class="stat-val ${pctColor(c.mean_pct) || 'dim'}">${fmtPctRaw(c.mean_pct, 2)}</div>
+      <div class="stat-sub">거래당 기대값 (gross)</div>
+    </div>
+  </div>`;
+}
+
+function renderStrategyCards(strategies){
+  function card(sid, s, kind){
+    const cls = kind === 'long' ? 'is-long' : 'is-short';
+    const titleCls = kind === 'long' ? 'side-long' : 'side-short';
+    return `<div class="side-card ${cls}">
+      <div class="side-card-hdr">
+        <div class="side-card-title ${titleCls}">${esc(s.label || sid)}</div>
+        <div class="side-row" style="margin:0"><b>${esc(s.n ?? 0)}</b> 건</div>
+      </div>
+      <div class="side-row"><span>승률</span><b>${esc(fmtWin(s.win_rate))}</b></div>
+      <div class="side-row"><span>평균 거래</span><b class="${pctColor(s.mean_pct)}">${fmtPctRaw(s.mean_pct, 2)}</b></div>
+      <div class="side-row"><span>누적 gross%</span><b class="${pctColor(s.sum_pct)}">${fmtPctRaw(s.sum_pct, 0)}</b></div>
+      <div class="side-row"><span>누적 net%</span><b class="${pctColor(s.net_pct)}">${fmtPctRaw(s.net_pct, 0)}</b></div>
+      <div class="side-row"><span>Profit Factor</span><b>${esc(fmtPf(s.pf))}</b></div>
+      <div class="side-row"><span>전략 id</span><b style="font-size:.7rem;color:var(--text3)">${esc(sid)}</b></div>
+    </div>`;
+  }
+  const cap = strategies['live-capitulation-bounce'];
+  const don = strategies['live-donchian-breakout-btcgate'];
+  const html = ['<div class="section-h2">⚖️ 전략별 <span class="count">· 평균회귀 vs 추세추종</span></div>',
+    '<div class="side-grid">'];
+  if (cap) html.push(card('live-capitulation-bounce', cap, 'long'));
+  if (don) html.push(card('live-donchian-breakout-btcgate', don, 'short'));
+  html.push('</div>');
+  return html.join('');
+}
+
+function renderYearTable(rows){
+  if (!rows || rows.length === 0){
+    return `<div class="section-h2">📅 연도별 페어 분산 <span class="count">· 데이터 없음</span></div>
+      <div class="empty">연도별로 보여줄 거래가 없습니다.</div>`;
+  }
+  let tCapN=0,tCapS=0,tDonN=0,tDonS=0,tComN=0,tComS=0;
+  const trs = rows.map(r => {
+    tCapN+=r.cap.n; tCapS+=r.cap.sum_pct; tDonN+=r.don.n; tDonS+=r.don.sum_pct;
+    tComN+=r.combined.n; tComS+=r.combined.sum_pct;
+    return `<tr>
+      <td><b>${esc(r.year)}</b></td>
+      <td class="td-num">${esc(r.cap.n)}</td>
+      <td class="td-num">${fmtPct(r.cap.sum_pct, 0)}</td>
+      <td class="td-num">${esc(fmtPf(r.cap.pf))}</td>
+      <td class="td-num">${esc(r.don.n)}</td>
+      <td class="td-num">${fmtPct(r.don.sum_pct, 0)}</td>
+      <td class="td-num">${esc(fmtPf(r.don.pf))}</td>
+      <td class="td-num">${esc(r.combined.n)}</td>
+      <td class="td-num">${fmtPct(r.combined.sum_pct, 0)}</td>
+    </tr>`;
+  }).join('');
+  const total = `<tr class="is-total">
+    <td>합계</td>
+    <td class="td-num">${tCapN}</td><td class="td-num">${fmtPct(tCapS,0)}</td><td class="td-num">—</td>
+    <td class="td-num">${tDonN}</td><td class="td-num">${fmtPct(tDonS,0)}</td><td class="td-num">—</td>
+    <td class="td-num">${tComN}</td><td class="td-num">${fmtPct(tComS,0)}</td>
+  </tr>`;
+  return `<div class="section-h2">📅 연도별 페어 분산 <span class="count">· 한쪽이 죽을 때 다른쪽이 받친다</span></div>
+    <table><thead><tr>
+      <th>연도</th>
+      <th class="td-num">투매 n</th><th class="td-num">투매 합산</th><th class="td-num">투매 PF</th>
+      <th class="td-num">돌파 n</th><th class="td-num">돌파 합산</th><th class="td-num">돌파 PF</th>
+      <th class="td-num">합산 n</th><th class="td-num">합산 수익</th>
+    </tr></thead><tbody>${trs}${total}</tbody></table>
+    <div class="note">합산(단리 gross) — 두 전략의 연도별 진입 기준 누적. 돌파(추세)가 베어에 −여도 투매반등(평균회귀)이 + 면 페어 분산 작동.</div>`;
+}
+
+function renderReasons(strategies){
+  function block(sid, s){
+    const br = s.by_reason || {};
+    const order = ['tp','channel_exit','stop','open_end'];
+    const labels = {tp:'TP (2R 익절)', channel_exit:'채널청산(Donchian10)', stop:'손절', open_end:'미청산 종가'};
+    const keys = order.filter(k => br[k]).concat(Object.keys(br).filter(k => order.indexOf(k)<0));
+    if (keys.length === 0) return '';
+    const trs = keys.map(k => {
+      const x = br[k];
+      return `<tr><td>${esc(labels[k] || k)}</td>
+        <td class="td-num">${esc(x.n)}</td>
+        <td class="td-num">${((x.n / (s.n||1))*100).toFixed(0)}%</td>
+        <td class="td-num">${fmtPct(x.sum_pct, 0)}</td></tr>`;
+    }).join('');
+    return `<div style="flex:1;min-width:280px">
+      <div class="side-card-title" style="font-size:.78rem;margin-bottom:6px;color:var(--text2)">${esc(s.label || sid)}</div>
+      <table><thead><tr><th>청산 사유</th><th class="td-num">n</th><th class="td-num">비중</th><th class="td-num">합산%</th></tr></thead>
+      <tbody>${trs}</tbody></table></div>`;
+  }
+  const cap = strategies['live-capitulation-bounce'];
+  const don = strategies['live-donchian-breakout-btcgate'];
+  const blocks = [];
+  if (cap) blocks.push(block('live-capitulation-bounce', cap));
+  if (don) blocks.push(block('live-donchian-breakout-btcgate', don));
+  if (blocks.length === 0) return '';
+  return `<div class="section-h2">🚪 청산 사유 분해 <span class="count">· 엣지가 어디서 나오나</span></div>
+    <div style="display:flex;gap:14px;flex-wrap:wrap">${blocks.join('')}</div>`;
+}
+
+function renderSymbols(combined){
+  const by = (combined.by_symbol || []);
+  if (by.length === 0){
+    return `<div class="section-h2">🏷️ 종목별 top/bottom <span class="count">· 데이터 없음</span></div>
+      <div class="empty">종목별 분포가 없습니다.</div>`;
+  }
+  const top = by.slice(0, 8);
+  const bottom = by.slice(-8).reverse();
+  function tbl(title, rows){
+    const trs = rows.map(r => `<tr>
+      <td class="sym-cell">${esc((r.symbol||'').replace(/USDT$/,''))}</td>
+      <td class="td-num">${esc(r.n)}</td>
+      <td class="td-num">${fmtPct(r.sum_pct, 0)}</td>
+      <td class="td-num">${esc(fmtPf(r.pf))}</td>
+    </tr>`).join('');
+    return `<div style="flex:1;min-width:280px">
+      <div class="side-card-title" style="font-size:.78rem;margin-bottom:6px;color:var(--text2)">${title}</div>
+      <table><thead><tr><th>종목</th><th class="td-num">n</th><th class="td-num">합산%</th><th class="td-num">PF</th></tr></thead>
+      <tbody>${trs}</tbody></table></div>`;
+  }
+  return `<div class="section-h2">🏷️ 종목별 top/bottom <span class="count">· 합산 gross 기준 (두 전략 합산)</span></div>
+    <div style="display:flex;gap:14px;flex-wrap:wrap">
+      ${tbl('▲ 상위 8', top)}
+      ${tbl('▼ 하위 8', bottom)}
+    </div>`;
+}
+
+function render(d){
+  const combined = d.combined || {};
+  const strategies = d.strategies || {};
+  const out = [renderHeadline(combined)];
+  out.push(renderStrategyCards(strategies));
+  out.push(renderYearTable(d.per_year || []));
+  out.push(renderReasons(strategies));
+  out.push(renderSymbols(combined));
+  return out.join('');
+}
+
+async function load(forceRefreshFlag){
+  const meta = document.getElementById('meta');
+  const content = document.getElementById('content');
+  try{
+    const url = '/api/swing_metrics' + (forceRefreshFlag ? '?refresh=1' : '?_=' + Date.now());
+    const r = await fetch(url);
+    const j = await r.json();
+    if (j.error){
+      content.innerHTML = `<div class="error">${esc(j.error)}</div>`;
+      return;
+    }
+    const cachedTxt = j.cached ? '(캐시)' : '(방금 재구동)';
+    const span = j.span || {};
+    meta.innerHTML =
+      `거래 <b>${esc(j.trade_count ?? 0)}</b> · 유니버스 ${esc(j.universe_size ?? 0)}종 · `
+      + `${fmtKstFull(span.start)} ~ ${fmtKstFull(span.end)} · ${cachedTxt}`;
+    content.innerHTML = render(j);
+  }catch(e){
+    content.innerHTML =
+      `<div class="error">로딩 실패: ${esc(String(e))} — 잠시 후 자동 재시도</div>`;
+  }
+}
+
+async function forceRefresh(){
+  const btn = document.getElementById('refresh-btn');
+  btn.disabled = true; btn.textContent = '재구동 중…';
+  try{ await load(true); }
+  catch(e){ alert('재구동 실패: ' + e); }
+  finally{ btn.disabled = false; btn.textContent = '↻ 캐시 무효화 + 재구동'; }
+}
+
+load(false);
+setInterval(() => load(false), 120000);
+</script>
+</body>
+</html>"""
+
+
 def _render_strategies(items: list[dict]) -> str:
     cards_html = "".join(_strategy_card(it) for it in items)
     return f"""<!DOCTYPE html>
@@ -6034,6 +6692,15 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
         airborne 페이지 레이아웃 미러.
         """
         return HTMLResponse(content=_render_ma_cross_page())
+
+    @app.get("/swing", response_class=HTMLResponse)
+    async def swing_page() -> HTMLResponse:
+        """스윙 2전략(투매반등 + 돌파) 신호 수익률 누적 분석 페이지.
+
+        두 라이브 전략 객체를 과거 4h 봉에 직접 구동한 합성 거래(sim==live)를
+        집계 — 페어 분산·청산사유·종목·연도별. ma-cross 레이아웃 미러, READ-ONLY.
+        """
+        return HTMLResponse(content=_render_swing_page())
 
     # ── PPP 반전 스캘핑 페이퍼 시그널 (2026-06-19, live-ppp-scalping-v1) ──────
     # scripts/ppp_signal_daemon.py 가 고변동 알트 5m 반전(과매수/과매도 + QPP
@@ -7389,6 +8056,87 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
             "cached": False,
         }
         _ma_cross_metrics_cache[cache_key] = {"ts": now, "data": payload}
+        return JSONResponse(payload)
+
+    # ── swing 2전략 합성 거래 메트릭 (read-only analytics) ──────────────────
+    _swing_metrics_cache: dict[str, Any] = {}
+    SWING_METRICS_CACHE_TTL = 300.0  # 5분 (in-memory; sim cache JSONL 은 영속)
+
+    @app.get("/api/swing_metrics")
+    async def api_swing_metrics(
+        refresh: int = Query(0, description="1 이면 sim 캐시 clear 후 재구동"),
+    ) -> JSONResponse:
+        """스윙 2전략(투매반등 + 돌파) 합성 거래 메트릭 — 누적 전기간.
+
+        라이브 데몬 없음 — 두 전략 객체를 과거 4h 봉에 직접 구동(sim==live,
+        scripts/_swing_signal_returns_sim2). 결과는 영속 JSONL 캐시
+        (logs/swing/sim_cache.jsonl) + 5분 in-memory 캐시. ``refresh=1`` 은
+        캐시 clear 후 재구동. 데이터/전략 부재는 graceful (n=0).
+        """
+        import time as _time
+
+        now = _time.time()
+        sim_cache = _get_swing_sim_cache()
+
+        if refresh:
+            sim_cache.clear()
+            _swing_metrics_cache.clear()
+
+        entry = _swing_metrics_cache.get("data")
+        ts = _swing_metrics_cache.get("ts", 0.0)
+        if (not refresh and entry is not None
+                and now - ts < SWING_METRICS_CACHE_TTL):
+            return JSONResponse({**entry, "cached": True})
+
+        # 거래 합성 — sim cache 비었으면 전략 구동(무거움, thread). 차면 그대로 load.
+        if sim_cache.is_empty():
+            trades = await asyncio.to_thread(_swing_compute_all_trades)
+            if trades:
+                sim_cache.put_many(trades)
+        all_trades = sim_cache.load_all()
+
+        cap = [t for t in all_trades if t.get("strategy") == "live-capitulation-bounce"]
+        don = [t for t in all_trades
+               if t.get("strategy") == "live-donchian-breakout-btcgate"]
+
+        def _strat_block(sid: str, trades: list[dict]) -> dict:
+            agg = _aggregate_swing_trades(trades)
+            agg["label"] = SWING_STRATEGIES.get(sid, sid)
+            agg["strategy_id"] = sid
+            agg["fee_pct"] = SWING_FEE_PCT
+            return agg
+
+        combined = _aggregate_swing_trades(all_trades)
+        combined["fee_pct"] = SWING_FEE_PCT
+
+        span = {"start": None, "end": None}
+        if all_trades:
+            span["start"] = min(str(t.get("entry_ts", "")) for t in all_trades)
+            span["end"] = max(str(t.get("exit_ts", "")) for t in all_trades)
+
+        payload = {
+            "computed_at": datetime.now(timezone.utc).isoformat(),
+            "trade_count": len(all_trades),
+            "universe_size": len(SWING_UNIVERSE),
+            "fee_pct": SWING_FEE_PCT,
+            "combined": combined,
+            "strategies": {
+                "live-capitulation-bounce": _strat_block(
+                    "live-capitulation-bounce", cap),
+                "live-donchian-breakout-btcgate": _strat_block(
+                    "live-donchian-breakout-btcgate", don),
+            },
+            "per_year": _swing_per_year(cap, don),
+            "span": span,
+            "rule": {
+                "interval": "4h", "side": "long-only",
+                "max_hold_bars": SWING_MAX_HOLD, "rr": 2.0,
+                "fee_pct": SWING_FEE_PCT,
+            },
+            "cached": False,
+        }
+        _swing_metrics_cache["data"] = payload
+        _swing_metrics_cache["ts"] = now
         return JSONResponse(payload)
 
     @app.get("/api/journal/today")
