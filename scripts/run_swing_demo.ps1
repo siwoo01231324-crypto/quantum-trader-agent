@@ -10,6 +10,7 @@
 
 $env:SWING_CHANNEL_SWEEP = "1"     # 돌파 채널청산(Donchian10 하단) 발동
 $env:SWING_SIGNAL_ALERT  = "1"     # 스윙 진입 텔레그램 알림
+$env:SWING_EVAL_TIMER_SEC = "60"     # 체결틱 죽은 환경 대비 — 60s마다 4h 평가
 $env:QTA_LOG_FILE        = "logs/shadow-swing/live_run.log"   # 실거래 로그와 분리
 
 python scripts/live_run.py `
