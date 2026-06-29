@@ -15,6 +15,24 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.101"
+    date: "2026-06-29"
+    title: "숏 진입 post-only Maker 전환 — 진입 수수료 60%↓ (short-whitelist)"
+    tags: [feature, perf]
+    summary: >
+      sim PF는 1.5인데 실거래 PF 0.9로 새는 갭의 큰 축이 수수료(testnet 실측
+      수수료가 수익 초과). 진입을 Taker 시장가→Maker GTX LIMIT 으로 전환해 진입
+      수수료 0.045%→0.018%(60%↓), 왕복 ~30%↓. 롱이 전면 차단돼 숏 전략에 적용.
+      미체결 시 30s 후 시장가 fallback. 라이브 실험(안티셀렉션 모니터).
+    items:
+      - "_build_entry_intent: 숏 *진입*(sell & not reduce_only, shorts_allowed)도 entry_order_type 읽어 GTX LIMIT(maker, ref×1.0005) stamp. 청산(reduce_only)은 항상 market — 손절 즉시성·naked-short 안전핵심부 불변."
+      - "LiveAirborneShortWhitelistV1 에 entry_order_type ClassVar+kwarg, production.yaml short-whitelist = post_only."
+      - "fire consumer 경로(dispatch_fire_entry→execute_intents)도 post_only_fallback 자동 적용(30s 미체결→시장가)."
+      - "⚠️ BB되돌림 숏 maker는 즉시반락(winner) 미체결 안티셀렉션 위험 — post_only_fallback WAL outcome(filled_maker vs resubmitted_market) 모니터, 나쁘면 entry_order_type: market 롤백."
+      - "테스트 4건(숏진입 stamp/청산 market 회귀/롱 회귀/market 강등). 기존 post_only·fire·shorts_allowed·fallback 회귀 green."
+    refs:
+      - "docs/specs/post-only-maker-entry.draft.md"
+      - "src/portfolio/_async_orchestrator.py"
   - version: "v0.6.100"
     date: "2026-06-29"
     title: "롱 사이드 전면 차단 + 숏차단 시각 확장 (2주 ledger 실측)"

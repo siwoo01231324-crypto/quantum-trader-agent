@@ -62,6 +62,10 @@ class LiveAirborneShortWhitelistV1(LiveAirborneBbReversalKstHours):
     stop_loss_pct: ClassVar[float] = 0.03
     take_profit_pct: ClassVar[float] = 0.06
     shorts_allowed: ClassVar[bool] = True  # 부모 True 명시 — sell intent reduce_only=False
+    # post-only Maker 진입 (2026-06-29). orchestrator._build_entry_intent 가 숏
+    # *진입*(sell & not reduce_only)에 한해 이 속성을 읽어 GTX LIMIT(maker) stamp.
+    # 청산은 항상 market(손절 즉시성). "market"=레거시. production.yaml kwargs override.
+    entry_order_type: ClassVar[str] = "market"
 
     # 19시간 게이트 — Hard OOS train_PF>1 결과
     kst_entry_hours: ClassVar[frozenset[int]] = _KST_HOURS_19
@@ -80,6 +84,7 @@ class LiveAirborneShortWhitelistV1(LiveAirborneBbReversalKstHours):
         kst_entry_hours: tuple[int, ...] | list[int] | None = None,
         cooldown_after_stop_sec: float | None = None,
         max_concurrent_positions: int | None = None,
+        entry_order_type: str | None = None,
     ) -> None:
         # 부모 ctor 호출 (min_close_margin / atr_period 는 None 이면 부모 default 사용)
         parent_kwargs: dict = {
@@ -103,6 +108,17 @@ class LiveAirborneShortWhitelistV1(LiveAirborneBbReversalKstHours):
                 f"retrace_ratio in (0, 1] required, got {retrace_ratio}"
             )
         self.retrace_ratio = float(retrace_ratio)
+
+        # post-only Maker 토글 — kwarg 지정 시 ClassVar override (instance 속성).
+        # orchestrator 가 getattr 로 읽어 숏 진입에 GTX LIMIT stamp. 미지정/None 이면
+        # ClassVar("market") 유지. 유효값만 허용("market"|"post_only").
+        if entry_order_type is not None:
+            if entry_order_type not in ("market", "post_only"):
+                raise ValueError(
+                    f"entry_order_type must be 'market'|'post_only', "
+                    f"got {entry_order_type!r}"
+                )
+            self.entry_order_type = entry_order_type
 
     # get_universe 는 부모 상속 — venue-routing 거래량 top-100
     # (QTA_BROKER_VENUE=bitget → Bitget, 아니면 Binance). #380 부터 고정
