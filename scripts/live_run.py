@@ -299,13 +299,17 @@ def _attach_rotating_file_log() -> None:
     import logging  # noqa: PLC0415
     from logging.handlers import RotatingFileHandler  # noqa: PLC0415
     from pathlib import Path  # noqa: PLC0415
+    # 2026-06-30 — 프로세스별 로그파일 분리. 기본 logs/live_run.log (실거래 유지),
+    # QTA_LOG_FILE 로 override (스윙 데모 등 동시 프로세스가 같은 파일에 섞여 쓰며
+    # 실거래 로그를 오염시키던 문제 fix — 예: QTA_LOG_FILE=logs/shadow-swing/live_run.log).
+    log_path = os.environ.get("QTA_LOG_FILE", "logs/live_run.log")
     try:
         root = logging.getLogger()
         if any(getattr(h, "_qta_file_log", False) for h in root.handlers):
             return  # 중복 부착 방지 (두 모드/재진입)
-        Path("logs").mkdir(parents=True, exist_ok=True)
+        Path(log_path).parent.mkdir(parents=True, exist_ok=True)
         fh = RotatingFileHandler(
-            "logs/live_run.log", maxBytes=20_000_000, backupCount=5,
+            log_path, maxBytes=20_000_000, backupCount=5,
             encoding="utf-8",
         )
         fh.setFormatter(
@@ -314,7 +318,7 @@ def _attach_rotating_file_log() -> None:
         fh._qta_file_log = True  # type: ignore[attr-defined]  # 중복 가드 마커
         root.addHandler(fh)
         logging.getLogger("live_run").info(
-            "rotating file log → logs/live_run.log (20MB×5, 자동 회전)"
+            "rotating file log → %s (20MB×5, 자동 회전)", log_path,
         )
     except Exception:  # noqa: BLE001 — 파일 로그 실패가 거래를 막으면 안 됨
         pass
