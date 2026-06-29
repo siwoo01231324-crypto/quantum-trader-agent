@@ -189,6 +189,24 @@ class AirborneFireConsumer:
             self._f_time_gate, self._f_btc_downtrend, self._f_short_block,
             self._f_high_vol, self._f_short_pump, self._f_long_crash,
         )
+        # ── 롱 사이드 차단 (2026-06-29) ──────────────────────────────────────────
+        # 06-15~06-29 거래소 ledger 자동매매 실측: 롱 304건 PF 0.49·net −116
+        # (전체 손실 −149 의 78%), 숏 PF 0.92·net −33(거의 본전). 롱이 구조적
+        # 손실원 → AIRBORNE_BLOCK_LONG=1 로 롱 전면 차단(기본 OFF). 시각 단위로
+        # 미세조정하려면 AIRBORNE_LONG_BLOCK_HOURS=csv (예 7,11,16,17,23). 둘 다
+        # 설정되면 전면차단 우선. 숏차단(_short_block_hours)과 대칭.
+        self._block_long = _flag("AIRBORNE_BLOCK_LONG", False)
+        _lbh = _os.environ.get("AIRBORNE_LONG_BLOCK_HOURS", "").strip()
+        self._long_block_hours = (
+            frozenset(int(h) for h in _lbh.split(",") if h.strip().isdigit())
+            if _lbh else frozenset()
+        )
+        if self._block_long or self._long_block_hours:
+            logger.warning(
+                "AirborneFireConsumer LONG BLOCK — full=%s hours=%s "
+                "(2주 롱 PF 0.49 구조적 손실)",
+                self._block_long, sorted(self._long_block_hours),
+            )
         # ── 당일 손익 기반 전체 진입 정지 게이트 3종 (2026-06-27) ─────────────────
         # 오전에 번 걸 오후·밤에 토해내는 패턴(24일~ 반복) 방어. 전부 % of equity
         # 기준, KST 자정 리셋, *신규진입만* 차단(미청산 포지션은 TP/SL 그대로 유지),
@@ -551,6 +569,12 @@ class AirborneFireConsumer:
         if (side == "short" and self._f_short_block
                 and hour_kst in self._short_block_hours):
             self._record_skip(symbol, side, hour_kst, bar_open_key, "숏차단시각")
+            return False
+
+        # 롱 차단 (2026-06-29) — 롱 사이드 구조적 손실(2주 PF 0.49). 전면 또는 시각.
+        if side == "long" and (self._block_long
+                               or hour_kst in self._long_block_hours):
+            self._record_skip(symbol, side, hour_kst, bar_open_key, "롱차단")
             return False
 
         # ── 모멘텀 진입 필터 (2026-06-17, symbol+side 레벨) ──────────────────
