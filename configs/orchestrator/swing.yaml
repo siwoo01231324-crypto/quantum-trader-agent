@@ -1,0 +1,53 @@
+# Swing-only orchestrator roster (2026-06-30) — 4h 스윙 2전략 격리 실행용.
+#
+# 목적: production.yaml(airborne 1h + cs 1d 혼재)과 분리해 **스윙 4h 전략만** 등록.
+# 등록 전략이 전부 4h(get_interval="4h") → universe_quote provider 가 4h 만 fetch →
+# cross-interval symbol collision 원천 차단 (docs/specs/strategies/live-donchian-breakout-btcgate.md
+# "활성화 선결 — 4h 피드 collision" 참조). 이 격리 전제 위에서만 SWING_CHANNEL_SWEEP=1 안전.
+#
+# 실행:
+#   1) bitget-demo 로 먼저 검증:
+#      python scripts/live_run.py --production-yaml configs/orchestrator/swing.yaml \
+#        --broker-mode bitget-demo  (+ SWING_CHANNEL_SWEEP=1, AIRBORNE_FIRE_CONSUMER 미설정)
+#      → 4h 진입 정상? 채널청산(donchian) 발동? 확인.
+#   2) 통과 시 prod 전환 (airborne off → 본 config). 운영자 판단.
+#
+# ⚠️ 본 config 는 airborne/cs 를 포함하지 않는다. 같은 프로세스에서 airborne 과 절대 혼용 금지
+# (혼용 시 4h collision). 스윙은 항상 이 격리 config 로 단독 기동.
+
+orchestrator:
+  min_order_interval_sec: 300
+
+strategies:
+  # 투매반등 (평균회귀, 베어장 강함) — 유동성 메이저(TOP30) 고정, falling knife 회피.
+  # 청산 = 동적 override(손절=신호봉 꼬리저점, TP=2R), 채널청산 없음 → sweep 불요.
+  - id: live-capitulation-bounce
+    class: backtest.strategies.live_capitulation_bounce.LiveCapitulationBounce
+    kwargs:
+      default_size: 0.05
+      n_dev: 2.5                 # EMA20 아래 N×ATR 투매 깊이
+      wick_mult: 1.5             # 아랫꼬리/몸통
+      vol_mult: 2.0              # 거래량 스파이크 배수
+      rr: 2.0                    # 손익비 — TP = RR × 꼬리저점 손절거리
+      stop_loss_pct: 0.05        # override 미전달 시 fallback
+      take_profit_pct: 0.10
+      anomaly_guard_enabled: true
+
+  # 돌파 + BTC 레짐 게이트 (추세, 불장 강함) — 채널청산(Donchian10) = 엣지 핵심.
+  # SWING_CHANNEL_SWEEP=1 필요(미설정 시 ① 2ATR 손절만 작동 = 백테스트 대비 열화).
+  - id: live-donchian-breakout-btcgate
+    class: backtest.strategies.live_donchian_breakout_btcgate.LiveDonchianBreakoutBtcGate
+    kwargs:
+      default_size: 0.05
+      breakout_lookback: 20      # Donchian 상단 (진입)
+      exit_lookback: 10          # Donchian 하단 (추세청산)
+      stop_atr_mult: 2.0         # 하드 손절 = entry − 2×ATR
+      btc_regime_gate: true      # BTC 4h close>EMA200 일 때만 진입 (엣지 핵심)
+      stop_loss_pct: 0.08        # override 미전달 fallback
+      take_profit_pct: 0.50      # 추세청산이 주청산 → 넓게
+      anomaly_guard_enabled: true
+
+# 스윙 단독 → 자본 전부 live_scanner.
+capital_allocation:
+  universe_scan_pct: 0.0
+  live_scanner_pct: 1.0
