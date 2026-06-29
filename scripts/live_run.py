@@ -1001,6 +1001,15 @@ def _register_exit_policies(orch, risk_mgr, logger) -> int:
             risk_mgr.set_strategy_max_hold(sid_, mh)
             logger.info("live_risk.max_hold_override sid=%s max_hold_sec=%s", sid_, mh)
 
+    def _apply_channel_exit(sid_: str, strat_: object) -> None:
+        """전략이 ``channel_exit_level(history)`` 메서드를 선언한 경우만 채널청산 등록
+        (Donchian 돌파 추세전략 등 — 매 봉 갱신 레벨 청산). 미선언이면 no-op(영향 0).
+        가격 stop/TP(register_strategy_policy)와 병행 — 둘 중 먼저 닿는 쪽이 청산."""
+        fn = getattr(strat_, "channel_exit_level", None)
+        if callable(fn) and hasattr(risk_mgr, "register_channel_exit"):
+            risk_mgr.register_channel_exit(sid_, fn)
+            logger.info("live_risk.channel_exit_registered sid=%s", sid_)
+
     for sid, strategy in orch.strategies.items():
         if getattr(strategy, "is_live_scanner", False):
             risk_mgr.register_strategy_policy(
@@ -1010,6 +1019,7 @@ def _register_exit_policies(orch, risk_mgr, logger) -> int:
                 trailing_stop_pct=getattr(strategy, "trailing_stop_pct", None),
             )
             _apply_max_hold(sid, strategy)
+            _apply_channel_exit(sid, strategy)
             registered += 1
             logger.info("live_scanner.policy_registered sid=%s", sid)
             continue
