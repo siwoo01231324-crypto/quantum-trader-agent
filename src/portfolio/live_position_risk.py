@@ -20,10 +20,15 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Callable, ClassVar
 
+import pandas as pd
+
 from src.live.pnl_aggregator import PnLAggregator
 from src.live.strategy_position_store import StrategyPositionStore
 from src.live.types import WALEvent
 from src.portfolio.order_intent import OrderIntent
+
+# 채널청산 level provider — 전략의 channel_exit_level(history)->float|None 시그니처.
+ChannelLevelFn = Callable[[pd.DataFrame], "float | None"]
 
 logger = logging.getLogger(__name__)
 
@@ -135,6 +140,12 @@ class LivePositionRiskManager:
         # 되는 충돌 차단용. airborne 은 ClassVar 미선언 → map 미등록 → 영향 0.
         self._max_hold_by_sid: dict[str, float | None] = {}
         self._entry_ts: dict[tuple[str, str], datetime] = {}
+        # 2026-06-25 채널청산 — 전략별 Donchian-style 동적 청산 레벨 provider.
+        # sid → channel_exit_level(history)->float|None. `sweep_channel_exits` 가
+        # 보유분을 순회하며 매 봉 레벨 계산 후 close<level 이면 reduce_only 청산.
+        # 가격 임계(evaluate)·시간청산(sweep_timeouts)과 독립 additive 경로 —
+        # 기존 race-path 무영향. 미등록 전략은 영향 0 (Donchian 돌파 추세전략 전용).
+        self._channel_exit_fns: dict[str, ChannelLevelFn] = {}
 
     def set_native_tpsl_check(self, check: Callable[[str], bool] | None) -> None:
         """P2 (2026-06-10) — broker adapter.has_native_tpsl 를 생성 *후* 주입.
@@ -504,6 +515,97 @@ class LivePositionRiskManager:
                 # 2026-06-22 — entry_ts 리셋(evaluate 경로와 동일). 미리셋 시
                 # stale entry_ts 가 재진입에 물려 즉시 timeout (churn) → 청산
                 # reject/틱부재로 held==0 cleanup 이 안 도는 종목에서 영구 잔존.
+                self._entry_ts.pop(key, None)
+                self._pending_exit[key] = now
+        return intents
+
+    def register_channel_exit(
+        self, strategy_id: str, level_fn: ChannelLevelFn,
+    ) -> None:
+        """채널청산 전략 등록 — `level_fn(history)` 가 청산 레벨(Donchian10 하단 등)
+        반환. `sweep_channel_exits` 가 매 sweep 마다 보유분에 적용.
+
+        Donchian 돌파 추세전략(`live_donchian_breakout_btcgate`)처럼 청산 기준이
+        고정 % 가 아니라 *매 봉 갱신되는 채널 레벨* 인 전략용. 미등록 전략은 영향 0.
+        live_run 의 `_register_exit_policies` 가 전략의 `channel_exit_level` 메서드를
+        가진 경우 본 메서드로 배선(가격 stop/TP 와 병행).
+        """
+        self._channel_exit_fns[strategy_id] = level_fn
+
+    def sweep_channel_exits(
+        self,
+        now: datetime,
+        history_lookup: Callable[[str], "pd.DataFrame | None"],
+    ) -> list[OrderIntent]:
+        """채널청산 sweep — 등록 전략 보유분을 순회, 봉 종가가 청산 레벨 이탈 시 청산.
+
+        `evaluate`(가격 임계, tick)·`sweep_timeouts`(시간) 와 **독립 additive 경로**.
+        기존 race-path 무영향 — 새 dict(`_channel_exit_fns`) 만 본다. long-only 전제
+        (돌파 추세) → 하방 채널 이탈(close < level)만 청산.
+
+        ``history_lookup(symbol)`` → 해당 symbol 의 봉 DataFrame(close/low 포함) 또는 None.
+        루프가 universe OHLCV 를 이미 보유하므로 그 조회를 주입. 봉 부재/레벨 None 이면 skip.
+        in-flight guard·entry_ts reset·WAL·on_exit 는 `evaluate`/`sweep_timeouts` 와 동일.
+        """
+        if not self._channel_exit_fns:
+            return []
+        intents: list[OrderIntent] = []
+        for strategy_id, level_fn in self._channel_exit_fns.items():
+            for symbol, _qty in self._position_store.get_positions(strategy_id):
+                held, avg_cost = self._lookup_position(strategy_id, symbol)
+                if held <= 0 or avg_cost <= 0:
+                    continue  # long-only — 숏/flat skip
+                key = (strategy_id, symbol)
+                # in-flight guard — evaluate/sweep_timeouts 와 동일 self-heal.
+                pending_ts = self._pending_exit.get(key)
+                if pending_ts is not None:
+                    if (now - pending_ts).total_seconds() < self._pending_exit_timeout_sec:
+                        continue
+                    self._pending_exit.pop(key, None)
+                hist = None
+                try:
+                    hist = history_lookup(symbol)
+                except Exception:  # noqa: BLE001 — 조회 실패가 청산을 막지 않게
+                    hist = None
+                if hist is None or len(hist) == 0:
+                    continue
+                try:
+                    level = level_fn(hist)
+                    last_close = float(hist["close"].iloc[-1])
+                except Exception:  # noqa: BLE001
+                    continue
+                if level is None or last_close <= 0:
+                    continue
+                if last_close > float(level):
+                    continue  # 채널 안 — 보유 유지
+                pct_change = float((Decimal(str(last_close)) - avg_cost) / avg_cost)
+                intents.append(OrderIntent(
+                    strategy_id=strategy_id,
+                    symbol=symbol,
+                    side="sell",
+                    qty=float(abs(held)),
+                    reason=(
+                        f"live_channel_exit:entry={avg_cost},close={last_close},"
+                        f"level={float(level):.6g},pct={pct_change:+.4f}"
+                    ),
+                    reduce_only=True,
+                ))
+                logger.info(
+                    "live_risk CHANNEL-EXIT sid=%s %s held=%s entry=%s close=%s level=%s",
+                    strategy_id, symbol, held, avg_cost, last_close, level,
+                )
+                self._emit_stop_event(
+                    strategy_id=strategy_id,
+                    symbol=symbol,
+                    trigger="channel_exit",
+                    avg_cost=avg_cost,
+                    last_price=Decimal(str(last_close)),
+                    qty=abs(held),
+                    pct_change=pct_change,
+                    ts=now,
+                )
+                self._high_water.pop(key, None)
+                self._dynamic_policies.pop(key, None)
                 self._entry_ts.pop(key, None)
                 self._pending_exit[key] = now
         return intents

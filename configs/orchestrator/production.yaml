@@ -286,12 +286,6 @@ strategies:
       #   (코인 -0.5% = 포지션 -5% @10x)으로 제한.
       default_size: 0.50         # 명목 50% = 증거금 5%/종목 @10x (#380 사용자 요청)
       max_concurrent_positions: 18  # 동시 보유 상한 18종 = 증거금 90% (#380, 버퍼 10%)
-      # 2026-06-29 — post-only Maker 진입(수수료 진입 60%↓, 왕복 ~30%↓). 숏 *진입*
-      # 만 GTX LIMIT(ref×1.0005), 청산은 항상 market(손절 즉시성). 미체결 시
-      # POST_ONLY_FALLBACK_SEC(30s) 후 시장가 재발주. ⚠️ 라이브 실험 — BB되돌림
-      # 숏에 maker 는 즉시반락(=winner) 미체결 안티셀렉션 위험. post_only_fallback
-      # WAL outcome(filled_maker vs resubmitted_market) 모니터, 나쁘면 market 롤백.
-      entry_order_type: post_only
       stop_loss_pct: 0.010       # -1.0% 코인가 (= -10% ROE @10x). 2026-06-16 widening
       take_profit_pct: 0.020     # +2.0% 코인가 (= +20% ROE @10x). 2026-06-16 widening
       # 손익비 widening (2026-06-16, kst-hours 와 동일) — 좁은 +1.1%/-0.5% 가 수수료
@@ -528,6 +522,46 @@ strategies:
   #     bb_std: 2.0
   #     require_divergence: false  # true → 4P 다이버전스 필수
   #     require_zone: false        # true → OB/OS 구간 필수
+  #     anomaly_guard_enabled: true
+
+  # 투매반등 평균회귀 (research 2026-06-25) — CANDIDATE, 비활성.
+  # 4h 스윙 long-only. low≤EMA20−2.5×ATR + 긴아랫꼬리(≥1.5×몸통) + 거래량스파이크(2×)
+  # + 양봉 → buy. 청산은 동적 override(손절=신호봉 꼬리저점, TP=2R), time-stop 면제.
+  # 5y·13메이저·정직10bp·random-vs-signal 통과: PF 1.63 / exp +1.73%/거래 / 단독
+  # basket CAGR 9.3%·MDD 12.9%·Sharpe 1.07. 인트라데이 비용벽 뒤 일봉터틀에 이어 두
+  # 번째 유효 신호(평균회귀, 베어장 강함). 활성화 선결: 돌파(trend, BTC게이트)와 병렬
+  # 2-전략 사이징 통합 + 생존편향 정밀. spec: docs/specs/strategies/live-capitulation-bounce.md
+  # - id: live-capitulation-bounce
+  #   class: backtest.strategies.live_capitulation_bounce.LiveCapitulationBounce
+  #   kwargs:
+  #     default_size: 0.05
+  #     n_dev: 2.5                 # EMA20 아래 N×ATR 투매 깊이
+  #     wick_mult: 1.5             # 아랫꼬리/몸통
+  #     vol_mult: 2.0              # 거래량 스파이크 배수
+  #     rr: 2.0                    # 손익비 — TP = RR × 꼬리저점 손절거리
+  #     stop_loss_pct: 0.05        # override 미전달 시 fallback
+  #     take_profit_pct: 0.10
+  #     anomaly_guard_enabled: true
+  #     # regime_filter_enabled: true  # 켜면 평균회귀 국면(meanrev)에서만 진입
+
+  # 돌파 + BTC 레짐 게이트 (research 2026-06-25) — CANDIDATE, 비활성(청산배선 대기).
+  # 4h 스윙 long-only 추세추종. close>Donchian20상단 + close>EMA200 + BTC4h>EMA200 → buy.
+  # 청산 2단: ① 2ATR 동적 손절, ② close<Donchian10 채널청산(엣지 핵심). 투매반등의 짝
+  # (불장 강함, 레짐 비상관 → 병렬 시 분산). 5y·정직10bp·random 통과: PF 1.37 / exp
+  # +0.95%/거래 / 채널청산판 단독 basket CAGR 26.5%·MDD 24.7%·Sharpe 1.06.
+  # ⚠️ 채널청산(②)은 매 봉 갱신 레벨이라 risk manager 정적 stop/TP 로 못 함 → ratchet
+  # 배선(sweep_channel_exits) + testnet 검증 후 활성화. 미배선 시 ①만 작동(열화).
+  # spec: docs/specs/strategies/live-donchian-breakout-btcgate.md
+  # - id: live-donchian-breakout-btcgate
+  #   class: backtest.strategies.live_donchian_breakout_btcgate.LiveDonchianBreakoutBtcGate
+  #   kwargs:
+  #     default_size: 0.05
+  #     breakout_lookback: 20      # Donchian 상단 (진입)
+  #     exit_lookback: 10          # Donchian 하단 (추세청산)
+  #     stop_atr_mult: 2.0         # 하드 손절 = entry − 2×ATR
+  #     btc_regime_gate: true      # BTC 4h close>EMA200 일 때만 진입 (엣지 핵심)
+  #     stop_loss_pct: 0.08        # override 미전달 fallback
+  #     take_profit_pct: 0.50      # 추세청산이 주청산 → 넓게
   #     anomaly_guard_enabled: true
 
   # ── 메타라벨러 활성화 (#85) — 운영자 절차 ─────────────────────────────────
