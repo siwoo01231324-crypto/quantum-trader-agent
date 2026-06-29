@@ -214,9 +214,10 @@ class AirborneFireConsumer:
         # daily (KST business-date 리셋) 주입. provider 없거나 equity≤0 이면 fail-open.
         #   AIRBORNE_DAILY_GUARDS=1  → 3종 전부 기본 ON (개별 토글로 덮어쓰기 가능)
         #   개별: AIRBORNE_DAILY_PROFIT_LOCK / _GIVEBACK_LOCK / _LOSS_LOCK = 1/0
-        #   임계: _PROFIT_TARGET_PCT(3.5) / _GIVEBACK_PCT(40) / _GIVEBACK_ARM_PCT(3.0)
-        #   (arm 1.0 은 2026-06-28 +1.2% 노이즈에 종일 정지 사고 → 3.0 으로 상향.
-        #    arm 은 target(3.5)보다 낮아야 give-back 이 의미 — target 도달은 profit_lock)
+        #   임계: _PROFIT_TARGET_PCT(5.0) / _GIVEBACK_PCT(40) / _GIVEBACK_ARM_PCT(3.0)
+        #   (target 3.5→5.0 2026-06-28 사용자 상향. arm 1.0→3.0 동일 +1.2% 노이즈
+        #    종일정지 사고. arm 은 target(5.0)보다 낮아야 give-back 이 의미 —
+        #    target 도달은 profit_lock 이 먼저 정지)
         #         / _LOSS_LIMIT_PCT(3.0)
         # caveat: native TP/SL·수동청산(숫자 coid)은 strategy_id 귀속 실패로
         # aggregator daily 에서 누락될 수 있음 → 게이트가 약간 늦게 걸릴 수 있다.
@@ -234,7 +235,7 @@ class AirborneFireConsumer:
             except (TypeError, ValueError):
                 return default
 
-        self._daily_profit_target_pct = _envf("AIRBORNE_DAILY_PROFIT_TARGET_PCT", 3.5)
+        self._daily_profit_target_pct = _envf("AIRBORNE_DAILY_PROFIT_TARGET_PCT", 5.0)
         self._giveback_pct = _envf("AIRBORNE_DAILY_GIVEBACK_PCT", 40.0)
         self._giveback_arm_pct = _envf("AIRBORNE_DAILY_GIVEBACK_ARM_PCT", 3.0)
         self._daily_loss_limit_pct = _envf("AIRBORNE_DAILY_LOSS_LIMIT_PCT", 3.0)
