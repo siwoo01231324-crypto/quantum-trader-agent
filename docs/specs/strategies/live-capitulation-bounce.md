@@ -132,24 +132,22 @@ orch.refresh_portfolio_risk()
 - 단독 운용 시 저CAGR(9%) — 설계 의도는 돌파(trend)와 **병렬 2-전략** 운용(앙상블 wrapper 금지
   — 분산 파괴, `src/backtest/strategies/.ai.md` live-scanner-ensemble REJECTED 교훈).
 
-## 활성화 선결 — 4h 피드 부재 (2026-06-30 발견)
+## 활성화 선결 — 4h 피드 collision (2026-06-30, 정정)
 
-⚠️ **라이브 파이프라인은 `get_interval()` 을 소비하지 않는다** (loop/snapshot_builder/_async_orchestrator
-어디서도 안 읽음 — 전략 파일·대시보드 sim 에서만 참조). 전략이 받는 `market_snapshot["history"]`
-= `_universe_ohlcv[symbol]` = SnapshotBuilder `_universe_cache` = **universe_quote_provider 의 단일 인터벌**.
-`scripts/live_run.py::_build_universe_quote_provider` 가 `fetch_universe_klines(..., interval="1d")` 로
-**일봉 하드코딩** (binance/bitget 양쪽, cs-tsmom 일봉용).
+라이브 provider 는 **`get_interval()` 을 소비한다** — `scripts/live_run.py::_build_universe_quote_provider`
+의 binance/bitget closure 가 `_collect_strategy_universes()` 로 등록 전략의 (get_universe, get_interval)
+을 모아 **per-interval `fetch_universe_klines(syms, interval=...)`**. 즉 투매반등(4h) 등록 시 그 universe
+는 **4h 로 fetch**된다. (loop/snapshot_builder/_async_orchestrator 는 get_interval 미소비 — provider 가 담당.)
 
-→ **스윙 4h 전략을 현 orchestrator 에 등록하면 일봉을 받아** Donchian20=20일·EMA200=200일·
-채널청산 Donchian10=10일 로 **silent 오작동**(4h 백테스트와 완전 불일치). 진입·청산 둘 다 깨짐.
+⚠️ **단 cross-interval symbol collision**: merge 가 `for interval in sorted(...): ohlcv.setdefault(sym, df)`
+= **first-wins(알파벳)**. "1d" < "1h" < "4h" 라 **스윙 종목이 cs(1d)/airborne(1h) universe 와 겹치면
+그 종목만 1d/1h 봉을 받아** EMA20/ATR/투매깊이가 4h 아닌 값으로 silent 오작동. 코드 주석도 "Phase 3
+symbol-major 분리 검토" 로 플래그. 투매반등은 채널청산 없음(고정 꼬리저점손절+2R TP)이라 sweep 무관.
 
-**활성화 선결(채널청산 배선보다 먼저)**:
-1. **4h 유니버스 피드** — 스윙용 `fetch_universe_klines(universe, interval="4h")`. 라이브가 orchestrator
-   당 단일 인터벌이라 (a) 스윙 전용 별도 orchestrator/process(interval=4h), 또는 (b) per-strategy
-   interval 피드(get_interval 소비 배선) 중 택1. **(a) 가 격리·저위험.**
-2. 그 위에 채널청산 sweep 배선 — `history_lookup` 은 그 4h 피드 또는 sweep 전용 4h fetch. env-guard
-   default-off + sweep_timeouts 회귀박제.
-3. testnet 검증 → 활성화.
+**활성화 선결**:
+1. **4h collision-safety** — 투매반등 universe(유동성 메이저 고정)를 1d/1h 전략과 disjoint 하게 하거나,
+   provider merge 를 symbol+interval-aware 로 수정(전략별 자기 interval 보장).
+2. testnet 검증 → 활성화. (채널청산 없어 sweep 배선 불요 — 고정 stop/TP override 로 라이브 fit 깨끗.)
 
 **유니버스/사이징 확정(2026-06-30, `swing-strategy-research-handoff.draft.md`)**: 돌파=동적 top-N broad
 (EMA200+BTC게이트 생존편향 면역) / 투매반등=유동성 메이저 고정(falling knife 회피). 공통 제외
