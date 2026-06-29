@@ -34,6 +34,7 @@ from src.dashboard.swing_sim_cache import SwingSimCache
 from src.dashboard.swing_live import (
     SWING_LIVE_STRATEGY_IDS,
     aggregate_swing_live,
+    aggregate_swing_window,
     discover_swing_wal_files,
 )
 from src.dashboard.ops_counters import OpsCounters
@@ -5305,6 +5306,9 @@ tbody tr.is-total td{background:#11161b;font-weight:700;border-top:1px solid var
 .sd-badge{display:inline-block;padding:2px 6px;border-radius:3px;font-size:.66rem;font-weight:700;font-family:var(--mono);letter-spacing:.4px}
 .sd-long{background:rgba(14,203,129,.16);color:var(--green)}
 .sd-short{background:rgba(246,70,93,.16);color:var(--red)}
+.src-badge{display:inline-block;padding:1px 6px;border-radius:3px;font-size:.64rem;font-weight:700;font-family:var(--mono);letter-spacing:.3px}
+.src-sim{background:rgba(132,142,156,.18);color:var(--text2)}
+.src-live{background:rgba(14,203,129,.18);color:var(--green)}
 .live-divider{margin-top:22px;border-top:1px solid var(--border);padding-top:16px}
 </style>
 </head>
@@ -5321,9 +5325,9 @@ tbody tr.is-total td{background:#11161b;font-weight:700;border-top:1px solid var
   <a href="/strategies">전략 카탈로그</a>
 </div>
 
-<!-- ── 라이브 (testnet/demo 실거래) 섹션 ──────────────────────────────── -->
-<div class="section-h2" style="margin-top:4px">🟢 라이브 (testnet/demo 실거래)
-  <span class="count">· binance-testnet + bitget-demo WAL — 실제 신호/거래/NET 누적 추적</span></div>
+<!-- ── 윈도우 뷰 (sim 백테스트 + 라이브) 섹션 ─────────────────────────── -->
+<div class="section-h2" style="margin-top:4px">🟢 윈도우 뷰 (sim 백테스트 + 라이브)
+  <span class="count">· 선택 윈도우의 sim(진입일 기준) 거래 + binance-testnet/bitget-demo 라이브 WAL 을 함께 표시</span></div>
 <div class="header-row">
   <label style="font-size:.78rem;color:var(--text2)">윈도우:
     <select id="live-window-selector" onchange="changeLiveWindow(this.value)"
@@ -5335,10 +5339,10 @@ tbody tr.is-total td{background:#11161b;font-weight:700;border-top:1px solid var
       <option value="all">전체 누적</option>
     </select>
   </label>
-  <span class="rule-badge">binance-testnet + bitget-demo · 4h 롱전용 · 실현 NET=USDT(fill 기준)</span>
+  <span class="rule-badge">sim=4h 롱전용 gross% · 라이브=testnet/demo 실현 NET(USDT)</span>
   <div class="meta" id="live-meta">로딩 중…</div>
 </div>
-<div id="live-content"><div class="empty">라이브 데이터를 불러오는 중…</div></div>
+<div id="live-content"><div class="empty">윈도우 데이터를 불러오는 중…</div></div>
 
 <!-- ── 백테스트 sim (5y) 섹션 ─────────────────────────────────────────── -->
 <div class="section-h2 live-divider">📉 백테스트 sim (5y)
@@ -5603,32 +5607,49 @@ function _liveStatusBadge(t){
   return `<span class="live-badge ${cls}">${esc(t.status_label || '청산')}</span>`;
 }
 function _fmtPx(v){ return (v != null && !isNaN(v)) ? Number(v).toPrecision(6) : '—'; }
+function _srcBadge(t){
+  return t.source === 'sim'
+    ? '<span class="src-badge src-sim">sim</span>'
+    : '<span class="src-badge src-live">라이브</span>';
+}
 function renderLiveHeadline(j){
-  const net = j.net_pnl;
-  const cur = j.net_currency || 'USDT';
-  const netTxt = (net != null) ? (net >= 0 ? '+' : '') + Number(net).toFixed(2) + ' ' + cur : '—';
-  const netCls = net == null ? 'dim' : (net > 0 ? 'green' : (net < 0 ? 'red' : 'dim'));
-  const heroCls = net == null ? '' : (net >= 0 ? 'is-hero' : 'is-hero-bad');
-  const wl = `${j.wins ?? 0}승 / ${j.losses ?? 0}패`;
+  const sim = j.sim || {};
+  const live = j.live || j;  // 하위호환 (live 블록 없으면 top-level)
+  const simN = sim.n ?? 0;
+  const simNet = sim.net_pct;
+  const simNetTxt = (simNet != null) ? (simNet >= 0 ? '+' : '') + Number(simNet).toFixed(1) + '%' : '—';
+  const simNetCls = simNet == null ? 'dim' : (simNet >= 0 ? 'green' : 'red');
+  const heroCls = simNet == null ? '' : (simNet >= 0 ? 'is-hero' : 'is-hero-bad');
+  const simWin = sim.win_rate != null ? (sim.win_rate * 100).toFixed(0) + '%' : '—';
+  const simPf = sim.pf != null ? Number(sim.pf).toFixed(2) : '—';
+  const lnet = live.net_pnl;
+  const cur = live.net_currency || 'USDT';
+  const lnetTxt = (lnet != null) ? (lnet >= 0 ? '+' : '') + Number(lnet).toFixed(2) + ' ' + cur : '—';
+  const lnetCls = lnet == null ? 'dim' : (lnet > 0 ? 'green' : (lnet < 0 ? 'red' : 'dim'));
   return `<div class="stat-grid">
     <div class="stat-tile ${heroCls}">
-      <div class="stat-label">실현 NET</div>
-      <div class="stat-val ${netCls}">${esc(netTxt)}</div>
-      <div class="stat-sub">청산거래 fill 합 (수수료 반영)</div>
+      <div class="stat-label">sim net% (윈도우)</div>
+      <div class="stat-val ${simNetCls}">${esc(simNetTxt)}</div>
+      <div class="stat-sub">백테스트 ${esc(simN)}건 · gross−fee</div>
     </div>
     <div class="stat-tile">
-      <div class="stat-label">신호 (진입)</div>
-      <div class="stat-val ${(j.n_signals ? '' : 'dim')}">${esc(j.n_signals ?? 0)}</div>
+      <div class="stat-label">sim 거래</div>
+      <div class="stat-val ${(simN ? '' : 'dim')}">${esc(simN)}</div>
+      <div class="stat-sub">승률 ${esc(simWin)} · PF ${esc(simPf)}</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-label">라이브 신호</div>
+      <div class="stat-val ${(live.n_signals ? '' : 'dim')}">${esc(live.n_signals ?? 0)}</div>
       <div class="stat-sub">signal_emitted (buy)</div>
     </div>
     <div class="stat-tile">
-      <div class="stat-label">청산 거래</div>
-      <div class="stat-val ${(j.n_trades_closed ? '' : 'dim')}">${esc(j.n_trades_closed ?? 0)}</div>
-      <div class="stat-sub">${esc(wl)}</div>
+      <div class="stat-label">라이브 실현 NET</div>
+      <div class="stat-val ${lnetCls}">${esc(lnetTxt)}</div>
+      <div class="stat-sub">청산 ${esc(live.n_trades_closed ?? 0)}건 · ${esc(live.wins ?? 0)}승/${esc(live.losses ?? 0)}패</div>
     </div>
     <div class="stat-tile">
-      <div class="stat-label">보유중</div>
-      <div class="stat-val ${(j.open_positions ? '' : 'dim')}">${esc(j.open_positions ?? 0)}</div>
+      <div class="stat-label">라이브 보유중</div>
+      <div class="stat-val ${(live.open_positions ? '' : 'dim')}">${esc(live.open_positions ?? 0)}</div>
       <div class="stat-sub">미청산 포지션</div>
     </div>
   </div>`;
@@ -5641,6 +5662,7 @@ function renderLiveTable(trades){
     const exitTxt = (t.exit_price != null)
       ? ` <span style="color:var(--text3)">@${_fmtPx(t.exit_price)}</span>` : '';
     return `<tr>
+      <td>${_srcBadge(t)}</td>
       <td>${esc(fmtKstFull(when))}</td>
       <td class="sym-cell">${esc((t.symbol || '').replace(/USDT$/, ''))}</td>
       <td><span class="sd-badge ${sd}">${sdTxt}</span></td>
@@ -5651,19 +5673,22 @@ function renderLiveTable(trades){
       <td style="color:var(--text3)">${esc(t.reason || '—')}</td>
     </tr>`;
   }).join('');
-  return `<div class="section-h2">📋 라이브 거래·보유 상세 <span class="count">· ${trades.length}건 (최신순)</span></div>
+  const nSim = trades.filter(t => t.source === 'sim').length;
+  const nLive = trades.length - nSim;
+  return `<div class="section-h2">📋 윈도우 거래·보유 상세 <span class="count">· ${trades.length}건 (sim ${nSim} · 라이브 ${nLive}, 최신순)</span></div>
     <table><thead><tr>
-      <th>일시 (KST)</th><th>Symbol</th><th>방향</th><th>전략</th>
+      <th>소스</th><th>일시 (KST)</th><th>Symbol</th><th>방향</th><th>전략</th>
       <th class="td-num">진입가</th><th>상태/청산</th><th class="td-num">pct</th><th>사유</th>
     </tr></thead><tbody>${trs}</tbody></table>
-    <div class="note">실현 NET 은 거래소 fill(수수료 포함)에서 페어링한 라운드트립 손익(USDT) 합. pct 는 진입·청산가 기준(부호 인지). 청산거래는 exit_ts, 보유중은 entry_ts 가 윈도우에 들어올 때 노출. READ-ONLY — 주문/리스크 미연동.</div>`;
+    <div class="note"><b>sim</b> = 과거 4h 봉 합성 거래(진입일이 윈도우 안). pct 는 gross %, USDT 손익 없음. <b>라이브</b> = testnet/demo 거래소 fill 페어링 라운드트립, 실현 NET=USDT(수수료 포함). 라이브 청산거래는 exit_ts, 보유중은 entry_ts 기준 윈도우 귀속. READ-ONLY — 주문/리스크 미연동.</div>`;
 }
 function renderLive(j){
   const out = [renderLiveHeadline(j)];
-  if((j.trades || []).length === 0){
-    out.push(`<div class="empty">아직 거래 없음 — 라이브 스윙(testnet/demo)이 이 윈도우에 체결한 신호/거래가 없습니다. 4h 스윙 신호는 드물어 한동안 비어 있을 수 있습니다.</div>`);
+  const trades = j.trades || [];
+  if(trades.length === 0){
+    out.push(`<div class="empty">이 윈도우에 sim·라이브 거래가 모두 없습니다. (다른 윈도우, 예: 최근 30일 을 선택하면 sim 백테스트 거래가 표시됩니다.)</div>`);
   } else {
-    out.push(renderLiveTable(j.trades || []));
+    out.push(renderLiveTable(trades));
   }
   return out.join('');
 }
@@ -5675,14 +5700,16 @@ async function loadLive(){
     const j = await r.json();
     if(j.error){ content.innerHTML = `<div class="error">${esc(j.error)}</div>`; return; }
     const cachedTxt = j.cached ? '(캐시)' : '(방금 갱신)';
+    const sim = j.sim || {};
     if(meta) meta.innerHTML =
       `<b>${esc(_liveWindowLabel(j.window || LIVE_WINDOW))}</b> · `
-      + `신호 <b>${j.n_signals ?? 0}</b> · 청산 <b>${j.n_trades_closed ?? 0}</b> · `
-      + `보유 <b>${j.open_positions ?? 0}</b> · WAL ${j.wal_files_count ?? 0}개 · ${cachedTxt}`;
+      + `sim <b>${sim.n ?? 0}</b> · 라이브 신호 <b>${j.n_signals ?? 0}</b> · `
+      + `청산 <b>${j.n_trades_closed ?? 0}</b> · 보유 <b>${j.open_positions ?? 0}</b> · `
+      + `WAL ${j.wal_files_count ?? 0}개 · ${cachedTxt}`;
     content.innerHTML = renderLive(j);
   }catch(e){
     content.innerHTML =
-      `<div class="error">라이브 로딩 실패: ${esc(String(e))} — 잠시 후 자동 재시도</div>`;
+      `<div class="error">윈도우 로딩 실패: ${esc(String(e))} — 잠시 후 자동 재시도</div>`;
   }
 }
 window.addEventListener('DOMContentLoaded', () => {
@@ -8301,19 +8328,25 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
         window: str = Query(
             "today", description="today | yesterday | 7d | 30d | all",
         ),
+        refresh: int = Query(0, description="1 이면 윈도우 in-memory 캐시 우회"),
     ) -> JSONResponse:
-        """라이브 스윙 2전략의 WAL 거래/신호 윈도우 집계 — airborne 윈도우 UX 미러.
+        """스윙 2전략 윈도우 뷰 — **sim(백테스트) + 라이브(testnet/demo)** 병합.
 
-        ``logs/shadow-swing*/<run_id>/wal.jsonl`` (binance-testnet + bitget-demo)
-        를 스캔해 두 전략(live-capitulation-bounce · live-donchian-breakout-btcgate)
-        의 signal_emitted(신호) + order_filled 라운드트립(거래·실현 NET) 을 집계.
-        READ-ONLY — 주문/리스크/전략 미연동.
+        airborne 윈도우 UX 미러(오늘/어제/7일/30일/전체, KST 자정 경계). 두 소스를
+        한 윈도우로 합쳐 보여줘 라이브가 막 시작해 비어도 페이지가 즉시 콘텐츠를
+        갖는다:
+          - **sim**: 과거 4h 봉에 두 전략 객체를 직접 구동한 합성 거래(gross %,
+            `swing_sim_cache.jsonl` 공유 — `/api/swing_metrics` 와 동일 소스) 중
+            entry_ts ∈ 윈도우.
+          - **라이브**: ``logs/shadow-swing*/<run>/wal.jsonl`` (binance-testnet +
+            bitget-demo) 의 signal_emitted(신호) + order_filled 라운드트립(실현 NET).
+        두 소스는 통화가 달라(USDT vs %) 별도 집계 블록(`sim`/`live`). READ-ONLY.
         """
         import time as _time
 
         now = _time.time()
         cache_entry = _swing_live_cache.get(window)
-        if (cache_entry is not None
+        if (not refresh and cache_entry is not None
                 and now - cache_entry["ts"] < SWING_LIVE_CACHE_TTL
                 and cache_entry["data"] is not None):
             return JSONResponse({**cache_entry["data"], "cached": True})
@@ -8341,8 +8374,19 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
 
         repo_root = _swing_repo_root()
         wal_paths = discover_swing_wal_files(repo_root)
+
+        # sim 거래 — `/api/swing_metrics` 와 동일 영속 캐시(logs/swing/sim_cache.jsonl)
+        # 공유. 비어 있으면(최초/force-refresh 후) 전략 구동(무거움, thread) 후 적재.
+        # 채워지면 load_all 만(빠름). 윈도우 필터는 aggregate_swing_window 가 한다.
+        sim_cache = _get_swing_sim_cache()
+        if sim_cache.is_empty():
+            sim_trades = await asyncio.to_thread(_swing_compute_all_trades)
+            if sim_trades:
+                sim_cache.put_many(sim_trades)
+        all_sim = sim_cache.load_all()
+
         agg = await asyncio.to_thread(
-            aggregate_swing_live, wal_paths, since_utc, until_utc,
+            aggregate_swing_window, wal_paths, all_sim, since_utc, until_utc,
             SWING_LIVE_STRATEGY_IDS,
         )
 
@@ -8353,6 +8397,7 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
             "now_kst": kst_now.isoformat(),
             "wal_files": [str(p) for p in wal_paths],
             "wal_files_count": len(wal_paths),
+            "sim_trades_total": len(all_sim),
             "strategy_ids": sorted(SWING_LIVE_STRATEGY_IDS),
             **agg,
             "cached": False,
