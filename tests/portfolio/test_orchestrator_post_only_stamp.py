@@ -102,3 +102,83 @@ def test_invalid_entry_order_type_falls_back_to_market():
     assert len(intents) == 1
     assert intents[0].entry_order_type == "market"
     assert intents[0].ref_price is None
+
+
+# ── 2026-06-29 숏 진입 post_only 확장 (_build_entry_intent 직접 검증) ──────────
+# 숏 *진입*(sell & shorts_allowed) 은 post_only stamp 허용. 청산(reduce_only)은
+# 항상 market — 손절 즉시성(naked-short 안전 핵심부 reduce_only 회귀 박제).
+
+class _ShortPostOnly:
+    """shorts_allowed 숏 진입 전략 — post_only 선언."""
+    entry_order_type = "post_only"
+    shorts_allowed = True
+    stop_loss_pct = 0.01
+    take_profit_pct = 0.02
+
+
+class _LongOnlyPostOnly:
+    """long-only 전략 (shorts_allowed 미선언) — SELL 은 청산이므로 market 강제."""
+    entry_order_type = "post_only"
+    stop_loss_pct = 0.01
+    take_profit_pct = 0.02
+
+
+def test_short_entry_post_only_stamped():
+    """SELL & shorts_allowed(= 숏 진입) → post_only + ref_price stamp."""
+    orch = _orch()
+    intent = orch._build_entry_intent(
+        strategy_id="sw", strategy=_ShortPostOnly(), symbol="SOLUSDT",
+        action="sell", qty=1.0, price=100.0, reason="fire_consume:short",
+    )
+    assert intent.entry_order_type == "post_only"
+    assert intent.ref_price == pytest.approx(100.0)
+    assert intent.reduce_only is False  # 숏 진입은 reduceOnly 아님
+
+
+def test_short_entry_market_when_declared_market():
+    """shorts_allowed 라도 entry_order_type 미선언/market → market."""
+    orch = _orch()
+
+    class _ShortMarket:
+        shorts_allowed = True
+        stop_loss_pct = 0.01
+        take_profit_pct = 0.02
+
+    intent = orch._build_entry_intent(
+        strategy_id="sw", strategy=_ShortMarket(), symbol="SOLUSDT",
+        action="sell", qty=1.0, price=100.0, reason="r",
+    )
+    assert intent.entry_order_type == "market"
+    assert intent.ref_price is None
+    assert intent.reduce_only is False
+
+
+def test_liquidation_sell_always_market_even_if_post_only():
+    """⚠️ 안전 핵심부 회귀: long-only 전략의 SELL(=청산, reduce_only) 은
+    entry_order_type=post_only 선언해도 절대 market — 손절 즉시성 우선."""
+    orch = _orch()
+    intent = orch._build_entry_intent(
+        strategy_id="lo", strategy=_LongOnlyPostOnly(), symbol="SOLUSDT",
+        action="sell", qty=1.0, price=100.0, reason="liquidate",
+    )
+    assert intent.reduce_only is True       # 청산 = reduceOnly (naked-short 차단)
+    assert intent.entry_order_type == "market"  # maker 금지 (지연 시 손절 확대)
+    assert intent.ref_price is None
+
+
+def test_buy_entry_post_only_unchanged():
+    """롱 진입 post_only 는 기존대로 (회귀)."""
+    orch = _orch()
+
+    class _LongPostOnly:
+        entry_order_type = "post_only"
+        stop_loss_pct = 0.01
+        take_profit_pct = 0.02
+
+    intent = orch._build_entry_intent(
+        strategy_id="lo", strategy=_LongPostOnly(), symbol="SOLUSDT",
+        action="buy", qty=1.0, price=100.0, reason="r",
+    )
+    assert intent.entry_order_type == "post_only"
+    assert intent.ref_price == pytest.approx(100.0)
+    assert intent.reduce_only is False

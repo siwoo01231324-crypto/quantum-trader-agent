@@ -715,11 +715,6 @@ class AsyncStrategyOrchestrator:
         (가격 pct)로 trigger 가격 계산해 meta 에 stamp. 숏(sell) 진입: SL=가격↑,
         TP=가격↓ / 롱(buy): 반대.
         """
-        entry_order_type = "market"
-        if action == "buy":
-            declared = getattr(strategy, "entry_order_type", "market")
-            if declared in ("market", "post_only"):
-                entry_order_type = declared
         # #238 Item 7 — long-only 전략의 SELL 은 항상 청산이라 reduceOnly stamp
         # (보유 0 에서 sell 이 naked short 되는 사고 차단). shorts_allowed=True
         # 를 선언한 bidir 전략 (airborne v1.2 등) 은 SELL 이 short 진입일 수
@@ -728,6 +723,17 @@ class AsyncStrategyOrchestrator:
             action == "sell"
             and not getattr(strategy, "shorts_allowed", False)
         )
+        # post-only Maker 진입 (2026-05-22 BUY, 2026-06-29 SHORT 확장).
+        #   - BUY(롱 진입): post_only 허용.
+        #   - SELL & not reduce_only(= 숏 *진입*, shorts_allowed 전략): post_only 허용.
+        #   - SELL & reduce_only(= 청산): 항상 market — 손절 즉시성 우선(절대 maker 금지).
+        # executor 의 _post_only_limit_price 가 sell 은 ref×1.0005(위) maker 보장.
+        # 미체결 시 post_only_fallback 이 30s 후 시장가 재발주.
+        entry_order_type = "market"
+        if action == "buy" or not _ro:
+            declared = getattr(strategy, "entry_order_type", "market")
+            if declared in ("market", "post_only"):
+                entry_order_type = declared
         _preset_meta = None
         if not _ro and price and price > 0:
             _slp = getattr(strategy, "stop_loss_pct", None)

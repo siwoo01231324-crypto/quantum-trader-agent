@@ -286,6 +286,12 @@ strategies:
       #   (코인 -0.5% = 포지션 -5% @10x)으로 제한.
       default_size: 0.50         # 명목 50% = 증거금 5%/종목 @10x (#380 사용자 요청)
       max_concurrent_positions: 18  # 동시 보유 상한 18종 = 증거금 90% (#380, 버퍼 10%)
+      # 2026-06-29 — post-only Maker 진입(수수료 진입 60%↓, 왕복 ~30%↓). 숏 *진입*
+      # 만 GTX LIMIT(ref×1.0005), 청산은 항상 market(손절 즉시성). 미체결 시
+      # POST_ONLY_FALLBACK_SEC(30s) 후 시장가 재발주. ⚠️ 라이브 실험 — BB되돌림
+      # 숏에 maker 는 즉시반락(=winner) 미체결 안티셀렉션 위험. post_only_fallback
+      # WAL outcome(filled_maker vs resubmitted_market) 모니터, 나쁘면 market 롤백.
+      entry_order_type: post_only
       stop_loss_pct: 0.010       # -1.0% 코인가 (= -10% ROE @10x). 2026-06-16 widening
       take_profit_pct: 0.020     # +2.0% 코인가 (= +20% ROE @10x). 2026-06-16 widening
       # 손익비 widening (2026-06-16, kst-hours 와 동일) — 좁은 +1.1%/-0.5% 가 수수료
