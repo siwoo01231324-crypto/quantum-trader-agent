@@ -223,10 +223,22 @@ def test_all_guards_off_allows(monkeypatch):
 def test_macro_enables_profit_and_giveback_not_loss(monkeypatch):
     # 매크로는 이익목표+고점반납 2종만 ON. 손실한도는 명시 opt-in.
     monkeypatch.setenv("AIRBORNE_DAILY_GUARDS", "1")
-    c, _, _ = _build(daily_provider=lambda: 35.0, equity=1000.0)
+    c, _, _ = _build(daily_provider=lambda: 60.0, equity=1000.0)  # +6% > target 5%
     assert c._f_profit_lock and c._f_giveback_lock
     assert not c._f_daily_loss_lock
-    assert c._evaluate_daily_halt(_NOW) is not None  # +3.5% 이익목표 발동
+    assert c._evaluate_daily_halt(_NOW) is not None  # 이익목표(기본 5%) 발동
+
+
+def test_profit_target_default_is_5pct(monkeypatch):
+    # target 미설정 → 코드 기본값 5.0 (3.5→5.0, 2026-06-28 사용자 상향).
+    monkeypatch.setenv("AIRBORNE_DAILY_PROFIT_LOCK", "1")
+    c, _, _ = _build(daily_provider=lambda: 0.0, equity=1000.0)
+    assert c._daily_profit_target_pct == 5.0
+    # +4% 미발동, +5% 발동
+    c4, _, _ = _build(daily_provider=lambda: 40.0, equity=1000.0)
+    assert c4._evaluate_daily_halt(_NOW) is None
+    c5, _, _ = _build(daily_provider=lambda: 50.0, equity=1000.0)
+    assert c5._evaluate_daily_halt(_NOW) is not None
 
 
 def test_macro_does_not_trip_loss_limit(monkeypatch):
