@@ -5682,6 +5682,7 @@ function applyCustomRange(){
   loadLive();
 }
 function _liveStatusBadge(t){
+  if(t.status === 'signal') return '<span class="live-badge" style="background:#30363d;color:#c9d1d9">신호</span>';
   if(t.status === 'open') return '<span class="live-badge live-open">보유중</span>';
   const r = String(t.reason || '').toLowerCase();
   let cls = 'live-other';
@@ -5691,9 +5692,9 @@ function _liveStatusBadge(t){
 }
 function _fmtPx(v){ return (v != null && !isNaN(v)) ? Number(v).toPrecision(6) : '—'; }
 function _srcBadge(t){
-  return t.source === 'sim'
-    ? '<span class="src-badge src-sim">sim</span>'
-    : '<span class="src-badge src-live">라이브</span>';
+  if(t.source === 'sim') return '<span class="src-badge src-sim">sim</span>';
+  if(t.source === 'signal') return '<span class="src-badge" style="background:#1f6feb;color:#fff">신호</span>';
+  return '<span class="src-badge src-live">라이브</span>';
 }
 function renderLiveHeadline(j){
   const sim = j.sim || {};
@@ -5750,7 +5751,7 @@ function renderLiveTable(trades){
     const sd = t.side === 'short' ? 'sd-short' : 'sd-long';
     const sdTxt = t.side === 'short' ? 'SHORT' : 'LONG';
     const einTxt = t.entry_ts ? fmtKstFull(t.entry_ts) : '—';
-    const xoutTxt = t.exit_ts ? fmtKstFull(t.exit_ts) : '보유중';
+    const xoutTxt = t.status === 'signal' ? '— (미체결 포함)' : (t.exit_ts ? fmtKstFull(t.exit_ts) : '보유중');
     const exitTxt = (t.exit_price != null)
       ? ` <span style="color:var(--text3)">@${_fmtPx(t.exit_price)}</span>` : '';
     return `<tr>
@@ -5766,42 +5767,30 @@ function renderLiveTable(trades){
     </tr>`;
   }).join('');
   const nSim = trades.filter(t => t.source === 'sim').length;
-  const nLive = trades.length - nSim;
-  return `<div class="section-h2">📋 윈도우 거래·보유 상세 <span class="count">· ${trades.length}건 (sim ${nSim} · 라이브 ${nLive}, 최신순)</span></div>
+  const nSig = trades.filter(t => t.source === 'signal').length;
+  const nLive = trades.length - nSim - nSig;
+  return `<div class="section-h2">📋 윈도우 거래·보유 상세 <span class="count">· ${trades.length}건 (sim ${nSim} · 라이브 ${nLive} · 신호 ${nSig}, 최신순)</span></div>
     <table><thead><tr>
       <th>소스</th><th>진입/청산 (KST)</th><th>Symbol</th><th>방향</th><th>전략</th>
       <th class="td-num">진입가</th><th>상태/청산</th><th class="td-num">pct</th><th>사유</th>
     </tr></thead><tbody>${trs}</tbody></table>
     <div class="note"><b>sim</b> = 과거 4h 봉 합성 거래(진입일이 윈도우 안). pct 는 gross %, USDT 손익 없음. <b>라이브</b> = testnet/demo 거래소 fill 페어링 라운드트립, 실현 NET=USDT(수수료 포함). 라이브 청산거래는 exit_ts, 보유중은 entry_ts 기준 윈도우 귀속. READ-ONLY — 주문/리스크 미연동.</div>`;
 }
-function renderCapturedSignals(j){
-  const sigs = j.captured_signals || [];
-  const stratLabel = {'live-capitulation-bounce':'투매반등','live-donchian-breakout-btcgate':'돌파/터틀'};
-  const head = `<div class="section-h2">📡 오늘 포착 신호 <span class="count">· ${sigs.length}건 (전수 — 체결 무관, 사이징 전)</span></div>`;
-  if(sigs.length === 0){
-    return head + `<div class="note">이 윈도우에 포착된 스윙 진입신호 없음. (라이브 가동 중 신호 발생 시 체결 여부와 무관하게 여기 전수 기록됨 — 에어본 FIRE 와 동일.)</div>`;
-  }
-  const rows = sigs.slice().reverse().map(s => {
-    const sl = s.stop_loss_pct != null ? fmtPct(s.stop_loss_pct*100, 2) : '—';
-    const tp = s.take_profit_pct != null ? fmtPct(s.take_profit_pct*100, 2) : '—';
-    return `<tr>
-      <td>${esc(fmtKstFull(s.ts))}</td>
-      <td style="color:var(--text3)">${esc(stratLabel[s.strategy] || s.strategy || '')}</td>
-      <td class="sym-cell">${esc((s.symbol||'').replace(/USDT$/, ''))}</td>
-      <td class="td-num">${esc(sl)}</td>
-      <td class="td-num">${esc(tp)}</td>
-    </tr>`;
-  }).join('');
-  return head + `<table><thead><tr>
-      <th>시각 (KST)</th><th>전략</th><th>Symbol</th><th class="td-num">손절</th><th class="td-num">TP</th>
-    </tr></thead><tbody>${rows}</tbody></table>
-    <div class="note">신호 발생(진입 결정) 시점 전수 기록 — bitget 최소금액 미달·리스크게이트 등으로 <b>미체결</b>이어도 포함. 같은 4h봉 반복신호는 1건으로 dedup. 체결된 거래는 아래 "거래·보유 상세" 에.</div>`;
-}
 function renderLive(j){
-  const out = [renderLiveHeadline(j), renderCapturedSignals(j)];
-  const trades = j.trades || [];
+  const out = [renderLiveHeadline(j)];
+  // 포착 신호(체결 무관)도 거래·보유 상세 표에 source=signal 행으로 합쳐 쌓는다.
+  const stratLabel = {'live-capitulation-bounce':'투매반등','live-donchian-breakout-btcgate':'돌파/터틀'};
+  const sigRows = (j.captured_signals || []).map(s => {
+    const sl = s.stop_loss_pct != null ? (s.stop_loss_pct*100).toFixed(2)+'%' : '—';
+    const tp = s.take_profit_pct != null ? (s.take_profit_pct*100).toFixed(2)+'%' : '—';
+    return {source:'signal', status:'signal', side:'long', entry_ts:s.ts, exit_ts:null,
+      symbol:s.symbol, strategy:s.strategy, strategy_label:stratLabel[s.strategy] || s.strategy,
+      entry_price:null, exit_price:null, pct:null, reason:`신호 — SL ${sl} / TP ${tp}`};
+  });
+  const trades = (j.trades || []).concat(sigRows)
+    .sort((a,b) => String(b.exit_ts||b.entry_ts||'').localeCompare(String(a.exit_ts||a.entry_ts||'')));
   if(trades.length === 0){
-    out.push(`<div class="empty">이 윈도우에 sim·라이브 거래가 모두 없습니다. (다른 윈도우, 예: 최근 30일 을 선택하면 sim 백테스트 거래가 표시됩니다.)</div>`);
+    out.push(`<div class="empty">이 윈도우에 거래·신호가 없습니다. (다른 윈도우, 예: 최근 30일 을 선택하면 sim 백테스트 거래가 표시됩니다.)</div>`);
   } else {
     out.push(renderLiveTable(trades));
   }
