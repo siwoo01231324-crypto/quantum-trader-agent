@@ -2071,10 +2071,13 @@ body{{
           <div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">거래 제어</div>
           <div id="run-status" class="run-status" style="font-size:12px">상태 조회 중…</div>
           <div class="ks-controls" style="margin-top:8px">
-            <button id="btn-run-start" class="btn btn-success" onclick="runStart()">거래 시작</button>
+            <button id="btn-run-start" class="btn btn-success" onclick="runStart()">에어본 거래 시작</button>
             <button id="btn-run-stop" class="btn btn-danger" onclick="runStop()">거래 정지</button>
           </div>
-          <div class="last-ts" id="run-detail">production.yaml 의 등록 전략으로 시작합니다.</div>
+          <div class="ks-controls" style="margin-top:6px">
+            <button id="btn-run-start-swing" class="btn btn-success" style="background:#1f6feb" onclick="runStartSwing()">🐢 스윙/터틀 거래 시작 (실거래)</button>
+          </div>
+          <div class="last-ts" id="run-detail">에어본=production.yaml · 스윙=swing_mainnet.yaml(bitget 메인넷 1%/1x). 하나만 동시 가동(상호배제).</div>
         </div>
       </div>
 
@@ -2453,10 +2456,18 @@ function showReconcileBanner(payload) {{
 // ── 거래 시작/정지 ──────────────────────────────────────────────
 async function runStart() {{
   document.getElementById('run-status').textContent = '시작 중…';
-  const r = await fetch('/api/run/start', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body:JSON.stringify({{}})}});
+  const r = await fetch('/api/run/start', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body:JSON.stringify({{mode:'airborne'}})}});
   const d = await r.json();
   runRefresh();
   if (!d.ok) alert('시작 실패: ' + (d.reason || JSON.stringify(d)));
+}}
+async function runStartSwing() {{
+  if (!confirm('⚠️ 스윙/터틀 2전략을 bitget 메인넷(실거래, 자본 1%/1x)으로 시작합니다.\\n에어본이 돌고 있으면 먼저 정지해야 합니다 (상호배제).\\n시작할까요?')) return;
+  document.getElementById('run-status').textContent = '스윙 시작 중…';
+  const r = await fetch('/api/run/start', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body:JSON.stringify({{mode:'swing'}})}});
+  const d = await r.json();
+  runRefresh();
+  if (!d.ok) alert('스윙 시작 실패: ' + (d.reason || JSON.stringify(d)) + '\\n(이미 다른 거래가 가동 중이면 먼저 정지하세요)');
 }}
 async function runStop() {{
   document.getElementById('run-status').textContent = '정지 중…';
@@ -2476,11 +2487,19 @@ async function runRefresh() {{
       return;
     }}
     const status = d.status || '?';
-    el.textContent = '상태: ' + status;
+    const rp = d.request_params || {{}};
+    const modeLabel = rp.mode === 'swing' ? '🐢 스윙/터틀' : (rp.mode === 'airborne' ? '에어본' : '');
+    el.textContent = '상태: ' + status + (status === 'running' && modeLabel ? ' (' + modeLabel + ')' : '');
     el.style.color = status === 'running' ? 'var(--green)' : status === 'error' ? 'var(--red)' : 'var(--text2)';
+    // 가동 중엔 두 시작 버튼 비활성(상호배제 가시화), 정지 시 재활성
+    const busy = (status === 'running' || status === 'starting');
+    const bs = document.getElementById('btn-run-start');
+    const bsw = document.getElementById('btn-run-start-swing');
+    if (bs) bs.disabled = busy;
+    if (bsw) bsw.disabled = busy;
     if (det) {{
       if (d.last_error) det.textContent = 'Error: ' + d.last_error;
-      else if (d.started_at) det.textContent = '시작: ' + d.started_at + (d.stopped_at ? ' · 종료: ' + d.stopped_at : '');
+      else if (d.started_at) det.textContent = (modeLabel ? modeLabel + ' · ' : '') + '시작: ' + d.started_at + (d.stopped_at ? ' · 종료: ' + d.stopped_at : '');
     }}
   }} catch(err) {{ console.warn('run-status', err); }}
 }}

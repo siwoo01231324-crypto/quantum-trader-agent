@@ -15,6 +15,22 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.103"
+    date: "2026-06-30"
+    title: "대시보드 2-모드 거래 버튼 — 에어본/스윙 토글 (CLI·taskkill 불필요)"
+    tags: [feature]
+    summary: >
+      에어본·스윙을 별도 명령어 + taskkill 로 나눠 돌리던 복잡함 제거. 인자 없이
+      띄운 대시보드(localhost:8000)에 [에어본 거래 시작]/[🐢 스윙·터틀 거래 시작]
+      두 버튼 — RunController 단일 인스턴스라 상호배제(하나 가동 중 다른 모드 거부).
+    items:
+      - "live_run._resolve_run_mode(mode): 거래 모드→config·broker·env 순수 매핑"
+      - "swing 모드 = swing_mainnet.yaml + bitget-mainnet + SWING_CHANNEL_SWEEP/SWING_EVAL_TIMER_SEC 자동, airborne 모드 = production.yaml(스윙 env 정리)"
+      - "스윙 버튼 confirm('실거래') 다이얼로그 + 가동 중 두 시작버튼 비활성(상호배제 가시화)"
+      - "같은 bitget 계좌 4h collision·레버리지 충돌은 상호배제로 원천 차단 — 스윙 정지 후에만 에어본 시작 가능"
+    refs:
+      - "scripts/live_run.py"
+      - "tests/test_run_controller.py"
   - version: "v0.6.102"
     date: "2026-06-30"
     title: "스윙 2전략 유니버스 — 깨끗한 크립토(투매반등 top-100 / 돌파 top-30)"
