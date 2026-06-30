@@ -560,3 +560,80 @@ class TestSwingLiveEndpoint:
         assert j["trades"] == []
         assert j["has_data"] is False
         assert j["wal_files_count"] == 0
+
+
+# ── gross 합% vs net% (수수료 전/후, 둘 다 노출) ──────────────────────────────
+
+class TestSwingGrossVsNet:
+    def test_gross_and_net_distinct(self):
+        sim = [
+            _sim_trade(symbol="A", entry_ts="2026-06-29T01:00:00+00:00", ret=3.0),
+            _sim_trade(symbol="B", entry_ts="2026-06-29T02:00:00+00:00", ret=-1.0),
+            _sim_trade(symbol="C", entry_ts="2026-06-29T03:00:00+00:00", ret=2.0),
+        ]
+        s = aggregate_swing_window([], sim, _WIN_SINCE, _WIN_UNTIL)["sim"]
+        # gross = 3 − 1 + 2 = 4.0 (pct 단순합 = 사용자가 표에서 더한 값)
+        assert s["sum_pct"] == pytest.approx(4.0)
+        # net = gross − 0.10%/거래 × 3 = 3.7
+        assert s["net_pct"] == pytest.approx(4.0 - 0.10 * 3)
+        # 둘이 달라야 혼동 없음 (gross +4.0 / net +3.7 동시 노출)
+        assert abs(s["sum_pct"] - s["net_pct"]) == pytest.approx(0.30)
+        assert s["win_rate"] == pytest.approx(2 / 3)
+
+
+# ── 커스텀 날짜 범위 (start/end, KST, end 포함) ───────────────────────────────
+
+class TestSwingLiveCustomRange:
+    @staticmethod
+    def _patch(monkeypatch, tmp_path, sim_trades):
+        cache = SwingSimCache(tmp_path / "sim_cache.jsonl")
+        cache.put_many(sim_trades)
+        monkeypatch.setattr(app_mod, "_SWING_SIM_CACHE", cache)
+        monkeypatch.setattr(app_mod, "_swing_compute_all_trades", lambda: [])
+        monkeypatch.setattr(app_mod, "_swing_repo_root", lambda: tmp_path)
+
+    def test_custom_range_filters_by_entry(self, tmp_path, monkeypatch):
+        # A(05-02)·B(06-24)·C(06-29) → 커스텀 05-02~06-24 면 A,B 만
+        self._patch(monkeypatch, tmp_path, sim_trades=[
+            _sim_trade(symbol="AUSDT", entry_ts="2026-05-02T05:00:00+00:00", ret=1.0),
+            _sim_trade(symbol="BUSDT", entry_ts="2026-06-24T05:00:00+00:00", ret=2.0),
+            _sim_trade(symbol="CUSDT", entry_ts="2026-06-29T05:00:00+00:00", ret=3.0),
+        ])
+        j = _C.get("/api/swing_live?start=2026-05-02&end=2026-06-24&refresh=1").json()
+        assert "error" not in j
+        assert j["window"] == "custom"
+        assert j["custom_start"] == "2026-05-02"
+        assert j["custom_end"] == "2026-06-24"
+        assert j["sim"]["n"] == 2
+        assert {t["symbol"] for t in j["trades"]} == {"AUSDT", "BUSDT"}
+
+    def test_custom_end_is_inclusive(self, tmp_path, monkeypatch):
+        # end(06-24) 23:00 KST(=14:00 UTC) 포함, 다음날 00:30 KST(=15:30 UTC) 제외
+        self._patch(monkeypatch, tmp_path, sim_trades=[
+            _sim_trade(symbol="INUSDT", entry_ts="2026-06-24T14:00:00+00:00", ret=1.0),
+            _sim_trade(symbol="OUTUSDT", entry_ts="2026-06-24T15:30:00+00:00", ret=1.0),
+        ])
+        j = _C.get("/api/swing_live?start=2026-06-24&end=2026-06-24&refresh=1").json()
+        syms = {t["symbol"] for t in j["trades"]}
+        assert "INUSDT" in syms
+        assert "OUTUSDT" not in syms
+        assert j["sim"]["n"] == 1
+
+    def test_custom_bad_date_400(self):
+        r = _C.get("/api/swing_live?start=2026-13-99&end=2026-06-24")
+        assert r.status_code == 400
+        assert "YYYY-MM-DD" in r.json()["error"]
+
+    def test_custom_end_before_start_400(self):
+        r = _C.get("/api/swing_live?start=2026-06-24&end=2026-05-01")
+        assert r.status_code == 400
+        assert "<" in r.json()["error"]
+
+    def test_only_start_falls_back_to_preset(self, tmp_path, monkeypatch):
+        # start 만(end 없음) → 커스텀 아님, 프리셋 window 사용
+        self._patch(monkeypatch, tmp_path, sim_trades=[
+            _sim_trade(symbol="ZUSDT", entry_ts="2026-06-29T05:00:00+00:00", ret=1.0),
+        ])
+        j = _C.get("/api/swing_live?window=all&start=2026-05-02&refresh=1").json()
+        assert j["window"] == "all"        # 커스텀 무시
+        assert j["custom_start"] is None

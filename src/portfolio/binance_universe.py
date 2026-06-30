@@ -42,3 +42,31 @@ assert len(BINANCE_USDT_TOP30) == 30, "BINANCE_USDT_TOP30 must contain exactly 3
 def get_universe() -> list[str]:
     """Return a mutable list copy (caller can sort/filter without mutating pin)."""
     return list(BINANCE_USDT_TOP30)
+
+
+# ── 스윙 4h 전략 전용 크립토 유니버스 (2026-06-30) ────────────────────────────
+# 깨끗한 크립토 메이저 only — BINANCE_USDT_TOP30 와 달리 토큰화주식(TSLA/NVDA)·
+# 상품(XAU/XAG)·forex(EUR) 가 섞이지 않는다. Binance 선물이 토큰화자산을 상장하면서
+# 24h-거래량 동적 top-N 이 비-크립토로 오염되던 문제(2026-06-30 발견 — data/cache/
+# binance_1h 에 TSLA·币安人生 등) 회피용 정적 allowlist. **유동성(최근 90일 4h
+# close×volume) 내림차순** 으로 정렬 — get_universe()[:N] 슬라이스가 곧 top-N.
+#
+# 검증(2026-06-30 깨끗한 크립토 재분석, scripts/_swing_clean_majors_reanalysis.py):
+#   - 투매반등: 확대할수록 PF 유지/상승 (2y top-100 PF 2.14, 1y 2.54) → top-100
+#   - 돌파:    top-30 이 전 기간 최고 PF, 확대 시 단조 열화 (1y top-100 PF 1.05) → top-30
+# 데이터: data/cache/swing_crypto_4h/*.parquet (scripts/_swing_setup_clean_cache.py).
+# 갱신 시 셋업 스크립트 재실행 → 본 list 교체.
+SWING_CRYPTO_UNIVERSE: tuple[str, ...] = (
+    "ETHUSDT", "SOLUSDT", "ZECUSDT", "XRPUSDT", "DOGEUSDT", "BNBUSDT", "WLDUSDT",
+    "1000PEPEUSDT", "NEARUSDT", "SUIUSDT", "ADAUSDT", "EOSUSDT", "TONUSDT", "XLMUSDT",
+    "MATICUSDT", "AVAXUSDT", "ENAUSDT", "FILUSDT", "LINKUSDT", "AAVEUSDT", "BCHUSDT",
+    "ORDIUSDT", "DOTUSDT", "UNIUSDT", "LTCUSDT", "INJUSDT", "TRXUSDT", "DASHUSDT",
+    "FETUSDT", "JTOUSDT", "XMRUSDT", "ARBUSDT", "ICPUSDT", "1000SHIBUSDT", "APTUSDT",
+    "WIFUSDT", "HBARUSDT", "1000LUNCUSDT", "RENDERUSDT", "CHZUSDT", "OPUSDT", "TIAUSDT",
+    "CRVUSDT", "AXSUSDT", "ALGOUSDT", "ETCUSDT", "PENDLEUSDT", "SEIUSDT", "LDOUSDT",
+    "GALAUSDT", "ATOMUSDT", "JUPUSDT", "BLURUSDT", "DYDXUSDT", "STORJUSDT", "SANDUSDT",
+    "ARUSDT", "PYTHUSDT", "COMPUSDT", "RUNEUSDT", "STXUSDT", "ENSUSDT", "VETUSDT",
+    "THETAUSDT", "SNXUSDT", "GRTUSDT", "MANAUSDT", "ROSEUSDT", "QNTUSDT", "IMXUSDT",
+    "KSMUSDT", "SUSHIUSDT", "NEOUSDT", "EGLDUSDT", "BATUSDT", "KAVAUSDT", "ANKRUSDT",
+    "ZILUSDT", "1INCHUSDT", "YFIUSDT", "ZRXUSDT", "GMXUSDT", "MKRUSDT", "FTMUSDT",
+)

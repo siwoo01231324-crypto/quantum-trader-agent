@@ -89,12 +89,16 @@ Signal override 로 전달한다 (`live_breakout_with_atr_stop` 의 ATR override
 
 ## 종목 유니버스 / 봉
 
-- `get_interval() = "4h"`, `get_universe()` = 기본 `BINANCE_USDT_TOP30` (유동성 동적 top-N).
-  데이터 anomaly guard(기본 ON)가 0/NaN 가격 진입 차단. 저유동 코인은 거래량 스파이크
-  조건 + universe top-N 으로 자연 필터.
-- **Universe pin-date: 2026-05-19** (백테스트 majors13 = BTC ETH SOL XRP BNB BCH DOGE
-  TRX LTC ZEC ADA LINK AVAX). 생존편향(현재 상장 코인) disclosure — top30(최근상장 포함)
-  재검증에서 오히려 더 강해 cherry-pick 아님 확인.
+- `get_interval() = "4h"`, `get_universe()` = **깨끗한 크립토 top-100**
+  (`SWING_CRYPTO_UNIVERSE[:100]`, src/portfolio/binance_universe.py). 데이터 anomaly
+  guard(기본 ON)가 0/NaN 가격 진입 차단.
+- **유니버스 확대 결정 (2026-06-30)**: 기존 `BINANCE_USDT_TOP30` 은 Binance 선물이
+  토큰화주식(TSLA/NVDA)·상품(XAU)·forex(EUR)를 상장하면서 비-크립토가 섞임. 깨끗한
+  크립토 메이저 재분석(scripts/_swing_clean_majors_reanalysis.py)에서 투매반등은
+  **확대할수록 PF 유지/상승** (top-30→100: 5y PF 1.28→1.38, 2y 2.19→2.14, 1y 2.27→2.54)
+  + 거래수 2.3배 → top-100 채택. (돌파는 반대로 top-30 집중 — 비대칭.)
+- **생존편향**: 폐지코인 부재는 잔존하나, 상장연차 코호트(veteran ≥ newcomer)·시점별
+  유동성 게이트 통과로 일부 완화. 확대가 신규 펌핑빨이 아님은 깨끗한 크립토에서 재확인.
 
 ## 5y 검증 결과 (정직 10bp, random-vs-signal)
 

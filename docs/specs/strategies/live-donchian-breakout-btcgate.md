@@ -101,9 +101,13 @@ time-stop **면제** (`max_hold_sec=None`) — 추세는 수일~수주 길게. #
 
 ## 종목 유니버스 / 봉
 
-- `get_interval()="4h"`, `get_universe()`=기본 `BINANCE_USDT_TOP30`(유동성 동적 top-N).
-- **Universe pin-date: 2026-05-19** (majors13). 생존편향 disclosure — top30(최근상장 포함) 재검증서
-  더 강해 cherry-pick 아님 확인.
+- `get_interval()="4h"`, `get_universe()`=**깨끗한 크립토 top-30**
+  (`SWING_CRYPTO_UNIVERSE[:30]`, src/portfolio/binance_universe.py).
+- **유니버스 결정 (2026-06-30)**: 기존 `BINANCE_USDT_TOP30` 은 토큰화주식·상품·forex(EUR)
+  혼입. 깨끗한 크립토 재분석에서 돌파는 **top-30 집중이 전 기간 최고 PF**, 확대 시 단조
+  열화(top-30→100: 5y PF 1.41→1.28, 2y 1.54→1.36, **1y 1.31→1.05 본전 붕괴**). illiquid
+  소형 알트가 나중에 펌핑한 생존편향이 확대 숫자를 부풀림 → **top-30 유지**. (투매반등은
+  반대로 top-100 확대 — 비대칭. scripts/_swing_clean_majors_reanalysis.py.)
 
 ## 5y 검증 결과 (정직 10bp, random-vs-signal, 채널청산판)
 

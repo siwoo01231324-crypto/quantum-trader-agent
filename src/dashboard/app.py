@@ -703,13 +703,15 @@ def _aggregate_ma_cross_sims(sims: list[dict]) -> dict:
 # 로직을 그대로 옮긴다. 청산 자동분기:
 #   - channel_exit_level 있는 전략(돌파) → 2ATR 손절(intrabar) + 채널청산
 #   - 없는 전략(투매반등) → 꼬리저점 손절 + 2R TP (Signal override, intrabar)
-# 데이터: data/cache/binance_1h/*.parquet (volume 有) → 4h 리샘플. BTC게이트는
-# data/cache/binance_4h_btc.parquet. ⚠️ 전략 코드/주문/리스크 미수정 — 분석 전용.
+# 데이터: data/cache/swing_crypto_4h/*.parquet (crypto-only, 이미 4h). BTC게이트는
+# data/cache/binance_4h_btc.parquet. 유니버스는 전략별 get_universe() (투매반등
+# top-100 / 돌파 top-30, src/portfolio/binance_universe.SWING_CRYPTO_UNIVERSE).
+# ⚠️ 전략 코드/주문/리스크 미수정 — 분석 전용.
 SWING_WIN: int = 260          # on_bar 에 넘기는 history 슬라이스 길이
 SWING_MAX_HOLD: int = 180     # 미청산 시 강제 청산까지 최대 보유 봉수
 SWING_FEE_PCT: float = 0.10   # 거래당 왕복 실효비용 가정 (net% 차감, %)
-# 캐시 가용 유동성 알트 (BTC 는 별도 parquet). 2021~2026 다중레짐.
-# scripts/_swing_signal_returns_sim2.py 의 UNIVERSE 와 동일.
+# [레거시] 옛 25 알트 유니버스 — 2026-06-30 부터 sim 은 전략 get_universe() 를
+# 직접 쓴다(_swing_compute_all_trades). _swing_universe_size() fallback 으로만 잔존.
 SWING_UNIVERSE: list[str] = [
     "ATOMUSDT", "ALGOUSDT", "DOTUSDT", "ETCUSDT", "FILUSDT", "XLMUSDT", "ARUSDT",
     "OPUSDT", "APTUSDT", "ARBUSDT", "1000PEPEUSDT", "WLDUSDT", "ICPUSDT", "FETUSDT",
@@ -728,27 +730,35 @@ def _swing_repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
-def _swing_load_4h(sym: str):
-    """binance_1h parquet → 4h OHLCV 리샘플. 없거나 volume 누락 시 None.
+def _swing_universe_size() -> int:
+    """두 스윙 전략 get_universe() 합집합 종목 수 (대시보드 표시용).
 
-    scripts/_swing_signal_returns_sim2.load_4h 미러.
+    sim==live: 투매반등 top-100 + 돌파 top-30 의 union(= 깨끗한 크립토 상위 100).
+    import 실패 시 레거시 SWING_UNIVERSE 길이로 graceful fallback.
+    """
+    try:
+        from src.portfolio.binance_universe import SWING_CRYPTO_UNIVERSE
+        return min(100, len(SWING_CRYPTO_UNIVERSE))
+    except Exception:  # noqa: BLE001
+        return len(SWING_UNIVERSE)
+
+
+def _swing_load_4h(sym: str):
+    """깨끗한 크립토 4h parquet 직접 로드. 없거나 volume 누락 시 None.
+
+    2026-06-30: 데이터 소스를 오염된 ``binance_1h``(토큰화주식·상품·forex 혼입,
+    1h→4h 리샘플) 에서 ``swing_crypto_4h``(crypto-only, 이미 4h) 로 교체.
+    scripts/_swing_setup_clean_cache.py 가 채운다.
     """
     import pandas as _pd
 
-    p = _swing_repo_root() / "data" / "cache" / "binance_1h" / f"{sym}.parquet"
+    p = _swing_repo_root() / "data" / "cache" / "swing_crypto_4h" / f"{sym}.parquet"
     if not p.exists():
         return None
     d = _pd.read_parquet(p)
     if "volume" not in d.columns:
         return None
-    o = d["open"].resample("4h").first()
-    h = d["high"].resample("4h").max()
-    low = d["low"].resample("4h").min()
-    c = d["close"].resample("4h").last()
-    v = d["volume"].resample("4h").sum()
-    return _pd.DataFrame(
-        {"open": o, "high": h, "low": low, "close": c, "volume": v}
-    ).dropna()
+    return d[["open", "high", "low", "close", "volume"]].dropna()
 
 
 def _swing_load_btc_4h():
@@ -882,23 +892,32 @@ def _swing_compute_all_trades() -> list[dict]:
     if btc is None:
         return []
 
+    strategies = [
+        ("live-capitulation-bounce", LiveCapitulationBounce()),
+        ("live-donchian-breakout-btcgate",
+         LiveDonchianBreakoutBtcGate(btc_regime_gate=True)),
+    ]
+    # sim==live: 각 전략 get_universe() 로 종목 제한 (투매반등 top-100 / 돌파 top-30).
+    # 데이터는 union 으로 1회 로드 후 전략별 필터.
+    strat_universes = {
+        sid: set(type(strat).get_universe()) for sid, strat in strategies
+    }
+    union = set().union(*strat_universes.values())
     b4: dict[str, Any] = {}
-    for sym in SWING_UNIVERSE:
+    for sym in union:
+        if sym == "BTCUSDT":
+            continue
         d = _swing_load_4h(sym)
         if d is not None and len(d) > 250:
             b4[sym] = d
     if not b4:
         return []
 
-    strategies = [
-        ("live-capitulation-bounce", LiveCapitulationBounce()),
-        ("live-donchian-breakout-btcgate",
-         LiveDonchianBreakoutBtcGate(btc_regime_gate=True)),
-    ]
     all_trades: list[dict] = []
     for strategy_id, strat in strategies:
+        uni = strat_universes[strategy_id]
         for sym, bars in b4.items():
-            if sym == "BTCUSDT" or len(bars) < strat.MIN_HISTORY + 5:
+            if sym not in uni or len(bars) < strat.MIN_HISTORY + 5:
                 continue
             all_trades += _swing_sim_symbol(strat, strategy_id, sym, bars, btc)
     return all_trades
@@ -5315,7 +5334,7 @@ tbody tr.is-total td{background:#11161b;font-weight:700;border-top:1px solid var
 <body>
 <h1>QTA — 스윙 2전략 적중 (누적)</h1>
 <div class="meta">룰: <b>4h · 롱전용 · 투매반등=꼬리저점 손절+2R TP / 돌파=2ATR 손절+채널청산(Donchian10)</b></div>
-<div class="subtitle">두 라이브 스윙 전략 객체(<b>live-capitulation-bounce</b> 평균회귀 + <b>live-donchian-breakout-btcgate</b> 추세추종)를 과거 4h 봉(binance_1h→4h, volume 有)에 직접 구동한 합성 거래(sim==live). 페어 분산 가설 — 돌파가 죽는 베어에 투매반등이 +. ⚠️ gross 누적뷰(net 은 거래당 0.10% 비용 차감), 생존편향·random-vs-signal 별도. READ-ONLY 분석 — 주문/리스크 미연동.</div>
+<div class="subtitle">두 라이브 스윙 전략 객체(<b>live-capitulation-bounce</b> 평균회귀 + <b>live-donchian-breakout-btcgate</b> 추세추종)를 과거 4h 봉(깨끗한 크립토 메이저, 토큰화주식·상품·forex 제외)에 직접 구동한 합성 거래(sim==live). 유니버스: 투매반등 top-100 / 돌파 top-30(전략별 get_universe). 페어 분산 가설 — 돌파가 죽는 베어에 투매반등이 +. ⚠️ gross 누적뷰(net 은 거래당 0.10% 비용 차감), 생존편향·random-vs-signal 별도. READ-ONLY 분석 — 주문/리스크 미연동.</div>
 <div class="nav">
   <a href="/">← 대시보드</a>
   <a href="/ma-cross">골든/데드크로스</a>
@@ -5339,6 +5358,15 @@ tbody tr.is-total td{background:#11161b;font-weight:700;border-top:1px solid var
       <option value="all">전체 누적</option>
     </select>
   </label>
+  <span style="font-size:.78rem;color:var(--text2);display:inline-flex;align-items:center;gap:5px">기간(KST):
+    <input type="date" id="custom-start"
+           style="background:var(--surface);color:var(--text);border:1px solid var(--border);padding:4px 6px;border-radius:4px;font-family:var(--mono);font-size:.74rem">
+    <span style="color:var(--text3)">~</span>
+    <input type="date" id="custom-end"
+           style="background:var(--surface);color:var(--text);border:1px solid var(--border);padding:4px 6px;border-radius:4px;font-family:var(--mono);font-size:.74rem">
+    <button onclick="applyCustomRange()"
+            style="background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:5px 12px;border-radius:4px;font-size:.74rem;cursor:pointer;font-family:var(--sans)">적용</button>
+  </span>
   <span class="rule-badge">sim=4h 롱전용 gross% · 라이브=testnet/demo 실현 NET(USDT)</span>
   <div class="meta" id="live-meta">로딩 중…</div>
 </div>
@@ -5584,17 +5612,41 @@ async function forceRefresh(){
   finally{ btn.disabled = false; btn.textContent = '↻ 캐시 무효화 + 재구동'; }
 }
 
-// ── 라이브 뷰 (testnet/demo WAL 윈도우) ──────────────────────────────────────
-let LIVE_WINDOW = (new URL(location.href).searchParams.get('live_window')) || 'today';
+// ── 윈도우 뷰 (sim + 라이브) ─────────────────────────────────────────────────
+const _lp = new URL(location.href).searchParams;
+let LIVE_WINDOW = _lp.get('live_window') || 'today';
+// 커스텀 기간 (둘 다 있으면 프리셋 대신 사용)
+let CUSTOM_START = _lp.get('cstart') || null;
+let CUSTOM_END = _lp.get('cend') || null;
 function _liveWindowLabel(w){
   const map = {'today':'오늘 (KST 자정~지금)','yesterday':'어제 (KST 어제 자정~오늘 자정)',
-    '7d':'최근 7일 누적','30d':'최근 30일 누적','all':'전체 누적'};
+    '7d':'최근 7일 누적','30d':'최근 30일 누적','all':'전체 누적','custom':'커스텀 기간'};
   return map[w] || w;
+}
+function _isCustom(){ return !!(CUSTOM_START && CUSTOM_END); }
+function _liveQuery(){
+  if(_isCustom())
+    return 'start=' + encodeURIComponent(CUSTOM_START) + '&end=' + encodeURIComponent(CUSTOM_END);
+  return 'window=' + encodeURIComponent(LIVE_WINDOW);
 }
 function changeLiveWindow(v){
   LIVE_WINDOW = v;
+  CUSTOM_START = CUSTOM_END = null;  // 프리셋 선택 시 커스텀 해제
   const url = new URL(location.href);
   url.searchParams.set('live_window', v);
+  url.searchParams.delete('cstart'); url.searchParams.delete('cend');
+  history.replaceState(null, '', url.toString());
+  loadLive();
+}
+function applyCustomRange(){
+  const s = document.getElementById('custom-start');
+  const e = document.getElementById('custom-end');
+  const sv = s && s.value, ev = e && e.value;
+  if(!sv || !ev){ alert('시작일과 종료일을 모두 선택하세요.'); return; }
+  if(ev < sv){ alert('종료일이 시작일보다 빠릅니다.'); return; }
+  CUSTOM_START = sv; CUSTOM_END = ev;
+  const url = new URL(location.href);
+  url.searchParams.set('cstart', sv); url.searchParams.set('cend', ev);
   history.replaceState(null, '', url.toString());
   loadLive();
 }
@@ -5616,10 +5668,13 @@ function renderLiveHeadline(j){
   const sim = j.sim || {};
   const live = j.live || j;  // 하위호환 (live 블록 없으면 top-level)
   const simN = sim.n ?? 0;
-  const simNet = sim.net_pct;
-  const simNetTxt = (simNet != null) ? (simNet >= 0 ? '+' : '') + Number(simNet).toFixed(1) + '%' : '—';
+  const simGross = sim.sum_pct;   // pct 단순합 (gross)
+  const simNet = sim.net_pct;     // gross − 0.10%/거래
+  const simGrossTxt = (simGross != null) ? (simGross >= 0 ? '+' : '') + Number(simGross).toFixed(2) + '%' : '—';
+  const simGrossCls = simGross == null ? 'dim' : (simGross >= 0 ? 'green' : 'red');
+  const heroCls = simGross == null ? '' : (simGross >= 0 ? 'is-hero' : 'is-hero-bad');
+  const simNetTxt = (simNet != null) ? (simNet >= 0 ? '+' : '') + Number(simNet).toFixed(2) + '%' : '—';
   const simNetCls = simNet == null ? 'dim' : (simNet >= 0 ? 'green' : 'red');
-  const heroCls = simNet == null ? '' : (simNet >= 0 ? 'is-hero' : 'is-hero-bad');
   const simWin = sim.win_rate != null ? (sim.win_rate * 100).toFixed(0) + '%' : '—';
   const simPf = sim.pf != null ? Number(sim.pf).toFixed(2) : '—';
   const lnet = live.net_pnl;
@@ -5628,9 +5683,14 @@ function renderLiveHeadline(j){
   const lnetCls = lnet == null ? 'dim' : (lnet > 0 ? 'green' : (lnet < 0 ? 'red' : 'dim'));
   return `<div class="stat-grid">
     <div class="stat-tile ${heroCls}">
-      <div class="stat-label">sim net% (윈도우)</div>
+      <div class="stat-label">sim gross 합% (윈도우)</div>
+      <div class="stat-val ${simGrossCls}">${esc(simGrossTxt)}</div>
+      <div class="stat-sub">${esc(simN)}건 pct 단순합 (수수료 전)</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-label">sim net%</div>
       <div class="stat-val ${simNetCls}">${esc(simNetTxt)}</div>
-      <div class="stat-sub">백테스트 ${esc(simN)}건 · gross−fee</div>
+      <div class="stat-sub">gross − 0.10%/거래 (fee ${esc((0.10 * simN).toFixed(2))}%)</div>
     </div>
     <div class="stat-tile">
       <div class="stat-label">sim 거래</div>
@@ -5696,13 +5756,16 @@ async function loadLive(){
   const meta = document.getElementById('live-meta');
   const content = document.getElementById('live-content');
   try{
-    const r = await fetch('/api/swing_live?window=' + encodeURIComponent(LIVE_WINDOW) + '&_=' + Date.now());
+    const r = await fetch('/api/swing_live?' + _liveQuery() + '&_=' + Date.now());
     const j = await r.json();
     if(j.error){ content.innerHTML = `<div class="error">${esc(j.error)}</div>`; return; }
     const cachedTxt = j.cached ? '(캐시)' : '(방금 갱신)';
     const sim = j.sim || {};
+    const rangeTxt = (j.window === 'custom' && j.custom_start)
+      ? `커스텀 ${esc(j.custom_start)} ~ ${esc(j.custom_end)} (KST)`
+      : `<b>${esc(_liveWindowLabel(j.window || LIVE_WINDOW))}</b>`;
     if(meta) meta.innerHTML =
-      `<b>${esc(_liveWindowLabel(j.window || LIVE_WINDOW))}</b> · `
+      `${rangeTxt} · `
       + `sim <b>${sim.n ?? 0}</b> · 라이브 신호 <b>${j.n_signals ?? 0}</b> · `
       + `청산 <b>${j.n_trades_closed ?? 0}</b> · 보유 <b>${j.open_positions ?? 0}</b> · `
       + `WAL ${j.wal_files_count ?? 0}개 · ${cachedTxt}`;
@@ -5715,6 +5778,10 @@ async function loadLive(){
 window.addEventListener('DOMContentLoaded', () => {
   const s = document.getElementById('live-window-selector');
   if(s) s.value = LIVE_WINDOW;
+  const cs = document.getElementById('custom-start');
+  const ce = document.getElementById('custom-end');
+  if(cs && CUSTOM_START) cs.value = CUSTOM_START;
+  if(ce && CUSTOM_END) ce.value = CUSTOM_END;
 });
 
 load(false);
@@ -8293,7 +8360,7 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
         payload = {
             "computed_at": datetime.now(timezone.utc).isoformat(),
             "trade_count": len(all_trades),
-            "universe_size": len(SWING_UNIVERSE),
+            "universe_size": _swing_universe_size(),
             "fee_pct": SWING_FEE_PCT,
             "combined": combined,
             "strategies": {
@@ -8328,6 +8395,12 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
         window: str = Query(
             "today", description="today | yesterday | 7d | 30d | all",
         ),
+        start: str | None = Query(
+            None, description="커스텀 시작일 YYYY-MM-DD (KST, end 와 함께)",
+        ),
+        end: str | None = Query(
+            None, description="커스텀 종료일 YYYY-MM-DD (KST, 포함, start 와 함께)",
+        ),
         refresh: int = Query(0, description="1 이면 윈도우 in-memory 캐시 우회"),
     ) -> JSONResponse:
         """스윙 2전략 윈도우 뷰 — **sim(백테스트) + 라이브(testnet/demo)** 병합.
@@ -8341,36 +8414,63 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
           - **라이브**: ``logs/shadow-swing*/<run>/wal.jsonl`` (binance-testnet +
             bitget-demo) 의 signal_emitted(신호) + order_filled 라운드트립(실현 NET).
         두 소스는 통화가 달라(USDT vs %) 별도 집계 블록(`sim`/`live`). READ-ONLY.
+
+        **커스텀 기간**: ``start`` + ``end`` (둘 다, YYYY-MM-DD KST) 를 주면 프리셋
+        ``window`` 대신 [start 00:00, end+1일 00:00) KST (end 포함) 로 집계한다.
         """
         import time as _time
-
-        now = _time.time()
-        cache_entry = _swing_live_cache.get(window)
-        if (not refresh and cache_entry is not None
-                and now - cache_entry["ts"] < SWING_LIVE_CACHE_TTL
-                and cache_entry["data"] is not None):
-            return JSONResponse({**cache_entry["data"], "cached": True})
 
         kst_now = datetime.now(_KST)
         kst_midnight = kst_now.replace(hour=0, minute=0, second=0, microsecond=0)
         utc_midnight = kst_midnight.astimezone(timezone.utc)
         utc_now = datetime.now(timezone.utc)
 
-        if window == "today":
+        # ── 윈도우 해석: 커스텀(start+end) 우선, 아니면 프리셋 ──────────────
+        custom = bool(start and end)
+        if custom:
+            try:
+                s_kst = datetime.strptime(start, "%Y-%m-%d").replace(tzinfo=_KST)
+                e_kst = datetime.strptime(end, "%Y-%m-%d").replace(tzinfo=_KST)
+            except (ValueError, TypeError):
+                return JSONResponse(
+                    {"error": f"start/end must be YYYY-MM-DD (got start={start!r}, end={end!r})"},
+                    status_code=400,
+                )
+            if e_kst < s_kst:
+                return JSONResponse(
+                    {"error": f"end({end}) < start({start})"}, status_code=400,
+                )
+            since_utc = s_kst.astimezone(timezone.utc)
+            until_utc = (e_kst + timedelta(days=1)).astimezone(timezone.utc)  # end 포함
+            window_label = "custom"
+            cache_key = f"custom:{start}:{end}"
+        elif window == "today":
             since_utc, until_utc = utc_midnight, utc_now
+            window_label, cache_key = window, window
         elif window == "yesterday":
             since_utc, until_utc = utc_midnight - timedelta(days=1), utc_midnight
+            window_label, cache_key = window, window
         elif window == "7d":
             since_utc, until_utc = utc_midnight - timedelta(days=7), utc_now
+            window_label, cache_key = window, window
         elif window == "30d":
             since_utc, until_utc = utc_midnight - timedelta(days=30), utc_now
+            window_label, cache_key = window, window
         elif window == "all":
             since_utc, until_utc = datetime(2000, 1, 1, tzinfo=timezone.utc), utc_now
+            window_label, cache_key = window, window
         else:
             return JSONResponse(
                 {"error": f"unknown window={window!r}, allowed: today/yesterday/7d/30d/all"},
                 status_code=400,
             )
+
+        now = _time.time()
+        cache_entry = _swing_live_cache.get(cache_key)
+        if (not refresh and cache_entry is not None
+                and now - cache_entry["ts"] < SWING_LIVE_CACHE_TTL
+                and cache_entry["data"] is not None):
+            return JSONResponse({**cache_entry["data"], "cached": True})
 
         repo_root = _swing_repo_root()
         wal_paths = discover_swing_wal_files(repo_root)
@@ -8391,7 +8491,9 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
         )
 
         payload = {
-            "window": window,
+            "window": window_label,
+            "custom_start": start if custom else None,
+            "custom_end": end if custom else None,
             "window_start_utc": since_utc.isoformat(),
             "window_end_utc": until_utc.isoformat(),
             "now_kst": kst_now.isoformat(),
@@ -8402,7 +8504,7 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
             **agg,
             "cached": False,
         }
-        _swing_live_cache[window] = {"ts": now, "data": payload}
+        _swing_live_cache[cache_key] = {"ts": now, "data": payload}
         return JSONResponse(payload)
 
     @app.get("/api/journal/today")

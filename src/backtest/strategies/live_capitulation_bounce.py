@@ -145,6 +145,18 @@ class LiveCapitulationBounce(LiveScannerMixin):
     def get_interval(cls) -> str:
         return "4h"
 
+    @classmethod
+    def get_universe(cls) -> list[str]:
+        """투매반등은 크립토 top-100 확대.
+
+        깨끗한 크립토 메이저 재분석(2026-06-30): 확대해도 PF 유지/상승(2y top-100
+        PF 2.14, 1y 2.54)+거래수 2.3배. 돌파와 달리 넓을수록 유리. 토큰화주식·
+        상품·forex 섞인 BINANCE_USDT_TOP30 대신 검증 크립토 유니버스 상위 100.
+        → docs/specs/strategies 참조.
+        """
+        from src.portfolio.binance_universe import SWING_CRYPTO_UNIVERSE
+        return list(SWING_CRYPTO_UNIVERSE[:100])
+
     async def on_bar(self, ctx: object) -> Signal | None:
         snap = ctx["market_snapshot"]  # type: ignore[index]
         history: pd.DataFrame | None = snap.get("history")

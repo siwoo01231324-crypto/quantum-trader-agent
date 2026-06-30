@@ -172,6 +172,18 @@ class LiveDonchianBreakoutBtcGate(LiveScannerMixin):
     def get_interval(cls) -> str:
         return "4h"
 
+    @classmethod
+    def get_universe(cls) -> list[str]:
+        """돌파는 가장 유동적인 크립토 top-30 집중.
+
+        깨끗한 크립토 메이저 재분석(2026-06-30)에서 5y/2y/1y 전 기간 top-30 이
+        최고 PF(1.41/1.54/1.31), 확대 시 단조 열화(top-100 1y PF 1.05 붕괴).
+        토큰화주식·상품·forex 가 섞인 BINANCE_USDT_TOP30(EUR 등) 대신 검증된
+        크립토 유니버스 상위 30 만 사용. → docs/specs/strategies 참조.
+        """
+        from src.portfolio.binance_universe import SWING_CRYPTO_UNIVERSE
+        return list(SWING_CRYPTO_UNIVERSE[:30])
+
     def channel_exit_level(self, history: pd.DataFrame) -> float | None:
         """추세 청산 레벨 = Donchian(EXIT_LOOKBACK) 하단 = min(low[-(K+1):-1]).
 

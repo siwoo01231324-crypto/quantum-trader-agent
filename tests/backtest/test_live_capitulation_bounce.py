@@ -67,6 +67,21 @@ class TestMarker:
         # 스윙 평균회귀 — time-stop 면제 (반등까지 보유).
         assert s.max_hold_sec is None
 
+    def test_universe_is_clean_crypto_top100(self):
+        # 투매반등 = 크립토 top-100 확대 (품질 유지+거래수↑). 돌파보다 넓다.
+        from src.portfolio.binance_universe import SWING_CRYPTO_UNIVERSE
+        uni = LiveCapitulationBounce.get_universe()
+        assert uni == list(SWING_CRYPTO_UNIVERSE[:100])
+        # 투매반등(top-100) ⊇ 돌파(top-30) — 확대 비대칭 검증.
+        from src.backtest.strategies.live_donchian_breakout_btcgate import (
+            LiveDonchianBreakoutBtcGate,
+        )
+        assert set(LiveDonchianBreakoutBtcGate.get_universe()) <= set(uni)
+        assert len(uni) > 30
+        # 토큰화주식·상품·forex 오염 회귀 방지.
+        bad = {"TSLAUSDT", "NVDAUSDT", "XAUUSDT", "XAGUSDT", "EURUSDT", "QQQUSDT"}
+        assert not (set(uni) & bad)
+
 
 class TestBuyPath:
     def test_buy_on_capitulation_hammer(self):

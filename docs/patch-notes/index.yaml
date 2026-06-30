@@ -15,6 +15,25 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.102"
+    date: "2026-06-30"
+    title: "스윙 2전략 유니버스 — 깨끗한 크립토(투매반등 top-100 / 돌파 top-30)"
+    tags: [feature, fix]
+    summary: >
+      data/cache/binance_1h 가 Binance 선물 토큰화주식(TSLA/NVDA)·상품(XAU)·forex(EUR)·
+      비-ASCII 쓰레기로 오염되고 진짜 크립토 메이저(ETH/SOL/XRP)는 부재함을 발견.
+      깨끗한 크립토 메이저로 재분석 → 두 스윙 전략 get_universe() 를 검증된 크립토
+      유니버스로 교체. 비대칭: 투매반등은 확대할수록 PF 유지/상승(top-100), 돌파는
+      집중이 최고 PF(top-30, 확대 시 1y PF 1.05 붕괴).
+    items:
+      - "SWING_CRYPTO_UNIVERSE(src/portfolio/binance_universe.py) 정적 allowlist 추가 — 유동성순 크립토 84종, 토큰화주식·상품·forex 원천 배제"
+      - "투매반등 get_universe()=top-100, 돌파 get_universe()=top-30 (기존 BINANCE_USDT_TOP30=EUR 등 혼입 대체)"
+      - "대시보드 /swing sim 데이터소스 binance_1h(오염)→swing_crypto_4h(crypto-only) 교체 + 전략별 유니버스(sim==live)"
+      - "재분석 결과: 깨끗한 크립토 1y 투매반등 top-100 PF 2.54 / 돌파 top-30 PF 1.31"
+    refs:
+      - "scripts/_swing_clean_majors_reanalysis.py"
+      - "docs/specs/strategies/live-capitulation-bounce.md"
+      - "docs/specs/strategies/live-donchian-breakout-btcgate.md"
   - version: "v0.6.101"
     date: "2026-06-29"
     title: "숏 진입 post-only Maker 전환 — 진입 수수료 60%↓ (short-whitelist)"
