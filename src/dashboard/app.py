@@ -5776,25 +5776,25 @@ function renderLiveTable(trades){
 }
 function renderCapturedSignals(j){
   const sigs = j.captured_signals || [];
-  const stratLabel = {{'live-capitulation-bounce':'투매반등','live-donchian-breakout-btcgate':'돌파/터틀'}};
-  const head = `<div class="section-h2">📡 오늘 포착 신호 <span class="count">· ${{sigs.length}}건 (전수 — 체결 무관, 사이징 전)</span></div>`;
+  const stratLabel = {'live-capitulation-bounce':'투매반등','live-donchian-breakout-btcgate':'돌파/터틀'};
+  const head = `<div class="section-h2">📡 오늘 포착 신호 <span class="count">· ${sigs.length}건 (전수 — 체결 무관, 사이징 전)</span></div>`;
   if(sigs.length === 0){
     return head + `<div class="note">이 윈도우에 포착된 스윙 진입신호 없음. (라이브 가동 중 신호 발생 시 체결 여부와 무관하게 여기 전수 기록됨 — 에어본 FIRE 와 동일.)</div>`;
   }
-  const rows = sigs.slice().reverse().map(s => {{
+  const rows = sigs.slice().reverse().map(s => {
     const sl = s.stop_loss_pct != null ? fmtPct(s.stop_loss_pct*100, 2) : '—';
     const tp = s.take_profit_pct != null ? fmtPct(s.take_profit_pct*100, 2) : '—';
     return `<tr>
-      <td>${{esc(fmtKstFull(s.ts))}}</td>
-      <td style="color:var(--text3)">${{esc(stratLabel[s.strategy] || s.strategy || '')}}</td>
-      <td class="sym-cell">${{esc((s.symbol||'').replace(/USDT$/, ''))}}</td>
-      <td class="td-num">${{esc(sl)}}</td>
-      <td class="td-num">${{esc(tp)}}</td>
+      <td>${esc(fmtKstFull(s.ts))}</td>
+      <td style="color:var(--text3)">${esc(stratLabel[s.strategy] || s.strategy || '')}</td>
+      <td class="sym-cell">${esc((s.symbol||'').replace(/USDT$/, ''))}</td>
+      <td class="td-num">${esc(sl)}</td>
+      <td class="td-num">${esc(tp)}</td>
     </tr>`;
-  }}).join('');
+  }).join('');
   return head + `<table><thead><tr>
       <th>시각 (KST)</th><th>전략</th><th>Symbol</th><th class="td-num">손절</th><th class="td-num">TP</th>
-    </tr></thead><tbody>${{rows}}</tbody></table>
+    </tr></thead><tbody>${rows}</tbody></table>
     <div class="note">신호 발생(진입 결정) 시점 전수 기록 — bitget 최소금액 미달·리스크게이트 등으로 <b>미체결</b>이어도 포함. 같은 4h봉 반복신호는 1건으로 dedup. 체결된 거래는 아래 "거래·보유 상세" 에.</div>`;
 }
 function renderLive(j){
