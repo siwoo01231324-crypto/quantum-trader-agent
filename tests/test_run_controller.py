@@ -170,6 +170,12 @@ class TestRunModeResolution:
         assert mc["set_env"]["SWING_CHANNEL_SWEEP"] == "1"
         assert mc["setdefault_env"]["SWING_EVAL_TIMER_SEC"] == "60"
 
+    def test_swing_log_dir_is_discovered_by_swing_page(self) -> None:
+        # 버튼-swing WAL 이 /swing 라이브 윈도우(SWING_LIVE_LOG_DIRS)에 잡혀야 함
+        from scripts.live_run import _resolve_run_mode
+        from src.dashboard.swing_live import SWING_LIVE_LOG_DIRS
+        assert _resolve_run_mode("swing")["log_dir"] in SWING_LIVE_LOG_DIRS
+
     def test_airborne_mode_uses_production_yaml_and_clears_swing_env(self) -> None:
         from scripts.live_run import _resolve_run_mode
         mc = _resolve_run_mode("airborne")

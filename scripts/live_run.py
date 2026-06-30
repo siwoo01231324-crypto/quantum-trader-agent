@@ -1403,6 +1403,9 @@ def _resolve_run_mode(mode: str) -> dict:
         return {
             "production_yaml": "configs/orchestrator/swing_mainnet.yaml",
             "broker_default": "bitget-mainnet",
+            # WAL 은 /swing 페이지가 읽는 SWING_LIVE_LOG_DIRS("logs/shadow-swing")로
+            # 떨궈야 라이브 윈도우에 잡힌다 (기본 logs/shadow-bitget 이면 미discover).
+            "log_dir": "logs/shadow-swing",
             "set_env": {"SWING_CHANNEL_SWEEP": "1"},
             "setdefault_env": {"SWING_EVAL_TIMER_SEC": "60", "SWING_SIGNAL_ALERT": "1"},
             "pop_env": [],
@@ -1410,6 +1413,7 @@ def _resolve_run_mode(mode: str) -> dict:
     return {
         "production_yaml": "configs/orchestrator/production.yaml",
         "broker_default": None,
+        "log_dir": None,
         "set_env": {},
         "setdefault_env": {},
         "pop_env": ["SWING_CHANNEL_SWEEP", "SWING_EVAL_TIMER_SEC"],
@@ -1523,6 +1527,9 @@ def _build_pipeline_factory(
         extra_argv: list[str] = []
         if broker == "binance-testnet-shadow":
             extra_argv = ["--feed", "binance"]
+        if _mc.get("log_dir"):
+            # swing WAL → logs/shadow-swing (/swing 라이브 윈도우가 discover)
+            extra_argv += ["--log-dir", _mc["log_dir"]]
         argv = ["--symbols", ",".join(symbols), "--broker", broker, "--duration", duration,
                 "--production-yaml", production_yaml, *extra_argv]
         args = parse_args(argv)
