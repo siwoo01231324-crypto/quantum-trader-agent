@@ -703,13 +703,15 @@ def _aggregate_ma_cross_sims(sims: list[dict]) -> dict:
 # 로직을 그대로 옮긴다. 청산 자동분기:
 #   - channel_exit_level 있는 전략(돌파) → 2ATR 손절(intrabar) + 채널청산
 #   - 없는 전략(투매반등) → 꼬리저점 손절 + 2R TP (Signal override, intrabar)
-# 데이터: data/cache/binance_1h/*.parquet (volume 有) → 4h 리샘플. BTC게이트는
-# data/cache/binance_4h_btc.parquet. ⚠️ 전략 코드/주문/리스크 미수정 — 분석 전용.
+# 데이터: data/cache/swing_crypto_4h/*.parquet (crypto-only, 이미 4h). BTC게이트는
+# data/cache/binance_4h_btc.parquet. 유니버스는 전략별 get_universe() (투매반등
+# top-100 / 돌파 top-30, src/portfolio/binance_universe.SWING_CRYPTO_UNIVERSE).
+# ⚠️ 전략 코드/주문/리스크 미수정 — 분석 전용.
 SWING_WIN: int = 260          # on_bar 에 넘기는 history 슬라이스 길이
 SWING_MAX_HOLD: int = 180     # 미청산 시 강제 청산까지 최대 보유 봉수
 SWING_FEE_PCT: float = 0.10   # 거래당 왕복 실효비용 가정 (net% 차감, %)
-# 캐시 가용 유동성 알트 (BTC 는 별도 parquet). 2021~2026 다중레짐.
-# scripts/_swing_signal_returns_sim2.py 의 UNIVERSE 와 동일.
+# [레거시] 옛 25 알트 유니버스 — 2026-06-30 부터 sim 은 전략 get_universe() 를
+# 직접 쓴다(_swing_compute_all_trades). _swing_universe_size() fallback 으로만 잔존.
 SWING_UNIVERSE: list[str] = [
     "ATOMUSDT", "ALGOUSDT", "DOTUSDT", "ETCUSDT", "FILUSDT", "XLMUSDT", "ARUSDT",
     "OPUSDT", "APTUSDT", "ARBUSDT", "1000PEPEUSDT", "WLDUSDT", "ICPUSDT", "FETUSDT",
@@ -728,27 +730,35 @@ def _swing_repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
-def _swing_load_4h(sym: str):
-    """binance_1h parquet → 4h OHLCV 리샘플. 없거나 volume 누락 시 None.
+def _swing_universe_size() -> int:
+    """두 스윙 전략 get_universe() 합집합 종목 수 (대시보드 표시용).
 
-    scripts/_swing_signal_returns_sim2.load_4h 미러.
+    sim==live: 투매반등 top-100 + 돌파 top-30 의 union(= 깨끗한 크립토 상위 100).
+    import 실패 시 레거시 SWING_UNIVERSE 길이로 graceful fallback.
+    """
+    try:
+        from src.portfolio.binance_universe import SWING_CRYPTO_UNIVERSE
+        return min(100, len(SWING_CRYPTO_UNIVERSE))
+    except Exception:  # noqa: BLE001
+        return len(SWING_UNIVERSE)
+
+
+def _swing_load_4h(sym: str):
+    """깨끗한 크립토 4h parquet 직접 로드. 없거나 volume 누락 시 None.
+
+    2026-06-30: 데이터 소스를 오염된 ``binance_1h``(토큰화주식·상품·forex 혼입,
+    1h→4h 리샘플) 에서 ``swing_crypto_4h``(crypto-only, 이미 4h) 로 교체.
+    scripts/_swing_setup_clean_cache.py 가 채운다.
     """
     import pandas as _pd
 
-    p = _swing_repo_root() / "data" / "cache" / "binance_1h" / f"{sym}.parquet"
+    p = _swing_repo_root() / "data" / "cache" / "swing_crypto_4h" / f"{sym}.parquet"
     if not p.exists():
         return None
     d = _pd.read_parquet(p)
     if "volume" not in d.columns:
         return None
-    o = d["open"].resample("4h").first()
-    h = d["high"].resample("4h").max()
-    low = d["low"].resample("4h").min()
-    c = d["close"].resample("4h").last()
-    v = d["volume"].resample("4h").sum()
-    return _pd.DataFrame(
-        {"open": o, "high": h, "low": low, "close": c, "volume": v}
-    ).dropna()
+    return d[["open", "high", "low", "close", "volume"]].dropna()
 
 
 def _swing_load_btc_4h():
@@ -882,23 +892,32 @@ def _swing_compute_all_trades() -> list[dict]:
     if btc is None:
         return []
 
+    strategies = [
+        ("live-capitulation-bounce", LiveCapitulationBounce()),
+        ("live-donchian-breakout-btcgate",
+         LiveDonchianBreakoutBtcGate(btc_regime_gate=True)),
+    ]
+    # sim==live: 각 전략 get_universe() 로 종목 제한 (투매반등 top-100 / 돌파 top-30).
+    # 데이터는 union 으로 1회 로드 후 전략별 필터.
+    strat_universes = {
+        sid: set(type(strat).get_universe()) for sid, strat in strategies
+    }
+    union = set().union(*strat_universes.values())
     b4: dict[str, Any] = {}
-    for sym in SWING_UNIVERSE:
+    for sym in union:
+        if sym == "BTCUSDT":
+            continue
         d = _swing_load_4h(sym)
         if d is not None and len(d) > 250:
             b4[sym] = d
     if not b4:
         return []
 
-    strategies = [
-        ("live-capitulation-bounce", LiveCapitulationBounce()),
-        ("live-donchian-breakout-btcgate",
-         LiveDonchianBreakoutBtcGate(btc_regime_gate=True)),
-    ]
     all_trades: list[dict] = []
     for strategy_id, strat in strategies:
+        uni = strat_universes[strategy_id]
         for sym, bars in b4.items():
-            if sym == "BTCUSDT" or len(bars) < strat.MIN_HISTORY + 5:
+            if sym not in uni or len(bars) < strat.MIN_HISTORY + 5:
                 continue
             all_trades += _swing_sim_symbol(strat, strategy_id, sym, bars, btc)
     return all_trades
@@ -5315,7 +5334,7 @@ tbody tr.is-total td{background:#11161b;font-weight:700;border-top:1px solid var
 <body>
 <h1>QTA — 스윙 2전략 적중 (누적)</h1>
 <div class="meta">룰: <b>4h · 롱전용 · 투매반등=꼬리저점 손절+2R TP / 돌파=2ATR 손절+채널청산(Donchian10)</b></div>
-<div class="subtitle">두 라이브 스윙 전략 객체(<b>live-capitulation-bounce</b> 평균회귀 + <b>live-donchian-breakout-btcgate</b> 추세추종)를 과거 4h 봉(binance_1h→4h, volume 有)에 직접 구동한 합성 거래(sim==live). 페어 분산 가설 — 돌파가 죽는 베어에 투매반등이 +. ⚠️ gross 누적뷰(net 은 거래당 0.10% 비용 차감), 생존편향·random-vs-signal 별도. READ-ONLY 분석 — 주문/리스크 미연동.</div>
+<div class="subtitle">두 라이브 스윙 전략 객체(<b>live-capitulation-bounce</b> 평균회귀 + <b>live-donchian-breakout-btcgate</b> 추세추종)를 과거 4h 봉(깨끗한 크립토 메이저, 토큰화주식·상품·forex 제외)에 직접 구동한 합성 거래(sim==live). 유니버스: 투매반등 top-100 / 돌파 top-30(전략별 get_universe). 페어 분산 가설 — 돌파가 죽는 베어에 투매반등이 +. ⚠️ gross 누적뷰(net 은 거래당 0.10% 비용 차감), 생존편향·random-vs-signal 별도. READ-ONLY 분석 — 주문/리스크 미연동.</div>
 <div class="nav">
   <a href="/">← 대시보드</a>
   <a href="/ma-cross">골든/데드크로스</a>
@@ -8293,7 +8312,7 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
         payload = {
             "computed_at": datetime.now(timezone.utc).isoformat(),
             "trade_count": len(all_trades),
-            "universe_size": len(SWING_UNIVERSE),
+            "universe_size": _swing_universe_size(),
             "fee_pct": SWING_FEE_PCT,
             "combined": combined,
             "strategies": {

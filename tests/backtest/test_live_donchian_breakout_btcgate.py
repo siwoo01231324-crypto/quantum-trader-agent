@@ -69,6 +69,16 @@ class TestMarker:
         assert s.regime_preference == "trend"
         assert s.max_hold_sec is None
 
+    def test_universe_is_clean_crypto_top30(self):
+        # 돌파 = 가장 유동적인 크립토 top-30 집중 (확대 시 엣지 열화).
+        from src.portfolio.binance_universe import SWING_CRYPTO_UNIVERSE
+        uni = LiveDonchianBreakoutBtcGate.get_universe()
+        assert len(uni) == 30
+        assert uni == list(SWING_CRYPTO_UNIVERSE[:30])
+        # 토큰화주식·상품·forex 가 섞이지 않는다 (오염 회귀 방지).
+        bad = {"TSLAUSDT", "NVDAUSDT", "XAUUSDT", "XAGUSDT", "EURUSDT", "QQQUSDT"}
+        assert not (set(uni) & bad)
+
 
 class TestBuyPath:
     def test_buy_on_breakout_btc_up(self):
