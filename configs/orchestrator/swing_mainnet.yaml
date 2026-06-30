@@ -1,0 +1,48 @@
+# Swing-only MAINNET roster (2026-06-30) — 실전 검증용 (작은 사이즈 + 1x).
+#
+# ⚠️⚠️ 실거래(real money). bitget-mainnet 으로 돌릴 때만 사용. ⚠️⚠️
+#
+# swing.yaml 과 동일 격리 원칙(스윙 4h 2전략만 → 4h collision 0) + 검증용 안전세팅:
+#   - default_size 0.01 (자본의 1%/포지션, swing.yaml 의 0.05 → 1/5)
+#   - 레버리지 1x 는 런처가 QTA_TARGET_LEVERAGE=1 로 강제 (거래소 종목 레버리지)
+#
+# ⚠️ airborne 과 절대 동시 가동 금지:
+#   (1) 4h collision  (2) 종목 레버리지 충돌(airborne 10x vs 스윙 1x, bitget 종목당 1개)
+#   (3) fill 스트림 혼선. → airborne 끄고 이 config 로 스윙 단독 기동.
+#
+# 실행: scripts/run_swing_mainnet.ps1 (airborne 정지 후). 첫 거래 TP/SL 로그
+#   `protective_coordinator: registered ... SL=Y TP=Z` 를 눈으로 확인할 것.
+
+orchestrator:
+  min_order_interval_sec: 300
+
+strategies:
+  # 투매반등 — SL=꼬리저점, TP=2R (진입시 확정 동적값 → 거래소 라인). 채널청산 없음.
+  - id: live-capitulation-bounce
+    class: backtest.strategies.live_capitulation_bounce.LiveCapitulationBounce
+    kwargs:
+      default_size: 0.01          # 자본 1%/포지션 (검증용 소액)
+      n_dev: 2.5
+      wick_mult: 1.5
+      vol_mult: 2.0
+      rr: 2.0
+      stop_loss_pct: 0.05         # override 미전달 시 fallback
+      take_profit_pct: 0.10
+      anomaly_guard_enabled: true
+
+  # 돌파 — SL=2ATR(거래소 backstop), 주청산=채널(봇 감시, SWING_CHANNEL_SWEEP).
+  - id: live-donchian-breakout-btcgate
+    class: backtest.strategies.live_donchian_breakout_btcgate.LiveDonchianBreakoutBtcGate
+    kwargs:
+      default_size: 0.01          # 자본 1%/포지션 (검증용 소액)
+      breakout_lookback: 20
+      exit_lookback: 10
+      stop_atr_mult: 2.0
+      btc_regime_gate: true
+      stop_loss_pct: 0.08
+      take_profit_pct: 0.50
+      anomaly_guard_enabled: true
+
+capital_allocation:
+  universe_scan_pct: 0.0
+  live_scanner_pct: 1.0
