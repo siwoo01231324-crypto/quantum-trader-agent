@@ -199,7 +199,8 @@ class LiveDonchianBreakoutBtcGate(LiveScannerMixin):
 
     async def on_bar(self, ctx: object) -> Signal | None:
         snap = ctx["market_snapshot"]  # type: ignore[index]
-        history: pd.DataFrame | None = snap.get("history")
+        # 마감봉 게이트 — live forming-bar 제거(가짜돌파 방지, 백테스트 무변경).
+        history, _closed_ts = self._closed_bar_history(ctx)
         if history is None or len(history) < self.MIN_HISTORY:
             return Signal(action="hold", size=0.0, reason="warmup")
 
@@ -246,6 +247,12 @@ class LiveDonchianBreakoutBtcGate(LiveScannerMixin):
             sl_pct = self.STOP_ATR_MULT * atr / close
             if 0 < sl_pct < 1:
                 sl_override = sl_pct
+
+        # 봉당 1진입 dedup (live 한정) — 같은 마감봉 재신호/재진입 차단.
+        _symbol = snap.get("symbol") if isinstance(snap, dict) else None
+        if self._already_entered_bar(ctx, _symbol, _closed_ts):
+            return Signal(action="hold", size=0.0, reason="bar_dedup")
+        self._mark_entered_bar(ctx, _symbol, _closed_ts)
 
         return Signal(
             action="buy",

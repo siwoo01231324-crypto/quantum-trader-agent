@@ -989,6 +989,14 @@ def _make_on_entry(risk_mgr, logger):
     """
     import threading
     alert_on = os.environ.get("SWING_SIGNAL_ALERT", "0") == "1"
+    # 스윙 신호 전수 store (체결 무관, 사이징 전 = 드롭/미체결도 포함). 에어본 미러.
+    # /swing "오늘 포착 신호" 소스. fail-soft, dedup=봉당 1신호.
+    _sig_store = None
+    try:
+        from src.dashboard.swing_signal_store import SwingSignalStore
+        _sig_store = SwingSignalStore("logs/swing/signals.jsonl")
+    except Exception:  # noqa: BLE001 — store 없어도 거래 정상
+        _sig_store = None
 
     def _on_entry(strategy_id, symbol, *, stop_loss_pct=None,
                   take_profit_pct=None, trailing_stop_pct=None):
@@ -998,6 +1006,10 @@ def _make_on_entry(risk_mgr, logger):
             take_profit_pct=take_profit_pct,
             trailing_stop_pct=trailing_stop_pct,
         )
+        if _sig_store is not None and strategy_id in _SWING_ALERT_SIDS:
+            _sig_store.append(strategy_id, symbol,
+                              stop_loss_pct=stop_loss_pct,
+                              take_profit_pct=take_profit_pct)
         if alert_on and strategy_id in _SWING_ALERT_SIDS:
             def _send():
                 try:
