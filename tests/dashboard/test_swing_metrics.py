@@ -420,13 +420,12 @@ def _sim_trade(strategy="live-capitulation-bounce", symbol="ATOMUSDT",
 
 
 class TestWindowSimTrades:
-    def test_filters_by_entry_or_exit_ts(self):
+    def test_filters_by_entry_ts(self):
+        # 윈도우 귀속은 진입시각 기준 (사용자 확정 2026-06-30).
         sim = [
-            _sim_trade(entry_ts="2026-06-29T03:00:00+00:00",
-                       exit_ts="2026-06-29T07:00:00+00:00", ret=3.0),           # entry in
+            _sim_trade(entry_ts="2026-06-29T03:00:00+00:00", ret=3.0),          # 진입 in
             _sim_trade(symbol="DOTUSDT",
-                       entry_ts="2025-01-01T00:00:00+00:00",
-                       exit_ts="2025-01-02T00:00:00+00:00", ret=5.0),           # 둘 다 out
+                       entry_ts="2025-01-01T00:00:00+00:00", ret=5.0),          # 진입 out
         ]
         rows = window_sim_trades(sim, _WIN_SINCE, _WIN_UNTIL)
         assert len(rows) == 1
@@ -436,18 +435,14 @@ class TestWindowSimTrades:
         assert rows[0]["status"] == "closed"
         assert rows[0]["pct"] == pytest.approx(3.0)
         assert rows[0]["pnl"] is None  # sim 은 % 기반, USDT 손익 없음
-        assert rows[0]["window_basis"] == "both"  # entry+exit 둘 다 윈도우 안
 
-    def test_includes_trade_exited_in_window_entered_before(self):
-        # 사용자 발견(2026-06-30): 진입은 그 전, 청산이 윈도우 안 → "어제 실현" 으로 노출돼야.
+    def test_entry_before_window_excluded_even_if_exit_inside(self):
+        # 진입은 윈도우 전, 청산만 윈도우 안 → 진입 기준이라 제외 (PENDLE 케이스).
+        # 일시 칸에 진입·청산 둘 다 표시해 사용자가 헷갈리지 않게 한다(JS 렌더).
         sim = [_sim_trade(symbol="PENDLEUSDT",
                           entry_ts="2026-06-24T16:00:00+00:00",   # 윈도우 전
-                          exit_ts="2026-06-29T04:00:00+00:00", ret=7.49)]  # 윈도우 안
-        rows = window_sim_trades(sim, _WIN_SINCE, _WIN_UNTIL)
-        assert len(rows) == 1
-        assert rows[0]["symbol"] == "PENDLEUSDT"
-        assert rows[0]["window_basis"] == "exit"  # 청산 기준으로 잡힘
-        assert rows[0]["pct"] == pytest.approx(7.49)
+                          exit_ts="2026-06-29T04:00:00+00:00", ret=7.49)]  # 청산만 윈도우 안
+        assert window_sim_trades(sim, _WIN_SINCE, _WIN_UNTIL) == []
 
     def test_filters_foreign_strategy(self):
         sim = [_sim_trade(strategy="other-strat",
