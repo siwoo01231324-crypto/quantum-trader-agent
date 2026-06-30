@@ -1388,6 +1388,38 @@ async def _run_pipeline_attached(
                 reconciler_task.cancel()
 
 
+def _resolve_run_mode(mode: str) -> dict:
+    """거래 모드 → config·broker·env 매핑 (순수 함수, 테스트 가능; 2026-06-30).
+
+    대시보드 [에어본 거래 시작]/[스윙 거래 시작] 두 버튼이 ``mode`` 로 전략셋 선택.
+      - ``"swing"`` = 4h 터틀 2전략(swing_mainnet.yaml), bitget-mainnet, 돌파 채널청산
+        sweep(SWING_CHANNEL_SWEEP) + 한국IP 피드死 대비 타이머평가(SWING_EVAL_TIMER_SEC).
+      - 그외(``"airborne"`` 기본) = production.yaml. 스윙 전용 env 는 정리해 airborne
+        동작(타이머평가 등)을 바꾸지 않게 한다.
+    RunController 가 동시실행을 막아 두 모드는 상호배제 — 같은 bitget 계좌 4h
+    collision·레버리지 충돌 원천 차단(swing 정지 후에만 airborne 시작 가능).
+    """
+    if mode == "swing":
+        return {
+            "production_yaml": "configs/orchestrator/swing_mainnet.yaml",
+            "broker_default": "bitget-mainnet",
+            # WAL 은 /swing 페이지가 읽는 SWING_LIVE_LOG_DIRS("logs/shadow-swing")로
+            # 떨궈야 라이브 윈도우에 잡힌다 (기본 logs/shadow-bitget 이면 미discover).
+            "log_dir": "logs/shadow-swing",
+            "set_env": {"SWING_CHANNEL_SWEEP": "1"},
+            "setdefault_env": {"SWING_EVAL_TIMER_SEC": "60", "SWING_SIGNAL_ALERT": "1"},
+            "pop_env": [],
+        }
+    return {
+        "production_yaml": "configs/orchestrator/production.yaml",
+        "broker_default": None,
+        "log_dir": None,
+        "set_env": {},
+        "setdefault_env": {},
+        "pop_env": ["SWING_CHANNEL_SWEEP", "SWING_EVAL_TIMER_SEC"],
+    }
+
+
 def _build_pipeline_factory(
     state, logger, *, position_store=None, pnl_aggregator=None, ops_counters=None,
 ):
@@ -1418,6 +1450,22 @@ def _build_pipeline_factory(
         return ["005930"]
 
     async def _factory(params: dict):
+        # ── 거래 모드 (2026-06-30) — 대시보드 버튼이 mode 로 전략셋 선택 ──────────
+        # "swing" = 4h 터틀 2전략(swing_mainnet.yaml, bitget-mainnet, 채널청산 sweep
+        # + 죽은피드 타이머평가). "airborne"(기본) = 기존 production.yaml.
+        # RunController 가 동시실행을 막아 airborne↔swing 상호배제 (같은 bitget 계좌
+        # 4h collision·레버리지 충돌 원천 차단). swing 정지 후에만 airborne 시작 가능.
+        mode = str(params.get("mode") or "airborne").strip().lower()
+        _mc = _resolve_run_mode(mode)
+        production_yaml = _mc["production_yaml"]
+        for _k, _v in _mc["set_env"].items():
+            os.environ[_k] = _v
+        for _k, _v in _mc["setdefault_env"].items():
+            os.environ.setdefault(_k, _v)
+        for _k in _mc["pop_env"]:
+            os.environ.pop(_k, None)
+        if _mc["broker_default"] and not params.get("broker"):
+            params = {**params, "broker": _mc["broker_default"]}
         smoke_on = os.environ.get("SMOKE_TEST_ENABLED", "").lower() in ("1", "true", "yes")
         broker = params.get("broker")
         if not broker:
@@ -1479,7 +1527,11 @@ def _build_pipeline_factory(
         extra_argv: list[str] = []
         if broker == "binance-testnet-shadow":
             extra_argv = ["--feed", "binance"]
-        argv = ["--symbols", ",".join(symbols), "--broker", broker, "--duration", duration, *extra_argv]
+        if _mc.get("log_dir"):
+            # swing WAL → logs/shadow-swing (/swing 라이브 윈도우가 discover)
+            extra_argv += ["--log-dir", _mc["log_dir"]]
+        argv = ["--symbols", ",".join(symbols), "--broker", broker, "--duration", duration,
+                "--production-yaml", production_yaml, *extra_argv]
         args = parse_args(argv)
         config = _build_config(args)
         if args.feed == "mock":

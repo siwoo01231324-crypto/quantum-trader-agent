@@ -156,3 +156,54 @@ class TestDashboardControlCard:
         assert "거래 정지" in body
         assert "run-status" in body
         assert "/api/run/start" in body or "runStart" in body
+
+
+class TestRunModeResolution:
+    """대시보드 두 버튼(에어본/스윙) → 거래 모드 매핑 (2026-06-30)."""
+
+    def test_swing_mode_uses_swing_yaml_and_mainnet(self) -> None:
+        from scripts.live_run import _resolve_run_mode
+        mc = _resolve_run_mode("swing")
+        assert "swing_mainnet.yaml" in mc["production_yaml"]
+        assert mc["broker_default"] == "bitget-mainnet"
+        # 돌파 채널청산 sweep 강제 + 죽은피드 타이머평가 기본
+        assert mc["set_env"]["SWING_CHANNEL_SWEEP"] == "1"
+        assert mc["setdefault_env"]["SWING_EVAL_TIMER_SEC"] == "60"
+
+    def test_swing_log_dir_is_discovered_by_swing_page(self) -> None:
+        # 버튼-swing WAL 이 /swing 라이브 윈도우(SWING_LIVE_LOG_DIRS)에 잡혀야 함
+        from scripts.live_run import _resolve_run_mode
+        from src.dashboard.swing_live import SWING_LIVE_LOG_DIRS
+        assert _resolve_run_mode("swing")["log_dir"] in SWING_LIVE_LOG_DIRS
+
+    def test_airborne_mode_uses_production_yaml_and_clears_swing_env(self) -> None:
+        from scripts.live_run import _resolve_run_mode
+        mc = _resolve_run_mode("airborne")
+        assert "production.yaml" in mc["production_yaml"]
+        assert mc["broker_default"] is None
+        # 스윙 전용 env 정리 — airborne 동작(타이머평가) 안 바뀌게
+        assert "SWING_CHANNEL_SWEEP" in mc["pop_env"]
+        assert "SWING_EVAL_TIMER_SEC" in mc["pop_env"]
+
+    def test_unknown_mode_defaults_to_airborne(self) -> None:
+        from scripts.live_run import _resolve_run_mode
+        assert _resolve_run_mode("")["production_yaml"] == _resolve_run_mode("airborne")["production_yaml"]
+
+
+class TestRunModeMutualExclusion:
+    """한 모드 가동 중 다른 모드 시작 거부 (같은 bitget 계좌 충돌 차단)."""
+
+    def test_mode_passes_through_and_blocks_other_mode(
+        self, client_with_controller: tuple[TestClient, RunController],
+    ) -> None:
+        client, _ = client_with_controller
+        # 스윙 시작 → running, request_params.mode=swing 노출
+        resp = client.post("/api/run/start", json={"mode": "swing"})
+        assert resp.status_code == 200 and resp.json()["ok"] is True
+        st = client.get("/api/run/status").json()
+        assert st["request_params"].get("mode") == "swing"
+        # 가동 중 에어본 시작 → 422 already running (상호배제)
+        resp2 = client.post("/api/run/start", json={"mode": "airborne"})
+        assert resp2.status_code == 422
+        assert resp2.json()["ok"] is False
+        client.post("/api/run/stop")
