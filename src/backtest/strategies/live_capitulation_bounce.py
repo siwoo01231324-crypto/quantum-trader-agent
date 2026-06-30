@@ -159,7 +159,8 @@ class LiveCapitulationBounce(LiveScannerMixin):
 
     async def on_bar(self, ctx: object) -> Signal | None:
         snap = ctx["market_snapshot"]  # type: ignore[index]
-        history: pd.DataFrame | None = snap.get("history")
+        # 마감봉 게이트 — live forming-bar 제거(백테스트 무변경, byte-identical).
+        history, _closed_ts = self._closed_bar_history(ctx)
         if history is None or len(history) < self.MIN_HISTORY:
             return Signal(action="hold", size=0.0, reason="warmup")
 
@@ -218,6 +219,12 @@ class LiveCapitulationBounce(LiveScannerMixin):
         # confidence ∈ [0,1] — 투매 깊이 + 거래량 초과.
         depth = min(1.0, (capitulation_level - low) / max(atr, 1e-9) + 0.3) if low < capitulation_level else 0.3
         confidence = max(0.0, min(1.0, 0.4 + 0.3 * (vol_ratio / self.VOL_MULT - 1.0) + 0.3 * depth))
+
+        # 봉당 1진입 dedup (live 한정) — 같은 마감봉 재신호/재진입 차단.
+        _symbol = snap.get("symbol") if isinstance(snap, dict) else None
+        if self._already_entered_bar(ctx, _symbol, _closed_ts):
+            return Signal(action="hold", size=0.0, reason="bar_dedup")
+        self._mark_entered_bar(ctx, _symbol, _closed_ts)
 
         return Signal(
             action="buy",

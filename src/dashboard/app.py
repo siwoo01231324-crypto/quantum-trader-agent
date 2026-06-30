@@ -141,6 +141,18 @@ def _get_swing_sim_cache() -> SwingSimCache:
     return _SWING_SIM_CACHE
 
 
+_SWING_SIGNAL_STORE = None
+
+
+def _get_swing_signal_store():
+    """스윙 진입신호 전수 store (라이브가 _on_entry 에서 적재). /swing 오늘 포착 신호 소스."""
+    global _SWING_SIGNAL_STORE
+    if _SWING_SIGNAL_STORE is None:
+        from src.dashboard.swing_signal_store import SwingSignalStore
+        _SWING_SIGNAL_STORE = SwingSignalStore("logs/swing/signals.jsonl")
+    return _SWING_SIGNAL_STORE
+
+
 from src.live.trade_history import discover_wal_files, reconstruct_trades
 from src.live.wal import replay as wal_replay
 from src.observability.metrics import Metrics
@@ -5762,8 +5774,31 @@ function renderLiveTable(trades){
     </tr></thead><tbody>${trs}</tbody></table>
     <div class="note"><b>sim</b> = 과거 4h 봉 합성 거래(진입일이 윈도우 안). pct 는 gross %, USDT 손익 없음. <b>라이브</b> = testnet/demo 거래소 fill 페어링 라운드트립, 실현 NET=USDT(수수료 포함). 라이브 청산거래는 exit_ts, 보유중은 entry_ts 기준 윈도우 귀속. READ-ONLY — 주문/리스크 미연동.</div>`;
 }
+function renderCapturedSignals(j){
+  const sigs = j.captured_signals || [];
+  const stratLabel = {{'live-capitulation-bounce':'투매반등','live-donchian-breakout-btcgate':'돌파/터틀'}};
+  const head = `<div class="section-h2">📡 오늘 포착 신호 <span class="count">· ${{sigs.length}}건 (전수 — 체결 무관, 사이징 전)</span></div>`;
+  if(sigs.length === 0){
+    return head + `<div class="note">이 윈도우에 포착된 스윙 진입신호 없음. (라이브 가동 중 신호 발생 시 체결 여부와 무관하게 여기 전수 기록됨 — 에어본 FIRE 와 동일.)</div>`;
+  }
+  const rows = sigs.slice().reverse().map(s => {{
+    const sl = s.stop_loss_pct != null ? fmtPct(s.stop_loss_pct*100, 2) : '—';
+    const tp = s.take_profit_pct != null ? fmtPct(s.take_profit_pct*100, 2) : '—';
+    return `<tr>
+      <td>${{esc(fmtKstFull(s.ts))}}</td>
+      <td style="color:var(--text3)">${{esc(stratLabel[s.strategy] || s.strategy || '')}}</td>
+      <td class="sym-cell">${{esc((s.symbol||'').replace(/USDT$/, ''))}}</td>
+      <td class="td-num">${{esc(sl)}}</td>
+      <td class="td-num">${{esc(tp)}}</td>
+    </tr>`;
+  }}).join('');
+  return head + `<table><thead><tr>
+      <th>시각 (KST)</th><th>전략</th><th>Symbol</th><th class="td-num">손절</th><th class="td-num">TP</th>
+    </tr></thead><tbody>${{rows}}</tbody></table>
+    <div class="note">신호 발생(진입 결정) 시점 전수 기록 — bitget 최소금액 미달·리스크게이트 등으로 <b>미체결</b>이어도 포함. 같은 4h봉 반복신호는 1건으로 dedup. 체결된 거래는 아래 "거래·보유 상세" 에.</div>`;
+}
 function renderLive(j){
-  const out = [renderLiveHeadline(j)];
+  const out = [renderLiveHeadline(j), renderCapturedSignals(j)];
   const trades = j.trades || [];
   if(trades.length === 0){
     out.push(`<div class="empty">이 윈도우에 sim·라이브 거래가 모두 없습니다. (다른 윈도우, 예: 최근 30일 을 선택하면 sim 백테스트 거래가 표시됩니다.)</div>`);
@@ -8510,8 +8545,18 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
             SWING_LIVE_STRATEGY_IDS,
         )
 
+        # 포착 신호 전수 (체결 무관 — 사이징서 드롭된 것도 포함). 윈도우 ts 필터.
+        try:
+            _sigs = _get_swing_signal_store().load_since(since_utc)
+            captured_signals = [s for s in _sigs
+                                if s.get("ts", "") < until_utc.isoformat()]
+        except Exception:  # noqa: BLE001 — 신호 store 없어도 페이지 정상
+            captured_signals = []
+
         payload = {
             "window": window_label,
+            "captured_signals": captured_signals,
+            "captured_signals_count": len(captured_signals),
             "custom_start": start if custom else None,
             "custom_end": end if custom else None,
             "window_start_utc": since_utc.isoformat(),

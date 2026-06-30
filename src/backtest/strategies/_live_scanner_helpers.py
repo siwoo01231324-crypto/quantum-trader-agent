@@ -75,6 +75,69 @@ class LiveScannerMixin:
         기본 "1d" — 기존 fetch_universe_klines 의 default 와 동일.
         """
         return "1d"
+
+    # ── 마감봉 게이트 + 봉당 dedup (2026-06-30) ──────────────────────────────
+    # 라이브는 매 틱 평가라 history[-1]=형성 중(미완성) 봉.
+    # ⚠️ 분석(scripts/_swing_forming_vs_closed.py, 2026-06-30): 미완성봉 *진입*은
+    #    백테스트(마감봉)보다 동등~우세(조기진입 = 더 좋은 가격, 가짜돌파 손실 압도).
+    #    → 마감봉 trim 은 **opt-in 기본 OFF**(env ``SWING_CLOSED_BAR_GATE=1``). 기본은
+    #    forming 진입 유지(더 낫다). **봉당 1진입 dedup 은 항상 ON**(매분 재신호 스팸
+    #    차단 — MANA 사고). backtest/sim(``live_run`` 없음)은 무변경 → byte-identical.
+
+    def _closed_bar_history(self, ctx):
+        """평가용 history + dedup 용 bar_ts 반환 ``(history|None, bar_ts|None)``.
+
+        backtest/sim(``live_run`` 없음): history 그대로(마지막봉=마감봉).
+        live + ``SWING_CLOSED_BAR_GATE``≠1(기본): forming 봉 그대로(진입 허용), dedup
+          키=현재(형성중) 봉 → 봉당 1진입.
+        live + gate ON: 형성중 마지막 봉 제거 → 마감봉만 평가(백테스트 충실).
+        """
+        import os
+        import pandas as pd
+        snap = ctx.get("market_snapshot") if isinstance(ctx, dict) else None
+        hist = snap.get("history") if isinstance(snap, dict) else None
+        if hist is None or len(hist) == 0:
+            return None, None
+        if not (isinstance(ctx, dict) and ctx.get("live_run")):
+            return hist, hist.index[-1]               # backtest: 마지막봉=마감봉
+        if os.environ.get("SWING_CLOSED_BAR_GATE", "0") != "1":
+            return hist, hist.index[-1]               # 기본: forming 허용, dedup=현재봉
+        # gate ON — 마감봉만 평가
+        try:
+            now = pd.Timestamp(ctx.get("ts"))
+            last_open = pd.Timestamp(hist.index[-1])
+        except (ValueError, TypeError):
+            return hist, hist.index[-1]
+        if now.tzinfo is None:
+            now = now.tz_localize("UTC")
+        if last_open.tzinfo is None:
+            last_open = last_open.tz_localize("UTC")
+        if now >= last_open + pd.Timedelta(self.get_interval()):
+            return hist, last_open                    # 이미 마감
+        trimmed = hist.iloc[:-1]                       # 형성중 봉 제거
+        if len(trimmed) == 0:
+            return None, None
+        return trimmed, trimmed.index[-1]
+
+    def _already_entered_bar(self, ctx, symbol, closed_ts) -> bool:
+        """live 에서 같은 마감봉에 이미 진입신호를 냈으면 True (봉당 1진입 dedup).
+
+        backtest/sim(``live_run`` 없음)은 항상 False — 봉당 1회 평가라 dedup 불요
+        (sim ctx 엔 symbol 도 없어 None-키 충돌 방지 위해서도 live 한정).
+        """
+        if not (isinstance(ctx, dict) and ctx.get("live_run")):
+            return False
+        seen = getattr(self, "_swing_entered_bars", None)
+        if seen is None:
+            return False
+        return seen.get(symbol) == closed_ts
+
+    def _mark_entered_bar(self, ctx, symbol, closed_ts) -> None:
+        if not (isinstance(ctx, dict) and ctx.get("live_run")):
+            return
+        if not hasattr(self, "_swing_entered_bars"):
+            self._swing_entered_bars = {}
+        self._swing_entered_bars[symbol] = closed_ts
     # 2026-05-21: stop/TP 청산 직후 같은 (sid, symbol) 재진입 차단 시간 (초).
     # Default 0.0 = 차단 없음 (기존 동작 보존). 0 보다 크면 orchestrator 가
     # `release_live_position()` 호출 시점에 monotonic 타임스탬프를 기록하고,
