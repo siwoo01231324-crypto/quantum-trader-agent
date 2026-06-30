@@ -420,11 +420,13 @@ def _sim_trade(strategy="live-capitulation-bounce", symbol="ATOMUSDT",
 
 
 class TestWindowSimTrades:
-    def test_filters_by_entry_ts(self):
+    def test_filters_by_entry_or_exit_ts(self):
         sim = [
-            _sim_trade(entry_ts="2026-06-29T03:00:00+00:00", ret=3.0),          # in
+            _sim_trade(entry_ts="2026-06-29T03:00:00+00:00",
+                       exit_ts="2026-06-29T07:00:00+00:00", ret=3.0),           # entry in
             _sim_trade(symbol="DOTUSDT",
-                       entry_ts="2025-01-01T00:00:00+00:00", ret=5.0),          # out
+                       entry_ts="2025-01-01T00:00:00+00:00",
+                       exit_ts="2025-01-02T00:00:00+00:00", ret=5.0),           # 둘 다 out
         ]
         rows = window_sim_trades(sim, _WIN_SINCE, _WIN_UNTIL)
         assert len(rows) == 1
@@ -434,6 +436,18 @@ class TestWindowSimTrades:
         assert rows[0]["status"] == "closed"
         assert rows[0]["pct"] == pytest.approx(3.0)
         assert rows[0]["pnl"] is None  # sim 은 % 기반, USDT 손익 없음
+        assert rows[0]["window_basis"] == "both"  # entry+exit 둘 다 윈도우 안
+
+    def test_includes_trade_exited_in_window_entered_before(self):
+        # 사용자 발견(2026-06-30): 진입은 그 전, 청산이 윈도우 안 → "어제 실현" 으로 노출돼야.
+        sim = [_sim_trade(symbol="PENDLEUSDT",
+                          entry_ts="2026-06-24T16:00:00+00:00",   # 윈도우 전
+                          exit_ts="2026-06-29T04:00:00+00:00", ret=7.49)]  # 윈도우 안
+        rows = window_sim_trades(sim, _WIN_SINCE, _WIN_UNTIL)
+        assert len(rows) == 1
+        assert rows[0]["symbol"] == "PENDLEUSDT"
+        assert rows[0]["window_basis"] == "exit"  # 청산 기준으로 잡힘
+        assert rows[0]["pct"] == pytest.approx(7.49)
 
     def test_filters_foreign_strategy(self):
         sim = [_sim_trade(strategy="other-strat",
