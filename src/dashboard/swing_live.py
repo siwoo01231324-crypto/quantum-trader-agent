@@ -313,14 +313,25 @@ def window_sim_trades(
     until_utc: datetime,
     strategy_ids: frozenset[str] = SWING_LIVE_STRATEGY_IDS,
 ) -> list[dict]:
-    """entry_ts ∈ [since, until) 인 sim 거래만 표 row(source=sim) 로 변환."""
+    """entry_ts 또는 exit_ts 가 [since, until) 에 걸치는 sim 거래를 표 row(source=sim).
+
+    2026-06-30: 진입 기준만 쓰면 *어제 청산해 실현*한 거래(진입은 그 전날)가 "어제"
+    윈도우에서 누락됐다 — 라이브(aggregate_swing_live)는 청산거래를 exit_ts 로 귀속하는데
+    sim 만 entry_ts 라 불일치(사용자 발견: 06-24 진입→06-29 청산 PENDLE TP 가 "어제"에
+    안 뜸). **진입날·청산날 둘 중 하나라도 윈도우에 걸치면 노출**. dedup 은 거래 단위(한
+    거래는 한 윈도우에 한 번). ``window_basis`` 로 왜 떴는지(entry/exit/both) 표기.
+    """
     rows: list[dict] = []
     for t in sim_trades:
         if t.get("strategy") not in strategy_ids:
             continue
-        if not _in_window(t.get("entry_ts"), since_utc, until_utc):
+        ein = _in_window(t.get("entry_ts"), since_utc, until_utc)
+        xin = _in_window(t.get("exit_ts"), since_utc, until_utc)
+        if not (ein or xin):
             continue
-        rows.append(_sim_trade_row(t))
+        row = _sim_trade_row(t)
+        row["window_basis"] = "both" if (ein and xin) else ("entry" if ein else "exit")
+        rows.append(row)
     return rows
 
 
