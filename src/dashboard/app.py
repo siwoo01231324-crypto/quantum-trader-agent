@@ -5737,12 +5737,13 @@ function renderLiveTable(trades){
   const trs = trades.map(t => {
     const sd = t.side === 'short' ? 'sd-short' : 'sd-long';
     const sdTxt = t.side === 'short' ? 'SHORT' : 'LONG';
-    const when = t.exit_ts || t.entry_ts;
+    const einTxt = t.entry_ts ? fmtKstFull(t.entry_ts) : '—';
+    const xoutTxt = t.exit_ts ? fmtKstFull(t.exit_ts) : '보유중';
     const exitTxt = (t.exit_price != null)
       ? ` <span style="color:var(--text3)">@${_fmtPx(t.exit_price)}</span>` : '';
     return `<tr>
       <td>${_srcBadge(t)}</td>
-      <td>${esc(fmtKstFull(when))}</td>
+      <td style="font-size:11px;line-height:1.45">진입 ${esc(einTxt)}<br><span style="color:var(--text3)">청산 ${esc(xoutTxt)}</span></td>
       <td class="sym-cell">${esc((t.symbol || '').replace(/USDT$/, ''))}</td>
       <td><span class="sd-badge ${sd}">${sdTxt}</span></td>
       <td style="color:var(--text3)">${esc(t.strategy_label || t.strategy || '')}</td>
@@ -5756,7 +5757,7 @@ function renderLiveTable(trades){
   const nLive = trades.length - nSim;
   return `<div class="section-h2">📋 윈도우 거래·보유 상세 <span class="count">· ${trades.length}건 (sim ${nSim} · 라이브 ${nLive}, 최신순)</span></div>
     <table><thead><tr>
-      <th>소스</th><th>일시 (KST)</th><th>Symbol</th><th>방향</th><th>전략</th>
+      <th>소스</th><th>진입/청산 (KST)</th><th>Symbol</th><th>방향</th><th>전략</th>
       <th class="td-num">진입가</th><th>상태/청산</th><th class="td-num">pct</th><th>사유</th>
     </tr></thead><tbody>${trs}</tbody></table>
     <div class="note"><b>sim</b> = 과거 4h 봉 합성 거래(진입일이 윈도우 안). pct 는 gross %, USDT 손익 없음. <b>라이브</b> = testnet/demo 거래소 fill 페어링 라운드트립, 실현 NET=USDT(수수료 포함). 라이브 청산거래는 exit_ts, 보유중은 entry_ts 기준 윈도우 귀속. READ-ONLY — 주문/리스크 미연동.</div>`;
