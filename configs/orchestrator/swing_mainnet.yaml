@@ -3,7 +3,8 @@
 # ⚠️⚠️ 실거래(real money). bitget-mainnet 으로 돌릴 때만 사용. ⚠️⚠️
 #
 # swing.yaml 과 동일 격리 원칙(스윙 4h 2전략만 → 4h collision 0) + 검증용 안전세팅:
-#   - default_size 0.01 (자본의 1%/포지션, swing.yaml 의 0.05 → 1/5)
+#   - default_size 0.05 (자본의 5%/포지션). 2026-06-30: 1%($1.86)는 bitget 최소
+#     주문금액 $5 미달로 below_min_notional 드롭 → 무한 재신호+알림스팸. 5%($9.3)로 상향.
 #   - 레버리지 1x 는 런처가 QTA_TARGET_LEVERAGE=1 로 강제 (거래소 종목 레버리지)
 #
 # ⚠️ airborne 과 절대 동시 가동 금지:
@@ -21,7 +22,7 @@ strategies:
   - id: live-capitulation-bounce
     class: backtest.strategies.live_capitulation_bounce.LiveCapitulationBounce
     kwargs:
-      default_size: 0.01          # 자본 1%/포지션 (검증용 소액)
+      default_size: 0.05          # 자본 5%/포지션 ($9.3 — bitget 최소 $5 충족)
       n_dev: 2.5
       wick_mult: 1.5
       vol_mult: 2.0
@@ -34,7 +35,7 @@ strategies:
   - id: live-donchian-breakout-btcgate
     class: backtest.strategies.live_donchian_breakout_btcgate.LiveDonchianBreakoutBtcGate
     kwargs:
-      default_size: 0.01          # 자본 1%/포지션 (검증용 소액)
+      default_size: 0.05          # 자본 5%/포지션 ($9.3 — bitget 최소 $5 충족)
       breakout_lookback: 20
       exit_lookback: 10
       stop_atr_mult: 2.0

@@ -64,13 +64,23 @@ def main() -> int:
         return utc_start <= t < utc_end_excl
 
     # ── WAL events (auto_fills + auto_signals) ──
+    # 2026-06-30: 스윙(터틀) 전환 — 스윙 WAL 은 logs/shadow-swing(/shadow-swing-binance)
+    # 에 떨어진다(대시보드 스윙버튼 --log-dir, #506). 에어본 시절 logs/shadow-bitget
+    # 와 함께 *둘 다* 스캔해 auto_fills/auto_signals 가 swing 전략(live-capitulation-
+    # bounce / live-donchian-breakout-btcgate) 체결·신호를 포착하게 한다. ledger
+    # (auto_pnl_ledger)는 전략무관이라 PnL 은 어차피 정확하지만, 신호/사유 대조엔 WAL 필요.
     log_dir = Path(args.log_dir)
+    _wal_dirs = [log_dir,
+                 REPO_ROOT / "logs" / "shadow-swing",
+                 REPO_ROOT / "logs" / "shadow-swing-binance"]
     auto_fills: list[dict] = []
     auto_signals: list[dict] = []
     wal_paths: list[Path] = []
-    if log_dir.is_dir():
-        wal_paths = list(discover_wal_files(log_dir))
-        for p in wal_paths:
+    for _d in _wal_dirs:
+        if _d.is_dir():
+            wal_paths.extend(discover_wal_files(_d))
+    if wal_paths:
+        for p in sorted(set(wal_paths)):
             events, _ = wal_replay(p)
             for ev in events:
                 if not _in_window(ev.ts):
