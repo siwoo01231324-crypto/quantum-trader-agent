@@ -16,6 +16,11 @@
 
 orchestrator:
   min_order_interval_sec: 300
+  # 선점 우선 cross-strategy 종목중복 차단 (2026-07-01) — swing 롱·숏 동시운용
+  # (투매반등/터틀 롱 + macross 데드숏) 시 같은 종목 롱+숏 동시진입 = Bitget
+  # one-way 네팅 사고(2y 실측 48건). 먼저 잡은 전략이 점유 → 다른 전략 skip.
+  # 현재 롱2 전략만이라 same-side 충돌은 드물지만, macross(숏) 활성화 대비 미리 ON.
+  cross_strategy_symbol_lock: true
 
 strategies:
   # 투매반등 — SL=꼬리저점, TP=2R (진입시 확정 동적값 → 거래소 라인). 채널청산 없음.

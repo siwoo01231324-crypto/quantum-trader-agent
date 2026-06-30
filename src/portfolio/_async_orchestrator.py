@@ -47,8 +47,13 @@ class AsyncStrategyOrchestrator:
         broker: AsyncBrokerAdapter | None = None,
         wal_observer: Callable[[WALEvent], None] | None = None,
         min_order_interval_sec: float = 0.0,
+        cross_strategy_symbol_lock: bool = False,
     ) -> None:
         self._sync = _SyncStrategyOrchestrator(policy)
+        # 선점 우선 cross-strategy 종목중복 차단 (2026-07-01). True 면 한 종목을
+        # 한 live-scanner 전략만 보유(먼저 진입한 전략 점유). swing 롱·숏 동시운용
+        # 시 네팅 사고 방지. 기본 False = 레거시 동작 보존.
+        self._cross_strategy_symbol_lock = bool(cross_strategy_symbol_lock)
         self._policy = policy
         self._broker: AsyncBrokerAdapter | None = broker
         self._strategies: dict[str, object] = {}
@@ -559,6 +564,23 @@ class AsyncStrategyOrchestrator:
                     self._emit_strategy_evaluated(
                         sid, symbol=order_symbol, decision="hold",
                         reason="live_position_open", ts=ts,
+                    )
+                    continue
+                # 선점 우선 cross-strategy 종목중복 차단 (2026-07-01) — 다른
+                # live-scanner 전략이 *같은 종목* 을 이미 보유 중이면 진입 skip.
+                # 한 종목 = 전 live-scanner 통틀어 1 포지션. swing 3전략(투매반등
+                # 롱 + macross 데드숏)이 하락장 급락에 같은 종목 롱·숏 동시진입
+                # → Bitget one-way 네팅 사고(2y 45종목 실측 48건, 에어본 유령
+                # 전례). 먼저 잡은 전략이 점유 = 선점 우선. dispatch_fire_entry
+                # 의 symbol_held_cross_airborne(airborne 한정) 의 live-scanner 판.
+                # 기본 OFF(레거시 보존) — ``cross_strategy_symbol_lock`` opt-in.
+                if self._cross_strategy_symbol_lock and any(
+                    _sym == order_symbol and _s != sid
+                    for (_s, _sym) in self._live_entered
+                ):
+                    self._emit_strategy_evaluated(
+                        sid, symbol=order_symbol, decision="hold",
+                        reason="symbol_held_cross_strategy", ts=ts,
                     )
                     continue
                 self._live_entered.add(key)
