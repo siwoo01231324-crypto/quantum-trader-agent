@@ -77,9 +77,15 @@ _ADX_PERIOD: int = 14
 # 리서치 confluence 필터 default (opt-in — 기본 OFF, 기존 bidir 동작 보존).
 # 5y/2y/split-half OOS 검증으로 채택된 숏-집중 스택. 근거·수치는
 # docs/specs/strategies/live-macross-regime-v1.md "리서치 confluence" 섹션.
-#   - KST 시간게이트: airborne kst-hours 와 동일 {1,2,3,5,6,7,8,23}
+#   - KST 시간게이트: **MA크로스 데드숏 자체 데이터 도출 (2026-07-01)**.
+#     기존엔 airborne kst-hours {1,2,3,5,6,7,8,23} 를 차용했으나 — 그건 에어본 BB
+#     신호(랜덤·sim착시) 기준이라 MA크로스와 무관(8h·23h 는 MA크로스선 PF<0.8 손실,
+#     12·13·14·19h 좋은시각은 누락). R+DdPX 데드숏을 시각별로 분해해 **5y AND 2y
+#     둘 다 PF>1 + n>=8** 인 시각만 채택 → {2,3,4,5,6,7,12,13,14,19,22}.
+#     결과: 5y PF 1.31→1.61, 거래 361→515, split-half 전반1.43/후반1.81 통과
+#     (에어본차용 대비 거래↑·PF↑). 분석 scripts/_macross_hour_analysis(연구).
 #   - 과확장 회피: 진입가가 SMA200 에서 10% 초과 이탈 시 추격 금지
-_KST_HOURS_DEFAULT: tuple[int, ...] = (1, 2, 3, 5, 6, 7, 8, 23)
+_KST_HOURS_DEFAULT: tuple[int, ...] = (2, 3, 4, 5, 6, 7, 12, 13, 14, 19, 22)
 _OVEREXTENSION_MAX_DEFAULT: float = 0.10
 
 

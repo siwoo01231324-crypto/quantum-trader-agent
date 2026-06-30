@@ -44,6 +44,31 @@ strategies:
       take_profit_pct: 0.50
       anomaly_guard_enabled: true
 
+  # ── live-macross-regime-v1 데드크로스 숏 (2026-07-01, candidate 비활성) ───────
+  # 롱2(투매반등·터틀돌파, BTC상승레짐) 옆에 숏1 추가 → 레짐 헤지(하락장 커버).
+  # 검증: SMA25/200 데드크로스 숏 + R(BTC레짐)+ADX≥20+자기SMA200하회+과확장회피(10%)
+  #       + 자체도출 시간게이트 {2,3,4,5,6,7,12,13,14,19,22}(에어본차용 폐기).
+  #   5y PF 1.61 / 2y PF 1.42, split-half OOS 전반1.43·후반1.81 통과. RR1:6.
+  #   롱(골든)은 5y −144% 구조적 손실이라 allow_long=False 로 숏 전용.
+  # ⚠️ 활성화 선결(주석 해제 전):
+  #   ① cross-strategy 종목중복 차단 — 투매반등/터틀 롱과 같은 종목 동시보유 시
+  #      Bitget one-way 네팅 사고(에어본 유령 전례). swing config 도 (sid,sym) 1포지션 보장 확인.
+  #   ② 전체 명목 노출 상한 — 롱2+숏1 동시 최대보유 시 증거금 경합. orchestrator
+  #      합산 상한 가드 부재(현재 전략별 max_concurrent 만 있음).
+  #   ③ 생존편향(폐지코인 부재 5y) + 라이브 슬리피지(sim↔실거래 갭) 소액 검증.
+  # - id: live-macross-regime-v1
+  #   class: backtest.strategies.live_macross_regime_v1.LiveMacrossRegime
+  #   kwargs:
+  #     default_size: 0.05          # 자본 5%/포지션 (투매반등·터틀과 통일)
+  #     allow_long: false           # 숏 전용 (롱 5y 손실)
+  #     allow_short: true
+  #     kst_hour_gate: true         # 자체도출 시각 (기본값=검증된 11시각)
+  #     self_sma200_filter: true    # 종목 자기 SMA200 하회 정렬
+  #     overextension_max_pct: 0.10 # 과확장 추격 금지
+  #     stop_loss_pct: 0.02         # -2% (RR1:6)
+  #     take_profit_pct: 0.12       # +12%
+  #     max_concurrent_positions: 8 # 동시보유 상한 (신호 과다 대비)
+
 capital_allocation:
   universe_scan_pct: 0.0
   live_scanner_pct: 1.0
