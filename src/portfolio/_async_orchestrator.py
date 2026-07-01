@@ -48,12 +48,20 @@ class AsyncStrategyOrchestrator:
         wal_observer: Callable[[WALEvent], None] | None = None,
         min_order_interval_sec: float = 0.0,
         cross_strategy_symbol_lock: bool = False,
+        max_total_notional_pct: float = 0.0,
     ) -> None:
         self._sync = _SyncStrategyOrchestrator(policy)
         # 선점 우선 cross-strategy 종목중복 차단 (2026-07-01). True 면 한 종목을
         # 한 live-scanner 전략만 보유(먼저 진입한 전략 점유). swing 롱·숏 동시운용
         # 시 네팅 사고 방지. 기본 False = 레거시 동작 보존.
         self._cross_strategy_symbol_lock = bool(cross_strategy_symbol_lock)
+        # 전체 명목 노출 상한 (2026-07-01). 열린 live-scanner 포지션들의 명목분율
+        # (각 전략 default_size) 합이 이 값 이상이면 신규진입 차단(기존 포지션은
+        # TP/SL 로 자연청산 — 강제청산·evict 안 함). swing 3전략 자유운용 시 증거금
+        # 폭발 방지 안전판(전략별 칸막이 대신 공유 풀 상한). 레버 전역 QTA_TARGET_
+        # LEVERAGE 고정이라 명목% = 증거금% × 레버. 0.0(기본)=무제한(레거시 보존).
+        # 예: 명목 9.5(=950%) 캡 + 레버 10x → 증거금 95% 상한.
+        self._max_total_notional_pct = float(max_total_notional_pct)
         self._policy = policy
         self._broker: AsyncBrokerAdapter | None = broker
         self._strategies: dict[str, object] = {}
@@ -566,6 +574,23 @@ class AsyncStrategyOrchestrator:
                         reason="live_position_open", ts=ts,
                     )
                     continue
+                # 전체 명목 노출 상한 (2026-07-01) — 열린 live-scanner 포지션들의
+                # 명목분율(각 sid default_size) 합이 캡 이상이면 신규진입 차단.
+                # swing 3전략 공유 풀 안전판(칸막이 대신 총량 제한). 기존 포지션은
+                # 강제청산 안 함 — TP/SL 로 자연청산돼 슬롯 빌 때까지 새 진입만 대기.
+                if self._max_total_notional_pct > 0:
+                    open_notional = sum(
+                        float(getattr(self._strategies.get(_s), "default_size", 0.0) or 0.0)
+                        for (_s, _sym) in self._live_entered
+                    )
+                    if open_notional >= self._max_total_notional_pct:
+                        self._emit_strategy_evaluated(
+                            sid, symbol=order_symbol, decision="hold",
+                            reason=(f"max_total_notional:{open_notional:.2f}"
+                                    f">={self._max_total_notional_pct:.2f}"),
+                            ts=ts,
+                        )
+                        continue
                 # 선점 우선 cross-strategy 종목중복 차단 (2026-07-01) — 다른
                 # live-scanner 전략이 *같은 종목* 을 이미 보유 중이면 진입 skip.
                 # 한 종목 = 전 live-scanner 통틀어 1 포지션. swing 3전략(투매반등

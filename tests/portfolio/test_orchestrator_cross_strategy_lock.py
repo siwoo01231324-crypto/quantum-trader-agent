@@ -87,3 +87,46 @@ def test_lock_on_different_symbols_both_enter():
     for i in intents:
         by_sym.setdefault(i.symbol, set()).add(i.strategy_id)
     assert all(len(v) == 1 for v in by_sym.values())  # 종목당 1전략
+
+
+# ── 전체 명목 노출 상한 (2026-07-01) ──────────────────────────────────────────
+
+class _BuyScanner25(LiveScannerMixin):
+    """default_size 0.25 롱 스캐너 (명목캡 테스트용, 클래스 상수)."""
+    default_size: ClassVar[float] = 0.25
+
+    async def on_bar(self, ctx) -> Signal:
+        return Signal(action="buy", size=0.25, reason="long")
+
+
+_REAL_SYMS = ["SOLUSDT", "ETHUSDT", "BTCUSDT", "ADAUSDT", "XRPUSDT",
+              "DOGEUSDT", "LINKUSDT", "AVAXUSDT", "DOTUSDT", "BNBUSDT"]
+
+
+def _universe(n: int):
+    # size_to_qty 가 tick/step 필터로 미등록 심볼(SYM0 등)을 drop → 실제 심볼 사용.
+    return {s: _ohlcv(s) for s in _REAL_SYMS[:n]}
+
+
+def test_notional_cap_blocks_new_entries():
+    """명목캡 도달 시 신규진입 차단. default_size 0.25 × 캡 1.0 → 최대 4포지션."""
+    orch = AsyncStrategyOrchestrator(
+        Policy(policy_version=1, name="t"), max_total_notional_pct=1.0)
+    orch.register_strategy("capit", _BuyScanner25())
+    snap = {"symbol": None, "price": None, "equity_krw": 1e6, "equity_usdt": 1e6,
+            "ohlcv_history": _universe(10)}
+    intents = asyncio.run(orch.run_bar(pd.Timestamp("2026-01-01"), snap))
+    # 4개(0.25×4=1.0) 진입 후 5번째부터 캡(>=1.0) 차단.
+    assert len({i.symbol for i in intents}) == 4
+
+
+def test_notional_cap_zero_unlimited():
+    """캡 0.0(기본) = 무제한 (레거시 보존)."""
+    orch = AsyncStrategyOrchestrator(
+        Policy(policy_version=1, name="t"), max_total_notional_pct=0.0)
+    orch.register_strategy("capit", _BuyScanner25())
+    snap = {"symbol": None, "price": None, "equity_krw": 1e6, "equity_usdt": 1e6,
+            "ohlcv_history": _universe(10)}
+    intents = asyncio.run(orch.run_bar(pd.Timestamp("2026-01-01"), snap))
+    # 캡 없으면 캡(4)보다 많이 진입 (일부 종목은 tick/min-notional 로 drop 가능).
+    assert len({i.symbol for i in intents}) > 4

@@ -24,13 +24,14 @@ versions:
       에어본 차용{1,2,3,5,6,7,8,23}에서 MA크로스 자체도출{2,3,4,5,6,7,12,13,14,19,22}
       로 교체(8h·23h MA크로스선 손실, 12~14h 호시각 누락이었음). 5y PF 1.31→1.61,
       거래 361→515, split-half OOS 전반1.43·후반1.81 통과. 숏 전용(롱 5y −144%).
-      candidate 비활성 유지 — 활성화 선결 2건 남음.
+      candidate 비활성 유지 — 선결①②완료, 잔여 ③(라이브 소액 슬리피지 관찰).
     items:
       - "live_macross_regime_v1: _KST_HOURS_DEFAULT 자체도출 11시각으로 교체(에어본 차용 폐기). 도출=R+DdPX 데드숏 시각별 5y AND 2y 둘다 PF>1&n≥8."
       - "swing_mainnet.yaml: macross 데드숏 commented(비활성) 추가 — 투매반등·터틀 롱 옆 숏1로 레짐 헤지."
       - "✅ 선결① 완료 — 선점 우선 cross-strategy 종목중복 차단: AsyncStrategyOrchestrator(cross_strategy_symbol_lock=True). 먼저 진입 전략이 종목 점유, 다른 live-scanner skip(symbol_held_cross_strategy). config_loader 가 orchestrator.cross_strategy_symbol_lock 읽음. swing_mainnet.yaml ON, production OFF=bit-identical. 근거: 2y 45종목 투매롱×macross숏 ±8h 동시 48건(BTC·ETH 급락)."
-      - "활성화 잔여 선결: ② 전체 명목 합산 상한(현 max_concurrent 전략별만) ③ 생존편향·슬리피지 소액검증."
-      - "테스트: macross 38 + cross-lock 3 신규 green. 시간게이트 in/out 2건 갱신. spec verdict 갱신(PF1.22→1.61, 선결①완료)."
+      - "✅ 선결② 완료 — 전체 명목 노출 상한: AsyncStrategyOrchestrator(max_total_notional_pct). 열린 포지션 default_size 합 캡, 도달 시 신규진입만 차단(강제청산·evict 안 함). swing_mainnet.yaml max_total_notional_pct:9.5(레버10x=증거금95%). 사이징 투매·macross 0.25(증거금2.5%)·터틀 0.10(1%). 칸막이 없이 3전략 공유 풀."
+      - "활성화 잔여 선결: ③ 생존편향·슬리피지 소액검증(라이브 소액 관찰 — 유일한 잔여)."
+      - "테스트: macross 38 + cross-lock/cap 5 신규 green. spec verdict 갱신(PF1.22→1.61, 선결①②완료)."
     refs:
       - "docs/specs/strategies/live-macross-regime-v1.md"
       - "configs/orchestrator/swing_mainnet.yaml"

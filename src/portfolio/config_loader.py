@@ -114,10 +114,14 @@ def load_orchestrator_from_yaml(
     cross_strategy_symbol_lock = bool(
         orch_cfg.get("cross_strategy_symbol_lock", False)
     )
+    # 전체 명목 노출 상한 (2026-07-01). 열린 포지션 default_size 합 캡. swing
+    # 3전략 공유 풀 증거금 폭발 방지. 0.0(기본)=무제한 bit-identical.
+    max_total_notional_pct = float(orch_cfg.get("max_total_notional_pct", 0.0))
 
     orch = AsyncStrategyOrchestrator(
         policy, min_order_interval_sec=min_order_interval_sec,
         cross_strategy_symbol_lock=cross_strategy_symbol_lock,
+        max_total_notional_pct=max_total_notional_pct,
     )
 
     for entry in entries:
