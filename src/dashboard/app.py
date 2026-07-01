@@ -474,7 +474,10 @@ MA_CROSS_FEE_PCT = AIRBORNE_FEE_PCT
 #   숏전용 + BTC하락레짐 + KST시간게이트 + 자기SMA200하회 + 과확장회피.
 # ⚠️ ADX(14)≥20·SMA200 기울기는 진입前 봉 시계열이 필요해 이 대시보드 프록시엔
 #    미포함 — 전략 코드(on_bar)에는 적용됨. 따라서 confluence 뷰는 *근사*다.
-MA_CROSS_CONF_KST_HOURS = frozenset({1, 2, 3, 5, 6, 7, 8, 23})
+# 2026-07-01: 에어본 차용 {1,2,3,5,6,7,8,23} 폐기 → 자체도출(5y&2y PF>1&n≥8).
+# 정본 = live_macross_regime_v1._KST_HOURS_DEFAULT. (8h·23h 는 MA크로스선 손실,
+# 12·13·14h 호시각 누락이었음). 이 값 바뀌면 아래 renderExcluded 문구도 동기화.
+MA_CROSS_CONF_KST_HOURS = frozenset({2, 3, 4, 5, 6, 7, 12, 13, 14, 19, 22})
 MA_CROSS_CONF_OVEREXTENSION_MAX = 0.10  # 자기 SMA200 에서 10% 초과 이탈 시 추격 금지
 
 
@@ -5131,7 +5134,7 @@ function renderCrossesTable(sims){
 
 function renderExcluded(d){
   const ex = d.excluded || [];
-  const note = `<div class="note">confluence = 숏-집중 리서치 스택의 <b>대시보드 근사</b>: 데드크로스 + BTC하락레짐 + KST시간게이트{1,2,3,5,6,7,8,23} + 자기SMA200 하회 + 과확장 회피(≤10%). <b>⚠️ ADX(14)≥20·SMA200 기울기는 진입前 봉이 필요해 여기선 미적용</b>(전략 on_bar 엔 적용). 위 카드/표는 통과분만, 아래는 걸러진 CROSS.</div>`;
+  const note = `<div class="note">confluence = 숏-집중 리서치 스택의 <b>대시보드 근사</b>: 데드크로스 + BTC하락레짐 + KST시간게이트{2,3,4,5,6,7,12,13,14,19,22} + 자기SMA200 하회 + 과확장 회피(≤10%). <b>⚠️ ADX(14)≥20·SMA200 기울기는 진입前 봉이 필요해 여기선 미적용</b>(전략 on_bar 엔 적용). 위 카드/표는 통과분만, 아래는 걸러진 CROSS.</div>`;
   if (ex.length === 0) {
     return `<div class="section-h2">⊘ confluence 로 걸러낸 CROSS <span class="count">· 0건</span></div>${note}
       <div class="empty">이 윈도우에서 걸러낸 CROSS 가 없습니다.</div>`;
