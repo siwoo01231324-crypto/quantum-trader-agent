@@ -15,6 +15,22 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.105"
+    date: "2026-07-01"
+    title: "macross 데드숏 활성화 — swing 3전략 동시운용 + 실진입 텔레그램 알림"
+    tags: [feature]
+    summary: >
+      swing_mainnet.yaml 에 macross 데드숏(confluence, 숏전용) 활성 등록 → 투매반등
+      롱 + 터틀 돌파 롱 + 데드크로스 숏 3전략 동시운용(레짐 헤지). 실진입 시 전략별
+      텔레그램 알림(에어본 실진입 알림의 run_bar 판) — override 무관 전 전략 통지.
+      선결①②(종목중복차단·명목상한) 완료, ③(슬리피지)은 라이브 소액 관찰.
+    items:
+      - "swing_mainnet.yaml: live-macross-regime-v1 활성(allow_long=false 숏전용, 자체시각·ADX·SMA200·과확장 스택, default_size 0.25). status candidate→active."
+      - "실진입 알림: orchestrator._on_live_entry 콜백(진입확정 _live_entered.add 직후, override 무관). live_run _make_on_live_entry 가 SWING_SIGNAL_ALERT=1 시 '✅ 실진입 — 전략라벨 종목 방향' 텔레그램. 투매반등🔵/터틀🐢/데드크로스🔻 라벨. macross(정적stop)도 알림 옴(기존 _on_entry override 의존 문제 해결)."
+      - "테스트: 알림 콜백 3건(숏 override無 발동/롱 발동/None no-op) + 기존 cross-lock·cap 5 = 8 green. macross 38 green. portfolio 회귀 0."
+    refs:
+      - "configs/orchestrator/swing_mainnet.yaml"
+      - "scripts/live_run.py"
   - version: "v0.6.104"
     date: "2026-07-01"
     title: "macross 데드숏 — 시간게이트 자체도출 교체 + 5y 재검증(candidate 유지)"

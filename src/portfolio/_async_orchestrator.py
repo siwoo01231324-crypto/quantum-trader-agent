@@ -103,6 +103,11 @@ class AsyncStrategyOrchestrator:
         # 에서 risk_mgr.register_entry_override 메서드로 와이어. None 이면
         # 콜백 안 함 (정적 policy 만 사용) = 기존 동작.
         self._on_entry: Callable[..., None] | None = None
+        # 진입 확정 알림 콜백 (2026-07-01) — override 유무와 무관하게 모든
+        # live-scanner 진입 확정 시 호출(sid, symbol, side). _on_entry(동적 stop
+        # 등록, override 실은 전략만)와 분리 — macross 처럼 정적 stop 쓰는 전략도
+        # 알림 오게. live_run 이 텔레그램 통지로 배선. None 이면 no-op.
+        self._on_live_entry: Callable[[str, str, str], None] | None = None
 
     # ---- sync delegation API -----------------------------------------------
 
@@ -609,6 +614,17 @@ class AsyncStrategyOrchestrator:
                     )
                     continue
                 self._live_entered.add(key)
+                # 진입 확정 알림 (2026-07-01) — override 유무 무관, 실제 진입한
+                # 모든 live-scanner 를 통지(에어본 "실진입 알림"의 run_bar 판).
+                # macross 처럼 정적 stop 쓰는 전략도 알림 옴. fail-soft.
+                if self._on_live_entry is not None:
+                    try:
+                        self._on_live_entry(sid, order_symbol, signal.action)
+                    except Exception as err:  # noqa: BLE001 — 알림 실패가 거래 막지 않음
+                        logger.warning(
+                            "_on_live_entry callback failed sid=%s sym=%s err=%s",
+                            sid, order_symbol, err,
+                        )
                 # 2026-05-21 — Signal 에 동적 stop/TP/trailing pct override 가
                 # 들어있으면 risk manager 의 per-(sid, sym) dynamic policy 로
                 # 등록. 콜백 미연결 또는 override 셋이 모두 None 이면 no-op

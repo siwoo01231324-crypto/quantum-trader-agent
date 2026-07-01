@@ -130,3 +130,32 @@ def test_notional_cap_zero_unlimited():
     intents = asyncio.run(orch.run_bar(pd.Timestamp("2026-01-01"), snap))
     # 캡 없으면 캡(4)보다 많이 진입 (일부 종목은 tick/min-notional 로 drop 가능).
     assert len({i.symbol for i in intents}) > 4
+
+
+# ── 진입 확정 알림 콜백 (2026-07-01) — override 무관 전 전략 ──────────────────
+
+def test_on_live_entry_fires_on_short_without_override():
+    """macross 처럼 override 안 싣는 숏 진입도 _on_live_entry 발동(에어본 실진입 알림 판)."""
+    fired = []
+    orch = AsyncStrategyOrchestrator(Policy(policy_version=1, name="t"))
+    orch._on_live_entry = lambda sid, sym, side: fired.append((sid, sym, side))
+    orch.register_strategy("macross", _SellScanner())
+    asyncio.run(orch.run_bar(pd.Timestamp("2026-01-01"), _snap()))
+    assert fired == [("macross", "SOLUSDT", "sell")]
+
+
+def test_on_live_entry_fires_on_long():
+    fired = []
+    orch = AsyncStrategyOrchestrator(Policy(policy_version=1, name="t"))
+    orch._on_live_entry = lambda sid, sym, side: fired.append((sid, sym, side))
+    orch.register_strategy("capit", _BuyScanner())
+    asyncio.run(orch.run_bar(pd.Timestamp("2026-01-01"), _snap()))
+    assert fired == [("capit", "SOLUSDT", "buy")]
+
+
+def test_on_live_entry_none_noop():
+    """콜백 미연결이면 no-op (진입은 정상)."""
+    orch = AsyncStrategyOrchestrator(Policy(policy_version=1, name="t"))
+    orch.register_strategy("capit", _BuyScanner())
+    intents = asyncio.run(orch.run_bar(pd.Timestamp("2026-01-01"), _snap()))
+    assert len(intents) == 1  # 알림 콜백 없어도 진입 정상

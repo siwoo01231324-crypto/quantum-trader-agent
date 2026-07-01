@@ -2,7 +2,7 @@
 type: strategy
 id: live-macross-regime-v1
 name: Live MA-Cross Regime v1 (SMA25/200 cross + BTC SMA200 regime gate, bidir)
-status: candidate
+status: active
 paradigm: live-scanner
 instruments:
 - BINANCE_USDT_PERP_UNIVERSE
@@ -26,7 +26,7 @@ take_profit_pct: 0.12
 trailing_stop_pct: null
 profit_factor_bt: 1.61
 expectancy_bt: 0.0048
-verdict_5y: "CANDIDATE (비활성, 활성화 선결 1건 남음). **데드크로스 숏 confluence 스택이 5y 게이트 통과** (2026-07-01 재검증, 30종목 data/cache/binance_1m). 채택 스택 = R(BTC레짐 하락) + ADX≥20/25 + 자기SMA200하회 + 과확장회피(10%) + **자체도출 시간게이트 {2,3,4,5,6,7,12,13,14,19,22}**(에어본차용 {1,2,3,5,6,7,8,23} 폐기 — 8h·23h 는 MA크로스선 PF<0.8 손실, 12·13·14h 좋은시각 누락이었음). **5y PF 1.61·기대값 +0.48% / 2y PF 1.42, split-half OOS 전반 PF1.43·후반 PF1.81 둘 다 통과**(시간게이트 없이 R+DdPX 만 해도 전반1.13·후반1.28 통과 — 게이트는 거래 1127→515 줄이며 PF 샤프닝). 롱(골든)은 raw 5y −144% 구조적 손실이라 **숏 전용**(allow_long=False). 과거 평결(레짐만 PF1.22·5y BTC/ETH 본전)은 raw+레짐 기준이었고, confluence 스택은 그보다 명확히 우위. ⚠️ 활성화 선결: ① ✅**완료(2026-07-01)** cross-strategy 종목중복 차단 — `AsyncStrategyOrchestrator(cross_strategy_symbol_lock=True)` 선점 우선(먼저 진입한 전략이 종목 점유, 다른 live-scanner 는 `symbol_held_cross_strategy` skip). swing_mainnet.yaml `orchestrator.cross_strategy_symbol_lock: true` ON, production(에어본) OFF=bit-identical. 겹침 근거: 2y 45종목 투매롱×macross숏 ±8h 동시 48건(BTC·ETH 급락 집중). ② ✅**완료(2026-07-01)** 전체 명목 합산 상한 — `AsyncStrategyOrchestrator(max_total_notional_pct)` 열린 포지션 default_size 합 캡, 도달 시 신규진입만 차단(강제청산·evict 안 함, TP/SL 자연청산). swing_mainnet.yaml `max_total_notional_pct: 9.5`(레버10x 기준 증거금95%, 버퍼5%). 칸막이 없이 3전략 공유 풀. 사이징: 투매·macross default_size 0.25(증거금2.5%)·터틀 0.10(1%). ③ 생존편향(폐지코인 부재 5y)·라이브 슬리피지(sim↔실거래 갭) 소액 검증 — **미완(라이브 소액 관찰 필요, 유일한 잔여)**."
+verdict_5y: "ACTIVE (2026-07-01 swing_mainnet.yaml 활성화 — 투매반등·터틀 옆 숏1로 레짐헤지 3전략 동시운용. 선결①② 완료, ③(생존편향·슬리피지)은 라이브 소액 관찰로 검증중). **데드크로스 숏 confluence 스택이 5y 게이트 통과** (2026-07-01 재검증, 30종목 data/cache/binance_1m). 채택 스택 = R(BTC레짐 하락) + ADX≥20/25 + 자기SMA200하회 + 과확장회피(10%) + **자체도출 시간게이트 {2,3,4,5,6,7,12,13,14,19,22}**(에어본차용 {1,2,3,5,6,7,8,23} 폐기 — 8h·23h 는 MA크로스선 PF<0.8 손실, 12·13·14h 좋은시각 누락이었음). **5y PF 1.61·기대값 +0.48% / 2y PF 1.42, split-half OOS 전반 PF1.43·후반 PF1.81 둘 다 통과**(시간게이트 없이 R+DdPX 만 해도 전반1.13·후반1.28 통과 — 게이트는 거래 1127→515 줄이며 PF 샤프닝). 롱(골든)은 raw 5y −144% 구조적 손실이라 **숏 전용**(allow_long=False). 과거 평결(레짐만 PF1.22·5y BTC/ETH 본전)은 raw+레짐 기준이었고, confluence 스택은 그보다 명확히 우위. ⚠️ 활성화 선결: ① ✅**완료(2026-07-01)** cross-strategy 종목중복 차단 — `AsyncStrategyOrchestrator(cross_strategy_symbol_lock=True)` 선점 우선(먼저 진입한 전략이 종목 점유, 다른 live-scanner 는 `symbol_held_cross_strategy` skip). swing_mainnet.yaml `orchestrator.cross_strategy_symbol_lock: true` ON, production(에어본) OFF=bit-identical. 겹침 근거: 2y 45종목 투매롱×macross숏 ±8h 동시 48건(BTC·ETH 급락 집중). ② ✅**완료(2026-07-01)** 전체 명목 합산 상한 — `AsyncStrategyOrchestrator(max_total_notional_pct)` 열린 포지션 default_size 합 캡, 도달 시 신규진입만 차단(강제청산·evict 안 함, TP/SL 자연청산). swing_mainnet.yaml `max_total_notional_pct: 9.5`(레버10x 기준 증거금95%, 버퍼5%). 칸막이 없이 3전략 공유 풀. 사이징: 투매·macross default_size 0.25(증거금2.5%)·터틀 0.10(1%). ③ 생존편향(폐지코인 부재 5y)·라이브 슬리피지(sim↔실거래 갭) 소액 검증 — **미완(라이브 소액 관찰 필요, 유일한 잔여)**."
 verdict_1y: null
 summary_ko: |
   1h 종가 SMA(25)/SMA(200) 골든·데드 크로스 + BTC SMA200 레짐 게이트 (양방향).
