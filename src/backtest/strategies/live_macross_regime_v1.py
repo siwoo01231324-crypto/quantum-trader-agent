@@ -253,14 +253,15 @@ class LiveMacrossRegime(LiveScannerMixin):
 
     @classmethod
     def get_universe(cls) -> list[str]:
-        """24h 거래량 top-100 USDT-perp — venue 자동 라우팅 (airborne 미러)."""
-        import os
-        venue = os.environ.get("QTA_BROKER_VENUE", "").strip().lower()
-        if venue == "bitget":
-            from src.portfolio.bitget_top_dynamic import get_top_n_symbols
-            return get_top_n_symbols(100)
-        from src.portfolio.binance_top_dynamic import get_top_n_symbols
-        return get_top_n_symbols(100)
+        """검증 크립토 유니버스 (토큰화주식·상품 오염 제거) — 투매반등과 통일.
+
+        2026-07-01: 동적 24h top-100(bitget/binance_top_dynamic)은 SOXL·SPCX·MSTR
+        등 토큰화주식 + XAU/XAG 상품이 섞여 오염(라이브 실측 top-100 중 12종). 토큰화
+        주식은 장마감 시 틱死 → 숏 timeout starvation(무한보유) 위험 + 5y 검증(클린
+        30종목)과 유니버스 불일치. capitulation 과 동일 정적 크립토 allowlist 사용.
+        """
+        from src.portfolio.binance_universe import SWING_CRYPTO_UNIVERSE
+        return list(SWING_CRYPTO_UNIVERSE[:100])
 
     async def on_bar(self, ctx: object) -> Signal | None:
         snap = ctx["market_snapshot"]  # type: ignore[index]
