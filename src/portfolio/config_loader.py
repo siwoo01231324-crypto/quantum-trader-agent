@@ -7,6 +7,7 @@ from __future__ import annotations
 import importlib
 import inspect
 import logging
+import os
 from pathlib import Path
 from typing import Any, Literal
 
@@ -114,14 +115,21 @@ def load_orchestrator_from_yaml(
     cross_strategy_symbol_lock = bool(
         orch_cfg.get("cross_strategy_symbol_lock", False)
     )
-    # 전체 명목 노출 상한 (2026-07-01). 열린 포지션 default_size 합 캡. swing
-    # 3전략 공유 풀 증거금 폭발 방지. 0.0(기본)=무제한 bit-identical.
-    max_total_notional_pct = float(orch_cfg.get("max_total_notional_pct", 0.0))
+    # 전체 *증거금* 노출 상한 (2026-07-01). 열린 포지션 default_size 합 ÷ 레버리지
+    # = 증거금% 캡. 증거금 기준이라 레버(QTA_TARGET_LEVERAGE) 1x↔10x 바뀌어도 캡
+    # 고정. 0.0(기본)=무제한 bit-identical. 레버는 executor 와 동일 env 를 읽어 정합.
+    max_total_margin_pct = float(orch_cfg.get("max_total_margin_pct", 0.0))
+    try:
+        _lev = float(os.environ.get("QTA_TARGET_LEVERAGE", "") or 1.0)
+    except (TypeError, ValueError):
+        _lev = 1.0
+    total_leverage = _lev if _lev >= 1.0 else 1.0
 
     orch = AsyncStrategyOrchestrator(
         policy, min_order_interval_sec=min_order_interval_sec,
         cross_strategy_symbol_lock=cross_strategy_symbol_lock,
-        max_total_notional_pct=max_total_notional_pct,
+        max_total_margin_pct=max_total_margin_pct,
+        total_leverage=total_leverage,
     )
 
     for entry in entries:
