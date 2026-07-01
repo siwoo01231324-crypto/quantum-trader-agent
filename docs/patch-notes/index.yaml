@@ -15,6 +15,42 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.105"
+    date: "2026-07-01"
+    title: "macross 데드숏 활성화 — swing 3전략 동시운용 + 실진입 텔레그램 알림"
+    tags: [feature]
+    summary: >
+      swing_mainnet.yaml 에 macross 데드숏(confluence, 숏전용) 활성 등록 → 투매반등
+      롱 + 터틀 돌파 롱 + 데드크로스 숏 3전략 동시운용(레짐 헤지). 실진입 시 전략별
+      텔레그램 알림(에어본 실진입 알림의 run_bar 판) — override 무관 전 전략 통지.
+      선결①②(종목중복차단·명목상한) 완료, ③(슬리피지)은 라이브 소액 관찰.
+    items:
+      - "swing_mainnet.yaml: live-macross-regime-v1 활성(allow_long=false 숏전용, 자체시각·ADX·SMA200·과확장 스택, default_size 0.25). status candidate→active."
+      - "실진입 알림: orchestrator._on_live_entry 콜백(진입확정 _live_entered.add 직후, override 무관). live_run _make_on_live_entry 가 SWING_SIGNAL_ALERT=1 시 '✅ 실진입 — 전략라벨 종목 방향' 텔레그램. 투매반등🔵/터틀🐢/데드크로스🔻 라벨. macross(정적stop)도 알림 옴(기존 _on_entry override 의존 문제 해결)."
+      - "테스트: 알림 콜백 3건(숏 override無 발동/롱 발동/None no-op) + 기존 cross-lock·cap 5 = 8 green. macross 38 green. portfolio 회귀 0."
+    refs:
+      - "configs/orchestrator/swing_mainnet.yaml"
+      - "scripts/live_run.py"
+  - version: "v0.6.104"
+    date: "2026-07-01"
+    title: "macross 데드숏 — 시간게이트 자체도출 교체 + 5y 재검증(candidate 유지)"
+    tags: [chore, research]
+    summary: >
+      골든/데드 SMA25/200 데드크로스 숏 confluence 스택 5y 재검증. 시간게이트를
+      에어본 차용{1,2,3,5,6,7,8,23}에서 MA크로스 자체도출{2,3,4,5,6,7,12,13,14,19,22}
+      로 교체(8h·23h MA크로스선 손실, 12~14h 호시각 누락이었음). 5y PF 1.31→1.61,
+      거래 361→515, split-half OOS 전반1.43·후반1.81 통과. 숏 전용(롱 5y −144%).
+      candidate 비활성 유지 — 선결①②완료, 잔여 ③(라이브 소액 슬리피지 관찰).
+    items:
+      - "live_macross_regime_v1: _KST_HOURS_DEFAULT 자체도출 11시각으로 교체(에어본 차용 폐기). 도출=R+DdPX 데드숏 시각별 5y AND 2y 둘다 PF>1&n≥8."
+      - "swing_mainnet.yaml: macross 데드숏 commented(비활성) 추가 — 투매반등·터틀 롱 옆 숏1로 레짐 헤지."
+      - "✅ 선결① 완료 — 선점 우선 cross-strategy 종목중복 차단: AsyncStrategyOrchestrator(cross_strategy_symbol_lock=True). 먼저 진입 전략이 종목 점유, 다른 live-scanner skip(symbol_held_cross_strategy). config_loader 가 orchestrator.cross_strategy_symbol_lock 읽음. swing_mainnet.yaml ON, production OFF=bit-identical. 근거: 2y 45종목 투매롱×macross숏 ±8h 동시 48건(BTC·ETH 급락)."
+      - "✅ 선결② 완료 — 전체 명목 노출 상한: AsyncStrategyOrchestrator(max_total_notional_pct). 열린 포지션 default_size 합 캡, 도달 시 신규진입만 차단(강제청산·evict 안 함). swing_mainnet.yaml max_total_notional_pct:9.5(레버10x=증거금95%). 사이징 투매·macross 0.25(증거금2.5%)·터틀 0.10(1%). 칸막이 없이 3전략 공유 풀."
+      - "활성화 잔여 선결: ③ 생존편향·슬리피지 소액검증(라이브 소액 관찰 — 유일한 잔여)."
+      - "테스트: macross 38 + cross-lock/cap 5 신규 green. spec verdict 갱신(PF1.22→1.61, 선결①②완료)."
+    refs:
+      - "docs/specs/strategies/live-macross-regime-v1.md"
+      - "configs/orchestrator/swing_mainnet.yaml"
   - version: "v0.6.103"
     date: "2026-06-30"
     title: "대시보드 2-모드 거래 버튼 — 에어본/스윙 토글 (CLI·taskkill 불필요)"

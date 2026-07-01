@@ -977,7 +977,14 @@ def _build_mock_ticks(symbols: list[str], n_bars: int):
     return ticks
 
 
-_SWING_ALERT_SIDS = {"live-capitulation-bounce", "live-donchian-breakout-btcgate"}
+# 스윙 진입 알림/신호store 대상 전략 + 사람용 라벨(이모지+이름·방향).
+# 2026-07-01: macross 데드숏(confluence) 추가 — 3전략 동시운용.
+_SWING_ALERT_LABELS = {
+    "live-capitulation-bounce": "🔵 투매반등(롱)",
+    "live-donchian-breakout-btcgate": "🐢 터틀 돌파(롱)",
+    "live-macross-regime-v1": "🔻 데드크로스(숏)",
+}
+_SWING_ALERT_SIDS = set(_SWING_ALERT_LABELS)
 
 
 def _make_on_entry(risk_mgr, logger):
@@ -1010,23 +1017,42 @@ def _make_on_entry(risk_mgr, logger):
             _sig_store.append(strategy_id, symbol,
                               stop_loss_pct=stop_loss_pct,
                               take_profit_pct=take_profit_pct)
-        if alert_on and strategy_id in _SWING_ALERT_SIDS:
-            def _send():
-                try:
-                    from src.observability.alerts import notify
-                    _sl = f"{stop_loss_pct:.2%}" if stop_loss_pct else "—"
-                    _tp = f"{take_profit_pct:.2%}" if take_profit_pct else "—"
-                    notify(
-                        "info",
-                        f"🐢 스윙 진입 신호 — {strategy_id}",
-                        f"{symbol} 진입\n손절 {_sl} / TP {_tp}",
-                        fields={"strategy_id": strategy_id, "symbol": symbol},
-                    )
-                except Exception as exc:  # noqa: BLE001 — 알림 실패가 거래 막지 않음
-                    logger.warning("swing_signal_alert failed sid=%s sym=%s err=%s",
-                                   strategy_id, symbol, exc)
-            threading.Thread(target=_send, daemon=True).start()
+        # 진입 알림은 _make_on_live_entry(진입확정 지점, override 무관 전 전략)로
+        # 이관(2026-07-01). 여기(_on_entry)는 동적 stop 등록만 — signal store 는
+        # 유지(override 실은 전략의 신호 전수 기록).
     return _on_entry
+
+
+def _make_on_live_entry(logger):
+    """``orchestrator._on_live_entry`` — 실제 진입 확정 시 텔레그램 통지.
+
+    ``SWING_SIGNAL_ALERT=1`` 이면 진입한 스윙 3전략(투매반등·터틀·데드크로스)마다
+    "실진입 — 전략명 종목" 통지. _on_entry 와 달리 override 유무 무관(macross 처럼
+    정적 stop 쓰는 전략도 알림 옴 — 에어본 실진입 알림의 run_bar 판). hot path
+    blocking 회피 위해 daemon thread fire-and-forget. flag off 면 no-op.
+    """
+    import threading
+    alert_on = os.environ.get("SWING_SIGNAL_ALERT", "0") == "1"
+
+    def _on_live_entry(strategy_id, symbol, side):
+        if not (alert_on and strategy_id in _SWING_ALERT_SIDS):
+            return
+        def _send():
+            try:
+                from src.observability.alerts import notify
+                _label = _SWING_ALERT_LABELS.get(strategy_id, strategy_id)
+                _dir = "롱 매수" if side == "buy" else "숏 매도"
+                notify(
+                    "info",
+                    f"✅ 실진입 — {_label}",
+                    f"{symbol} {_dir}\n전략: {_label}",
+                    fields={"strategy_id": strategy_id, "symbol": symbol, "side": side},
+                )
+            except Exception as exc:  # noqa: BLE001 — 알림 실패가 거래 막지 않음
+                logger.warning("swing_live_entry alert failed sid=%s sym=%s err=%s",
+                               strategy_id, symbol, exc)
+        threading.Thread(target=_send, daemon=True).start()
+    return _on_live_entry
 
 
 def _register_exit_policies(orch, risk_mgr, logger) -> int:
@@ -1328,6 +1354,7 @@ async def _run_pipeline_attached(
         # stop/TP/trailing pct override 를 risk manager 의 (sid, sym) dynamic
         # policy 로 등록한다. 없으면 정적 policy fallback (기존 동작).
         orch._on_entry = _make_on_entry(risk_mgr, logger)
+        orch._on_live_entry = _make_on_live_entry(logger)
         _register_exit_policies(orch, risk_mgr, logger)
 
     config.on_orchestrator_ready = _on_orchestrator_ready
@@ -1861,6 +1888,7 @@ async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
         # stop/TP/trailing pct override 를 risk manager 의 (sid, sym) dynamic
         # policy 로 등록한다. 없으면 정적 policy fallback.
         orch._on_entry = _make_on_entry(risk_mgr, logger)
+        orch._on_live_entry = _make_on_live_entry(logger)
         _register_exit_policies(orch, risk_mgr, logger)
 
     config.on_orchestrator_ready = _on_orchestrator_ready

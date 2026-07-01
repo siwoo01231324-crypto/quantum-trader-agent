@@ -108,9 +108,20 @@ def load_orchestrator_from_yaml(
     # path). Absent key → 0.0 → bit-identical (every existing yaml/test).
     orch_cfg = config.get("orchestrator", {}) or {}
     min_order_interval_sec = float(orch_cfg.get("min_order_interval_sec", 0.0))
+    # 선점 우선 cross-strategy 종목중복 차단 (2026-07-01). swing 롱·숏 동시운용
+    # (투매반등 롱 + macross 데드숏) 시 같은 종목 네팅 사고 방지. 기본 False
+    # = bit-identical (모든 기존 yaml/test). swing_mainnet.yaml 이 opt-in.
+    cross_strategy_symbol_lock = bool(
+        orch_cfg.get("cross_strategy_symbol_lock", False)
+    )
+    # 전체 명목 노출 상한 (2026-07-01). 열린 포지션 default_size 합 캡. swing
+    # 3전략 공유 풀 증거금 폭발 방지. 0.0(기본)=무제한 bit-identical.
+    max_total_notional_pct = float(orch_cfg.get("max_total_notional_pct", 0.0))
 
     orch = AsyncStrategyOrchestrator(
-        policy, min_order_interval_sec=min_order_interval_sec
+        policy, min_order_interval_sec=min_order_interval_sec,
+        cross_strategy_symbol_lock=cross_strategy_symbol_lock,
+        max_total_notional_pct=max_total_notional_pct,
     )
 
     for entry in entries:

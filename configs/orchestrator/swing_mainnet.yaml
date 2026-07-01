@@ -16,13 +16,25 @@
 
 orchestrator:
   min_order_interval_sec: 300
+  # 선점 우선 cross-strategy 종목중복 차단 (2026-07-01) — swing 롱·숏 동시운용
+  # (투매반등/터틀 롱 + macross 데드숏) 시 같은 종목 롱+숏 동시진입 = Bitget
+  # one-way 네팅 사고(2y 실측 48건). 먼저 잡은 전략이 점유 → 다른 전략 skip.
+  # 현재 롱2 전략만이라 same-side 충돌은 드물지만, macross(숏) 활성화 대비 미리 ON.
+  cross_strategy_symbol_lock: true
+  # 전체 명목 노출 상한 (2026-07-01) — 열린 포지션 default_size 합 캡. 레버 전역
+  # 10x(QTA_TARGET_LEVERAGE) 이라 명목% = 증거금% × 10. 증거금 95% 상한 = 명목 9.5.
+  # swing 3전략 공유 풀 — 칸막이 없이 자유 경쟁, 이 캡 도달 시 신규진입만 차단
+  # (기존 포지션 강제청산·evict 안 함, TP/SL 자연청산으로 슬롯 빔). 사이징: 투매·
+  # macross default_size 0.25(증거금2.5%/포지션)·터틀 0.10(1%) → 캡 9.5 안에서
+  # 투매/데드 ~30개 or 터틀 ~90개 수용. 잔여 증거금 5% 버퍼(에어본 잔여<$5 사고 방지).
+  max_total_notional_pct: 9.5
 
 strategies:
   # 투매반등 — SL=꼬리저점, TP=2R (진입시 확정 동적값 → 거래소 라인). 채널청산 없음.
   - id: live-capitulation-bounce
     class: backtest.strategies.live_capitulation_bounce.LiveCapitulationBounce
     kwargs:
-      default_size: 0.05          # 자본 5%/포지션 ($9.3 — bitget 최소 $5 충족)
+      default_size: 0.25          # 명목25% = 증거금2.5%/포지션 @10x (2026-07-01)
       n_dev: 2.5
       wick_mult: 1.5
       vol_mult: 2.0
@@ -35,7 +47,7 @@ strategies:
   - id: live-donchian-breakout-btcgate
     class: backtest.strategies.live_donchian_breakout_btcgate.LiveDonchianBreakoutBtcGate
     kwargs:
-      default_size: 0.05          # 자본 5%/포지션 ($9.3 — bitget 최소 $5 충족)
+      default_size: 0.10          # 명목10% = 증거금1%/포지션 @10x (터틀 폭주 대비 소액, 2026-07-01)
       breakout_lookback: 20
       exit_lookback: 10
       stop_atr_mult: 2.0
@@ -43,6 +55,27 @@ strategies:
       stop_loss_pct: 0.08
       take_profit_pct: 0.50
       anomaly_guard_enabled: true
+
+  # ── live-macross-regime-v1 데드크로스 숏 (2026-07-01, candidate 비활성) ───────
+  # 롱2(투매반등·터틀돌파, BTC상승레짐) 옆에 숏1 추가 → 레짐 헤지(하락장 커버).
+  # 검증: SMA25/200 데드크로스 숏 + R(BTC레짐)+ADX≥20+자기SMA200하회+과확장회피(10%)
+  #       + 자체도출 시간게이트 {2,3,4,5,6,7,12,13,14,19,22}(에어본차용 폐기).
+  #   5y PF 1.61 / 2y PF 1.42, split-half OOS 전반1.43·후반1.81 통과. RR1:6.
+  #   롱(골든)은 5y −144% 구조적 손실이라 allow_long=False 로 숏 전용.
+  # 활성화됨 (2026-07-01) — 선결①(cross_strategy_symbol_lock)·②(max_total_notional_pct)
+  # 완료. ③ 생존편향·라이브 슬리피지는 소액 라이브 관찰로 검증(지금부터).
+  - id: live-macross-regime-v1
+    class: backtest.strategies.live_macross_regime_v1.LiveMacrossRegime
+    kwargs:
+      default_size: 0.25          # 명목25%=증거금2.5% (투매반등과 통일)
+      allow_long: false           # 숏 전용 (롱 5y 손실)
+      allow_short: true
+      kst_hour_gate: true         # 자체도출 시각 (기본값=검증된 11시각)
+      self_sma200_filter: true    # 종목 자기 SMA200 하회 정렬
+      overextension_max_pct: 0.10 # 과확장 추격 금지
+      stop_loss_pct: 0.02         # -2% (RR1:6)
+      take_profit_pct: 0.12       # +12%
+      max_concurrent_positions: 8 # 동시보유 상한 (신호 과다 대비)
 
 capital_allocation:
   universe_scan_pct: 0.0

@@ -439,11 +439,19 @@ class TestConfluenceFilters:
         assert "kst_gate" in sig.reason
 
     def test_kst_gate_allows_ingate(self):
-        # KST 23시(게이트 안) → 통과해서 sell.
-        df = _reindex_end_kst(_gentle_death_frame(), 23)
+        # KST 22시(자체도출 게이트 안 {2,3,4,5,6,7,12,13,14,19,22}) → 통과해서 sell.
+        df = _reindex_end_kst(_gentle_death_frame(), 22)
         sig = _run(LiveMacrossRegime(kst_hour_gate=True),
                    _ctx(df, _btc_frame("down")))
         assert sig.action == "sell"
+
+    def test_kst_gate_blocks_outgate(self):
+        # KST 23시(자체도출 게이트 밖 — 옛 에어본차용은 in이었음) → hold.
+        df = _reindex_end_kst(_gentle_death_frame(), 23)
+        sig = _run(LiveMacrossRegime(kst_hour_gate=True),
+                   _ctx(df, _btc_frame("down")))
+        assert sig.action == "hold"
+        assert "kst_gate" in sig.reason
 
     def test_self_sma200_aligned_short_passes(self):
         sig = _run(LiveMacrossRegime(self_sma200_filter=True),
@@ -458,8 +466,8 @@ class TestConfluenceFilters:
         assert "overextended" in sig.reason
 
     def test_full_short_stack_sells(self):
-        # 권장 숏-집중 풀스택: allow_long=False + 시간게이트(23시) + 자기200 + 과확장.
-        df = _reindex_end_kst(_gentle_death_frame(), 23)
+        # 권장 숏-집중 풀스택: allow_long=False + 시간게이트(22시=in) + 자기200 + 과확장.
+        df = _reindex_end_kst(_gentle_death_frame(), 22)
         s = LiveMacrossRegime(
             allow_long=False, kst_hour_gate=True,
             self_sma200_filter=True, overextension_max_pct=0.10)

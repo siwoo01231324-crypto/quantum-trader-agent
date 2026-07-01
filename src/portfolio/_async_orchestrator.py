@@ -47,8 +47,21 @@ class AsyncStrategyOrchestrator:
         broker: AsyncBrokerAdapter | None = None,
         wal_observer: Callable[[WALEvent], None] | None = None,
         min_order_interval_sec: float = 0.0,
+        cross_strategy_symbol_lock: bool = False,
+        max_total_notional_pct: float = 0.0,
     ) -> None:
         self._sync = _SyncStrategyOrchestrator(policy)
+        # 선점 우선 cross-strategy 종목중복 차단 (2026-07-01). True 면 한 종목을
+        # 한 live-scanner 전략만 보유(먼저 진입한 전략 점유). swing 롱·숏 동시운용
+        # 시 네팅 사고 방지. 기본 False = 레거시 동작 보존.
+        self._cross_strategy_symbol_lock = bool(cross_strategy_symbol_lock)
+        # 전체 명목 노출 상한 (2026-07-01). 열린 live-scanner 포지션들의 명목분율
+        # (각 전략 default_size) 합이 이 값 이상이면 신규진입 차단(기존 포지션은
+        # TP/SL 로 자연청산 — 강제청산·evict 안 함). swing 3전략 자유운용 시 증거금
+        # 폭발 방지 안전판(전략별 칸막이 대신 공유 풀 상한). 레버 전역 QTA_TARGET_
+        # LEVERAGE 고정이라 명목% = 증거금% × 레버. 0.0(기본)=무제한(레거시 보존).
+        # 예: 명목 9.5(=950%) 캡 + 레버 10x → 증거금 95% 상한.
+        self._max_total_notional_pct = float(max_total_notional_pct)
         self._policy = policy
         self._broker: AsyncBrokerAdapter | None = broker
         self._strategies: dict[str, object] = {}
@@ -90,6 +103,11 @@ class AsyncStrategyOrchestrator:
         # 에서 risk_mgr.register_entry_override 메서드로 와이어. None 이면
         # 콜백 안 함 (정적 policy 만 사용) = 기존 동작.
         self._on_entry: Callable[..., None] | None = None
+        # 진입 확정 알림 콜백 (2026-07-01) — override 유무와 무관하게 모든
+        # live-scanner 진입 확정 시 호출(sid, symbol, side). _on_entry(동적 stop
+        # 등록, override 실은 전략만)와 분리 — macross 처럼 정적 stop 쓰는 전략도
+        # 알림 오게. live_run 이 텔레그램 통지로 배선. None 이면 no-op.
+        self._on_live_entry: Callable[[str, str, str], None] | None = None
 
     # ---- sync delegation API -----------------------------------------------
 
@@ -561,7 +579,52 @@ class AsyncStrategyOrchestrator:
                         reason="live_position_open", ts=ts,
                     )
                     continue
+                # 전체 명목 노출 상한 (2026-07-01) — 열린 live-scanner 포지션들의
+                # 명목분율(각 sid default_size) 합이 캡 이상이면 신규진입 차단.
+                # swing 3전략 공유 풀 안전판(칸막이 대신 총량 제한). 기존 포지션은
+                # 강제청산 안 함 — TP/SL 로 자연청산돼 슬롯 빌 때까지 새 진입만 대기.
+                if self._max_total_notional_pct > 0:
+                    open_notional = sum(
+                        float(getattr(self._strategies.get(_s), "default_size", 0.0) or 0.0)
+                        for (_s, _sym) in self._live_entered
+                    )
+                    if open_notional >= self._max_total_notional_pct:
+                        self._emit_strategy_evaluated(
+                            sid, symbol=order_symbol, decision="hold",
+                            reason=(f"max_total_notional:{open_notional:.2f}"
+                                    f">={self._max_total_notional_pct:.2f}"),
+                            ts=ts,
+                        )
+                        continue
+                # 선점 우선 cross-strategy 종목중복 차단 (2026-07-01) — 다른
+                # live-scanner 전략이 *같은 종목* 을 이미 보유 중이면 진입 skip.
+                # 한 종목 = 전 live-scanner 통틀어 1 포지션. swing 3전략(투매반등
+                # 롱 + macross 데드숏)이 하락장 급락에 같은 종목 롱·숏 동시진입
+                # → Bitget one-way 네팅 사고(2y 45종목 실측 48건, 에어본 유령
+                # 전례). 먼저 잡은 전략이 점유 = 선점 우선. dispatch_fire_entry
+                # 의 symbol_held_cross_airborne(airborne 한정) 의 live-scanner 판.
+                # 기본 OFF(레거시 보존) — ``cross_strategy_symbol_lock`` opt-in.
+                if self._cross_strategy_symbol_lock and any(
+                    _sym == order_symbol and _s != sid
+                    for (_s, _sym) in self._live_entered
+                ):
+                    self._emit_strategy_evaluated(
+                        sid, symbol=order_symbol, decision="hold",
+                        reason="symbol_held_cross_strategy", ts=ts,
+                    )
+                    continue
                 self._live_entered.add(key)
+                # 진입 확정 알림 (2026-07-01) — override 유무 무관, 실제 진입한
+                # 모든 live-scanner 를 통지(에어본 "실진입 알림"의 run_bar 판).
+                # macross 처럼 정적 stop 쓰는 전략도 알림 옴. fail-soft.
+                if self._on_live_entry is not None:
+                    try:
+                        self._on_live_entry(sid, order_symbol, signal.action)
+                    except Exception as err:  # noqa: BLE001 — 알림 실패가 거래 막지 않음
+                        logger.warning(
+                            "_on_live_entry callback failed sid=%s sym=%s err=%s",
+                            sid, order_symbol, err,
+                        )
                 # 2026-05-21 — Signal 에 동적 stop/TP/trailing pct override 가
                 # 들어있으면 risk manager 의 per-(sid, sym) dynamic policy 로
                 # 등록. 콜백 미연결 또는 override 셋이 모두 None 이면 no-op
