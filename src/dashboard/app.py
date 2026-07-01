@@ -474,8 +474,20 @@ MA_CROSS_FEE_PCT = AIRBORNE_FEE_PCT
 #   숏전용 + BTC하락레짐 + KST시간게이트 + 자기SMA200하회 + 과확장회피.
 # ⚠️ ADX(14)≥20·SMA200 기울기는 진입前 봉 시계열이 필요해 이 대시보드 프록시엔
 #    미포함 — 전략 코드(on_bar)에는 적용됨. 따라서 confluence 뷰는 *근사*다.
-MA_CROSS_CONF_KST_HOURS = frozenset({1, 2, 3, 5, 6, 7, 8, 23})
+# 2026-07-01: 에어본 차용 {1,2,3,5,6,7,8,23} 폐기 → 자체도출(5y&2y PF>1&n≥8).
+# 정본 = live_macross_regime_v1._KST_HOURS_DEFAULT. (8h·23h 는 MA크로스선 손실,
+# 12·13·14h 호시각 누락이었음). 이 값 바뀌면 아래 renderExcluded 문구도 동기화.
+MA_CROSS_CONF_KST_HOURS = frozenset({2, 3, 4, 5, 6, 7, 12, 13, 14, 19, 22})
 MA_CROSS_CONF_OVEREXTENSION_MAX = 0.10  # 자기 SMA200 에서 10% 초과 이탈 시 추격 금지
+# macross 전략이 실제로 스캔하는 유니버스 (클린 크립토). ma_cross 데몬은 bitget
+# top-100(토큰화주식·상품 포함)에서 CROSS 를 수집하지만, 실제 전략은 이 정적
+# 크립토 allowlist 밖 종목(예: GWEI)은 진입조차 안 함 → confluence 뷰도 동일하게
+# 걸러 "유니버스밖" 으로 표기. 정본 = live_macross_regime_v1.get_universe (동일 소스).
+try:
+    from src.portfolio.binance_universe import SWING_CRYPTO_UNIVERSE as _SWING_UNIV
+    MA_CROSS_CONF_UNIVERSE = frozenset(_SWING_UNIV[:100])
+except Exception:  # noqa: BLE001 — 유니버스 로드 실패 시 필터 skip(빈 set=전부 통과)
+    MA_CROSS_CONF_UNIVERSE = frozenset()
 
 
 def _ma_cross_confluence_reject(sim: dict) -> str | None:
@@ -486,6 +498,11 @@ def _ma_cross_confluence_reject(sim: dict) -> str | None:
     """
     if sim.get("cross") != "death":
         return "long(롱 제외 — 엣지는 숏)"
+    # 전략 유니버스 밖 종목은 실제로 스캔·진입 안 함 (예: GWEI 등 ma_cross 데몬
+    # top-100 엔 있으나 클린 크립토 allowlist 밖). 빈 set(로드실패)이면 skip.
+    sym = sim.get("symbol")
+    if MA_CROSS_CONF_UNIVERSE and sym and sym not in MA_CROSS_CONF_UNIVERSE:
+        return f"universe_out({sym} 유니버스밖)"
     if sim.get("btc_regime") != "down":
         return f"btc_regime={sim.get('btc_regime')}(하락 아님)"
     # KST 시간게이트
@@ -5131,7 +5148,7 @@ function renderCrossesTable(sims){
 
 function renderExcluded(d){
   const ex = d.excluded || [];
-  const note = `<div class="note">confluence = 숏-집중 리서치 스택의 <b>대시보드 근사</b>: 데드크로스 + BTC하락레짐 + KST시간게이트{1,2,3,5,6,7,8,23} + 자기SMA200 하회 + 과확장 회피(≤10%). <b>⚠️ ADX(14)≥20·SMA200 기울기는 진입前 봉이 필요해 여기선 미적용</b>(전략 on_bar 엔 적용). 위 카드/표는 통과분만, 아래는 걸러진 CROSS.</div>`;
+  const note = `<div class="note">confluence = 숏-집중 리서치 스택의 <b>대시보드 근사</b>: 데드크로스 + <b>전략 유니버스(클린 크립토 84)</b> + BTC하락레짐 + KST시간게이트{2,3,4,5,6,7,12,13,14,19,22} + 자기SMA200 하회 + 과확장 회피(≤10%). <b>유니버스밖</b> 종목(GWEI 등 ma_cross 데몬 top-100 엔 있으나 전략은 미스캔)은 여기서 제외. <b>⚠️ ADX(14)≥20·SMA200 기울기는 진입前 봉이 필요해 여기선 미적용</b>(전략 on_bar 엔 적용). 위 카드/표는 통과분만, 아래는 걸러진 CROSS.</div>`;
   if (ex.length === 0) {
     return `<div class="section-h2">⊘ confluence 로 걸러낸 CROSS <span class="count">· 0건</span></div>${note}
       <div class="empty">이 윈도우에서 걸러낸 CROSS 가 없습니다.</div>`;
