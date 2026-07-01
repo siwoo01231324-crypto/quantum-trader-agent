@@ -108,22 +108,36 @@ def _universe(n: int):
     return {s: _ohlcv(s) for s in _REAL_SYMS[:n]}
 
 
-def test_notional_cap_blocks_new_entries():
-    """명목캡 도달 시 신규진입 차단. default_size 0.25 × 캡 1.0 → 최대 4포지션."""
+def test_margin_cap_blocks_new_entries_1x():
+    """증거금캡 — 1x, default_size 0.25 × 캡 1.0 → 명목=증거금 → 최대 4포지션."""
     orch = AsyncStrategyOrchestrator(
-        Policy(policy_version=1, name="t"), max_total_notional_pct=1.0)
+        Policy(policy_version=1, name="t"),
+        max_total_margin_pct=1.0, total_leverage=1.0)
     orch.register_strategy("capit", _BuyScanner25())
     snap = {"symbol": None, "price": None, "equity_krw": 1e6, "equity_usdt": 1e6,
             "ohlcv_history": _universe(10)}
     intents = asyncio.run(orch.run_bar(pd.Timestamp("2026-01-01"), snap))
-    # 4개(0.25×4=1.0) 진입 후 5번째부터 캡(>=1.0) 차단.
+    # 1x: 증거금=명목. 0.25×4=1.0 → 4포지션 후 차단.
     assert len({i.symbol for i in intents}) == 4
 
 
-def test_notional_cap_zero_unlimited():
+def test_margin_cap_leverage_scales_capacity():
+    """레버 10x 면 같은 캡(1.0 증거금)에 명목 10배 = 포지션 더 많이 수용."""
+    orch = AsyncStrategyOrchestrator(
+        Policy(policy_version=1, name="t"),
+        max_total_margin_pct=1.0, total_leverage=10.0)
+    orch.register_strategy("capit", _BuyScanner25())
+    snap = {"symbol": None, "price": None, "equity_krw": 1e6, "equity_usdt": 1e6,
+            "ohlcv_history": _universe(10)}
+    intents = asyncio.run(orch.run_bar(pd.Timestamp("2026-01-01"), snap))
+    # 10x: 증거금 = 명목/10. 0.25/10=0.025/포지션 → 캡 1.0 안에 10개 다 들어감.
+    assert len({i.symbol for i in intents}) > 4
+
+
+def test_margin_cap_zero_unlimited():
     """캡 0.0(기본) = 무제한 (레거시 보존)."""
     orch = AsyncStrategyOrchestrator(
-        Policy(policy_version=1, name="t"), max_total_notional_pct=0.0)
+        Policy(policy_version=1, name="t"), max_total_margin_pct=0.0)
     orch.register_strategy("capit", _BuyScanner25())
     snap = {"symbol": None, "price": None, "equity_krw": 1e6, "equity_usdt": 1e6,
             "ohlcv_history": _universe(10)}
