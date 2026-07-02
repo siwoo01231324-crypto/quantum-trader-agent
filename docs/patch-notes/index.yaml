@@ -15,6 +15,20 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.107"
+    date: "2026-07-02"
+    title: "macross 대시보드 = 전략 실제신호 기반 재편 (데몬 정시신호 레거시화)"
+    tags: [feature]
+    summary: >
+      /ma-cross 페이지를 데몬(정시·마감봉·주식오염) 기반에서 전략 실제신호 기반으로
+      재편. 데몬 신호는 실전략(intra-hour·형성봉·크립토)과 구조적으로 어긋나 P&L
+      프리뷰로 부정확 → 레거시·참고로 강등. 3뷰 토글: ①실제진입(WAL) ②스킵신호
+      (크로스 감지했으나 필터로 진입 안 함) ③데몬(레거시). 기본=실제진입.
+    items:
+      - "macross_signal_store.py(신규): strategy_evaluated fan-out 에서 macross 크로스-hold(레짐·ADX·기울기·과확장·시간게이트) 만 필터·봉당 dedup → logs/macross/skipped_signals.jsonl. no_cross/warmup 잡음 제외."
+      - "live_run._wal_observer 가 store.ingest 로 fan-out(swing 경로). macross 아니면 no-op, fail-soft."
+      - "app.py: /ma-cross 3뷰 토글 + /api/macross_skipped_signals + renderSkippedSignals. 기본뷰=실제진입, 활성뷰만 60s 갱신. 데몬='레거시·참고'."
+      - "배경: 형성봉(실전략) PF 1.55 vs 마감봉(데몬) 1.45 — 데몬은 엣지 과소평가+페이크아웃 놓침+주식오염+정시기록. 데이터 보존(삭제 안 함)."
   - version: "v0.6.106"
     date: "2026-07-02"
     title: "macross 유니버스 = Bitget top-100 크립토만 (isRwa 필터, 정적 리스트 폐기)"

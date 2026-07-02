@@ -986,6 +986,22 @@ _SWING_ALERT_LABELS = {
 }
 _SWING_ALERT_SIDS = set(_SWING_ALERT_LABELS)
 
+# macross 스킵 신호 store (2026-07-02) — 크로스 감지했으나 필터로 진입 안 한 신호를
+# 영속화. _wal_observer 가 strategy_evaluated fan-out 을 여기로 흘림. 데몬(정시·마감봉)
+# 대체 — 실제 전략 신호 기반. lazy 싱글톤(최초 이벤트 시 생성), 실패 시 no-op.
+_macross_signal_store = None
+
+
+def _get_macross_signal_store():
+    global _macross_signal_store
+    if _macross_signal_store is None:
+        try:
+            from src.dashboard.macross_signal_store import MacrossSignalStore
+            _macross_signal_store = MacrossSignalStore("logs/macross/skipped_signals.jsonl")
+        except Exception:  # noqa: BLE001 — store 없어도 거래 정상
+            _macross_signal_store = False
+    return _macross_signal_store or None
+
 
 def _make_on_entry(risk_mgr, logger):
     """``orchestrator._on_entry`` 래퍼 — 동적 stop/TP 등록(기존) + 스윙 진입 신호 텔레그램 알림.
@@ -1254,6 +1270,11 @@ async def _run_pipeline_attached(
             pnl_aggregator.ingest_fill_event(ev.event_type, ev.payload or {})
         if ops_counters is not None:
             ops_counters.ingest(ev.event_type, ev.payload or {})
+        # macross 스킵 신호 수집 (크로스 감지+필터 hold). 내부에서 strategy_id·
+        # 이벤트타입 필터 → macross 아니면 no-op. fail-soft.
+        _mss = _get_macross_signal_store()
+        if _mss is not None:
+            _mss.ingest(ev.event_type, ev.payload or {})
 
     config.wal_observer = _wal_observer
     # Binance live-fill gap — the executor only writes `order_acked` (Binance

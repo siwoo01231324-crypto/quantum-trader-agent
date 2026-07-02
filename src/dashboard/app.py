@@ -4971,11 +4971,13 @@ tbody tr:hover{background:#1c2229}
   padding:6px 14px;border-radius:4px;font-size:.78rem;cursor:pointer;font-family:var(--sans)}
 .view-btn.active{background:var(--green);color:#03110a;font-weight:700;border-color:var(--green)}</style>
 <div class="view-toggle">
-  <button class="view-btn active" id="vb-daemon" onclick="showMacrossView('daemon')">데몬 신호 (하시간 수집)</button>
-  <button class="view-btn" id="vb-live" onclick="showMacrossView('live')">🔻 실제 진입 (WAL)</button>
+  <button class="view-btn active" id="vb-live" onclick="showMacrossView('live')">🔻 실제 진입 (WAL)</button>
+  <button class="view-btn" id="vb-skip" onclick="showMacrossView('skip')">⊘ 스킵 신호 (포착·필터)</button>
+  <button class="view-btn" id="vb-daemon" onclick="showMacrossView('daemon')">데몬 신호 (레거시·참고)</button>
 </div>
-<div id="content"><div class="empty">데이터를 불러오는 중입니다…</div></div>
-<div id="live-content" style="display:none"></div>
+<div id="content" style="display:none"><div class="empty">데이터를 불러오는 중입니다…</div></div>
+<div id="live-content"></div>
+<div id="skip-content" style="display:none"></div>
 <script>
 const KST = 'Asia/Seoul';
 function fmtKstFull(iso){
@@ -5198,13 +5200,41 @@ function render(d){
 
 // ── 실제 진입(WAL) 뷰 — 데몬 근사가 아닌 전략이 실제 체결한 숏 ──
 let LIVE_VIEW = false;
+let MACROSS_VIEW = 'live';
 function showMacrossView(view){
-  LIVE_VIEW = (view === 'live');
-  document.getElementById('content').style.display = LIVE_VIEW ? 'none' : '';
-  document.getElementById('live-content').style.display = LIVE_VIEW ? '' : 'none';
-  document.getElementById('vb-daemon').classList.toggle('active', !LIVE_VIEW);
-  document.getElementById('vb-live').classList.toggle('active', LIVE_VIEW);
-  if (LIVE_VIEW) loadLiveEntries();
+  MACROSS_VIEW = view;
+  LIVE_VIEW = (view === 'daemon') ? false : true;  // legacy 호환(일부 refresh 분기)
+  const map = {daemon:'content', live:'live-content', skip:'skip-content'};
+  for (const [v,id] of Object.entries(map))
+    document.getElementById(id).style.display = (v===view) ? '' : 'none';
+  document.getElementById('vb-daemon').classList.toggle('active', view==='daemon');
+  document.getElementById('vb-live').classList.toggle('active', view==='live');
+  document.getElementById('vb-skip').classList.toggle('active', view==='skip');
+  if (view === 'live') loadLiveEntries();
+  else if (view === 'skip') loadSkippedSignals();
+  else if (view === 'daemon') refresh();
+}
+async function loadSkippedSignals(){
+  const el = document.getElementById('skip-content');
+  el.innerHTML = '<div class="empty">스킵 신호 로딩 중…</div>';
+  try{
+    const r = await fetch('/api/macross_skipped_signals');
+    const j = await r.json();
+    if (j.error){ el.innerHTML = `<div class="error">${esc(j.error)}</div>`; return; }
+    el.innerHTML = renderSkippedSignals(j.signals || []);
+  }catch(e){ el.innerHTML = `<div class="error">로드 실패: ${esc(String(e))}</div>`; }
+}
+function renderSkippedSignals(rows){
+  const byCat = {};
+  for (const r of rows) byCat[r.category] = (byCat[r.category]||0)+1;
+  const catTxt = Object.entries(byCat).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${esc(k)} ${v}`).join(' · ');
+  let h = `<div class="section-h2">⊘ 포착했지만 스킵한 신호 <span class="count">· ${rows.length}건</span></div>`;
+  h += `<div class="note">전략이 크로스를 <b>실제 감지(intra-hour)</b>했으나 필터(BTC레짐·ADX·SMA200기울기·과확장·시간게이트)에 걸려 진입 안 함. 데몬 정시신호가 아닌 <b>전략 자신의 평가</b> 기반. 봉당 dedup.<br>사유 분포: ${catTxt||'—'}</div>`;
+  if (!rows.length) return h + '<div class="empty">아직 스킵 신호 없음 (재시작 후 수집 시작)</div>';
+  h += '<table class="th-table"><thead><tr><th>시각(KST)</th><th>종목</th><th>스킵 사유</th><th>상세</th></tr></thead><tbody>';
+  for (const r of rows)
+    h += `<tr><td>${fmtKstFull(r.ts)}</td><td>${esc(r.symbol)}</td><td>${esc(r.category)}</td><td style="color:var(--text3)">${esc(r.reason)}</td></tr>`;
+  return h + '</tbody></table>';
 }
 async function loadLiveEntries(){
   const el = document.getElementById('live-content');
@@ -5336,9 +5366,14 @@ window.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('.regime-btn').forEach(b =>
       b.classList.toggle('active', b.dataset.regime === CURRENT_REGIME));
   }
+  showMacrossView('live');   // 기본 = 실제 진입 (데몬은 레거시·참고)
 });
-refresh();
-setInterval(refresh, 60000);
+function refreshActive(){
+  if (MACROSS_VIEW === 'live') loadLiveEntries();
+  else if (MACROSS_VIEW === 'skip') loadSkippedSignals();
+  else refresh();
+}
+setInterval(refreshActive, 60000);
 </script>
 </body>
 </html>"""
@@ -8244,6 +8279,19 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
                 return "?"
             return "up" if up_arr[idx] else "down"
         return _lookup
+
+    @app.get("/api/macross_skipped_signals")
+    async def api_macross_skipped_signals():
+        """macross 스킵 신호 (크로스 감지+필터 hold) — /ma-cross '스킵 신호' 뷰용.
+
+        전략 실제 평가(strategy_evaluated) 기반, live_run._wal_observer 가 수집한
+        logs/macross/skipped_signals.jsonl 을 읽음. 데몬 정시신호 대체."""
+        try:
+            from src.dashboard.macross_signal_store import MacrossSignalStore
+            store = MacrossSignalStore("logs/macross/skipped_signals.jsonl")
+            return {"signals": store.recent(300)}
+        except Exception as exc:  # noqa: BLE001
+            return {"error": str(exc), "signals": []}
 
     @app.get("/api/macross_live_entries")
     async def api_macross_live_entries():
