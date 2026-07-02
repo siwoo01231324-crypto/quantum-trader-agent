@@ -15,6 +15,21 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.106"
+    date: "2026-07-02"
+    title: "macross 유니버스 = Bitget top-100 크립토만 (isRwa 필터, 정적 리스트 폐기)"
+    tags: [fix]
+    summary: >
+      macross get_universe 를 낡은 정적 리스트(SWING_CRYPTO_UNIVERSE — Binance
+      네이밍 1000PEPE 로 Bitget 과 6종 불일치 + HYPE·TAO 신규 메이저 누락)에서
+      Bitget 실시간 24h top-100 으로 복원. RWA(isRwa=YES 토큰화주식·금속: SOXL·
+      MSTR·XAU·XAG) 만 제외 → 크립토 100종목. 대시보드 confluence 유니버스도 동일
+      동적 소스로 교체(HYPE 등 실거래 종목이 "유니버스밖" 오표기되던 것 해소).
+    items:
+      - "bitget_top_dynamic.get_top_n_symbols(exclude_rwa=True) 추가 — contracts.isRwa 로 RWA 제외, 5분 캐시. 기본 False=기존 동작 보존(airborne·ma_cross 데몬 무영향). top-100 중 46종이 RWA 였음."
+      - "live_macross_regime_v1.get_universe → get_top_n_symbols(100, exclude_rwa=True). Bitget 네이밍·자동 최신 → 정적 리스트 네이밍/staleness 문제 제거. BTC·HYPE·PEPE·TAO 포함."
+      - "dashboard app.py: MA_CROSS_CONF_UNIVERSE(정적) → _macross_conf_universe() 동적. confluence 뷰가 실거래 유니버스와 일치."
+      - "RWA 제외 근거: 장마감 틱死·갭·크립토전용 시간게이트·5y 크립토 검증. 주식 포함(A안)은 별도 백테스트 후 결정."
   - version: "v0.6.105"
     date: "2026-07-01"
     title: "macross 데드숏 활성화 — swing 3전략 동시운용 + 실진입 텔레그램 알림"

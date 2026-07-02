@@ -253,15 +253,17 @@ class LiveMacrossRegime(LiveScannerMixin):
 
     @classmethod
     def get_universe(cls) -> list[str]:
-        """검증 크립토 유니버스 (토큰화주식·상품 오염 제거) — 투매반등과 통일.
+        """Bitget 24h 거래량 top-100 중 *크립토만* (RWA=토큰화주식·금속 제외).
 
-        2026-07-01: 동적 24h top-100(bitget/binance_top_dynamic)은 SOXL·SPCX·MSTR
-        등 토큰화주식 + XAU/XAG 상품이 섞여 오염(라이브 실측 top-100 중 12종). 토큰화
-        주식은 장마감 시 틱死 → 숏 timeout starvation(무한보유) 위험 + 5y 검증(클린
-        30종목)과 유니버스 불일치. capitulation 과 동일 정적 크립토 allowlist 사용.
+        2026-07-02: 정적 리스트(SWING_CRYPTO_UNIVERSE) 폐기 — Binance 네이밍
+        (1000PEPE)이라 Bitget(PEPE)과 불일치로 6종 드롭 + HYPE·TAO 등 신규 메이저
+        누락(오래됨). 대신 Bitget 실시간 top-100 을 그대로 쓰되 ``isRwa=YES``
+        (SOXL·MSTR·XAU·XAG 등 실물자산 토큰) 만 제외 → 자동 최신·Bitget 네이밍·
+        네이밍 문제 없음. RWA 제외 근거: 장마감 틱死(timeout starvation)·갭·크립토
+        전용 시간게이트 불일치·5y 크립토 검증. 주식 포함(A안)은 별도 검증 후 결정.
         """
-        from src.portfolio.binance_universe import SWING_CRYPTO_UNIVERSE
-        return list(SWING_CRYPTO_UNIVERSE[:100])
+        from src.portfolio.bitget_top_dynamic import get_top_n_symbols
+        return get_top_n_symbols(100, exclude_rwa=True)
 
     async def on_bar(self, ctx: object) -> Signal | None:
         snap = ctx["market_snapshot"]  # type: ignore[index]
