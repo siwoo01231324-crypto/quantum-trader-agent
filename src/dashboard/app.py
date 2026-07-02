@@ -4961,8 +4961,17 @@ tbody tr:hover{background:#1c2229}
   <div class="meta" id="meta">로딩 중…</div>
   <button class="refresh-btn" id="refresh-btn" onclick="forceRefresh()">↻ 캐시 무효화 + 재계산</button>
 </div>
-<style>.regime-btn.active{background:var(--green)!important;color:#03110a!important;font-weight:700}</style>
+<style>.regime-btn.active{background:var(--green)!important;color:#03110a!important;font-weight:700}
+.view-toggle{display:flex;gap:8px;margin:12px 0 6px}
+.view-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text2);
+  padding:6px 14px;border-radius:4px;font-size:.78rem;cursor:pointer;font-family:var(--sans)}
+.view-btn.active{background:var(--green);color:#03110a;font-weight:700;border-color:var(--green)}</style>
+<div class="view-toggle">
+  <button class="view-btn active" id="vb-daemon" onclick="showMacrossView('daemon')">데몬 신호 (하시간 수집)</button>
+  <button class="view-btn" id="vb-live" onclick="showMacrossView('live')">🔻 실제 진입 (WAL)</button>
+</div>
 <div id="content"><div class="empty">데이터를 불러오는 중입니다…</div></div>
+<div id="live-content" style="display:none"></div>
 <script>
 const KST = 'Asia/Seoul';
 function fmtKstFull(iso){
@@ -5181,6 +5190,49 @@ function render(d){
   out.push(renderCrossesTable(d.sims || []));
   if (CURRENT_REGIME === 'confluence') out.push(renderExcluded(d));
   return out.join('');
+}
+
+// ── 실제 진입(WAL) 뷰 — 데몬 근사가 아닌 전략이 실제 체결한 숏 ──
+let LIVE_VIEW = false;
+function showMacrossView(view){
+  LIVE_VIEW = (view === 'live');
+  document.getElementById('content').style.display = LIVE_VIEW ? 'none' : '';
+  document.getElementById('live-content').style.display = LIVE_VIEW ? '' : 'none';
+  document.getElementById('vb-daemon').classList.toggle('active', !LIVE_VIEW);
+  document.getElementById('vb-live').classList.toggle('active', LIVE_VIEW);
+  if (LIVE_VIEW) loadLiveEntries();
+}
+async function loadLiveEntries(){
+  const el = document.getElementById('live-content');
+  el.innerHTML = '<div class="empty">실제 진입 이력 로딩 중…</div>';
+  try{
+    const r = await fetch('/api/macross_live_entries');
+    const j = await r.json();
+    if (j.error){ el.innerHTML = `<div class="error">${esc(j.error)}</div>`; return; }
+    el.innerHTML = renderLiveEntries(j.entries || []);
+  }catch(e){ el.innerHTML = `<div class="error">로드 실패: ${esc(String(e))}</div>`; }
+}
+function renderLiveEntries(rows){
+  const openN = rows.filter(r => r.status === 'open').length;
+  const closed = rows.filter(r => r.status === 'closed');
+  const wins = closed.filter(r => (r.pnl_pct||0) > 0).length;
+  let h = `<div class="section-h2">🔻 데드크로스 실제 진입 <span class="count">· ${rows.length}건 (열림 ${openN} / 청산 ${closed.length}${closed.length ? ', 승 '+wins : ''})</span></div>`;
+  h += `<div class="note">실거래 WAL(order_filled) 기반 — ma_cross 데몬 근사가 아닌 <b>전략이 실제 체결한 숏</b>. mid-hour·정시 무관 모든 진입 기록. SL=진입×1.02(위)/TP=진입×0.88(아래), 정적 2%/12%. 실현손익%는 가격기준(레버 미반영).</div>`;
+  if (!rows.length){ return h + '<div class="empty">아직 실제 진입 없음</div>'; }
+  h += '<table class="th-table"><thead><tr><th>진입시각(KST)</th><th>종목</th><th class="num">진입가</th><th class="num">SL(위)</th><th class="num">TP(아래)</th><th>상태</th><th class="num">청산가</th><th class="num">PnL%</th><th>결과</th></tr></thead><tbody>';
+  for (const r of rows){
+    const pnl = r.pnl_pct;
+    const pnlTxt = (pnl==null) ? '—'
+      : (pnl>0 ? `<span style="color:var(--green)">+${pnl}%</span>`
+               : `<span style="color:var(--red)">${pnl}%</span>`);
+    const oc = {tp:'✅ TP', sl:'🛑 SL', manual:'수동'}[r.outcome] || '—';
+    const st = (r.status==='open') ? '<span style="color:var(--yellow)">● 열림</span>' : '청산';
+    h += `<tr><td>${fmtKstFull(r.entry_ts)}</td><td>${esc(r.symbol)}</td>`
+       + `<td class="num">${r.entry_price}</td><td class="num">${r.sl_price}</td>`
+       + `<td class="num">${r.tp_price}</td><td>${st}</td>`
+       + `<td class="num">${r.exit_price ?? '—'}</td><td class="num">${pnlTxt}</td><td>${oc}</td></tr>`;
+  }
+  return h + '</tbody></table>';
 }
 
 let CURRENT_WINDOW = (new URL(location.href).searchParams.get('window')) || 'today';
@@ -8188,6 +8240,19 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
                 return "?"
             return "up" if up_arr[idx] else "down"
         return _lookup
+
+    @app.get("/api/macross_live_entries")
+    async def api_macross_live_entries():
+        """macross 실제 진입 이력 (WAL 기반, /ma-cross '실제 진입' 토글용).
+
+        ma_cross 데몬 근사가 아닌 전략이 실제 체결한 숏만. WAL 을 매 요청 파싱
+        (진입 소수라 가벼움) — 과거 포함 backfill 자동.
+        """
+        try:
+            from src.dashboard.macross_entry_store import parse_macross_entries
+            return {"entries": parse_macross_entries()}
+        except Exception as exc:  # noqa: BLE001 — 대시보드가 거래 안 깬다
+            return {"error": str(exc), "entries": []}
 
     @app.get("/api/ma_cross_metrics")
     async def api_ma_cross_metrics(
