@@ -479,15 +479,19 @@ MA_CROSS_FEE_PCT = AIRBORNE_FEE_PCT
 # 12·13·14h 호시각 누락이었음). 이 값 바뀌면 아래 renderExcluded 문구도 동기화.
 MA_CROSS_CONF_KST_HOURS = frozenset({2, 3, 4, 5, 6, 7, 12, 13, 14, 19, 22})
 MA_CROSS_CONF_OVEREXTENSION_MAX = 0.10  # 자기 SMA200 에서 10% 초과 이탈 시 추격 금지
-# macross 전략이 실제로 스캔하는 유니버스 (클린 크립토). ma_cross 데몬은 bitget
-# top-100(토큰화주식·상품 포함)에서 CROSS 를 수집하지만, 실제 전략은 이 정적
-# 크립토 allowlist 밖 종목(예: GWEI)은 진입조차 안 함 → confluence 뷰도 동일하게
-# 걸러 "유니버스밖" 으로 표기. 정본 = live_macross_regime_v1.get_universe (동일 소스).
-try:
-    from src.portfolio.binance_universe import SWING_CRYPTO_UNIVERSE as _SWING_UNIV
-    MA_CROSS_CONF_UNIVERSE = frozenset(_SWING_UNIV[:100])
-except Exception:  # noqa: BLE001 — 유니버스 로드 실패 시 필터 skip(빈 set=전부 통과)
-    MA_CROSS_CONF_UNIVERSE = frozenset()
+# macross 전략이 실제로 스캔하는 유니버스 — 전략 get_universe 와 *동일 소스*
+# (Bitget 24h top-100 중 크립토만, isRwa=YES 토큰화주식·금속 제외). ma_cross 데몬은
+# 오염 top-100(주식·금속 포함)에서 CROSS 를 수집하지만 실제 전략은 크립토만 진입 →
+# confluence 뷰도 동일 유니버스로 걸러 "유니버스밖" 표기. 동적(5분 캐시)이라 정적
+# 리스트의 네이밍(1000PEPE)·staleness(HYPE 누락) 문제 없음 (2026-07-02).
+def _macross_conf_universe() -> frozenset[str]:
+    """confluence 유니버스 = macross get_universe 와 동일 (Bitget top-100 크립토만).
+    실패 시 빈 set(필터 skip = 전부 통과 — 안전)."""
+    try:
+        from src.portfolio.bitget_top_dynamic import get_top_n_symbols
+        return frozenset(get_top_n_symbols(100, exclude_rwa=True))
+    except Exception:  # noqa: BLE001
+        return frozenset()
 
 
 def _ma_cross_confluence_reject(sim: dict) -> str | None:
@@ -498,10 +502,10 @@ def _ma_cross_confluence_reject(sim: dict) -> str | None:
     """
     if sim.get("cross") != "death":
         return "long(롱 제외 — 엣지는 숏)"
-    # 전략 유니버스 밖 종목은 실제로 스캔·진입 안 함 (예: GWEI 등 ma_cross 데몬
-    # top-100 엔 있으나 클린 크립토 allowlist 밖). 빈 set(로드실패)이면 skip.
+    # 전략 유니버스 밖(RWA·저거래량) 은 실제 스캔·진입 안 함. 빈 set(로드실패)이면 skip.
     sym = sim.get("symbol")
-    if MA_CROSS_CONF_UNIVERSE and sym and sym not in MA_CROSS_CONF_UNIVERSE:
+    _univ = _macross_conf_universe()
+    if _univ and sym and sym not in _univ:
         return f"universe_out({sym} 유니버스밖)"
     if sim.get("btc_regime") != "down":
         return f"btc_regime={sim.get('btc_regime')}(하락 아님)"
