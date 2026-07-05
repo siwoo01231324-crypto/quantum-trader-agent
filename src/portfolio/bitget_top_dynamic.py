@@ -77,6 +77,63 @@ _refresh_lock = threading.Lock()
 _rwa_cache: set[str] | None = None
 _rwa_cache_at: float = float("-inf")
 
+# 심볼별 주문 스펙 캐시 — contracts.volumePlace(수량 소수자리)·minTradeNum (2026-07-05).
+# {symbol: {"step": Decimal, "min_qty": Decimal}}. Binance 하드코딩 스텝(BTC 0.001,
+# SOL 1)이 Bitget 실제(0.0001, 0.1)와 달라 유효주문을 0으로 반올림·드롭하던 버그 수정.
+_specs_cache: dict[str, dict] | None = None
+_specs_cache_at: float = float("-inf")
+
+
+def _fetch_bitget_specs() -> dict[str, dict]:
+    """Bitget contracts → {symbol: {step, min_qty}} (Decimal), 5분 캐시.
+
+    step = 10 ** -volumePlace (수량 반올림 단위). min_qty = minTradeNum.
+    fetch 실패 시 빈 dict(호출자는 기존 fallback)."""
+    from decimal import Decimal
+    global _specs_cache, _specs_cache_at
+    with _state_lock:
+        if _specs_cache is not None and (time.time() - _specs_cache_at) < _TTL_SEC:
+            return dict(_specs_cache)
+    try:
+        with httpx.Client(timeout=_TIMEOUT) as c:
+            r = c.get(
+                f"{_BITGET_BASE}/api/v2/mix/market/contracts",
+                params={"productType": "USDT-FUTURES"},
+            )
+        r.raise_for_status()
+        rows = (r.json() or {}).get("data") or []
+        specs: dict[str, dict] = {}
+        for row in rows:
+            sym = str(row.get("symbol", ""))
+            if not sym:
+                continue
+            try:
+                vp = int(row.get("volumePlace"))
+                step = Decimal(1).scaleb(-vp)  # 10 ** -vp
+                min_qty = Decimal(str(row.get("minTradeNum") or step))
+            except (TypeError, ValueError):
+                continue
+            specs[sym] = {"step": step, "min_qty": min_qty}
+        with _state_lock:
+            _specs_cache = dict(specs)
+            _specs_cache_at = time.time()
+        return specs
+    except Exception as err:  # noqa: BLE001 — 스펙 실패가 매매 막지 않음
+        logger.warning(
+            "[bitget_top_dynamic] contract specs fetch 실패 (%s) — fallback 스텝 사용", err,
+        )
+        return {}
+
+
+def get_bitget_step_size(symbol: str):
+    """Bitget 실제 수량 스텝 (Decimal) — 없으면 None (호출자 fallback)."""
+    return (_fetch_bitget_specs().get(symbol) or {}).get("step")
+
+
+def get_bitget_min_qty(symbol: str):
+    """Bitget 실제 최소 주문수량 (Decimal) — 없으면 None."""
+    return (_fetch_bitget_specs().get(symbol) or {}).get("min_qty")
+
 
 def _fresh(key: tuple[int, bool]) -> list[str] | None:
     with _state_lock:
