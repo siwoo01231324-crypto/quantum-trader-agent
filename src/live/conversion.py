@@ -1,4 +1,5 @@
 from __future__ import annotations
+import os
 from decimal import Decimal, ROUND_DOWN
 from src.brokers.base import OrderRequest, OrderType
 from src.execution.base import Side, TimeInForce
@@ -35,6 +36,17 @@ def get_step_size(symbol: str) -> Decimal | None:
     without an explicit registry entry per symbol. Binance per-symbol step
     refinement (e.g. via ``exchangeInfo`` polling) is a separate issue.
     """
+    # Bitget 실거래 경로(QTA_BITGET_STEP_SIZE=1) — 실제 contract 스텝(volumePlace)
+    # 우선. Binance 하드코딩(BTC 0.001·SOL 1)이 Bitget(0.0001·0.1)과 달라 유효주문을
+    # 0으로 반올림·드롭하던 버그 수정 (2026-07-05). 미설정/API실패 시 아래 fallback.
+    if os.environ.get("QTA_BITGET_STEP_SIZE") == "1" and symbol.endswith("USDT"):
+        try:
+            from src.portfolio.bitget_top_dynamic import get_bitget_step_size  # noqa: PLC0415
+            bs = get_bitget_step_size(symbol)
+            if bs is not None and bs > 0:
+                return bs
+        except Exception:  # noqa: BLE001 — fallback 으로
+            pass
     if symbol in SYMBOL_STEP_SIZES:
         return SYMBOL_STEP_SIZES[symbol]
     if len(symbol) == 6 and symbol.isdigit():

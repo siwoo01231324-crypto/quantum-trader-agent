@@ -15,6 +15,20 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.108"
+    date: "2026-07-05"
+    title: "Bitget 실제 스텝사이즈 적용 — BTC/SOL 사이즈드롭 버그 수정"
+    tags: [fix]
+    summary: >
+      swing/macross 실거래(Bitget)가 Binance 하드코딩 스텝(BTC 0.001·SOL 1)을 써서
+      유효 주문을 0으로 반올림·드롭하던 버그 수정. Bitget contracts.volumePlace 로
+      실제 스텝(BTC 0.0001·SOL 0.1)을 동적 적용. BTC(min $6.28)·SOL($8.04) 정상
+      진입. 정수단위 코인(ADA·LINK)도 소수→정수 정확 반올림. ETH(min $17.63)는
+      포지션($9.29)보다 커서 여전히 스킵(사이즈 문제, 별도).
+    items:
+      - "bitget_top_dynamic: get_bitget_step_size/min_qty(contracts.volumePlace/minTradeNum, 5분 캐시)."
+      - "conversion.get_step_size: QTA_BITGET_STEP_SIZE=1 시 Bitget 실스텝 우선(env 게이트 — airborne Binance 무영향). swing mode set_env 로 자동 ON."
+      - "증상: SOL/BTC/ETH 알림 2회+진입 X — size_drop(0 반올림)→broker flat→release_flat→재발화. BTC/SOL 은 스텝수정으로 해소. 사용자 수동주문(Bitget 실스텝 0.0001)은 성공했었음."
   - version: "v0.6.107"
     date: "2026-07-02"
     title: "macross 대시보드 = 전략 실제신호 기반 재편 (데몬 정시신호 레거시화)"

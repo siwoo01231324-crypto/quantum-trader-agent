@@ -1466,7 +1466,7 @@ def _resolve_run_mode(mode: str) -> dict:
             # WAL 은 /swing 페이지가 읽는 SWING_LIVE_LOG_DIRS("logs/shadow-swing")로
             # 떨궈야 라이브 윈도우에 잡힌다 (기본 logs/shadow-bitget 이면 미discover).
             "log_dir": "logs/shadow-swing",
-            "set_env": {"SWING_CHANNEL_SWEEP": "1"},
+            "set_env": {"SWING_CHANNEL_SWEEP": "1", "QTA_BITGET_STEP_SIZE": "1"},
             "setdefault_env": {"SWING_EVAL_TIMER_SEC": "60", "SWING_SIGNAL_ALERT": "1"},
             "pop_env": [],
         }
