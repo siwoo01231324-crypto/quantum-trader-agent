@@ -15,6 +15,20 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.109"
+    date: "2026-07-05"
+    title: "전략별 레버리지 — macross 만 5x (증거금 유지·명목 5x)"
+    tags: [feature]
+    summary: >
+      QTA_TARGET_LEVERAGE 는 전역이라 macross 만 레버 부여 불가였음. 전략별
+      leverage(yaml top-level) 추가 — macross leverage 5 + default_size 0.25 →
+      명목 5x($46)·증거금 유지($9.29). 투매·터틀은 미지정(전역/1x) — 실거래 확인 후
+      개별 부여. BTC/SOL/ETH 다 진입(명목↑로 최소수량 충족). SL+2%≪청산~+20% 안전.
+    items:
+      - "executor._target_leverage(strategy_id): QTA_STRATEGY_LEVERAGE(sid:lev) 우선, 없으면 전역. 발주 직전 그 전략 레버 설정(cross-lock 로 심볼충돌 없음)."
+      - "config_loader: yaml entry top-level leverage 수집 → QTA_STRATEGY_LEVERAGE env + orch._strategy_leverage 전달."
+      - "증거금 캡 전략별 레버 반영 — Σ(명목÷전략레버). macross 명목을 1x 증거금으로 오인해 ~4포지션 과조기 차단하던 것 → 정상 ~19포지션."
+      - "swing_mainnet.yaml: macross leverage:5 + default_size 0.05→0.25. 투매·터틀 그대로."
   - version: "v0.6.108"
     date: "2026-07-05"
     title: "Bitget 실제 스텝사이즈 적용 — BTC/SOL 사이즈드롭 버그 수정"

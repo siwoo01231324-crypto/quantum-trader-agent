@@ -68,8 +68,13 @@ strategies:
   # 완료. ③ 생존편향·라이브 슬리피지는 소액 라이브 관찰로 검증(지금부터).
   - id: live-macross-regime-v1
     class: backtest.strategies.live_macross_regime_v1.LiveMacrossRegime
+    # 전략별 레버리지 (2026-07-05) — macross 만 5x. 증거금 그대로 명목 5x 효과:
+    # default_size 0.25(명목25%=~$46) + leverage 5x → 증거금 ~$9(5%) 유지. 투매·터틀은
+    # leverage 미지정(전역 QTA_TARGET_LEVERAGE) — 실거래 확인 후 개별 부여 예정.
+    # SL +2% << 청산선 ~+20%(5x) 이라 안전. config_loader 가 QTA_STRATEGY_LEVERAGE 로 전달.
+    leverage: 5
     kwargs:
-      default_size: 0.05          # 1x테스트 (투매반등과 통일). 10x전환시 0.50
+      default_size: 0.25          # 명목25%(~$46) + leverage5x → 증거금~$9 유지. BTC/SOL/ETH 다 진입
       allow_long: false           # 숏 전용 (롱 5y 손실)
       allow_short: true
       kst_hour_gate: true         # 자체도출 시각 (기본값=검증된 11시각)

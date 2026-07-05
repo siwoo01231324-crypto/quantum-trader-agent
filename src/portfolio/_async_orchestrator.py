@@ -50,6 +50,7 @@ class AsyncStrategyOrchestrator:
         cross_strategy_symbol_lock: bool = False,
         max_total_margin_pct: float = 0.0,
         total_leverage: float = 1.0,
+        strategy_leverage: dict[str, float] | None = None,
     ) -> None:
         self._sync = _SyncStrategyOrchestrator(policy)
         # 선점 우선 cross-strategy 종목중복 차단 (2026-07-01). True 면 한 종목을
@@ -65,6 +66,12 @@ class AsyncStrategyOrchestrator:
         # 예: cap 0.95(증거금95%) + 레버 1x → 명목 95%(≈4포지션@0.25), 10x → 명목 950%(≈38).
         self._max_total_margin_pct = float(max_total_margin_pct)
         self._total_leverage = max(1.0, float(total_leverage))
+        # 전략별 레버 오버라이드 (2026-07-05) — 증거금 캡 계산 시 각 포지션을 그
+        # 전략 레버로 나눔(macross 5x 등). 없으면 total_leverage 사용. 이게 없으면
+        # macross 명목(default_size 0.25)을 1x 증거금으로 오인해 캡이 과조기 차단.
+        self._strategy_leverage = {
+            str(k): max(1.0, float(v)) for k, v in (strategy_leverage or {}).items()
+        }
         self._policy = policy
         self._broker: AsyncBrokerAdapter | None = broker
         self._strategies: dict[str, object] = {}
@@ -592,7 +599,13 @@ class AsyncStrategyOrchestrator:
                         float(getattr(self._strategies.get(_s), "default_size", 0.0) or 0.0)
                         for (_s, _sym) in self._live_entered
                     )
-                    open_margin = open_notional / self._total_leverage
+                    # 증거금 = Σ(포지션 명목 ÷ 그 전략 레버). 전략별 레버(macross 5x)를
+                    # 반영해 캡이 과조기 차단하지 않게. 미지정 전략은 total_leverage.
+                    open_margin = sum(
+                        float(getattr(self._strategies.get(_s), "default_size", 0.0) or 0.0)
+                        / self._strategy_leverage.get(_s, self._total_leverage)
+                        for (_s, _sym) in self._live_entered
+                    )
                     if open_margin >= self._max_total_margin_pct:
                         self._emit_strategy_evaluated(
                             sid, symbol=order_symbol, decision="hold",

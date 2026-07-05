@@ -37,14 +37,42 @@ logger = logging.getLogger(__name__)
 _POST_ONLY_OFFSET = Decimal("0.0005")
 
 
-def _target_leverage() -> int | None:
-    """``QTA_TARGET_LEVERAGE`` env → 양의 int 면 그 값, 아니면 None.
+def _parse_strategy_leverage() -> dict[str, int]:
+    """``QTA_STRATEGY_LEVERAGE`` env ("sid:lev,sid:lev") → {sid: lev} (2026-07-05).
+
+    전략별 레버리지 오버라이드. 예: "live-macross-regime-v1:5". 파싱 실패한
+    엔트리는 skip. cross_strategy_symbol_lock 로 한 심볼=한 전략이라 발주 직전
+    strategy 별 레버 설정이 심볼 충돌 없이 성립."""
+    out: dict[str, int] = {}
+    raw = os.environ.get("QTA_STRATEGY_LEVERAGE", "").strip()
+    if not raw:
+        return out
+    for pair in raw.split(","):
+        if ":" not in pair:
+            continue
+        sid, _, lev = pair.partition(":")
+        sid = sid.strip()
+        try:
+            v = int(lev.strip())
+        except ValueError:
+            continue
+        if sid and v > 0:
+            out[sid] = v
+    return out
+
+
+def _target_leverage(strategy_id: str | None = None) -> int | None:
+    """레버리지 target — 전략별 오버라이드(``QTA_STRATEGY_LEVERAGE``) 우선, 없으면
+    전역 ``QTA_TARGET_LEVERAGE``. 양의 int 면 그 값, 아니면 None.
 
     #380 — 설정 시 executor 가 발주 직전 ``broker.ensure_leverage_target(symbol,
-    N)`` 으로 leverage 를 *강제* (브로커 UI 수동설정 의존 제거. 데모+실계좌
-    동시 운영 시 UI 동기화가 어려워 코드가 leverage 의 truth source). 미설정 /
-    0 / 비정수면 None → 기존 ``ensure_leverage_minimum`` (1x 안전망) 경로 그대로.
+    N)`` 으로 leverage 를 *강제*. 미설정/0/비정수면 None → ``ensure_leverage_minimum``
+    (1x 안전망) 경로. 2026-07-05 — 전략별(macross 만 5x 등) 지원.
     """
+    if strategy_id:
+        per = _parse_strategy_leverage().get(strategy_id)
+        if per is not None:
+            return per
     raw = os.environ.get("QTA_TARGET_LEVERAGE", "").strip()
     if not raw:
         return None
@@ -202,7 +230,7 @@ async def execute_intents(
         # #380 — QTA_TARGET_LEVERAGE 설정 시 leverage 를 그 값으로 *강제*
         # (ensure_leverage_target). 미설정이면 기존 ensure_leverage_minimum
         # (1x 안전망) 경로 — legacy 동작 byte-identical.
-        target_lev = _target_leverage()
+        target_lev = _target_leverage(intent.strategy_id)
         ensure_target = (
             getattr(broker, "ensure_leverage_target", None) if target_lev else None
         )
