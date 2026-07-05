@@ -35,8 +35,11 @@ strategies:
   # 투매반등 — SL=꼬리저점, TP=2R (진입시 확정 동적값 → 거래소 라인). 채널청산 없음.
   - id: live-capitulation-bounce
     class: backtest.strategies.live_capitulation_bounce.LiveCapitulationBounce
+    # 레버리지 5x (2026-07-05, macross 미러) — default_size 0.25(명목25%~$46) + 5x →
+    # 증거금 5%(~$9) 유지·명목 5배 효과. 청산선 ~−20% >> SL(꼬리저점 ~−1.5%) 안전.
+    leverage: 5
     kwargs:
-      default_size: 0.05          # 1x테스트 명목5%=증거금5% (~$12, bitget 최소충족). 10x전환시 0.50 권장
+      default_size: 0.25          # 명목25%(~$46) + leverage5x → 증거금~$9(5%). 저빈도라 동시노출 낮음
       n_dev: 2.5
       wick_mult: 1.5
       vol_mult: 2.0
@@ -48,8 +51,12 @@ strategies:
   # 돌파 — SL=2ATR(거래소 backstop), 주청산=채널(봇 감시, SWING_CHANNEL_SWEEP).
   - id: live-donchian-breakout-btcgate
     class: backtest.strategies.live_donchian_breakout_btcgate.LiveDonchianBreakoutBtcGate
+    # 레버리지 5x (2026-07-05) — 단 터틀은 불장에 돌파 동시다발(top-30 중 8~10개)이라
+    # default_size 0.15(명목15%~$28)로 투매(0.25)보다 보수적. 5x→증거금 3%(~$5.6)/포지션.
+    # 총노출은 max_total_margin_pct 0.95 가 캡. 청산선 ~−20% >> SL(2ATR ~−3%) 안전.
+    leverage: 5
     kwargs:
-      default_size: 0.05          # 1x테스트 명목5% (터틀도 통일). 10x전환시 0.20~0.30 권장(폭주 대비 소액)
+      default_size: 0.15          # 명목15%(~$28) + leverage5x → 증거금~$5.6(3%). 동시다발 폭주 대비 소액
       breakout_lookback: 20
       exit_lookback: 10
       stop_atr_mult: 2.0
