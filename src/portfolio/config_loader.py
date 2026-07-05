@@ -132,6 +132,12 @@ def load_orchestrator_from_yaml(
         total_leverage=total_leverage,
     )
 
+    # 전략별 레버리지 오버라이드 (2026-07-05) — yaml entry 의 top-level ``leverage``
+    # (kwargs 아님). 모아서 QTA_STRATEGY_LEVERAGE env 로 전달 → executor 가 주문별로
+    # 그 전략 레버 설정. 예: macross 만 5x, 투매·터틀 미지정(전역/1x). 명목만 키우고
+    # 증거금 유지하는 용도 (default_size 상향과 함께).
+    _strategy_leverage: dict[str, int] = {}
+
     for entry in entries:
         sid: str = entry["id"]
         if sid in seen_ids:
@@ -140,6 +146,17 @@ def load_orchestrator_from_yaml(
                 "Each strategy_id must be unique."
             )
         seen_ids.add(sid)
+        _lev_ov = entry.get("leverage")
+        if _lev_ov is not None:
+            try:
+                _lv = int(_lev_ov)
+                if _lv > 0:
+                    _strategy_leverage[sid] = _lv
+            except (TypeError, ValueError):
+                logger.warning(
+                    "config_loader.bad_leverage strategy_id=%s leverage=%r skipped",
+                    sid, _lev_ov,
+                )
 
         cls = _import_class(entry["class"])
         raw_kwargs: dict[str, Any] = entry.get("kwargs", {}) or {}
@@ -164,5 +181,21 @@ def load_orchestrator_from_yaml(
         else:
             orch.register_strategy(sid, _StrategyAdapter(strategy))
         orch.register_strategy_returns(sid, pd.Series(dtype=float))
+
+    # 전략별 레버 → executor 가 읽는 env 로 전달 (있을 때만). 기존 env 는 yaml 이
+    # 우선(override) — config 가 truth source.
+    if _strategy_leverage:
+        os.environ["QTA_STRATEGY_LEVERAGE"] = ",".join(
+            f"{k}:{v}" for k, v in _strategy_leverage.items()
+        )
+        # 증거금 캡이 전략별 레버 반영하도록 orch 에도 전달 (macross 5x → 캡 과조기
+        # 차단 방지). 생성자는 루프 前이라 여기서 세팅.
+        orch._strategy_leverage = {
+            k: max(1.0, float(v)) for k, v in _strategy_leverage.items()
+        }
+        logger.info(
+            "config_loader.strategy_leverage set QTA_STRATEGY_LEVERAGE=%s",
+            os.environ["QTA_STRATEGY_LEVERAGE"],
+        )
 
     return orch
