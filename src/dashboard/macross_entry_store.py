@@ -114,13 +114,13 @@ def parse_macross_entries(
             e.exit_price = price
             # 숏 실현손익%: (진입 - 청산) / 진입 × 100.
             e.pnl_pct = round((e.entry_price - price) / e.entry_price * 100, 4)
-            # 청산가로 TP/SL 판정 (여유 없이 근사 — 정확 실현손익은 거래소 ledger).
-            if price >= e.sl_price:
-                e.outcome = "sl"
-            elif price <= e.tp_price:
-                e.outcome = "tp"
-            else:
-                e.outcome = "manual"
+            # TP/SL 판정 — macross 는 거래소 TP/SL plan order 만 청산(수동청산·
+            # 타임아웃 없음, max_hold_sec=None). 근데 stop-market 슬리피지로 체결가가
+            # 트리거를 살짝 벗어나면 정확비교(>=/<=)가 SL 을 "manual" 로 오분류
+            # (2026-07-06 사용자 지적: 수동청산 한 적 없는데 manual 다수). → 가장
+            # 가까운 타깃으로 분류. 숏: SL 은 진입가 위, TP 는 아래라 둘은 멀리 떨어져
+            # 오분류 없음.
+            e.outcome = "sl" if abs(price - e.sl_price) <= abs(price - e.tp_price) else "tp"
 
     entries.sort(key=lambda e: e.entry_ts, reverse=True)
     return [asdict(e) for e in entries]
