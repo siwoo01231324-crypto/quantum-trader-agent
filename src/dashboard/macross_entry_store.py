@@ -37,6 +37,7 @@ class MacrossEntry:
     exit_ts: str | None = None
     exit_price: float | None = None
     pnl_pct: float | None = None      # 가격기준 실현손익% (숏: (entry-exit)/entry)
+    realized_usdt: float | None = None  # 실현손익 USDT (숏: qty×(entry-exit), 수수료 前)
     outcome: str | None = None        # "tp" | "sl" | "manual"
 
 
@@ -112,8 +113,9 @@ def parse_macross_entries(
             e.status = "closed"
             e.exit_ts = ts
             e.exit_price = price
-            # 숏 실현손익%: (진입 - 청산) / 진입 × 100.
+            # 숏 실현손익%: (진입 - 청산) / 진입 × 100. USDT: qty × (진입 - 청산).
             e.pnl_pct = round((e.entry_price - price) / e.entry_price * 100, 4)
+            e.realized_usdt = round(e.qty * (e.entry_price - price), 4)
             # TP/SL 판정 — macross 는 거래소 TP/SL plan order 만 청산(수동청산·
             # 타임아웃 없음, max_hold_sec=None). 근데 stop-market 슬리피지로 체결가가
             # 트리거를 살짝 벗어나면 정확비교(>=/<=)가 SL 을 "manual" 로 오분류
@@ -124,6 +126,31 @@ def parse_macross_entries(
 
     entries.sort(key=lambda e: e.entry_ts, reverse=True)
     return [asdict(e) for e in entries]
+
+
+def summarize_macross_entries(rows: list[dict]) -> dict:
+    """진입 이력 → 집계 (라이브 실현 NET·승패·PF·gross%). /ma-cross 라이브 지표용.
+
+    macross 는 거래소 실현손익 ledger 를 여기선 안 붙이고 가격기준(qty×이동) 근사.
+    정확 실현손익(수수료·펀딩 포함)은 거래소 ledger 별도."""
+    closed = [r for r in rows if r.get("status") == "closed"]
+    open_n = sum(1 for r in rows if r.get("status") == "open")
+    net_usdt = round(sum(float(r.get("realized_usdt") or 0.0) for r in closed), 4)
+    gross_pct = round(sum(float(r.get("pnl_pct") or 0.0) for r in closed), 4)
+    wins = [r for r in closed if (r.get("pnl_pct") or 0) > 0]
+    losses = [r for r in closed if (r.get("pnl_pct") or 0) <= 0]
+    gw = sum(float(r["pnl_pct"]) for r in wins)
+    gl = -sum(float(r["pnl_pct"]) for r in losses)
+    pf = round(gw / gl, 2) if gl > 0 else (None if gw == 0 else 9.99)
+    n_tp = sum(1 for r in closed if r.get("outcome") == "tp")
+    n_sl = sum(1 for r in closed if r.get("outcome") == "sl")
+    return {
+        "n_total": len(rows), "n_open": open_n, "n_closed": len(closed),
+        "wins": len(wins), "losses": len(losses),
+        "win_rate": round(len(wins) / len(closed) * 100, 1) if closed else None,
+        "net_usdt": net_usdt, "gross_pct": gross_pct, "net_pct": gross_pct, "pf": pf,
+        "n_tp": n_tp, "n_sl": n_sl,
+    }
 
 
 if __name__ == "__main__":  # 수동 검증

@@ -15,6 +15,19 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.110"
+    date: "2026-07-06"
+    title: "macross 실제진입 라이브 지표 + 청산 outcome 오분류·swing sim 캐시 수정"
+    tags: [fix]
+    summary: >
+      대시보드 3건: ① macross 청산 outcome 슬리피지 오분류(수동청산 없는데 "manual"
+      다수) → 가장가까운 SL/TP. ② macross 실제진입 뷰에 라이브 실현 지표(실현 NET
+      USDT·gross%·승률·PF·TP/SL) 타일 추가(스윙 2전략 페이지 미러). ③ swing sim 4h
+      캐시가 06-25 stale → 최근 윈도우 sim 0.00% → 캐시 07-06 갱신.
+    items:
+      - "macross_entry_store: outcome = 가장가까운 타깃(SL/TP). stop-market 슬리피지로 트리거 살짝 벗어난 SL 이 manual 오분류되던 것 수정(거래소 TP/SL 만 청산이라 manual 없음)."
+      - "macross_entry_store.summarize_macross_entries + realized_usdt(qty×가격이동). /api/macross_live_entries 에 summary 추가. renderLiveEntries 에 라이브 실현 NET·gross%·승률·PF·보유/청산 타일."
+      - "swing 4h sim 캐시(data/cache/swing_crypto_4h) 06-25→07-06 갱신 + sim_cache.jsonl clear. 근본은 주기 갱신(후속)."
   - version: "v0.6.109"
     date: "2026-07-05"
     title: "전략별 레버리지 — macross 만 5x (증거금 유지·명목 5x)"

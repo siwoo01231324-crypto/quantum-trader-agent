@@ -5243,15 +5243,45 @@ async function loadLiveEntries(){
     const r = await fetch('/api/macross_live_entries');
     const j = await r.json();
     if (j.error){ el.innerHTML = `<div class="error">${esc(j.error)}</div>`; return; }
-    el.innerHTML = renderLiveEntries(j.entries || []);
+    el.innerHTML = renderLiveEntries(j.entries || [], j.summary || {});
   }catch(e){ el.innerHTML = `<div class="error">로드 실패: ${esc(String(e))}</div>`; }
 }
-function renderLiveEntries(rows){
+function renderLiveEntries(rows, sm){
+  sm = sm || {};
   const openN = rows.filter(r => r.status === 'open').length;
   const closed = rows.filter(r => r.status === 'closed');
   const wins = closed.filter(r => (r.pnl_pct||0) > 0).length;
   let h = `<div class="section-h2">🔻 데드크로스 실제 진입 <span class="count">· ${rows.length}건 (열림 ${openN} / 청산 ${closed.length}${closed.length ? ', 승 '+wins : ''})</span></div>`;
-  h += `<div class="note">실거래 WAL(order_filled) 기반 — ma_cross 데몬 근사가 아닌 <b>전략이 실제 체결한 숏</b>. mid-hour·정시 무관 모든 진입 기록. SL=진입×1.02(위)/TP=진입×0.88(아래), 정적 2%/12%. 실현손익%는 가격기준(레버 미반영).</div>`;
+  // ── 라이브 실현 지표 타일 (스윙 2전략 페이지 미러) ──
+  const net = sm.net_usdt;
+  const netTxt = (net==null) ? '—' : (net>=0?'+':'') + Number(net).toFixed(4) + ' USDT';
+  const netCls = net==null?'dim':(net>0?'green':(net<0?'red':'dim'));
+  const gp = sm.gross_pct;
+  const gpTxt = (gp==null)?'—':(gp>=0?'+':'')+Number(gp).toFixed(2)+'%';
+  const gpCls = gp==null?'dim':(gp>0?'green':(gp<0?'red':'dim'));
+  h += `<div class="stat-grid">
+    <div class="stat-tile ${netCls==='green'?'is-hero':(netCls==='red'?'is-hero-bad':'')}">
+      <div class="stat-label">라이브 실현 NET</div>
+      <div class="stat-val ${netCls}">${esc(netTxt)}</div>
+      <div class="stat-sub">청산 ${esc(sm.n_closed??0)}건 · ${esc(sm.wins??0)}승/${esc(sm.losses??0)}패 · 수수료前</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-label">gross 합%</div>
+      <div class="stat-val ${gpCls}">${esc(gpTxt)}</div>
+      <div class="stat-sub">가격기준 pct 단순합(레버 미반영)</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-label">승률 · PF</div>
+      <div class="stat-val ${(sm.n_closed?'':'dim')}">${sm.win_rate==null?'—':esc(sm.win_rate)+'%'} · ${sm.pf==null?'—':esc(sm.pf)}</div>
+      <div class="stat-sub">TP ${esc(sm.n_tp??0)} / SL ${esc(sm.n_sl??0)}</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-label">보유중 / 청산</div>
+      <div class="stat-val ${(openN?'':'dim')}">${esc(openN)} / ${esc(sm.n_closed??closed.length)}</div>
+      <div class="stat-sub">진입 총 ${esc(rows.length)}건</div>
+    </div>
+  </div>`;
+  h += `<div class="note">실거래 WAL(order_filled) 기반 — ma_cross 데몬 근사가 아닌 <b>전략이 실제 체결한 숏</b>. mid-hour·정시 무관 모든 진입 기록. SL=진입×1.02(위)/TP=진입×0.88(아래), 정적 2%/12%. <b>실현 NET(USDT)=qty×가격이동(수수료·펀딩 前)</b> — 정확 실현손익은 거래소 ledger 별도. SIM GROSS/NET(과거 1h 백테스트)은 후속.</div>`;
   if (!rows.length){ return h + '<div class="empty">아직 실제 진입 없음</div>'; }
   h += '<table class="th-table"><thead><tr><th>진입시각(KST)</th><th>종목</th><th class="num">진입가</th><th class="num">SL(위)</th><th class="num">TP(아래)</th><th>상태</th><th class="num">청산가</th><th class="num">PnL%</th><th>결과</th></tr></thead><tbody>';
   for (const r of rows){
@@ -8301,10 +8331,13 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
         (진입 소수라 가벼움) — 과거 포함 backfill 자동.
         """
         try:
-            from src.dashboard.macross_entry_store import parse_macross_entries
-            return {"entries": parse_macross_entries()}
+            from src.dashboard.macross_entry_store import (
+                parse_macross_entries, summarize_macross_entries,
+            )
+            rows = parse_macross_entries()
+            return {"entries": rows, "summary": summarize_macross_entries(rows)}
         except Exception as exc:  # noqa: BLE001 — 대시보드가 거래 안 깬다
-            return {"error": str(exc), "entries": []}
+            return {"error": str(exc), "entries": [], "summary": {}}
 
     @app.get("/api/ma_cross_metrics")
     async def api_ma_cross_metrics(
