@@ -59,25 +59,41 @@ class MacrossSignalStore:
         self._dedup_window = dedup_window
 
     def ingest(self, event_type: str, payload: dict) -> None:
-        """WAL fan-out consumer — macross 크로스-hold 만 골라 기록. fail-soft."""
+        """WAL fan-out consumer — macross 신호를 골라 기록. fail-soft.
+
+        수집 대상 2종:
+          - decision="hold": 크로스 감지했으나 필터로 스킵 (kind="skip").
+          - decision="buy"/"sell": 진입 신호 (kind="entry"). observe_only(관찰)
+            모드에선 실주문 없이 이 이벤트만 남으므로 "실 진입 타이밍" 데이터가
+            여기로 수집된다. reason 에 "|observe" 표식(orchestrator HARD GUARD).
+        """
         try:
             if event_type != "strategy_evaluated":
                 return
             if payload.get("strategy_id") != _MACROSS_SID:
                 return
-            if payload.get("decision") != "hold":
-                return
-            reason = str(payload.get("reason", ""))
-            base = reason.split(":")[0].split("(")[0].strip()
-            if base in _PRE_CROSS_REASONS:
-                return  # 크로스 없음/warmup — 스킵 신호 아님
+            decision = payload.get("decision")
             symbol = payload.get("symbol")
             if not symbol:
+                return
+            reason = str(payload.get("reason", ""))
+            if decision == "hold":
+                base = reason.split(":")[0].split("(")[0].strip()
+                if base in _PRE_CROSS_REASONS:
+                    return  # 크로스 없음/warmup — 스킵 신호 아님
+                kind = "skip"
+                cat = _categorize(reason)
+            elif decision in ("buy", "sell"):
+                # 진입 신호 (관찰 모드면 실주문 없이 이것만 남음).
+                kind = "entry"
+                observe = "|observe" in reason
+                side = "숏" if decision == "sell" else "롱"
+                cat = f"🔻 진입포착({'관찰' if observe else '실'}·{side})"
+            else:
                 return
             # 봉당(1h) dedup — 같은 종목·시각버킷·카테고리 1회.
             now = datetime.now(timezone.utc)
             bar_ts = now.replace(minute=0, second=0, microsecond=0).isoformat()
-            cat = _categorize(reason)
             key = (symbol, bar_ts, cat)
             with self._lock:
                 if key in self._seen:
@@ -88,8 +104,9 @@ class MacrossSignalStore:
                     old = self._seen_order.pop(0)
                     self._seen.discard(old)
                 rec = {
-                    "ts": now.isoformat(), "symbol": symbol,
-                    "reason": reason, "category": cat, "bar_ts": bar_ts,
+                    "ts": now.isoformat(), "symbol": symbol, "kind": kind,
+                    "decision": decision, "reason": reason,
+                    "category": cat, "bar_ts": bar_ts,
                 }
                 with open(self._path, "a", encoding="utf-8") as f:
                     f.write(json.dumps(rec, ensure_ascii=False) + "\n")
