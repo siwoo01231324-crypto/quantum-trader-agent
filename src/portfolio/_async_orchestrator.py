@@ -72,6 +72,13 @@ class AsyncStrategyOrchestrator:
         self._strategy_leverage = {
             str(k): max(1.0, float(v)) for k, v in (strategy_leverage or {}).items()
         }
+        # observe_only 관찰 전용 전략 (2026-07-08) — 진입 신호를 strategy_evaluated
+        # 로 기록만 하고 실주문·_live_entered·알림 전부 skip. macross pause 중 "실 진입
+        # 타이밍" 데이터를 계속 수집하려는 용도(에어본 shadow 판). run_bar 의
+        # HARD GUARD 로 이 집합의 전략은 어떤 경우에도 OrderIntent 를 만들지 않는다.
+        # config_loader 가 yaml top-level `observe_only: true` 로 채운다. 기본 빈 set
+        # = 레거시 동작 보존(모든 기존 전략은 정상 매매).
+        self._observe_only: set[str] = set()
         self._policy = policy
         self._broker: AsyncBrokerAdapter | None = broker
         self._strategies: dict[str, object] = {}
@@ -533,6 +540,20 @@ class AsyncStrategyOrchestrator:
                 self._emit_strategy_evaluated(
                     sid, symbol=order_symbol, decision="hold",
                     reason="action_hold", ts=ts,
+                )
+                continue
+
+            # observe_only HARD GUARD (2026-07-08) — 관찰 전용 전략은 여기서 진입
+            # 신호(buy/sell)를 strategy_evaluated 로 "기록만" 하고 즉시 continue.
+            # 아래의 _live_entered.add / _on_live_entry(알림) / _on_entry(동적 stop)
+            # / size_to_qty / OrderIntent 생성을 전부 건너뛴다 → **실주문 0 보장**.
+            # signal.reason 에 "|observe" 를 붙여 skip store 가 "관찰 진입포착" 으로
+            # 분류할 수 있게 한다. macross pause 중 신호 타이밍 수집용(에어본 shadow).
+            if sid in self._observe_only:
+                self._emit_strategy_evaluated(
+                    sid, symbol=order_symbol, decision=signal.action,
+                    reason=(getattr(signal, "reason", None) or "entry") + "|observe",
+                    ts=ts,
                 )
                 continue
 

@@ -223,3 +223,49 @@ strategies:
         and "momo-btc-v2-meta" in rec.getMessage()
         for rec in caplog.records
     ), f"Expected skip warning, got: {[r.getMessage() for r in caplog.records]}"
+
+
+# ---------------------------------------------------------------------------
+# observe_only 관찰 전용 전략 (2026-07-08)
+# ---------------------------------------------------------------------------
+
+def test_observe_only_parsed_into_orch(tmp_path):
+    """yaml `observe_only: true` → orch._observe_only 에 sid 주입, 나머지는 정상."""
+    yaml_content = """
+strategies:
+  - id: live-capitulation-bounce
+    class: backtest.strategies.live_capitulation_bounce.LiveCapitulationBounce
+    kwargs:
+      default_size: 0.25
+  - id: live-macross-regime-v1
+    class: backtest.strategies.live_macross_regime_v1.LiveMacrossRegime
+    observe_only: true
+    kwargs:
+      default_size: 0.25
+      allow_long: false
+      allow_short: true
+"""
+    config_path = _write_yaml(tmp_path, yaml_content)
+    from portfolio.config_loader import load_orchestrator_from_yaml
+
+    orch = load_orchestrator_from_yaml(config_path, _make_policy())
+    # 둘 다 등록되지만 macross 만 관찰 전용.
+    assert "live-macross-regime-v1" in orch._strategies
+    assert "live-capitulation-bounce" in orch._strategies
+    assert orch._observe_only == {"live-macross-regime-v1"}
+
+
+def test_observe_only_absent_is_empty(tmp_path):
+    """observe_only 미지정 → 빈 set (레거시 보존, 전 전략 정상 매매)."""
+    yaml_content = """
+strategies:
+  - id: live-capitulation-bounce
+    class: backtest.strategies.live_capitulation_bounce.LiveCapitulationBounce
+    kwargs:
+      default_size: 0.25
+"""
+    config_path = _write_yaml(tmp_path, yaml_content)
+    from portfolio.config_loader import load_orchestrator_from_yaml
+
+    orch = load_orchestrator_from_yaml(config_path, _make_policy())
+    assert orch._observe_only == set()

@@ -73,28 +73,31 @@ strategies:
   #   롱(골든)은 5y −144% 구조적 손실이라 allow_long=False 로 숏 전용.
   # 활성화됨 (2026-07-01) — 선결①(cross_strategy_symbol_lock)·②(max_total_notional_pct)
   # 완료. ③ 생존편향·라이브 슬리피지는 소액 라이브 관찰로 검증(지금부터).
-  # ⏸ PAUSED (2026-07-07) — 라이브 11청산 중 10 SL, PF 0.03, gross −19%, 실현 −3.46 USDT.
+  # ⏸ 거래 PAUSED → 👁 OBSERVE-ONLY 전환 (2026-07-08) — 라이브 11청산 중 10 SL,
+  # PF 0.03, gross −19%, 실현 −3.46 USDT 로 실거래는 중단. 단 신호 데이터는 계속
+  # 수집(에어본 shadow 판): `observe_only: true` 로 orchestrator 에 등록은 하되
+  # 진입 신호를 strategy_evaluated 로 기록만 하고 **실주문 0**(run_bar HARD GUARD).
+  # 대시보드 /ma-cross "스킵신호" 뷰에 진입포착(관찰)·필터스킵이 모인다.
   # 레짐별 분해: 11건 전부 regime=down·ADX≥22·시간게이트 준수(필터 정상)인데도 다 SL.
   # 원인 = ① 상관 클러스터링(07-05 14시 5건 동시·07-07 05시 3건 동시 — 알트 동조
-  # 데드크로스라 사실상 1개 상관 숏, 반등에 8건 한꺼번에 SL. 백테스트는 종목독립
-  # 시뮬이라 이 집중위험 미반영) ② 횡보-반등 하락장에 +2% SL 이 -12% TP 前에 다
-  # 잘림(엣지가 강한 추세하락 의존). ③ 헤지 미작동(투매반등 +3.39 vs macross −3.46).
-  # → 강한 하락추세 or 클러스터링 수정(max_concurrent↓·클러스터당 1신호·SL완화) 후
-  #    재검증까지 비활성. 코드·spec·5y백테스트(PF1.61)는 유지, config 만 주석.
-  # 보유 2건은 거래소 TP/SL 로 자연청산(또는 수동). 재개는 아래 주석 해제.
-  # - id: live-macross-regime-v1
-  #   class: backtest.strategies.live_macross_regime_v1.LiveMacrossRegime
-  #   leverage: 5
-  #   kwargs:
-  #     default_size: 0.25
-  #     allow_long: false
-  #     allow_short: true
-  #     kst_hour_gate: true
-  #     self_sma200_filter: true
-  #     overextension_max_pct: 0.10
-  #     stop_loss_pct: 0.02
-  #     take_profit_pct: 0.12
-  #     max_concurrent_positions: 8
+  # 데드크로스라 사실상 1개 상관 숏, 반등에 8건 한꺼번에 SL) ② 횡보-반등 하락장에
+  # +2% SL 이 -12% TP 前 잘림(강한 추세하락 의존) ③ 헤지 미작동.
+  # → 실거래 재개 선결: 강한 하락추세 or 클러스터링 수정(max_concurrent↓·SL완화).
+  #    재개 시 아래 `observe_only` 만 제거(false)하면 즉시 실매매 복귀.
+  - id: live-macross-regime-v1
+    class: backtest.strategies.live_macross_regime_v1.LiveMacrossRegime
+    observe_only: true            # 👁 관찰 전용 — 신호 기록만, 실주문 0. 제거 시 실매매 복귀
+    leverage: 5
+    kwargs:
+      default_size: 0.25
+      allow_long: false
+      allow_short: true
+      kst_hour_gate: true
+      self_sma200_filter: true
+      overextension_max_pct: 0.10
+      stop_loss_pct: 0.02
+      take_profit_pct: 0.12
+      max_concurrent_positions: 8
 
 capital_allocation:
   universe_scan_pct: 0.0

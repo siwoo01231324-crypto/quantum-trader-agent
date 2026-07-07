@@ -137,6 +137,11 @@ def load_orchestrator_from_yaml(
     # 그 전략 레버 설정. 예: macross 만 5x, 투매·터틀 미지정(전역/1x). 명목만 키우고
     # 증거금 유지하는 용도 (default_size 상향과 함께).
     _strategy_leverage: dict[str, int] = {}
+    # observe_only 관찰 전용 전략 (2026-07-08) — yaml entry top-level
+    # ``observe_only: true`` 면 orchestrator 에 등록은 하되 진입 신호를 기록만
+    # 하고 실주문 안 냄(HARD GUARD in run_bar). macross pause 중 신호 데이터
+    # 수집용. 미지정(기본) = 정상 매매.
+    _observe_only: set[str] = set()
 
     for entry in entries:
         sid: str = entry["id"]
@@ -146,6 +151,8 @@ def load_orchestrator_from_yaml(
                 "Each strategy_id must be unique."
             )
         seen_ids.add(sid)
+        if bool(entry.get("observe_only", False)):
+            _observe_only.add(sid)
         _lev_ov = entry.get("leverage")
         if _lev_ov is not None:
             try:
@@ -196,6 +203,14 @@ def load_orchestrator_from_yaml(
         logger.info(
             "config_loader.strategy_leverage set QTA_STRATEGY_LEVERAGE=%s",
             os.environ["QTA_STRATEGY_LEVERAGE"],
+        )
+
+    # 관찰 전용 전략 → orchestrator HARD GUARD 집합에 주입 (있을 때만).
+    if _observe_only:
+        orch._observe_only = set(_observe_only)
+        logger.info(
+            "config_loader.observe_only strategies=%s (진입 신호 기록만, 실주문 0)",
+            sorted(_observe_only),
         )
 
     return orch
