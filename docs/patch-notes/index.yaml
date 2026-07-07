@@ -15,6 +15,20 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.111"
+    date: "2026-07-07"
+    title: "macross 데드숏 PAUSE — 라이브 10/11 SL, 상관 클러스터링 문제"
+    tags: [risk]
+    summary: >
+      macross 라이브 11청산 중 10 SL(PF 0.03·gross −19%·−3.46 USDT). 레짐별 분해:
+      11건 전부 regime=down·ADX≥22·시간게이트 준수(필터 정상)인데도 SL. 원인 =
+      상관 클러스터링(07-05 14시 5건·07-07 05시 3건 동시 진입, 알트 동조 데드크로스라
+      1개 상관 숏 → 반등에 한꺼번에 SL. 백테스트 종목독립 시뮬이라 미반영) + 횡보-
+      반등 하락장에 +2% SL 이 -12% TP 前 잘림. swing_mainnet.yaml 주석처리(코드·spec·
+      5y PF1.61 유지). 투매반등·터틀 유지.
+    items:
+      - "swing_mainnet.yaml: live-macross-regime-v1 주석처리(2전략만 활성). 보유 2건은 거래소 TP/SL 자연청산."
+      - "spec status active→paused. 재개 선결: 강한 하락추세 or 클러스터링 수정(max_concurrent↓·클러스터당 1신호·SL완화) 후 재검증."
   - version: "v0.6.110"
     date: "2026-07-06"
     title: "macross 실제진입 라이브 지표 + 청산 outcome 오분류·swing sim 캐시 수정"
