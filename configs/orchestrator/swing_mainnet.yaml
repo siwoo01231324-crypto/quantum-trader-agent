@@ -73,23 +73,28 @@ strategies:
   #   롱(골든)은 5y −144% 구조적 손실이라 allow_long=False 로 숏 전용.
   # 활성화됨 (2026-07-01) — 선결①(cross_strategy_symbol_lock)·②(max_total_notional_pct)
   # 완료. ③ 생존편향·라이브 슬리피지는 소액 라이브 관찰로 검증(지금부터).
-  - id: live-macross-regime-v1
-    class: backtest.strategies.live_macross_regime_v1.LiveMacrossRegime
-    # 전략별 레버리지 (2026-07-05) — macross 만 5x. 증거금 그대로 명목 5x 효과:
-    # default_size 0.25(명목25%=~$46) + leverage 5x → 증거금 ~$9(5%) 유지. 투매·터틀은
-    # leverage 미지정(전역 QTA_TARGET_LEVERAGE) — 실거래 확인 후 개별 부여 예정.
-    # SL +2% << 청산선 ~+20%(5x) 이라 안전. config_loader 가 QTA_STRATEGY_LEVERAGE 로 전달.
-    leverage: 5
-    kwargs:
-      default_size: 0.25          # 명목25%(~$46) + leverage5x → 증거금~$9 유지. BTC/SOL/ETH 다 진입
-      allow_long: false           # 숏 전용 (롱 5y 손실)
-      allow_short: true
-      kst_hour_gate: true         # 자체도출 시각 (기본값=검증된 11시각)
-      self_sma200_filter: true    # 종목 자기 SMA200 하회 정렬
-      overextension_max_pct: 0.10 # 과확장 추격 금지
-      stop_loss_pct: 0.02         # -2% (RR1:6)
-      take_profit_pct: 0.12       # +12%
-      max_concurrent_positions: 8 # 동시보유 상한 (신호 과다 대비)
+  # ⏸ PAUSED (2026-07-07) — 라이브 11청산 중 10 SL, PF 0.03, gross −19%, 실현 −3.46 USDT.
+  # 레짐별 분해: 11건 전부 regime=down·ADX≥22·시간게이트 준수(필터 정상)인데도 다 SL.
+  # 원인 = ① 상관 클러스터링(07-05 14시 5건 동시·07-07 05시 3건 동시 — 알트 동조
+  # 데드크로스라 사실상 1개 상관 숏, 반등에 8건 한꺼번에 SL. 백테스트는 종목독립
+  # 시뮬이라 이 집중위험 미반영) ② 횡보-반등 하락장에 +2% SL 이 -12% TP 前에 다
+  # 잘림(엣지가 강한 추세하락 의존). ③ 헤지 미작동(투매반등 +3.39 vs macross −3.46).
+  # → 강한 하락추세 or 클러스터링 수정(max_concurrent↓·클러스터당 1신호·SL완화) 후
+  #    재검증까지 비활성. 코드·spec·5y백테스트(PF1.61)는 유지, config 만 주석.
+  # 보유 2건은 거래소 TP/SL 로 자연청산(또는 수동). 재개는 아래 주석 해제.
+  # - id: live-macross-regime-v1
+  #   class: backtest.strategies.live_macross_regime_v1.LiveMacrossRegime
+  #   leverage: 5
+  #   kwargs:
+  #     default_size: 0.25
+  #     allow_long: false
+  #     allow_short: true
+  #     kst_hour_gate: true
+  #     self_sma200_filter: true
+  #     overextension_max_pct: 0.10
+  #     stop_loss_pct: 0.02
+  #     take_profit_pct: 0.12
+  #     max_concurrent_positions: 8
 
 capital_allocation:
   universe_scan_pct: 0.0

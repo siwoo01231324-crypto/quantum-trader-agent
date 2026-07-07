@@ -2,7 +2,7 @@
 type: strategy
 id: live-macross-regime-v1
 name: Live MA-Cross Regime v1 (SMA25/200 cross + BTC SMA200 regime gate, bidir)
-status: active
+status: paused
 paradigm: live-scanner
 instruments:
 - BINANCE_USDT_PERP_UNIVERSE
