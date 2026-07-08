@@ -35,11 +35,12 @@ strategies:
   # 투매반등 — SL=꼬리저점, TP=2R (진입시 확정 동적값 → 거래소 라인). 채널청산 없음.
   - id: live-capitulation-bounce
     class: backtest.strategies.live_capitulation_bounce.LiveCapitulationBounce
-    # 레버리지 5x (2026-07-05, macross 미러) — default_size 0.25(명목25%~$46) + 5x →
-    # 증거금 5%(~$9) 유지·명목 5배 효과. 청산선 ~−20% >> SL(꼬리저점 ~−1.5%) 안전.
+    # 레버리지 5x. default_size 0.50(명목50%~$93) + 5x → 증거금 10%(~$18)/포지션.
+    # 2026-07-08: macross 데드숏이 observe-only(무거래)라 증거금 풀 여유 → 5%→10% 상향.
+    # 청산선 ~−20% >> SL(꼬리저점 ~−1.5%) 여전히 안전. 총노출은 max_total_margin_pct 0.95 캡.
     leverage: 5
     kwargs:
-      default_size: 0.25          # 명목25%(~$46) + leverage5x → 증거금~$9(5%). 저빈도라 동시노출 낮음
+      default_size: 0.50          # 명목50%(~$93) + leverage5x → 증거금~$18(10%). 저빈도라 동시노출 낮음
       n_dev: 2.5
       wick_mult: 1.5
       vol_mult: 2.0
