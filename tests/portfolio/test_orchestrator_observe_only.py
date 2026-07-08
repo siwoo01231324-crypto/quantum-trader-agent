@@ -97,6 +97,34 @@ def test_non_observe_strategy_trades_normally():
     assert sol[0].side == "sell"
 
 
+def test_observe_only_entry_flows_to_macross_store(tmp_path):
+    """E2E: observe_only 진입 신호가 wal_observer fan-out → MacrossSignalStore
+    파일까지 실제로 기록된다 (2026-07-08 회귀 방지).
+
+    #527 은 orchestrator emit·store ingest 를 각각 배선했으나, 프로덕션에서
+    yaml orchestrator 의 _wal_observer 가 None 이라 emit 이 None 가드에 막혀
+    수집 0 이었다(live_run._on_orchestrator_ready 에서 배선 누락). 이 테스트는
+    orchestrator(_wal_observer 배선됨) → store.ingest → 파일 기록 전 사슬을 검증.
+    """
+    from src.dashboard.macross_signal_store import MacrossSignalStore
+
+    store = MacrossSignalStore(tmp_path / "skipped_signals.jsonl")
+    orch = AsyncStrategyOrchestrator(
+        Policy(policy_version=1, name="t"),
+        wal_observer=lambda ev: store.ingest(ev.event_type, ev.payload or {}),
+    )
+    # store 는 sid == "live-macross-regime-v1" 만 수집한다.
+    orch.register_strategy("live-macross-regime-v1", _SellScanner())
+    orch._observe_only = {"live-macross-regime-v1"}
+    asyncio.run(orch.run_bar(pd.Timestamp("2026-01-01"), _snap()))
+
+    rows = store.recent()
+    entries = [r for r in rows if r.get("kind") == "entry"]
+    assert len(entries) == 1, f"진입 신호가 store 에 기록돼야 함, got {rows}"
+    assert entries[0]["decision"] == "sell"
+    assert entries[0]["symbol"] == "SOLUSDT"
+
+
 def test_observe_only_mixed_roster():
     """관찰(macross)+실매매(capit) 혼재 — capit 만 주문, macross 는 기록만."""
     class _BuyScanner(LiveScannerMixin):

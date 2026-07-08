@@ -1345,6 +1345,11 @@ async def _run_pipeline_attached(
 
     def _on_orchestrator_ready(orch):
         setattr(state, "orchestrator", orch)
+        # strategy_evaluated fan-out 배선 (2026-07-08 #527 후속) — yaml 로 만든
+        # orchestrator 는 _wal_observer=None 이라 _emit_strategy_evaluated 가
+        # None 가드에 막혀 observe_only(macross) 진입 신호가 하나도 수집 안 됐음.
+        # 여기서 live 관측자에 연결해야 신호가 macross_signal_store 로 흐른다.
+        orch._wal_observer = _wal_observer
         # Dynamic Universe Architecture Phase 1 (2026-05-28) —
         # _build_universe_quote_provider 가 args._orchestrator lookup.
         # args 는 _factory 가 명시 keyword 로 넘긴 Namespace — caller 가
@@ -1881,6 +1886,9 @@ async def _run_pipeline(config, kis_adapter, dashboard_port: int, logger,
     # #227 S3: also register live-scanner stop/TP policies once strategies load.
     def _on_orchestrator_ready(orch):
         setattr(dashboard_state, "orchestrator", orch)
+        # strategy_evaluated fan-out 배선 (2026-07-08 #527 후속) — attached 경로와
+        # 동일. yaml orchestrator 의 _wal_observer=None → observe_only 신호 수집 0.
+        orch._wal_observer = _wal_observer
         # Dynamic Universe Architecture Phase 1 (2026-05-28) —
         # _build_universe_quote_provider 가 args._orchestrator lookup.
         # main() 에서 keyword 로 명시 전달된 args 로 박는다. 과거엔 args 가
