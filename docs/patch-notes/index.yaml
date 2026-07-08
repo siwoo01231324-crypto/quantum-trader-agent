@@ -15,6 +15,25 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.112"
+    date: "2026-07-08"
+    title: "한국주식 밸류·배당 스크리너 2종 (backtest) — 재무 펀더멘털 가치투자"
+    tags: [feature]
+    summary: >
+      재무제표 펀더멘털 기반 한국주식 가치 전략 2종을 리서치·검증(backtest 단계).
+      value-quality-kr(비금융 밸류): 4게이트 퍼널(안전·실적·저평가·안전마진)+업종상대
+      임계+지주사 NAV할인+top10+밸류정상화 exit, 생존편향 보정 CAGR 16.5%/MDD -18%.
+      dividend-value-kr(금융·배당): BASE 제외 금융·배당주 커버, 3축 점수표(이익창출력·
+      지속성·주주환원) 퀄리티 틸트, CAGR 17.1%/MDD -22%(KOSPI 초과). 생존편향은 퀄리티
+      게이트 덕에 미미(부도종목 139개 중 1개만 매수). 익절·집중·턴어라운드 필터는 역효과 확인.
+    items:
+      - "docs/specs/strategies/value-quality-kr.md (신규, status:backtest, paradigm:universe-scan)"
+      - "docs/specs/strategies/dividend-value-kr.md (신규, status:backtest, 금융 포함 자매전략)"
+      - "리서치 스크립트 scripts/_value_screener*.py·_dividend_value*.py·_survivorship.py + 주간 자동화 도커."
+      - "라이브 배선(KIS/토스)·정식 코드/테스트는 후속. 현 단계 backtest-only."
+    refs:
+      - "docs/background/31-valuation-analysis.md"
+      - "docs/specs/universe-scan-strategy-pattern.md"
   - version: "v0.6.111"
     date: "2026-07-07"
     title: "macross 데드숏 PAUSE — 라이브 10/11 SL, 상관 클러스터링 문제"
