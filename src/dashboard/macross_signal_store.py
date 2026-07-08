@@ -1,17 +1,16 @@
-"""macross 전략 *실제 신호* store — 진입까지 안 간 "스킵 신호" 영속화.
+"""macross 전략 *진입 신호* store — "실제로 진입했을 타이밍" 영속화.
 
 배경: ma_cross 데몬(정시·마감봉·주식오염)은 실제 전략(intra-hour·형성봉·크립토)과
-어긋나 폐기. 대신 전략 자신의 평가(strategy_evaluated) 를 수집한다.
-  - 진입(entered): WAL order_filled → macross_entry_store (별도).
-  - **스킵(skipped)**: 크로스를 감지했으나 필터(레짐/ADX/기울기/과확장/시간게이트)에
-    걸려 진입 안 함 → 본 store. "포착했지만 왜 스킵했나" 역추적용.
+어긋나 폐기. 대신 전략 자신의 평가(strategy_evaluated) 중 **진입 신호(buy/sell)** 만
+수집한다. observe_only(관찰) 모드에선 실주문 없이 이 진입 신호만 남으므로 "실제로
+진입했을 타이밍" 데이터가 여기로 모인다. hold/스킵은 노이즈라 기록하지 않는다.
 
 수집 경로: orchestrator._emit_strategy_evaluated → live_run._wal_observer 가 매
-(전략,종목) 평가마다 fan-out → 본 store.ingest() 가 macross 크로스-hold 만 필터.
-봉당 dedup (같은 종목·시각·사유 1회) — no_cross 잡음은 제외.
+(전략,종목) 평가마다 fan-out → 본 store.ingest() 가 macross 진입(buy/sell) 만 필터.
+봉당 dedup (같은 종목·시각·방향 1회).
 
-이벤트 payload: {strategy_id, symbol, decision("hold"/"buy"/"sell"), reason}.
-스킵 = decision=hold AND reason 이 크로스 감지 후 필터(아래 _PRE_CROSS 제외).
+이벤트 payload: {strategy_id, symbol, decision("buy"/"sell"), reason}.
+관찰 모드는 reason 에 "|observe" 표식(orchestrator HARD GUARD).
 """
 from __future__ import annotations
 
@@ -22,33 +21,9 @@ from pathlib import Path
 
 _MACROSS_SID = "live-macross-regime-v1"
 
-# 크로스 감지 *전* 사유 — 스킵 신호 아님(크로스 자체가 없거나 warmup). 제외.
-_PRE_CROSS_REASONS = frozenset({"warmup", "no_cross"})
-
-# 사유 → 사람용 카테고리 (스킵 분류).
-_REASON_CATEGORY = (
-    ("slope", "SMA200 기울기"),
-    ("adx", "ADX<20 (추세약)"),
-    ("regime", "BTC 레짐 역행"),
-    ("self_sma200", "자기 SMA200 위"),
-    ("overext", "과확장(추격금지)"),
-    ("kst", "시간게이트 밖"),
-    ("hour", "시간게이트 밖"),
-    ("long_disabled", "롱 비활성"),
-    ("short_disabled", "숏 비활성"),
-)
-
-
-def _categorize(reason: str) -> str:
-    r = (reason or "").lower()
-    for key, label in _REASON_CATEGORY:
-        if key in r:
-            return label
-    return reason or "기타"
-
 
 class MacrossSignalStore:
-    """macross 스킵 신호 append-only jsonl (봉당 dedup)."""
+    """macross 진입 신호 append-only jsonl (봉당 dedup)."""
 
     def __init__(self, path: str | Path, dedup_window: int = 5000) -> None:
         self._path = Path(path)
@@ -59,13 +34,10 @@ class MacrossSignalStore:
         self._dedup_window = dedup_window
 
     def ingest(self, event_type: str, payload: dict) -> None:
-        """WAL fan-out consumer — macross 신호를 골라 기록. fail-soft.
+        """WAL fan-out consumer — macross 진입(buy/sell) 신호만 골라 기록. fail-soft.
 
-        수집 대상 2종:
-          - decision="hold": 크로스 감지했으나 필터로 스킵 (kind="skip").
-          - decision="buy"/"sell": 진입 신호 (kind="entry"). observe_only(관찰)
-            모드에선 실주문 없이 이 이벤트만 남으므로 "실 진입 타이밍" 데이터가
-            여기로 수집된다. reason 에 "|observe" 표식(orchestrator HARD GUARD).
+        observe_only(관찰) 모드에선 실주문 없이 이 진입 신호만 남으므로 "실제로
+        진입했을 타이밍" 데이터가 여기로 수집된다. hold/스킵은 노이즈라 제외.
         """
         try:
             if event_type != "strategy_evaluated":
@@ -77,14 +49,10 @@ class MacrossSignalStore:
             if not symbol:
                 return
             reason = str(payload.get("reason", ""))
-            if decision == "hold":
-                base = reason.split(":")[0].split("(")[0].strip()
-                if base in _PRE_CROSS_REASONS:
-                    return  # 크로스 없음/warmup — 스킵 신호 아님
-                kind = "skip"
-                cat = _categorize(reason)
-            elif decision in ("buy", "sell"):
-                # 진입 신호 (관찰 모드면 실주문 없이 이것만 남음).
+            # 진입(buy/sell) 신호만 수집 — "실제로 진입했을 타이밍". hold/스킵은
+            # 노이즈라 기록 안 함 (orchestrator 가 hold reason 을 action_hold 로
+            # 덮어써 분류도 불가). observe_only 모드에선 실주문 없이 이 진입 신호만 남는다.
+            if decision in ("buy", "sell"):
                 kind = "entry"
                 observe = "|observe" in reason
                 side = "숏" if decision == "sell" else "롱"

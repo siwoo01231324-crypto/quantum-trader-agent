@@ -4972,7 +4972,7 @@ tbody tr:hover{background:#1c2229}
 .view-btn.active{background:var(--green);color:#03110a;font-weight:700;border-color:var(--green)}</style>
 <div class="view-toggle">
   <button class="view-btn active" id="vb-live" onclick="showMacrossView('live')">🔻 실제 진입 (WAL)</button>
-  <button class="view-btn" id="vb-skip" onclick="showMacrossView('skip')">⊘ 스킵 신호 (포착·필터)</button>
+  <button class="view-btn" id="vb-skip" onclick="showMacrossView('skip')">🔻 진입 신호 (관찰·무거래)</button>
   <button class="view-btn" id="vb-daemon" onclick="showMacrossView('daemon')">데몬 신호 (레거시·참고)</button>
 </div>
 <div id="content" style="display:none"><div class="empty">데이터를 불러오는 중입니다…</div></div>
@@ -5228,12 +5228,12 @@ function renderSkippedSignals(rows){
   const byCat = {};
   for (const r of rows) byCat[r.category] = (byCat[r.category]||0)+1;
   const catTxt = Object.entries(byCat).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${esc(k)} ${v}`).join(' · ');
-  let h = `<div class="section-h2">⊘ 포착했지만 스킵한 신호 <span class="count">· ${rows.length}건</span></div>`;
-  h += `<div class="note">전략이 크로스를 <b>실제 감지(intra-hour)</b>했으나 필터(BTC레짐·ADX·SMA200기울기·과확장·시간게이트)에 걸려 진입 안 함. 데몬 정시신호가 아닌 <b>전략 자신의 평가</b> 기반. 봉당 dedup.<br>사유 분포: ${catTxt||'—'}</div>`;
-  if (!rows.length) return h + '<div class="empty">아직 스킵 신호 없음 (재시작 후 수집 시작)</div>';
-  h += '<table class="th-table"><thead><tr><th>시각(KST)</th><th>종목</th><th>스킵 사유</th><th>상세</th></tr></thead><tbody>';
+  let h = `<div class="section-h2">🔻 진입 신호 (관찰·무거래) <span class="count">· ${rows.length}건</span></div>`;
+  h += `<div class="note">macross 가 모든 필터(BTC레짐·ADX·SMA200기울기·과확장·시간게이트)를 통과해 <b>실제로 진입했을 타이밍</b>. 관찰 모드라 실주문은 안 나감 — 신호만 수집. 데몬 정시신호가 아닌 <b>전략 자신의 평가</b> 기반. 봉당 dedup.<br>방향 분포: ${catTxt||'—'}</div>`;
+  if (!rows.length) return h + '<div class="empty">아직 진입 신호 없음 (데드크로스는 변동성 구간에 몰려 발생 — 조용한 장에선 0건 정상)</div>';
+  h += '<table class="th-table"><thead><tr><th>시각(KST)</th><th>종목</th><th>방향</th><th>상세</th></tr></thead><tbody>';
   for (const r of rows)
-    h += `<tr><td>${fmtKstFull(r.ts)}</td><td>${esc(r.symbol)}</td><td>${esc(r.category)}</td><td style="color:var(--text3)">${esc(r.reason)}</td></tr>`;
+    h += `<tr><td>${fmtKstFull(r.ts)}</td><td>${esc(r.symbol)}</td><td class="kind-entry">${esc(r.category)}</td><td style="color:var(--text3)">${esc(r.reason)}</td></tr>`;
   return h + '</tbody></table>';
 }
 async function loadLiveEntries(){

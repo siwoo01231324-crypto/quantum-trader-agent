@@ -125,6 +125,31 @@ def test_observe_only_entry_flows_to_macross_store(tmp_path):
     assert entries[0]["symbol"] == "SOLUSDT"
 
 
+def test_macross_store_records_entry_only_not_hold(tmp_path):
+    """진입(buy/sell) 신호만 수집 — hold/스킵은 노이즈라 기록 안 함 (2026-07-08).
+
+    사용자 요구: 대시보드엔 "실제로 진입했을 신호"만. orchestrator 가 hold reason 을
+    action_hold 로 덮어써 스킵 분류가 불가하므로 hold 는 아예 수집하지 않는다.
+    """
+    from src.dashboard.macross_signal_store import MacrossSignalStore
+
+    store = MacrossSignalStore(tmp_path / "sig.jsonl")
+    sid = "live-macross-regime-v1"
+    # hold(스킵/no_cross 잡음) → 기록 안 됨
+    store.ingest("strategy_evaluated",
+                 {"strategy_id": sid, "symbol": "BTCUSDT",
+                  "decision": "hold", "reason": "action_hold"})
+    # buy/sell(진입) → 기록됨
+    store.ingest("strategy_evaluated",
+                 {"strategy_id": sid, "symbol": "ETHUSDT",
+                  "decision": "sell", "reason": "death_short|observe"})
+
+    rows = store.recent()
+    assert len(rows) == 1, f"진입 1건만 남아야 함, got {rows}"
+    assert rows[0]["kind"] == "entry"
+    assert rows[0]["symbol"] == "ETHUSDT"
+
+
 def test_observe_only_mixed_roster():
     """관찰(macross)+실매매(capit) 혼재 — capit 만 주문, macross 는 기록만."""
     class _BuyScanner(LiveScannerMixin):
