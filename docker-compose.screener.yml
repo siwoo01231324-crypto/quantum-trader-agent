@@ -1,0 +1,27 @@
+# 저평가·우량주 스크리너 주간 자동실행
+# 사용:
+#   docker compose -f docker-compose.screener.yml up -d --build
+#   docker logs -f qta-value-screener
+# 중지:
+#   docker compose -f docker-compose.screener.yml down
+#
+# 결과는 호스트 ./reports (value_screener.json + history.jsonl) 에 그대로 쌓임.
+# 재무 캐시는 ./data/cache/dart 에 영속(다음 주엔 신규/변경분만 페치).
+services:
+  value-screener:
+    build:
+      context: .
+      dockerfile: Dockerfile.screener
+    image: qta-value-screener:latest
+    container_name: qta-value-screener
+    env_file:
+      - .env                      # DART_API_KEY, TELEGRAM_QTA_*
+    environment:
+      - SCREENER_WEEKDAY=0        # 0=월요일
+      - SCREENER_HOUR=8           # 08:00 KST
+      - SCREENER_RUN_ON_START=1   # 컨테이너 기동 시 1회 즉시 실행
+      - TZ=Asia/Seoul
+    volumes:
+      - ./data/cache:/app/data/cache   # 재무 캐시 영속
+      - ./reports:/app/reports         # 결과 산출물 호스트 공유
+    restart: unless-stopped

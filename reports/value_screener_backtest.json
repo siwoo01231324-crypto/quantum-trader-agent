@@ -1,0 +1,827 @@
+{
+  "generated_at": "2026-07-08T18:10:15.378442",
+  "universe_mode": "all",
+  "universe_size": 1584,
+  "rebal_years": [
+    2019,
+    2020,
+    2021,
+    2022,
+    2023,
+    2024,
+    2025
+  ],
+  "top_n": 10,
+  "gates": {
+    "max_debt_ratio": 1.5,
+    "min_current_ratio": 1.0,
+    "min_fscore": 5,
+    "min_roe": 0.08,
+    "min_rev_growth": -0.05,
+    "max_per": 15.0,
+    "max_pbr": 1.5,
+    "require_margin_of_safety": true
+  },
+  "yearly": [
+    {
+      "year": 2019,
+      "universe_valid": 1091,
+      "n_picks": 10,
+      "n_priced": 10,
+      "port_return%": -17.6,
+      "kospi_return%": -11.6,
+      "excess%": -6.0,
+      "win_stocks": "1/10",
+      "picks": [
+        {
+          "code": "016590",
+          "name": "신대양제지",
+          "PER": 3.39,
+          "PBR": 0.66,
+          "ROE%": 19.4,
+          "fscore": 7,
+          "안전마진%": 217,
+          "fwd_return%": -26.3
+        },
+        {
+          "code": "008060",
+          "name": "대덕",
+          "PER": 1.26,
+          "PBR": 0.34,
+          "ROE%": 26.9,
+          "fscore": 6,
+          "안전마진%": 626,
+          "fwd_return%": -22.5
+        },
+        {
+          "code": "023600",
+          "name": "삼보판지",
+          "PER": 2.96,
+          "PBR": 0.53,
+          "ROE%": 17.8,
+          "fscore": 7,
+          "안전마진%": 280,
+          "fwd_return%": -33.0
+        },
+        {
+          "code": "006650",
+          "name": "대한유화",
+          "PER": 3.79,
+          "PBR": 0.57,
+          "ROE%": 15.1,
+          "fscore": 6,
+          "안전마진%": 222,
+          "fwd_return%": -6.3
+        },
+        {
+          "code": "042420",
+          "name": "네오위즈홀딩스",
+          "PER": 2.52,
+          "PBR": 0.43,
+          "ROE%": 8.4,
+          "fscore": 5,
+          "안전마진%": 224,
+          "fwd_return%": 6.7
+        },
+        {
+          "code": "083930",
+          "name": "아바코",
+          "PER": 3.99,
+          "PBR": 0.85,
+          "ROE%": 21.4,
+          "fscore": 6,
+          "안전마진%": 157,
+          "fwd_return%": -8.2
+        },
+        {
+          "code": "045100",
+          "name": "한양이엔지",
+          "PER": 3.6,
+          "PBR": 0.9,
+          "ROE%": 24.9,
+          "fscore": 6,
+          "안전마진%": 164,
+          "fwd_return%": -35.8
+        },
+        {
+          "code": "002310",
+          "name": "아세아제지",
+          "PER": 4.28,
+          "PBR": 0.63,
+          "ROE%": 14.7,
+          "fscore": 7,
+          "안전마진%": 189,
+          "fwd_return%": -23.0
+        },
+        {
+          "code": "009160",
+          "name": "SIMPAC",
+          "PER": 2.43,
+          "PBR": 0.39,
+          "ROE%": 15.9,
+          "fscore": 6,
+          "안전마진%": 390,
+          "fwd_return%": -9.7
+        },
+        {
+          "code": "036190",
+          "name": "금화피에스시",
+          "PER": 5.24,
+          "PBR": 0.94,
+          "ROE%": 18.0,
+          "fscore": 7,
+          "안전마진%": 113,
+          "fwd_return%": -18.0
+        }
+      ]
+    },
+    {
+      "year": 2020,
+      "universe_valid": 1134,
+      "n_picks": 10,
+      "n_priced": 10,
+      "port_return%": 61.3,
+      "kospi_return%": 61.6,
+      "excess%": -0.3,
+      "win_stocks": "10/10",
+      "picks": [
+        {
+          "code": "079960",
+          "name": "동양이엔피",
+          "PER": 3.25,
+          "PBR": 0.38,
+          "ROE%": 11.7,
+          "fscore": 6,
+          "안전마진%": 326,
+          "fwd_return%": 75.9
+        },
+        {
+          "code": "065130",
+          "name": "탑엔지니어링",
+          "PER": 2.2,
+          "PBR": 0.39,
+          "ROE%": 17.6,
+          "fscore": 7,
+          "안전마진%": 413,
+          "fwd_return%": 1.1
+        },
+        {
+          "code": "049070",
+          "name": "인탑스",
+          "PER": 2.99,
+          "PBR": 0.35,
+          "ROE%": 11.6,
+          "fscore": 7,
+          "안전마진%": 367,
+          "fwd_return%": 177.6
+        },
+        {
+          "code": "053610",
+          "name": "프로텍",
+          "PER": 3.43,
+          "PBR": 0.62,
+          "ROE%": 18.0,
+          "fscore": 6,
+          "안전마진%": 226,
+          "fwd_return%": 95.1
+        },
+        {
+          "code": "294870",
+          "name": "IPARK현대산업개발",
+          "PER": 3.0,
+          "PBR": 0.56,
+          "ROE%": 18.5,
+          "fscore": 7,
+          "안전마진%": 267,
+          "fwd_return%": 48.5
+        },
+        {
+          "code": "053690",
+          "name": "한미글로벌",
+          "PER": 3.62,
+          "PBR": 0.68,
+          "ROE%": 18.9,
+          "fscore": 7,
+          "안전마진%": 202,
+          "fwd_return%": 53.9
+        },
+        {
+          "code": "091700",
+          "name": "파트론",
+          "PER": 6.27,
+          "PBR": 1.0,
+          "ROE%": 16.0,
+          "fscore": 7,
+          "안전마진%": 90,
+          "fwd_return%": 32.5
+        },
+        {
+          "code": "009970",
+          "name": "영원무역홀딩스",
+          "PER": 2.34,
+          "PBR": 0.41,
+          "ROE%": 8.8,
+          "fscore": 5,
+          "안전마진%": 242,
+          "fwd_return%": 16.1
+        },
+        {
+          "code": "025000",
+          "name": "KPX케미칼",
+          "PER": 4.78,
+          "PBR": 0.42,
+          "ROE%": 8.9,
+          "fscore": 6,
+          "안전마진%": 233,
+          "fwd_return%": 45.1
+        },
+        {
+          "code": "042370",
+          "name": "비츠로테크",
+          "PER": 5.59,
+          "PBR": 0.67,
+          "ROE%": 12.1,
+          "fscore": 5,
+          "안전마진%": 145,
+          "fwd_return%": 67.7
+        }
+      ]
+    },
+    {
+      "year": 2021,
+      "universe_valid": 1193,
+      "n_picks": 10,
+      "n_priced": 10,
+      "port_return%": 12.2,
+      "kospi_return%": -14.4,
+      "excess%": 26.6,
+      "win_stocks": "4/10",
+      "picks": [
+        {
+          "code": "009770",
+          "name": "삼정펄프",
+          "PER": 3.04,
+          "PBR": 0.39,
+          "ROE%": 12.7,
+          "fscore": 6,
+          "안전마진%": 337,
+          "fwd_return%": -8.7
+        },
+        {
+          "code": "013120",
+          "name": "동원개발",
+          "PER": 4.04,
+          "PBR": 0.65,
+          "ROE%": 16.0,
+          "fscore": 6,
+          "안전마진%": 193,
+          "fwd_return%": -19.4
+        },
+        {
+          "code": "007540",
+          "name": "샘표",
+          "PER": 4.18,
+          "PBR": 0.51,
+          "ROE%": 12.1,
+          "fscore": 7,
+          "안전마진%": 226,
+          "fwd_return%": 38.4
+        },
+        {
+          "code": "017890",
+          "name": "한국알콜",
+          "PER": 5.84,
+          "PBR": 0.82,
+          "ROE%": 14.0,
+          "fscore": 7,
+          "안전마진%": 117,
+          "fwd_return%": -16.7
+        },
+        {
+          "code": "024720",
+          "name": "콜마홀딩스",
+          "PER": 3.24,
+          "PBR": 1.28,
+          "ROE%": 19.7,
+          "fscore": 7,
+          "안전마진%": 65,
+          "fwd_return%": -22.7
+        },
+        {
+          "code": "035510",
+          "name": "신세계 I&C",
+          "PER": 3.79,
+          "PBR": 1.25,
+          "ROE%": 32.9,
+          "fscore": 7,
+          "안전마진%": 118,
+          "fwd_return%": -13.0
+        },
+        {
+          "code": "095500",
+          "name": "미래나노텍",
+          "PER": 6.83,
+          "PBR": 0.7,
+          "ROE%": 10.3,
+          "fscore": 7,
+          "안전마진%": 117,
+          "fwd_return%": 69.0
+        },
+        {
+          "code": "009970",
+          "name": "영원무역홀딩스",
+          "PER": 2.63,
+          "PBR": 0.47,
+          "ROE%": 9.0,
+          "fscore": 6,
+          "안전마진%": 201,
+          "fwd_return%": 7.7
+        },
+        {
+          "code": "036190",
+          "name": "금화피에스시",
+          "PER": 6.54,
+          "PBR": 0.76,
+          "ROE%": 11.6,
+          "fscore": 6,
+          "안전마진%": 113,
+          "fwd_return%": -1.4
+        },
+        {
+          "code": "105840",
+          "name": "우진",
+          "PER": 3.07,
+          "PBR": 0.63,
+          "ROE%": 20.4,
+          "fscore": 5,
+          "안전마진%": 242,
+          "fwd_return%": 88.7
+        }
+      ]
+    },
+    {
+      "year": 2022,
+      "universe_valid": 1248,
+      "n_picks": 10,
+      "n_priced": 10,
+      "port_return%": -8.7,
+      "kospi_return%": -7.2,
+      "excess%": -1.5,
+      "win_stocks": "3/10",
+      "picks": [
+        {
+          "code": "005810",
+          "name": "풍산홀딩스",
+          "PER": 1.69,
+          "PBR": 0.65,
+          "ROE%": 19.4,
+          "fscore": 7,
+          "안전마진%": 219,
+          "fwd_return%": 23.6
+        },
+        {
+          "code": "004800",
+          "name": "효성",
+          "PER": 1.99,
+          "PBR": 0.36,
+          "ROE%": 18.1,
+          "fscore": 6,
+          "안전마진%": 461,
+          "fwd_return%": -21.0
+        },
+        {
+          "code": "011780",
+          "name": "금호석유화학",
+          "PER": 1.98,
+          "PBR": 0.76,
+          "ROE%": 38.7,
+          "fscore": 6,
+          "안전마진%": 286,
+          "fwd_return%": -11.7
+        },
+        {
+          "code": "104700",
+          "name": "한국철강",
+          "PER": 3.4,
+          "PBR": 0.46,
+          "ROE%": 13.5,
+          "fscore": 5,
+          "안전마진%": 281,
+          "fwd_return%": -24.5
+        },
+        {
+          "code": "084010",
+          "name": "대한제강",
+          "PER": 3.12,
+          "PBR": 0.71,
+          "ROE%": 22.7,
+          "fscore": 7,
+          "안전마진%": 219,
+          "fwd_return%": -40.9
+        },
+        {
+          "code": "058430",
+          "name": "포스코스틸리온",
+          "PER": 3.16,
+          "PBR": 0.97,
+          "ROE%": 30.6,
+          "fscore": 7,
+          "안전마진%": 172,
+          "fwd_return%": 0.0
+        },
+        {
+          "code": "009970",
+          "name": "영원무역홀딩스",
+          "PER": 1.49,
+          "PBR": 0.42,
+          "ROE%": 14.2,
+          "fscore": 6,
+          "안전마진%": 324,
+          "fwd_return%": 26.1
+        },
+        {
+          "code": "017480",
+          "name": "삼현철강",
+          "PER": 4.7,
+          "PBR": 0.68,
+          "ROE%": 14.4,
+          "fscore": 5,
+          "안전마진%": 166,
+          "fwd_return%": -32.5
+        },
+        {
+          "code": "010060",
+          "name": "OCI홀딩스",
+          "PER": 2.4,
+          "PBR": 1.0,
+          "ROE%": 20.9,
+          "fscore": 7,
+          "안전마진%": 116,
+          "fwd_return%": 13.6
+        },
+        {
+          "code": "077500",
+          "name": "유니퀘스트",
+          "PER": 2.16,
+          "PBR": 0.42,
+          "ROE%": 19.6,
+          "fscore": 7,
+          "안전마진%": 395,
+          "fwd_return%": -19.4
+        }
+      ]
+    },
+    {
+      "year": 2023,
+      "universe_valid": 1293,
+      "n_picks": 10,
+      "n_priced": 10,
+      "port_return%": -13.6,
+      "kospi_return%": 7.6,
+      "excess%": -21.2,
+      "win_stocks": "2/10",
+      "picks": [
+        {
+          "code": "005010",
+          "name": "휴스틸",
+          "PER": 1.55,
+          "PBR": 0.39,
+          "ROE%": 25.0,
+          "fscore": 7,
+          "안전마진%": 511,
+          "fwd_return%": -26.2
+        },
+        {
+          "code": "009970",
+          "name": "영원무역홀딩스",
+          "PER": 0.93,
+          "PBR": 0.42,
+          "ROE%": 22.5,
+          "fscore": 5,
+          "안전마진%": 435,
+          "fwd_return%": 31.7
+        },
+        {
+          "code": "029460",
+          "name": "케이씨",
+          "PER": 1.83,
+          "PBR": 0.27,
+          "ROE%": 15.0,
+          "fscore": 6,
+          "안전마진%": 570,
+          "fwd_return%": 11.8
+        },
+        {
+          "code": "151860",
+          "name": "KG에코솔루션",
+          "PER": 0.84,
+          "PBR": 0.29,
+          "ROE%": 34.9,
+          "fscore": 6,
+          "안전마진%": 852,
+          "fwd_return%": -43.4
+        },
+        {
+          "code": "001390",
+          "name": "KG케미칼",
+          "PER": 0.54,
+          "PBR": 0.16,
+          "ROE%": 29.4,
+          "fscore": 6,
+          "안전마진%": 1523,
+          "fwd_return%": -25.0
+        },
+        {
+          "code": "111770",
+          "name": "영원무역",
+          "PER": 2.63,
+          "PBR": 0.63,
+          "ROE%": 23.9,
+          "fscore": 6,
+          "안전마진%": 269,
+          "fwd_return%": -13.0
+        },
+        {
+          "code": "069730",
+          "name": "DSR제강",
+          "PER": 2.6,
+          "PBR": 0.41,
+          "ROE%": 15.8,
+          "fscore": 7,
+          "안전마진%": 359,
+          "fwd_return%": -18.9
+        },
+        {
+          "code": "008060",
+          "name": "대덕",
+          "PER": 1.49,
+          "PBR": 0.13,
+          "ROE%": 9.0,
+          "fscore": 5,
+          "안전마진%": 959,
+          "fwd_return%": -1.1
+        },
+        {
+          "code": "011200",
+          "name": "HMM",
+          "PER": 1.91,
+          "PBR": 0.93,
+          "ROE%": 48.8,
+          "fscore": 6,
+          "안전마진%": 256,
+          "fwd_return%": -22.3
+        },
+        {
+          "code": "007700",
+          "name": "F&F홀딩스",
+          "PER": 2.0,
+          "PBR": 0.58,
+          "ROE%": 14.5,
+          "fscore": 5,
+          "안전마진%": 213,
+          "fwd_return%": -29.2
+        }
+      ]
+    },
+    {
+      "year": 2024,
+      "universe_valid": 1385,
+      "n_picks": 10,
+      "n_priced": 10,
+      "port_return%": 31.6,
+      "kospi_return%": -5.0,
+      "excess%": 36.7,
+      "win_stocks": "6/10",
+      "picks": [
+        {
+          "code": "018310",
+          "name": "삼목에스폼",
+          "PER": 2.42,
+          "PBR": 0.5,
+          "ROE%": 20.8,
+          "fscore": 7,
+          "안전마진%": 330,
+          "fwd_return%": 7.0
+        },
+        {
+          "code": "192080",
+          "name": "더블유게임즈",
+          "PER": 4.8,
+          "PBR": 0.77,
+          "ROE%": 16.1,
+          "fscore": 5,
+          "안전마진%": 146,
+          "fwd_return%": 28.9
+        },
+        {
+          "code": "042940",
+          "name": "상지건설",
+          "PER": 2.5,
+          "PBR": 0.86,
+          "ROE%": 34.5,
+          "fscore": 7,
+          "안전마진%": 222,
+          "fwd_return%": 127.4
+        },
+        {
+          "code": "084110",
+          "name": "휴온스글로벌",
+          "PER": 2.92,
+          "PBR": 0.3,
+          "ROE%": 10.2,
+          "fscore": 7,
+          "안전마진%": 409,
+          "fwd_return%": 134.1
+        },
+        {
+          "code": "007700",
+          "name": "F&F홀딩스",
+          "PER": 1.5,
+          "PBR": 0.37,
+          "ROE%": 12.3,
+          "fscore": 5,
+          "안전마진%": 351,
+          "fwd_return%": -16.3
+        },
+        {
+          "code": "006920",
+          "name": "모헨즈",
+          "PER": 3.99,
+          "PBR": 0.94,
+          "ROE%": 23.6,
+          "fscore": 7,
+          "안전마진%": 145,
+          "fwd_return%": 21.3
+        },
+        {
+          "code": "090410",
+          "name": "덕신이피씨",
+          "PER": 3.44,
+          "PBR": 0.73,
+          "ROE%": 21.1,
+          "fscore": 5,
+          "안전마진%": 200,
+          "fwd_return%": -7.3
+        },
+        {
+          "code": "306200",
+          "name": "세아제강",
+          "PER": 2.07,
+          "PBR": 0.39,
+          "ROE%": 18.9,
+          "fscore": 6,
+          "안전마진%": 428,
+          "fwd_return%": 28.7
+        },
+        {
+          "code": "036190",
+          "name": "금화피에스시",
+          "PER": 4.44,
+          "PBR": 0.51,
+          "ROE%": 11.5,
+          "fscore": 6,
+          "안전마진%": 215,
+          "fwd_return%": -6.4
+        },
+        {
+          "code": "079960",
+          "name": "동양이엔피",
+          "PER": 3.41,
+          "PBR": 0.49,
+          "ROE%": 14.4,
+          "fscore": 6,
+          "안전마진%": 267,
+          "fwd_return%": -1.2
+        }
+      ]
+    },
+    {
+      "year": 2025,
+      "universe_valid": 1454,
+      "n_picks": 10,
+      "n_priced": 10,
+      "port_return%": 71.3,
+      "kospi_return%": 158.1,
+      "excess%": -86.8,
+      "win_stocks": "10/10",
+      "picks": [
+        {
+          "code": "079960",
+          "name": "동양이엔피",
+          "PER": 2.27,
+          "PBR": 0.39,
+          "ROE%": 17.3,
+          "fscore": 6,
+          "안전마진%": 401,
+          "fwd_return%": 69.2
+        },
+        {
+          "code": "037460",
+          "name": "삼지전자",
+          "PER": 1.82,
+          "PBR": 0.27,
+          "ROE%": 14.7,
+          "fscore": 6,
+          "안전마진%": 581,
+          "fwd_return%": 212.0
+        },
+        {
+          "code": "011200",
+          "name": "HMM",
+          "PER": 4.55,
+          "PBR": 0.62,
+          "ROE%": 13.6,
+          "fscore": 6,
+          "안전마진%": 183,
+          "fwd_return%": 12.3
+        },
+        {
+          "code": "021820",
+          "name": "세원정공",
+          "PER": 1.53,
+          "PBR": 0.13,
+          "ROE%": 8.3,
+          "fscore": 6,
+          "안전마진%": 973,
+          "fwd_return%": 80.7
+        },
+        {
+          "code": "051370",
+          "name": "인터플렉스",
+          "PER": 3.54,
+          "PBR": 0.69,
+          "ROE%": 19.6,
+          "fscore": 6,
+          "안전마진%": 203,
+          "fwd_return%": 60.8
+        },
+        {
+          "code": "115440",
+          "name": "우리넷",
+          "PER": 3.68,
+          "PBR": 0.8,
+          "ROE%": 21.6,
+          "fscore": 6,
+          "안전마진%": 177,
+          "fwd_return%": 106.4
+        },
+        {
+          "code": "039010",
+          "name": "현대에이치티",
+          "PER": 4.33,
+          "PBR": 0.61,
+          "ROE%": 14.0,
+          "fscore": 7,
+          "안전마진%": 193,
+          "fwd_return%": 50.6
+        },
+        {
+          "code": "049520",
+          "name": "유아이엘",
+          "PER": 4.04,
+          "PBR": 0.61,
+          "ROE%": 15.0,
+          "fscore": 7,
+          "안전마진%": 203,
+          "fwd_return%": 3.5
+        },
+        {
+          "code": "036530",
+          "name": "SNT홀딩스",
+          "PER": 2.19,
+          "PBR": 0.51,
+          "ROE%": 11.6,
+          "fscore": 6,
+          "안전마진%": 218,
+          "fwd_return%": 87.3
+        },
+        {
+          "code": "004590",
+          "name": "한국가구",
+          "PER": 4.09,
+          "PBR": 0.35,
+          "ROE%": 8.4,
+          "fscore": 6,
+          "안전마진%": 299,
+          "fwd_return%": 30.3
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "port_CAGR%": 14.9,
+    "port_MDD%": -21.1,
+    "port_Sharpe": 0.54,
+    "kospi_CAGR%": 17.0,
+    "win_years": "2/7",
+    "avg_excess%": -7.5,
+    "stock_hit_rate": "36/70",
+    "avg_stock_return%": 19.5,
+    "median_stock_return%": 2.3
+  },
+  "disclosures": [
+    "생존편향: 유니버스=오늘 상장·유동성 통과 종목만. 과거 상폐·편출 미포함 → 수익률 상방 편의.",
+    "과거 시총=과거종가×현재주식수(고정). EV≈시총+부채. F-Score 7/9.",
+    "게이트 로직 유효성 검증용 — 실현가능 수익률 하한 아님. 진짜 검증은 point-in-time 상장이력 필요."
+  ]
+}
