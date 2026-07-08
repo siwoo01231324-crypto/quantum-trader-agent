@@ -1,0 +1,872 @@
+{
+  "generated_at": "2026-07-08T18:31:49.470797",
+  "rebal_years": [
+    2019,
+    2020,
+    2021,
+    2022,
+    2023,
+    2024,
+    2025
+  ],
+  "top_n": 10,
+  "n_current": 1584,
+  "n_delisted": 277,
+  "uncorrected": {
+    "CAGR%": 15.0,
+    "MDD%": -21.1,
+    "yearly": [
+      {
+        "year": 2019,
+        "n_pool": 1584,
+        "n_priced": 10,
+        "port%": -17.6,
+        "kospi%": -11.6,
+        "n_delisted_picks": 0,
+        "picks": [
+          {
+            "name": "신대양제지",
+            "delisted": false,
+            "ret%": -26.3
+          },
+          {
+            "name": "대덕",
+            "delisted": false,
+            "ret%": -22.5
+          },
+          {
+            "name": "삼보판지",
+            "delisted": false,
+            "ret%": -33.0
+          },
+          {
+            "name": "대한유화",
+            "delisted": false,
+            "ret%": -6.3
+          },
+          {
+            "name": "네오위즈홀딩스",
+            "delisted": false,
+            "ret%": 6.7
+          },
+          {
+            "name": "아바코",
+            "delisted": false,
+            "ret%": -8.2
+          },
+          {
+            "name": "한양이엔지",
+            "delisted": false,
+            "ret%": -35.8
+          },
+          {
+            "name": "아세아제지",
+            "delisted": false,
+            "ret%": -23.0
+          },
+          {
+            "name": "SIMPAC",
+            "delisted": false,
+            "ret%": -9.7
+          },
+          {
+            "name": "금화피에스시",
+            "delisted": false,
+            "ret%": -18.0
+          }
+        ]
+      },
+      {
+        "year": 2020,
+        "n_pool": 1584,
+        "n_priced": 10,
+        "port%": 61.4,
+        "kospi%": 61.6,
+        "n_delisted_picks": 0,
+        "picks": [
+          {
+            "name": "동양이엔피",
+            "delisted": false,
+            "ret%": 75.9
+          },
+          {
+            "name": "탑엔지니어링",
+            "delisted": false,
+            "ret%": 1.1
+          },
+          {
+            "name": "인탑스",
+            "delisted": false,
+            "ret%": 177.6
+          },
+          {
+            "name": "프로텍",
+            "delisted": false,
+            "ret%": 95.1
+          },
+          {
+            "name": "IPARK현대산업개발",
+            "delisted": false,
+            "ret%": 48.5
+          },
+          {
+            "name": "한미글로벌",
+            "delisted": false,
+            "ret%": 53.9
+          },
+          {
+            "name": "파트론",
+            "delisted": false,
+            "ret%": 32.5
+          },
+          {
+            "name": "영원무역홀딩스",
+            "delisted": false,
+            "ret%": 16.1
+          },
+          {
+            "name": "KPX케미칼",
+            "delisted": false,
+            "ret%": 45.1
+          },
+          {
+            "name": "비츠로테크",
+            "delisted": false,
+            "ret%": 67.7
+          }
+        ]
+      },
+      {
+        "year": 2021,
+        "n_pool": 1584,
+        "n_priced": 10,
+        "port%": 12.2,
+        "kospi%": -14.4,
+        "n_delisted_picks": 0,
+        "picks": [
+          {
+            "name": "삼정펄프",
+            "delisted": false,
+            "ret%": -8.7
+          },
+          {
+            "name": "동원개발",
+            "delisted": false,
+            "ret%": -19.4
+          },
+          {
+            "name": "샘표",
+            "delisted": false,
+            "ret%": 38.4
+          },
+          {
+            "name": "한국알콜",
+            "delisted": false,
+            "ret%": -16.7
+          },
+          {
+            "name": "콜마홀딩스",
+            "delisted": false,
+            "ret%": -22.7
+          },
+          {
+            "name": "신세계 I&C",
+            "delisted": false,
+            "ret%": -13.0
+          },
+          {
+            "name": "미래나노텍",
+            "delisted": false,
+            "ret%": 69.0
+          },
+          {
+            "name": "영원무역홀딩스",
+            "delisted": false,
+            "ret%": 7.7
+          },
+          {
+            "name": "금화피에스시",
+            "delisted": false,
+            "ret%": -1.4
+          },
+          {
+            "name": "우진",
+            "delisted": false,
+            "ret%": 88.7
+          }
+        ]
+      },
+      {
+        "year": 2022,
+        "n_pool": 1584,
+        "n_priced": 10,
+        "port%": -8.7,
+        "kospi%": -7.2,
+        "n_delisted_picks": 0,
+        "picks": [
+          {
+            "name": "풍산홀딩스",
+            "delisted": false,
+            "ret%": 23.6
+          },
+          {
+            "name": "효성",
+            "delisted": false,
+            "ret%": -21.0
+          },
+          {
+            "name": "금호석유화학",
+            "delisted": false,
+            "ret%": -11.7
+          },
+          {
+            "name": "한국철강",
+            "delisted": false,
+            "ret%": -24.5
+          },
+          {
+            "name": "대한제강",
+            "delisted": false,
+            "ret%": -40.9
+          },
+          {
+            "name": "포스코스틸리온",
+            "delisted": false,
+            "ret%": 0.0
+          },
+          {
+            "name": "영원무역홀딩스",
+            "delisted": false,
+            "ret%": 26.1
+          },
+          {
+            "name": "삼현철강",
+            "delisted": false,
+            "ret%": -32.5
+          },
+          {
+            "name": "OCI홀딩스",
+            "delisted": false,
+            "ret%": 13.6
+          },
+          {
+            "name": "유니퀘스트",
+            "delisted": false,
+            "ret%": -19.4
+          }
+        ]
+      },
+      {
+        "year": 2023,
+        "n_pool": 1584,
+        "n_priced": 10,
+        "port%": -13.6,
+        "kospi%": 7.6,
+        "n_delisted_picks": 0,
+        "picks": [
+          {
+            "name": "휴스틸",
+            "delisted": false,
+            "ret%": -26.2
+          },
+          {
+            "name": "영원무역홀딩스",
+            "delisted": false,
+            "ret%": 31.7
+          },
+          {
+            "name": "케이씨",
+            "delisted": false,
+            "ret%": 11.8
+          },
+          {
+            "name": "KG에코솔루션",
+            "delisted": false,
+            "ret%": -43.4
+          },
+          {
+            "name": "KG케미칼",
+            "delisted": false,
+            "ret%": -25.0
+          },
+          {
+            "name": "영원무역",
+            "delisted": false,
+            "ret%": -13.0
+          },
+          {
+            "name": "DSR제강",
+            "delisted": false,
+            "ret%": -18.9
+          },
+          {
+            "name": "대덕",
+            "delisted": false,
+            "ret%": -1.1
+          },
+          {
+            "name": "HMM",
+            "delisted": false,
+            "ret%": -22.3
+          },
+          {
+            "name": "F&F홀딩스",
+            "delisted": false,
+            "ret%": -29.2
+          }
+        ]
+      },
+      {
+        "year": 2024,
+        "n_pool": 1584,
+        "n_priced": 10,
+        "port%": 31.6,
+        "kospi%": -5.0,
+        "n_delisted_picks": 0,
+        "picks": [
+          {
+            "name": "삼목에스폼",
+            "delisted": false,
+            "ret%": 7.0
+          },
+          {
+            "name": "더블유게임즈",
+            "delisted": false,
+            "ret%": 28.9
+          },
+          {
+            "name": "상지건설",
+            "delisted": false,
+            "ret%": 127.4
+          },
+          {
+            "name": "휴온스글로벌",
+            "delisted": false,
+            "ret%": 134.1
+          },
+          {
+            "name": "F&F홀딩스",
+            "delisted": false,
+            "ret%": -16.3
+          },
+          {
+            "name": "모헨즈",
+            "delisted": false,
+            "ret%": 21.3
+          },
+          {
+            "name": "덕신이피씨",
+            "delisted": false,
+            "ret%": -7.3
+          },
+          {
+            "name": "세아제강",
+            "delisted": false,
+            "ret%": 28.7
+          },
+          {
+            "name": "금화피에스시",
+            "delisted": false,
+            "ret%": -6.4
+          },
+          {
+            "name": "동양이엔피",
+            "delisted": false,
+            "ret%": -1.2
+          }
+        ]
+      },
+      {
+        "year": 2025,
+        "n_pool": 1584,
+        "n_priced": 10,
+        "port%": 71.3,
+        "kospi%": 158.1,
+        "n_delisted_picks": 0,
+        "picks": [
+          {
+            "name": "동양이엔피",
+            "delisted": false,
+            "ret%": 69.2
+          },
+          {
+            "name": "삼지전자",
+            "delisted": false,
+            "ret%": 212.0
+          },
+          {
+            "name": "HMM",
+            "delisted": false,
+            "ret%": 12.3
+          },
+          {
+            "name": "세원정공",
+            "delisted": false,
+            "ret%": 80.7
+          },
+          {
+            "name": "인터플렉스",
+            "delisted": false,
+            "ret%": 60.8
+          },
+          {
+            "name": "우리넷",
+            "delisted": false,
+            "ret%": 106.4
+          },
+          {
+            "name": "현대에이치티",
+            "delisted": false,
+            "ret%": 50.6
+          },
+          {
+            "name": "유아이엘",
+            "delisted": false,
+            "ret%": 3.5
+          },
+          {
+            "name": "SNT홀딩스",
+            "delisted": false,
+            "ret%": 87.3
+          },
+          {
+            "name": "한국가구",
+            "delisted": false,
+            "ret%": 30.3
+          }
+        ]
+      }
+    ]
+  },
+  "corrected": {
+    "CAGR%": 16.5,
+    "MDD%": -17.8,
+    "yearly": [
+      {
+        "year": 2019,
+        "n_pool": 1372,
+        "n_priced": 10,
+        "port%": -17.8,
+        "kospi%": -11.6,
+        "n_delisted_picks": 1,
+        "picks": [
+          {
+            "name": "신대양제지",
+            "delisted": false,
+            "ret%": -26.3
+          },
+          {
+            "name": "대덕",
+            "delisted": false,
+            "ret%": -22.5
+          },
+          {
+            "name": "삼보판지",
+            "delisted": false,
+            "ret%": -33.0
+          },
+          {
+            "name": "대한유화",
+            "delisted": false,
+            "ret%": -6.3
+          },
+          {
+            "name": "네오위즈홀딩스",
+            "delisted": false,
+            "ret%": 6.7
+          },
+          {
+            "name": "아바코",
+            "delisted": false,
+            "ret%": -8.2
+          },
+          {
+            "name": "한양이엔지",
+            "delisted": false,
+            "ret%": -35.8
+          },
+          {
+            "name": "대양제지",
+            "delisted": true,
+            "ret%": -19.4
+          },
+          {
+            "name": "SIMPAC",
+            "delisted": false,
+            "ret%": -9.7
+          },
+          {
+            "name": "아세아제지",
+            "delisted": false,
+            "ret%": -23.0
+          }
+        ]
+      },
+      {
+        "year": 2020,
+        "n_pool": 1407,
+        "n_priced": 10,
+        "port%": 61.4,
+        "kospi%": 61.6,
+        "n_delisted_picks": 0,
+        "picks": [
+          {
+            "name": "동양이엔피",
+            "delisted": false,
+            "ret%": 75.9
+          },
+          {
+            "name": "탑엔지니어링",
+            "delisted": false,
+            "ret%": 1.1
+          },
+          {
+            "name": "인탑스",
+            "delisted": false,
+            "ret%": 177.6
+          },
+          {
+            "name": "프로텍",
+            "delisted": false,
+            "ret%": 95.1
+          },
+          {
+            "name": "IPARK현대산업개발",
+            "delisted": false,
+            "ret%": 48.5
+          },
+          {
+            "name": "한미글로벌",
+            "delisted": false,
+            "ret%": 53.9
+          },
+          {
+            "name": "파트론",
+            "delisted": false,
+            "ret%": 32.5
+          },
+          {
+            "name": "영원무역홀딩스",
+            "delisted": false,
+            "ret%": 16.1
+          },
+          {
+            "name": "KPX케미칼",
+            "delisted": false,
+            "ret%": 45.1
+          },
+          {
+            "name": "비츠로테크",
+            "delisted": false,
+            "ret%": 67.7
+          }
+        ]
+      },
+      {
+        "year": 2021,
+        "n_pool": 1442,
+        "n_priced": 10,
+        "port%": 12.2,
+        "kospi%": -14.4,
+        "n_delisted_picks": 0,
+        "picks": [
+          {
+            "name": "삼정펄프",
+            "delisted": false,
+            "ret%": -8.7
+          },
+          {
+            "name": "샘표",
+            "delisted": false,
+            "ret%": 38.4
+          },
+          {
+            "name": "동원개발",
+            "delisted": false,
+            "ret%": -19.4
+          },
+          {
+            "name": "한국알콜",
+            "delisted": false,
+            "ret%": -16.7
+          },
+          {
+            "name": "콜마홀딩스",
+            "delisted": false,
+            "ret%": -22.7
+          },
+          {
+            "name": "신세계 I&C",
+            "delisted": false,
+            "ret%": -13.0
+          },
+          {
+            "name": "미래나노텍",
+            "delisted": false,
+            "ret%": 69.0
+          },
+          {
+            "name": "영원무역홀딩스",
+            "delisted": false,
+            "ret%": 7.7
+          },
+          {
+            "name": "금화피에스시",
+            "delisted": false,
+            "ret%": -1.4
+          },
+          {
+            "name": "우진",
+            "delisted": false,
+            "ret%": 88.7
+          }
+        ]
+      },
+      {
+        "year": 2022,
+        "n_pool": 1470,
+        "n_priced": 10,
+        "port%": -8.7,
+        "kospi%": -7.2,
+        "n_delisted_picks": 0,
+        "picks": [
+          {
+            "name": "풍산홀딩스",
+            "delisted": false,
+            "ret%": 23.6
+          },
+          {
+            "name": "금호석유화학",
+            "delisted": false,
+            "ret%": -11.7
+          },
+          {
+            "name": "효성",
+            "delisted": false,
+            "ret%": -21.0
+          },
+          {
+            "name": "한국철강",
+            "delisted": false,
+            "ret%": -24.5
+          },
+          {
+            "name": "대한제강",
+            "delisted": false,
+            "ret%": -40.9
+          },
+          {
+            "name": "포스코스틸리온",
+            "delisted": false,
+            "ret%": 0.0
+          },
+          {
+            "name": "영원무역홀딩스",
+            "delisted": false,
+            "ret%": 26.1
+          },
+          {
+            "name": "삼현철강",
+            "delisted": false,
+            "ret%": -32.5
+          },
+          {
+            "name": "OCI홀딩스",
+            "delisted": false,
+            "ret%": 13.6
+          },
+          {
+            "name": "유니퀘스트",
+            "delisted": false,
+            "ret%": -19.4
+          }
+        ]
+      },
+      {
+        "year": 2023,
+        "n_pool": 1502,
+        "n_priced": 10,
+        "port%": -5.1,
+        "kospi%": 7.6,
+        "n_delisted_picks": 0,
+        "picks": [
+          {
+            "name": "휴스틸",
+            "delisted": false,
+            "ret%": -26.2
+          },
+          {
+            "name": "영원무역홀딩스",
+            "delisted": false,
+            "ret%": 31.7
+          },
+          {
+            "name": "케이씨",
+            "delisted": false,
+            "ret%": 11.8
+          },
+          {
+            "name": "KG에코솔루션",
+            "delisted": false,
+            "ret%": -43.4
+          },
+          {
+            "name": "KG케미칼",
+            "delisted": false,
+            "ret%": -25.0
+          },
+          {
+            "name": "영원무역",
+            "delisted": false,
+            "ret%": -13.0
+          },
+          {
+            "name": "DSR제강",
+            "delisted": false,
+            "ret%": -18.9
+          },
+          {
+            "name": "대덕",
+            "delisted": false,
+            "ret%": -1.1
+          },
+          {
+            "name": "HMM",
+            "delisted": false,
+            "ret%": -22.3
+          },
+          {
+            "name": "세아제강지주",
+            "delisted": false,
+            "ret%": 55.5
+          }
+        ]
+      },
+      {
+        "year": 2024,
+        "n_pool": 1536,
+        "n_priced": 10,
+        "port%": 31.6,
+        "kospi%": -5.0,
+        "n_delisted_picks": 0,
+        "picks": [
+          {
+            "name": "삼목에스폼",
+            "delisted": false,
+            "ret%": 7.0
+          },
+          {
+            "name": "더블유게임즈",
+            "delisted": false,
+            "ret%": 28.9
+          },
+          {
+            "name": "상지건설",
+            "delisted": false,
+            "ret%": 127.4
+          },
+          {
+            "name": "F&F홀딩스",
+            "delisted": false,
+            "ret%": -16.3
+          },
+          {
+            "name": "휴온스글로벌",
+            "delisted": false,
+            "ret%": 134.1
+          },
+          {
+            "name": "모헨즈",
+            "delisted": false,
+            "ret%": 21.3
+          },
+          {
+            "name": "덕신이피씨",
+            "delisted": false,
+            "ret%": -7.3
+          },
+          {
+            "name": "세아제강",
+            "delisted": false,
+            "ret%": 28.7
+          },
+          {
+            "name": "금화피에스시",
+            "delisted": false,
+            "ret%": -6.4
+          },
+          {
+            "name": "동양이엔피",
+            "delisted": false,
+            "ret%": -1.2
+          }
+        ]
+      },
+      {
+        "year": 2025,
+        "n_pool": 1567,
+        "n_priced": 10,
+        "port%": 71.3,
+        "kospi%": 158.1,
+        "n_delisted_picks": 0,
+        "picks": [
+          {
+            "name": "동양이엔피",
+            "delisted": false,
+            "ret%": 69.2
+          },
+          {
+            "name": "삼지전자",
+            "delisted": false,
+            "ret%": 212.0
+          },
+          {
+            "name": "HMM",
+            "delisted": false,
+            "ret%": 12.3
+          },
+          {
+            "name": "세원정공",
+            "delisted": false,
+            "ret%": 80.7
+          },
+          {
+            "name": "인터플렉스",
+            "delisted": false,
+            "ret%": 60.8
+          },
+          {
+            "name": "우리넷",
+            "delisted": false,
+            "ret%": 106.4
+          },
+          {
+            "name": "현대에이치티",
+            "delisted": false,
+            "ret%": 50.6
+          },
+          {
+            "name": "유아이엘",
+            "delisted": false,
+            "ret%": 3.5
+          },
+          {
+            "name": "SNT홀딩스",
+            "delisted": false,
+            "ret%": 87.3
+          },
+          {
+            "name": "한국가구",
+            "delisted": false,
+            "ret%": 30.3
+          }
+        ]
+      }
+    ]
+  },
+  "disclosures": [
+    "상폐종목 상폐직전가로 청산(부도성=급락가 반영). 정리매매 -100% 아닌 마지막가 → 약간 낙관.",
+    "현 유니버스 상장일=KRX-DESC. 상폐=KRX-DELISTING(보통주·영업회사 277).",
+    "여전히 근사: 액면분할·무상증자 주식수 고정, EV≈시총+부채, F-Score 7/9."
+  ]
+}

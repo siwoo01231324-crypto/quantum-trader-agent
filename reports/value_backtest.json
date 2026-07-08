@@ -1,0 +1,531 @@
+{
+  "generated_at": "2026-07-08T00:56:38.515220",
+  "universe_size": 197,
+  "financials_covered": 189,
+  "prices_covered": 193,
+  "fin_years": [
+    2016,
+    2017,
+    2018,
+    2019,
+    2020,
+    2021,
+    2022,
+    2023,
+    2024
+  ],
+  "rebal_years": [
+    2018,
+    2019,
+    2020,
+    2021,
+    2022,
+    2023,
+    2024,
+    2025
+  ],
+  "top_n": 20,
+  "fscore_max": 7,
+  "fscore_threshold": 5,
+  "year_universe_counts": {
+    "2018": 141,
+    "2019": 141,
+    "2020": 144,
+    "2021": 146,
+    "2022": 148,
+    "2023": 146,
+    "2024": 157,
+    "2025": 158
+  },
+  "backtests": {
+    "composite": {
+      "method": "composite",
+      "yearly": [
+        {
+          "year": 2018,
+          "n_picks": 20,
+          "n_priced": 20,
+          "port_return": -0.1033418355230243,
+          "kospi_return": -0.12395343844667606,
+          "excess": 0.02061160292365176
+        },
+        {
+          "year": 2019,
+          "n_picks": 20,
+          "n_priced": 20,
+          "port_return": -0.2180531371577124,
+          "kospi_return": -0.11618767556578136,
+          "excess": -0.10186546159193105
+        },
+        {
+          "year": 2020,
+          "n_picks": 20,
+          "n_priced": 20,
+          "port_return": 0.6403651484262441,
+          "kospi_return": 0.6163096387274334,
+          "excess": 0.024055509698810762
+        },
+        {
+          "year": 2021,
+          "n_picks": 20,
+          "n_priced": 20,
+          "port_return": -0.04695672719178981,
+          "kospi_return": -0.14384693093085454,
+          "excess": 0.09689020373906473
+        },
+        {
+          "year": 2022,
+          "n_picks": 20,
+          "n_priced": 20,
+          "port_return": -0.06173648804042196,
+          "kospi_return": -0.07180571789020607,
+          "excess": 0.01006922984978411
+        },
+        {
+          "year": 2023,
+          "n_picks": 20,
+          "n_priced": 20,
+          "port_return": -0.015780438100094267,
+          "kospi_return": 0.07616538678328855,
+          "excess": -0.09194582488338282
+        },
+        {
+          "year": 2024,
+          "n_picks": 20,
+          "n_priced": 20,
+          "port_return": 0.0898927606317216,
+          "kospi_return": -0.050314628945862916,
+          "excess": 0.1402073895775845
+        },
+        {
+          "year": 2025,
+          "n_picks": 20,
+          "n_priced": 20,
+          "port_return": 1.083953829521532,
+          "kospi_return": 1.581101536800685,
+          "excess": -0.49714770727915303
+        }
+      ],
+      "port_stats": {
+        "CAGR": 0.10966847437911387,
+        "MDD": -0.2988609612453049,
+        "Sharpe": 0.37928664722963495,
+        "years": 8,
+        "final_multiple": 2.2990371201339124
+      },
+      "bench_stats": {
+        "CAGR": 0.1281276562245195,
+        "MDD": -0.22573925212095192,
+        "Sharpe": 0.3658871900035309,
+        "years": 8,
+        "final_multiple": 2.6234087891292774
+      },
+      "avg_excess": -0.04989063224569638,
+      "win_years": 5,
+      "total_years": 8
+    },
+    "magic_formula": {
+      "method": "magic_formula",
+      "yearly": [
+        {
+          "year": 2018,
+          "n_picks": 20,
+          "n_priced": 20,
+          "port_return": 0.060774034579931135,
+          "kospi_return": -0.12395343844667606,
+          "excess": 0.1847274730266072
+        },
+        {
+          "year": 2019,
+          "n_picks": 20,
+          "n_priced": 20,
+          "port_return": -0.1522303061912787,
+          "kospi_return": -0.11618767556578136,
+          "excess": -0.03604263062549734
+        },
+        {
+          "year": 2020,
+          "n_picks": 20,
+          "n_priced": 20,
+          "port_return": 0.728839092872545,
+          "kospi_return": 0.6163096387274334,
+          "excess": 0.11252945414511162
+        },
+        {
+          "year": 2021,
+          "n_picks": 20,
+          "n_priced": 20,
+          "port_return": -0.08550504192090198,
+          "kospi_return": -0.14384693093085454,
+          "excess": 0.05834188900995256
+        },
+        {
+          "year": 2022,
+          "n_picks": 20,
+          "n_priced": 20,
+          "port_return": -0.1272770366635365,
+          "kospi_return": -0.07180571789020607,
+          "excess": -0.05547131877333045
+        },
+        {
+          "year": 2023,
+          "n_picks": 20,
+          "n_priced": 20,
+          "port_return": 0.14878362111813423,
+          "kospi_return": 0.07616538678328855,
+          "excess": 0.07261823433484568
+        },
+        {
+          "year": 2024,
+          "n_picks": 20,
+          "n_priced": 20,
+          "port_return": 0.014188438568818124,
+          "kospi_return": -0.050314628945862916,
+          "excess": 0.06450306751468105
+        },
+        {
+          "year": 2025,
+          "n_picks": 20,
+          "n_priced": 20,
+          "port_return": 0.6280593120270146,
+          "kospi_return": 1.581101536800685,
+          "excess": -0.9530422247736705
+        }
+      ],
+      "port_stats": {
+        "CAGR": 0.11292916050005375,
+        "MDD": -0.2018992502289546,
+        "Sharpe": 0.4456968048304601,
+        "years": 8,
+        "final_multiple": 2.353640747010202
+      },
+      "bench_stats": {
+        "CAGR": 0.1281276562245195,
+        "MDD": -0.22573925212095192,
+        "Sharpe": 0.3658871900035309,
+        "years": 8,
+        "final_multiple": 2.6234087891292774
+      },
+      "avg_excess": -0.06897950701766252,
+      "win_years": 5,
+      "total_years": 8
+    },
+    "fscore": {
+      "method": "fscore_ge_5",
+      "yearly": [
+        {
+          "year": 2018,
+          "n_picks": 20,
+          "n_priced": 20,
+          "port_return": -0.0918739248966279,
+          "kospi_return": -0.12395343844667606,
+          "excess": 0.03207951355004815
+        },
+        {
+          "year": 2019,
+          "n_picks": 20,
+          "n_priced": 20,
+          "port_return": -0.1446710061497975,
+          "kospi_return": -0.11618767556578136,
+          "excess": -0.028483330584016142
+        },
+        {
+          "year": 2020,
+          "n_picks": 20,
+          "n_priced": 20,
+          "port_return": 0.5569078712169885,
+          "kospi_return": 0.6163096387274334,
+          "excess": -0.0594017675104449
+        },
+        {
+          "year": 2021,
+          "n_picks": 20,
+          "n_priced": 20,
+          "port_return": -0.05442791773061327,
+          "kospi_return": -0.14384693093085454,
+          "excess": 0.08941901320024127
+        },
+        {
+          "year": 2022,
+          "n_picks": 20,
+          "n_priced": 20,
+          "port_return": -0.10574054527818717,
+          "kospi_return": -0.07180571789020607,
+          "excess": -0.033934827387981106
+        },
+        {
+          "year": 2023,
+          "n_picks": 20,
+          "n_priced": 20,
+          "port_return": 0.2181851009360955,
+          "kospi_return": 0.07616538678328855,
+          "excess": 0.14201971415280695
+        },
+        {
+          "year": 2024,
+          "n_picks": 20,
+          "n_priced": 20,
+          "port_return": 0.11264026345024747,
+          "kospi_return": -0.050314628945862916,
+          "excess": 0.16295489239611038
+        },
+        {
+          "year": 2025,
+          "n_picks": 20,
+          "n_priced": 20,
+          "port_return": 1.046038170094003,
+          "kospi_return": 1.581101536800685,
+          "excess": -0.5350633667066822
+        }
+      ],
+      "port_stats": {
+        "CAGR": 0.13916144506464168,
+        "MDD": -0.22325343789269936,
+        "Sharpe": 0.4615824223567116,
+        "years": 8,
+        "final_multiple": 2.8358432563498064
+      },
+      "bench_stats": {
+        "CAGR": 0.1281276562245195,
+        "MDD": -0.22573925212095192,
+        "Sharpe": 0.3658871900035309,
+        "years": 8,
+        "final_multiple": 2.6234087891292774
+      },
+      "avg_excess": -0.028801269861239695,
+      "win_years": 4,
+      "total_years": 8
+    }
+  },
+  "current_top20_composite": [
+    {
+      "code": "001800",
+      "name": "오리온홀딩스",
+      "PER": 3.31,
+      "PBR": 0.32,
+      "PSR": 0.5,
+      "ROE": 9.8,
+      "debt_ratio_pct": 22.0,
+      "fscore": 4,
+      "composite": 0.8177
+    },
+    {
+      "code": "002790",
+      "name": "아모레퍼시픽홀딩스",
+      "PER": 2.94,
+      "PBR": 0.27,
+      "PSR": 0.45,
+      "ROE": 9.3,
+      "debt_ratio_pct": 22.0,
+      "fscore": 4,
+      "composite": 0.8016
+    },
+    {
+      "code": "025530",
+      "name": "SJM홀딩스",
+      "PER": 2.4,
+      "PBR": 0.17,
+      "PSR": 0.25,
+      "ROE": 7.0,
+      "debt_ratio_pct": 22.0,
+      "fscore": 6,
+      "composite": 0.8013
+    },
+    {
+      "code": "011200",
+      "name": "HMM",
+      "PER": 4.89,
+      "PBR": 0.66,
+      "PSR": 1.58,
+      "ROE": 13.6,
+      "debt_ratio_pct": 22.0,
+      "fscore": 6,
+      "composite": 0.7856
+    },
+    {
+      "code": "025000",
+      "name": "KPX케미칼",
+      "PER": 3.5,
+      "PBR": 0.32,
+      "PSR": 0.24,
+      "ROE": 9.1,
+      "debt_ratio_pct": 26.0,
+      "fscore": 4,
+      "composite": 0.7664
+    },
+    {
+      "code": "005180",
+      "name": "빙그레",
+      "PER": 5.99,
+      "PBR": 0.86,
+      "PSR": 0.42,
+      "ROE": 14.3,
+      "debt_ratio_pct": 39.0,
+      "fscore": 4,
+      "composite": 0.7276
+    },
+    {
+      "code": "004140",
+      "name": "동방",
+      "PER": 4.3,
+      "PBR": 0.56,
+      "PSR": 0.1,
+      "ROE": 13.1,
+      "debt_ratio_pct": 296.0,
+      "fscore": 6,
+      "composite": 0.726
+    },
+    {
+      "code": "192080",
+      "name": "더블유게임즈",
+      "PER": 5.8,
+      "PBR": 0.91,
+      "PSR": 2.23,
+      "ROE": 15.6,
+      "debt_ratio_pct": 6.0,
+      "fscore": 5,
+      "composite": 0.7219
+    },
+    {
+      "code": "001120",
+      "name": "LX인터내셔널",
+      "PER": 5.45,
+      "PBR": 0.44,
+      "PSR": 0.09,
+      "ROE": 8.1,
+      "debt_ratio_pct": 169.0,
+      "fscore": 5,
+      "composite": 0.7209
+    },
+    {
+      "code": "084690",
+      "name": "대상홀딩스",
+      "PER": 3.51,
+      "PBR": 0.17,
+      "PSR": 0.05,
+      "ROE": 4.8,
+      "debt_ratio_pct": 164.0,
+      "fscore": 4,
+      "composite": 0.7122
+    },
+    {
+      "code": "000270",
+      "name": "기아",
+      "PER": 6.14,
+      "PBR": 1.07,
+      "PSR": 0.56,
+      "ROE": 17.5,
+      "debt_ratio_pct": 66.0,
+      "fscore": 5,
+      "composite": 0.7048
+    },
+    {
+      "code": "000070",
+      "name": "삼양홀딩스",
+      "PER": 5.01,
+      "PBR": 0.15,
+      "PSR": 0.13,
+      "ROE": 3.0,
+      "debt_ratio_pct": 76.0,
+      "fscore": 5,
+      "composite": 0.6957
+    },
+    {
+      "code": "001680",
+      "name": "대상",
+      "PER": 6.43,
+      "PBR": 0.43,
+      "PSR": 0.15,
+      "ROE": 6.7,
+      "debt_ratio_pct": 142.0,
+      "fscore": 5,
+      "composite": 0.6924
+    },
+    {
+      "code": "000120",
+      "name": "CJ대한통운",
+      "PER": 6.52,
+      "PBR": 0.41,
+      "PSR": 0.14,
+      "ROE": 6.3,
+      "debt_ratio_pct": 131.0,
+      "fscore": 5,
+      "composite": 0.6898
+    },
+    {
+      "code": "192400",
+      "name": "쿠쿠홀딩스",
+      "PER": 6.81,
+      "PBR": 0.78,
+      "PSR": 1.12,
+      "ROE": 11.5,
+      "debt_ratio_pct": 14.0,
+      "fscore": 4,
+      "composite": 0.689
+    },
+    {
+      "code": "161390",
+      "name": "한국타이어앤테크놀로지",
+      "PER": 8.12,
+      "PBR": 0.82,
+      "PSR": 0.98,
+      "ROE": 10.1,
+      "debt_ratio_pct": 42.0,
+      "fscore": 4,
+      "composite": 0.6801
+    },
+    {
+      "code": "298020",
+      "name": "효성티앤씨",
+      "PER": 6.57,
+      "PBR": 0.66,
+      "PSR": 0.16,
+      "ROE": 10.1,
+      "debt_ratio_pct": 160.0,
+      "fscore": 4,
+      "composite": 0.6711
+    },
+    {
+      "code": "259960",
+      "name": "크래프톤",
+      "PER": 8.68,
+      "PBR": 1.66,
+      "PSR": 4.17,
+      "ROE": 19.1,
+      "debt_ratio_pct": 16.0,
+      "fscore": 5,
+      "composite": 0.6695
+    },
+    {
+      "code": "214420",
+      "name": "토니모리",
+      "PER": 7.96,
+      "PBR": 1.13,
+      "PSR": 0.75,
+      "ROE": 14.2,
+      "debt_ratio_pct": 80.0,
+      "fscore": 7,
+      "composite": 0.6685
+    },
+    {
+      "code": "005850",
+      "name": "에스엘",
+      "PER": 7.05,
+      "PBR": 1.12,
+      "PSR": 0.54,
+      "ROE": 15.9,
+      "debt_ratio_pct": 54.0,
+      "fscore": 5,
+      "composite": 0.6663
+    }
+  ],
+  "current_universe_valid": 158,
+  "disclosures": [
+    "과거 시총 = 과거 종가 × 현재 주식수(고정) — 액면분할/증자 오차 감수",
+    "EV ≈ 시총 + 부채 (현금 데이터 없음), EBITDA ≈ 영업이익",
+    "F-Score 가용 7개 컴포넌트만(CFO 2종·신주발행·매출총이익률 결측), 임계 ≥5",
+    "생존편향: 현 KOSPI200 구성만 사용, 과거 편입/퇴출 미반영 → 성과 상방 편의",
+    "금융업(매출액 없음)은 자동 제외",
+    "Sharpe = 연수익률 기반(표본 8), 소표본 주의"
+  ]
+}

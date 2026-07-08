@@ -1,0 +1,1272 @@
+{
+  "generated_at": "2026-07-08T18:04:21.444501",
+  "params": {
+    "N_SLOTS": 10,
+    "TP_PCT": 0.35,
+    "MAX_HOLD_DAYS": 1095,
+    "STOP_PCT": null,
+    "start": "2019-05-01",
+    "end": "2026-05-01"
+  },
+  "sector_relative": true,
+  "holdco_mode": "discount",
+  "summary": {
+    "final_multiple": 2.63,
+    "CAGR%": 14.8,
+    "MDD%": -31.1,
+    "Sharpe": 0.65,
+    "KOSPI_CAGR%": 17.0,
+    "n_trades": 60,
+    "trade_win_rate": "33/60",
+    "exit_reasons": {
+      "밸류정상화": 58,
+      "최대보유": 2
+    },
+    "avg_hold_days": 426,
+    "avg_trade_return%": 21.6
+  },
+  "yearly_entries": [
+    {
+      "entry_year": "2019",
+      "n": 10,
+      "win_rate": "2/10",
+      "avg_return%": -12.9,
+      "median_return%": -13.8,
+      "best": "삼보판지 +14%",
+      "worst": "한양이엔지 -36%"
+    },
+    {
+      "entry_year": "2020",
+      "n": 9,
+      "win_rate": "9/9",
+      "avg_return%": 65.3,
+      "median_return%": 53.9,
+      "best": "인탑스 +178%",
+      "worst": "탑엔지니어링 +1%"
+    },
+    {
+      "entry_year": "2021",
+      "n": 8,
+      "win_rate": "2/8",
+      "avg_return%": 3.2,
+      "median_return%": -10.8,
+      "best": "미래나노텍 +69%",
+      "worst": "콜마홀딩스 -23%"
+    },
+    {
+      "entry_year": "2022",
+      "n": 9,
+      "win_rate": "3/9",
+      "avg_return%": -6.0,
+      "median_return%": -11.7,
+      "best": "한국철강 +31%",
+      "worst": "대한제강 -37%"
+    },
+    {
+      "entry_year": "2023",
+      "n": 7,
+      "win_rate": "2/7",
+      "avg_return%": -15.1,
+      "median_return%": -18.9,
+      "best": "영원무역홀딩스 +32%",
+      "worst": "KG케미칼 -48%"
+    },
+    {
+      "entry_year": "2024",
+      "n": 9,
+      "win_rate": "7/9",
+      "avg_return%": 42.0,
+      "median_return%": 28.7,
+      "best": "휴온스글로벌 +134%",
+      "worst": "F&F홀딩스 -16%"
+    },
+    {
+      "entry_year": "2025",
+      "n": 8,
+      "win_rate": "8/8",
+      "avg_return%": 74.4,
+      "median_return%": 65.0,
+      "best": "삼지전자 +212%",
+      "worst": "유아이엘 +4%"
+    }
+  ],
+  "trades": [
+    {
+      "code": "016590",
+      "name": "신대양제지",
+      "entry": "2019-05-01",
+      "exit": "2020-05-01",
+      "hold_days": 366,
+      "return%": -26.3,
+      "reason": "밸류정상화",
+      "entry_price": 8280,
+      "exit_price": 6100
+    },
+    {
+      "code": "008060",
+      "name": "대덕",
+      "entry": "2019-05-01",
+      "exit": "2020-05-01",
+      "hold_days": 366,
+      "return%": -22.5,
+      "reason": "밸류정상화",
+      "entry_price": 10652,
+      "exit_price": 8250
+    },
+    {
+      "code": "006650",
+      "name": "대한유화",
+      "entry": "2019-05-01",
+      "exit": "2020-05-01",
+      "hold_days": 366,
+      "return%": -6.3,
+      "reason": "밸류정상화",
+      "entry_price": 150000,
+      "exit_price": 140500
+    },
+    {
+      "code": "042420",
+      "name": "네오위즈홀딩스",
+      "entry": "2019-05-01",
+      "exit": "2020-05-01",
+      "hold_days": 366,
+      "return%": 6.7,
+      "reason": "밸류정상화",
+      "entry_price": 13500,
+      "exit_price": 14400
+    },
+    {
+      "code": "083930",
+      "name": "아바코",
+      "entry": "2019-05-01",
+      "exit": "2020-05-01",
+      "hold_days": 366,
+      "return%": -8.2,
+      "reason": "밸류정상화",
+      "entry_price": 6940,
+      "exit_price": 6370
+    },
+    {
+      "code": "045100",
+      "name": "한양이엔지",
+      "entry": "2019-05-01",
+      "exit": "2020-05-01",
+      "hold_days": 366,
+      "return%": -35.8,
+      "reason": "밸류정상화",
+      "entry_price": 15650,
+      "exit_price": 10050
+    },
+    {
+      "code": "002310",
+      "name": "아세아제지",
+      "entry": "2019-05-01",
+      "exit": "2020-05-01",
+      "hold_days": 366,
+      "return%": -23.0,
+      "reason": "밸류정상화",
+      "entry_price": 8530,
+      "exit_price": 6570
+    },
+    {
+      "code": "009160",
+      "name": "SIMPAC",
+      "entry": "2019-05-01",
+      "exit": "2020-05-01",
+      "hold_days": 366,
+      "return%": -9.7,
+      "reason": "밸류정상화",
+      "entry_price": 2570,
+      "exit_price": 2320
+    },
+    {
+      "code": "036190",
+      "name": "금화피에스시",
+      "entry": "2019-05-01",
+      "exit": "2020-05-01",
+      "hold_days": 366,
+      "return%": -18.0,
+      "reason": "밸류정상화",
+      "entry_price": 34650,
+      "exit_price": 28400
+    },
+    {
+      "code": "079960",
+      "name": "동양이엔피",
+      "entry": "2020-05-01",
+      "exit": "2021-05-01",
+      "hold_days": 365,
+      "return%": 75.9,
+      "reason": "밸류정상화",
+      "entry_price": 10600,
+      "exit_price": 18650
+    },
+    {
+      "code": "065130",
+      "name": "탑엔지니어링",
+      "entry": "2020-05-01",
+      "exit": "2021-05-01",
+      "hold_days": 365,
+      "return%": 1.1,
+      "reason": "밸류정상화",
+      "entry_price": 9050,
+      "exit_price": 9150
+    },
+    {
+      "code": "049070",
+      "name": "인탑스",
+      "entry": "2020-05-01",
+      "exit": "2021-05-01",
+      "hold_days": 365,
+      "return%": 177.6,
+      "reason": "밸류정상화",
+      "entry_price": 10950,
+      "exit_price": 30400
+    },
+    {
+      "code": "053610",
+      "name": "프로텍",
+      "entry": "2020-05-01",
+      "exit": "2021-05-01",
+      "hold_days": 365,
+      "return%": 95.1,
+      "reason": "밸류정상화",
+      "entry_price": 14250,
+      "exit_price": 27800
+    },
+    {
+      "code": "294870",
+      "name": "IPARK현대산업개발",
+      "entry": "2020-05-01",
+      "exit": "2021-05-01",
+      "hold_days": 365,
+      "return%": 48.5,
+      "reason": "밸류정상화",
+      "entry_price": 18850,
+      "exit_price": 28000
+    },
+    {
+      "code": "053690",
+      "name": "한미글로벌",
+      "entry": "2020-05-01",
+      "exit": "2021-05-01",
+      "hold_days": 365,
+      "return%": 53.9,
+      "reason": "밸류정상화",
+      "entry_price": 7730,
+      "exit_price": 11900
+    },
+    {
+      "code": "091700",
+      "name": "파트론",
+      "entry": "2020-05-01",
+      "exit": "2021-05-01",
+      "hold_days": 365,
+      "return%": 32.5,
+      "reason": "밸류정상화",
+      "entry_price": 8040,
+      "exit_price": 10650
+    },
+    {
+      "code": "025000",
+      "name": "KPX케미칼",
+      "entry": "2020-05-01",
+      "exit": "2021-05-01",
+      "hold_days": 365,
+      "return%": 45.1,
+      "reason": "밸류정상화",
+      "entry_price": 46032,
+      "exit_price": 66784
+    },
+    {
+      "code": "023600",
+      "name": "삼보판지",
+      "entry": "2019-05-01",
+      "exit": "2022-05-01",
+      "hold_days": 1096,
+      "return%": 14.2,
+      "reason": "최대보유",
+      "entry_price": 11950,
+      "exit_price": 13650
+    },
+    {
+      "code": "009770",
+      "name": "삼정펄프",
+      "entry": "2021-05-01",
+      "exit": "2022-05-01",
+      "hold_days": 365,
+      "return%": -8.7,
+      "reason": "밸류정상화",
+      "entry_price": 32700,
+      "exit_price": 29850
+    },
+    {
+      "code": "013120",
+      "name": "동원개발",
+      "entry": "2021-05-01",
+      "exit": "2022-05-01",
+      "hold_days": 365,
+      "return%": -19.4,
+      "reason": "밸류정상화",
+      "entry_price": 6430,
+      "exit_price": 5180
+    },
+    {
+      "code": "007540",
+      "name": "샘표",
+      "entry": "2021-05-01",
+      "exit": "2022-05-01",
+      "hold_days": 365,
+      "return%": 38.4,
+      "reason": "밸류정상화",
+      "entry_price": 51300,
+      "exit_price": 71000
+    },
+    {
+      "code": "017890",
+      "name": "한국알콜",
+      "entry": "2021-05-01",
+      "exit": "2022-05-01",
+      "hold_days": 365,
+      "return%": -16.7,
+      "reason": "밸류정상화",
+      "entry_price": 14650,
+      "exit_price": 12200
+    },
+    {
+      "code": "024720",
+      "name": "콜마홀딩스",
+      "entry": "2021-05-01",
+      "exit": "2022-05-01",
+      "hold_days": 365,
+      "return%": -22.7,
+      "reason": "밸류정상화",
+      "entry_price": 14660,
+      "exit_price": 11333
+    },
+    {
+      "code": "035510",
+      "name": "신세계 I&C",
+      "entry": "2021-05-01",
+      "exit": "2022-05-01",
+      "hold_days": 365,
+      "return%": -13.0,
+      "reason": "밸류정상화",
+      "entry_price": 18850,
+      "exit_price": 16400
+    },
+    {
+      "code": "095500",
+      "name": "미래나노텍",
+      "entry": "2021-05-01",
+      "exit": "2022-05-01",
+      "hold_days": 365,
+      "return%": 69.0,
+      "reason": "밸류정상화",
+      "entry_price": 4620,
+      "exit_price": 7810
+    },
+    {
+      "code": "036190",
+      "name": "금화피에스시",
+      "entry": "2021-05-01",
+      "exit": "2022-05-01",
+      "hold_days": 365,
+      "return%": -1.4,
+      "reason": "밸류정상화",
+      "entry_price": 32650,
+      "exit_price": 32200
+    },
+    {
+      "code": "009970",
+      "name": "영원무역홀딩스",
+      "entry": "2020-05-01",
+      "exit": "2023-05-01",
+      "hold_days": 1095,
+      "return%": 57.6,
+      "reason": "최대보유",
+      "entry_price": 41050,
+      "exit_price": 64700
+    },
+    {
+      "code": "005810",
+      "name": "풍산홀딩스",
+      "entry": "2022-05-01",
+      "exit": "2023-05-01",
+      "hold_days": 365,
+      "return%": 23.6,
+      "reason": "밸류정상화",
+      "entry_price": 20358,
+      "exit_price": 25160
+    },
+    {
+      "code": "004800",
+      "name": "효성",
+      "entry": "2022-05-01",
+      "exit": "2023-05-01",
+      "hold_days": 365,
+      "return%": -21.0,
+      "reason": "밸류정상화",
+      "entry_price": 64246,
+      "exit_price": 50765
+    },
+    {
+      "code": "011780",
+      "name": "금호석유화학",
+      "entry": "2022-05-01",
+      "exit": "2023-05-01",
+      "hold_days": 365,
+      "return%": -11.7,
+      "reason": "밸류정상화",
+      "entry_price": 154500,
+      "exit_price": 136400
+    },
+    {
+      "code": "058430",
+      "name": "포스코스틸리온",
+      "entry": "2022-05-01",
+      "exit": "2023-05-01",
+      "hold_days": 365,
+      "return%": 0.0,
+      "reason": "밸류정상화",
+      "entry_price": 5190,
+      "exit_price": 5190
+    },
+    {
+      "code": "017480",
+      "name": "삼현철강",
+      "entry": "2022-05-01",
+      "exit": "2023-05-01",
+      "hold_days": 365,
+      "return%": -32.5,
+      "reason": "밸류정상화",
+      "entry_price": 7730,
+      "exit_price": 5220
+    },
+    {
+      "code": "077500",
+      "name": "유니퀘스트",
+      "entry": "2022-05-01",
+      "exit": "2023-05-01",
+      "hold_days": 365,
+      "return%": -19.4,
+      "reason": "밸류정상화",
+      "entry_price": 6050,
+      "exit_price": 4875
+    },
+    {
+      "code": "104700",
+      "name": "한국철강",
+      "entry": "2022-05-01",
+      "exit": "2024-05-01",
+      "hold_days": 731,
+      "return%": 31.1,
+      "reason": "밸류정상화",
+      "entry_price": 9060,
+      "exit_price": 11880
+    },
+    {
+      "code": "084010",
+      "name": "대한제강",
+      "entry": "2022-05-01",
+      "exit": "2024-05-01",
+      "hold_days": 731,
+      "return%": -37.2,
+      "reason": "밸류정상화",
+      "entry_price": 14870,
+      "exit_price": 9335
+    },
+    {
+      "code": "010060",
+      "name": "OCI홀딩스",
+      "entry": "2022-05-01",
+      "exit": "2024-05-01",
+      "hold_days": 731,
+      "return%": 13.2,
+      "reason": "밸류정상화",
+      "entry_price": 83836,
+      "exit_price": 94900
+    },
+    {
+      "code": "005010",
+      "name": "휴스틸",
+      "entry": "2023-05-01",
+      "exit": "2024-05-01",
+      "hold_days": 366,
+      "return%": -26.2,
+      "reason": "밸류정상화",
+      "entry_price": 6280,
+      "exit_price": 4635
+    },
+    {
+      "code": "009970",
+      "name": "영원무역홀딩스",
+      "entry": "2023-05-01",
+      "exit": "2024-05-01",
+      "hold_days": 366,
+      "return%": 31.7,
+      "reason": "밸류정상화",
+      "entry_price": 64700,
+      "exit_price": 85200
+    },
+    {
+      "code": "029460",
+      "name": "케이씨",
+      "entry": "2023-05-01",
+      "exit": "2024-05-01",
+      "hold_days": 366,
+      "return%": 11.8,
+      "reason": "밸류정상화",
+      "entry_price": 19680,
+      "exit_price": 22000
+    },
+    {
+      "code": "151860",
+      "name": "KG에코솔루션",
+      "entry": "2023-05-01",
+      "exit": "2024-05-01",
+      "hold_days": 366,
+      "return%": -43.4,
+      "reason": "밸류정상화",
+      "entry_price": 16030,
+      "exit_price": 9080
+    },
+    {
+      "code": "111770",
+      "name": "영원무역",
+      "entry": "2023-05-01",
+      "exit": "2024-05-01",
+      "hold_days": 366,
+      "return%": -13.0,
+      "reason": "밸류정상화",
+      "entry_price": 44150,
+      "exit_price": 38400
+    },
+    {
+      "code": "069730",
+      "name": "DSR제강",
+      "entry": "2023-05-01",
+      "exit": "2024-05-01",
+      "hold_days": 366,
+      "return%": -18.9,
+      "reason": "밸류정상화",
+      "entry_price": 5220,
+      "exit_price": 4235
+    },
+    {
+      "code": "001390",
+      "name": "KG케미칼",
+      "entry": "2023-05-01",
+      "exit": "2025-05-01",
+      "hold_days": 731,
+      "return%": -48.0,
+      "reason": "밸류정상화",
+      "entry_price": 7640,
+      "exit_price": 3970
+    },
+    {
+      "code": "018310",
+      "name": "삼목에스폼",
+      "entry": "2024-05-01",
+      "exit": "2025-05-01",
+      "hold_days": 365,
+      "return%": 7.0,
+      "reason": "밸류정상화",
+      "entry_price": 19670,
+      "exit_price": 21050
+    },
+    {
+      "code": "042940",
+      "name": "상지건설",
+      "entry": "2024-05-01",
+      "exit": "2025-05-01",
+      "hold_days": 365,
+      "return%": 127.4,
+      "reason": "밸류정상화",
+      "entry_price": 13633,
+      "exit_price": 31000
+    },
+    {
+      "code": "084110",
+      "name": "휴온스글로벌",
+      "entry": "2024-05-01",
+      "exit": "2025-05-01",
+      "hold_days": 365,
+      "return%": 134.1,
+      "reason": "밸류정상화",
+      "entry_price": 21400,
+      "exit_price": 50100
+    },
+    {
+      "code": "007700",
+      "name": "F&F홀딩스",
+      "entry": "2024-05-01",
+      "exit": "2025-05-01",
+      "hold_days": 365,
+      "return%": -16.3,
+      "reason": "밸류정상화",
+      "entry_price": 15090,
+      "exit_price": 12630
+    },
+    {
+      "code": "006920",
+      "name": "모헨즈",
+      "entry": "2024-05-01",
+      "exit": "2025-05-01",
+      "hold_days": 365,
+      "return%": 21.3,
+      "reason": "밸류정상화",
+      "entry_price": 3635,
+      "exit_price": 4410
+    },
+    {
+      "code": "090410",
+      "name": "덕신이피씨",
+      "entry": "2024-05-01",
+      "exit": "2025-05-01",
+      "hold_days": 365,
+      "return%": -7.3,
+      "reason": "밸류정상화",
+      "entry_price": 1800,
+      "exit_price": 1669
+    },
+    {
+      "code": "306200",
+      "name": "세아제강",
+      "entry": "2024-05-01",
+      "exit": "2025-05-01",
+      "hold_days": 365,
+      "return%": 28.7,
+      "reason": "밸류정상화",
+      "entry_price": 137500,
+      "exit_price": 177000
+    },
+    {
+      "code": "192080",
+      "name": "더블유게임즈",
+      "entry": "2024-05-01",
+      "exit": "2026-05-01",
+      "hold_days": 730,
+      "return%": 39.7,
+      "reason": "밸류정상화",
+      "entry_price": 43750,
+      "exit_price": 61100
+    },
+    {
+      "code": "036190",
+      "name": "금화피에스시",
+      "entry": "2024-05-01",
+      "exit": "2026-05-01",
+      "hold_days": 730,
+      "return%": 43.4,
+      "reason": "밸류정상화",
+      "entry_price": 28100,
+      "exit_price": 40300
+    },
+    {
+      "code": "079960",
+      "name": "동양이엔피",
+      "entry": "2025-05-01",
+      "exit": "2026-05-01",
+      "hold_days": 365,
+      "return%": 69.2,
+      "reason": "밸류정상화",
+      "entry_price": 20100,
+      "exit_price": 34000
+    },
+    {
+      "code": "037460",
+      "name": "삼지전자",
+      "entry": "2025-05-01",
+      "exit": "2026-05-01",
+      "hold_days": 365,
+      "return%": 212.0,
+      "reason": "밸류정상화",
+      "entry_price": 10480,
+      "exit_price": 32700
+    },
+    {
+      "code": "011200",
+      "name": "HMM",
+      "entry": "2025-05-01",
+      "exit": "2026-05-01",
+      "hold_days": 365,
+      "return%": 12.3,
+      "reason": "밸류정상화",
+      "entry_price": 18260,
+      "exit_price": 20500
+    },
+    {
+      "code": "021820",
+      "name": "세원정공",
+      "entry": "2025-05-01",
+      "exit": "2026-05-01",
+      "hold_days": 365,
+      "return%": 80.7,
+      "reason": "밸류정상화",
+      "entry_price": 8440,
+      "exit_price": 15250
+    },
+    {
+      "code": "051370",
+      "name": "인터플렉스",
+      "entry": "2025-05-01",
+      "exit": "2026-05-01",
+      "hold_days": 365,
+      "return%": 60.8,
+      "reason": "밸류정상화",
+      "entry_price": 8360,
+      "exit_price": 13440
+    },
+    {
+      "code": "115440",
+      "name": "우리넷",
+      "entry": "2025-05-01",
+      "exit": "2026-05-01",
+      "hold_days": 365,
+      "return%": 106.4,
+      "reason": "밸류정상화",
+      "entry_price": 6880,
+      "exit_price": 14200
+    },
+    {
+      "code": "039010",
+      "name": "현대에이치티",
+      "entry": "2025-05-01",
+      "exit": "2026-05-01",
+      "hold_days": 365,
+      "return%": 50.6,
+      "reason": "밸류정상화",
+      "entry_price": 7000,
+      "exit_price": 10540
+    },
+    {
+      "code": "049520",
+      "name": "유아이엘",
+      "entry": "2025-05-01",
+      "exit": "2026-05-01",
+      "hold_days": 365,
+      "return%": 3.5,
+      "reason": "밸류정상화",
+      "entry_price": 3900,
+      "exit_price": 4035
+    }
+  ],
+  "equity_curve": [
+    {
+      "date": "2019-05",
+      "equity": 1.0,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2019-06",
+      "equity": 0.9498,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2019-07",
+      "equity": 0.9679,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2019-08",
+      "equity": 0.8562,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2019-09",
+      "equity": 0.8455,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2019-10",
+      "equity": 0.8948,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2019-11",
+      "equity": 0.8702,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2019-12",
+      "equity": 0.8345,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2020-01",
+      "equity": 0.8601,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2020-02",
+      "equity": 0.8178,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2020-03",
+      "equity": 0.7606,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2020-04",
+      "equity": 0.6886,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2020-05",
+      "equity": 0.8237,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2020-06",
+      "equity": 0.8682,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2020-07",
+      "equity": 0.8515,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2020-08",
+      "equity": 1.0053,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2020-09",
+      "equity": 1.0184,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2020-10",
+      "equity": 1.0356,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2020-11",
+      "equity": 1.0005,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2020-12",
+      "equity": 1.1292,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2021-01",
+      "equity": 1.2552,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2021-02",
+      "equity": 1.3189,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2021-03",
+      "equity": 1.2686,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2021-04",
+      "equity": 1.3006,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2021-05",
+      "equity": 1.3492,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2021-06",
+      "equity": 1.4022,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2021-07",
+      "equity": 1.4038,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2021-08",
+      "equity": 1.3667,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2021-09",
+      "equity": 1.3079,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2021-10",
+      "equity": 1.2329,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2021-11",
+      "equity": 1.2372,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2021-12",
+      "equity": 1.1404,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2022-01",
+      "equity": 1.3315,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2022-02",
+      "equity": 1.1827,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2022-03",
+      "equity": 1.243,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2022-04",
+      "equity": 1.2881,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2022-05",
+      "equity": 1.373,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2022-06",
+      "equity": 1.3619,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2022-07",
+      "equity": 1.1605,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2022-08",
+      "equity": 1.1682,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2022-09",
+      "equity": 1.1169,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2022-10",
+      "equity": 0.9877,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2022-11",
+      "equity": 1.0353,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2022-12",
+      "equity": 1.1474,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2023-01",
+      "equity": 1.0298,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2023-02",
+      "equity": 1.1146,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2023-03",
+      "equity": 1.172,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2023-04",
+      "equity": 1.2111,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2023-05",
+      "equity": 1.2414,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2023-06",
+      "equity": 1.1989,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2023-07",
+      "equity": 1.3321,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2023-08",
+      "equity": 1.2772,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2023-09",
+      "equity": 1.2075,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2023-10",
+      "equity": 1.178,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2023-11",
+      "equity": 1.1483,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2023-12",
+      "equity": 1.1449,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2024-01",
+      "equity": 1.1738,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2024-02",
+      "equity": 1.251,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2024-03",
+      "equity": 1.195,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2024-04",
+      "equity": 1.2154,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2024-05",
+      "equity": 1.2188,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2024-06",
+      "equity": 1.1827,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2024-07",
+      "equity": 1.1366,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2024-08",
+      "equity": 1.1627,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2024-09",
+      "equity": 1.1014,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2024-10",
+      "equity": 1.1824,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2024-11",
+      "equity": 1.1423,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2024-12",
+      "equity": 1.083,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2025-01",
+      "equity": 1.1683,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2025-02",
+      "equity": 1.1271,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2025-03",
+      "equity": 1.1379,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2025-04",
+      "equity": 1.1915,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2025-05",
+      "equity": 1.5857,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2025-06",
+      "equity": 1.6394,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2025-07",
+      "equity": 1.7926,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2025-08",
+      "equity": 1.7211,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2025-09",
+      "equity": 1.6436,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2025-10",
+      "equity": 1.6911,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2025-11",
+      "equity": 1.7098,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2025-12",
+      "equity": 1.8295,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2026-01",
+      "equity": 1.8659,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2026-02",
+      "equity": 2.1149,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2026-03",
+      "equity": 2.2462,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2026-04",
+      "equity": 2.3293,
+      "n_pos": 10,
+      "cash": 0.0
+    },
+    {
+      "date": "2026-05",
+      "equity": 2.6347,
+      "n_pos": 0,
+      "cash": 2.635
+    }
+  ],
+  "disclosures": [
+    "생존편향(현 상장·유동성 통과 종목만) 미제거 → 낙관 편의.",
+    "익절=일봉 고가가 TP 도달 시 지정가 체결 가정(약간 낙관). 슬리피지·세금·수수료 미반영.",
+    "월 1회 스크린. 과거 시총=과거종가×현재주식수. A(업종상대)·C(지주사) 적용."
+  ]
+}

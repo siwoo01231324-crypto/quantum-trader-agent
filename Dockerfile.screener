@@ -1,0 +1,29 @@
+# 저평가·우량주 스크리너 주간 자동실행 컨테이너
+# Build: docker build -f Dockerfile.screener -t qta-value-screener:latest .
+# Run  : docker compose -f docker-compose.screener.yml up -d
+ARG PYTHON_VERSION=3.12
+FROM python:${PYTHON_VERSION}-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        tzdata \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# 스크리너 전용 최소 의존성 (finance-datareader 는 메인 pyproject 에 없어 여기서 설치)
+# 주의: PyPI 배포명은 finance-datareader(하이픈), import 명은 FinanceDataReader.
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir \
+        "pandas>=2.1" "numpy>=1.26" "requests>=2.31" "finance-datareader==0.9.110" lxml
+
+# 소스 (스크리너가 참조하는 부분만)
+COPY src ./src
+COPY scripts ./scripts
+
+ENV PYTHONPATH=/app/src:/app \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    TZ=Asia/Seoul
+
+ENTRYPOINT ["python", "scripts/run_screener_weekly.py"]
