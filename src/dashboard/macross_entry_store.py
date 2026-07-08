@@ -42,7 +42,13 @@ class MacrossEntry:
 
 
 def _iter_macross_fills(wal_glob: str = _WAL_GLOB):
-    """모든 WAL 의 macross order_filled 를 trade_id dedup 후 ts 오름차순 반환."""
+    """macross-태그 fill + 태그없는(수동 청산) fill 을 trade_id dedup 후 ts 오름차순.
+
+    거래소에서 직접 수동 청산하면 봇 client_order_id 가 없어 strategy_id=None 으로
+    기록된다(태그없음). 이들도 포함해 parse 가 symbol+FIFO 로 열린 macross 숏에
+    청산으로 귀속시킨다. 다른 전략(airborne 등) 으로 태그된 fill 은 그 전략 소유라
+    제외 — 오귀속 방지.
+    """
     seen: set[str] = set()
     fills: list[dict] = []
     for path in glob.glob(wal_glob):
@@ -50,7 +56,7 @@ def _iter_macross_fills(wal_glob: str = _WAL_GLOB):
             with open(path, encoding="utf-8") as f:
                 for line in f:
                     line = line.strip()
-                    if not line or "live-macross-regime-v1" not in line:
+                    if not line or "order_filled" not in line:
                         continue
                     try:
                         rec = json.loads(line)
@@ -59,7 +65,8 @@ def _iter_macross_fills(wal_glob: str = _WAL_GLOB):
                     if rec.get("event_type") != "order_filled":
                         continue
                     p = rec.get("payload", {})
-                    if p.get("strategy_id") != _MACROSS_SID:
+                    # macross 태그 또는 태그없음(수동)만. 타 전략 소유 fill 제외.
+                    if p.get("strategy_id") not in (_MACROSS_SID, None, ""):
                         continue
                     tid = str(p.get("trade_id") or p.get("client_order_id") or "")
                     if tid and tid in seen:
@@ -96,7 +103,9 @@ def parse_macross_entries(
             continue
         ts = str(p.get("ts", ""))
 
-        if side == "SELL":  # 숏 진입 (open)
+        if side == "SELL":  # 숏 진입 (open) — macross 태그만 진입으로 인정
+            if p.get("strategy_id") != _MACROSS_SID:
+                continue  # 태그없는 SELL 은 macross 진입 아님 (수동 신규 숏 등)
             e = MacrossEntry(
                 entry_ts=ts, symbol=sym, side="short", entry_price=price, qty=qty,
                 sl_price=round(price * (1 + sl_pct), 8),
@@ -108,7 +117,7 @@ def parse_macross_entries(
         elif side == "BUY":  # 숏 청산 (close) — 가장 오래된 open 부터 FIFO 매칭
             queue = open_shorts.get(sym)
             if not queue:
-                continue  # 대응 진입 없는 청산 (수동/외부) — skip
+                continue  # 대응 진입 없는 청산 (외부 롱 등) — skip
             e = queue.pop(0)
             e.status = "closed"
             e.exit_ts = ts
@@ -116,13 +125,13 @@ def parse_macross_entries(
             # 숏 실현손익%: (진입 - 청산) / 진입 × 100. USDT: qty × (진입 - 청산).
             e.pnl_pct = round((e.entry_price - price) / e.entry_price * 100, 4)
             e.realized_usdt = round(e.qty * (e.entry_price - price), 4)
-            # TP/SL 판정 — macross 는 거래소 TP/SL plan order 만 청산(수동청산·
-            # 타임아웃 없음, max_hold_sec=None). 근데 stop-market 슬리피지로 체결가가
-            # 트리거를 살짝 벗어나면 정확비교(>=/<=)가 SL 을 "manual" 로 오분류
-            # (2026-07-06 사용자 지적: 수동청산 한 적 없는데 manual 다수). → 가장
-            # 가까운 타깃으로 분류. 숏: SL 은 진입가 위, TP 는 아래라 둘은 멀리 떨어져
-            # 오분류 없음.
-            e.outcome = "sl" if abs(price - e.sl_price) <= abs(price - e.tp_price) else "tp"
+            # outcome 판정. 봇 청산(태그 O)은 거래소 TP/SL plan order → 가장 가까운
+            # 타깃으로 tp/sl 분류(슬리피지 오분류 방지, 2026-07-06). 태그없는 청산은
+            # 사용자가 거래소에서 직접 수동 청산한 것 → "manual".
+            if p.get("strategy_id") in (None, ""):
+                e.outcome = "manual"
+            else:
+                e.outcome = "sl" if abs(price - e.sl_price) <= abs(price - e.tp_price) else "tp"
 
     entries.sort(key=lambda e: e.entry_ts, reverse=True)
     return [asdict(e) for e in entries]
