@@ -1,0 +1,23 @@
+{
+  "generated_at": "2026-07-08T21:23:00.301237",
+  "params": {
+    "ENTRY_N": 20,
+    "EXIT_N": 10,
+    "ATR_MULT": 2.0,
+    "MAX_POS": 15,
+    "cost_bp": 55.0
+  },
+  "n_trades": 2675,
+  "PF": 1.15,
+  "win_rate": "843/2675",
+  "avg_win%": 25.4,
+  "avg_loss%": -10.1,
+  "avg_hold_days": 15,
+  "CAGR%": 21.2,
+  "MDD%": -67.0,
+  "final": 4.16,
+  "disclosures": [
+    "생존편향: 현 상장만(상폐 미포함). 스윙은 유동성 필수라 시총≥300억.",
+    "돌파 지정가 아닌 종가 체결 가정. 비용 55bp 차감. equity=슬롯 복리 근사."
+  ]
+}
