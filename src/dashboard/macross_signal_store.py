@@ -20,6 +20,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 _MACROSS_SID = "live-macross-regime-v1"
+# macross 정적 손익비 (LiveMacrossRegime kwargs: stop_loss_pct 0.02 / take_profit_pct 0.12).
+# 대시보드 "실제 진입" 뷰와 동일 — SL/TP 라인 계산용.
+_SL_PCT = 0.02
+_TP_PCT = 0.12
 
 
 class MacrossSignalStore:
@@ -55,10 +59,26 @@ class MacrossSignalStore:
             if decision in ("buy", "sell"):
                 kind = "entry"
                 observe = "|observe" in reason
-                side = "숏" if decision == "sell" else "롱"
+                is_short = decision == "sell"
+                side = "숏" if is_short else "롱"
                 cat = f"🔻 진입포착({'관찰' if observe else '실'}·{side})"
             else:
                 return
+            # 진입가 + SL/TP 라인 (대시보드 "실제 진입" 뷰와 동일 형식).
+            #   숏: SL=진입×(1+2%) 위, TP=진입×(1−12%) 아래. 롱: 반대.
+            entry_price = payload.get("price")
+            sl_price = tp_price = None
+            try:
+                if entry_price is not None:
+                    entry_price = float(entry_price)
+                    if is_short:
+                        sl_price = round(entry_price * (1 + _SL_PCT), 8)
+                        tp_price = round(entry_price * (1 - _TP_PCT), 8)
+                    else:
+                        sl_price = round(entry_price * (1 - _SL_PCT), 8)
+                        tp_price = round(entry_price * (1 + _TP_PCT), 8)
+            except (TypeError, ValueError):
+                entry_price = None
             # 봉당(1h) dedup — 같은 종목·시각버킷·카테고리 1회.
             now = datetime.now(timezone.utc)
             bar_ts = now.replace(minute=0, second=0, microsecond=0).isoformat()
@@ -74,7 +94,9 @@ class MacrossSignalStore:
                 rec = {
                     "ts": now.isoformat(), "symbol": symbol, "kind": kind,
                     "decision": decision, "reason": reason,
-                    "category": cat, "bar_ts": bar_ts,
+                    "category": cat, "bar_ts": bar_ts, "side": side,
+                    "entry_price": entry_price,
+                    "sl_price": sl_price, "tp_price": tp_price,
                 }
                 with open(self._path, "a", encoding="utf-8") as f:
                     f.write(json.dumps(rec, ensure_ascii=False) + "\n")

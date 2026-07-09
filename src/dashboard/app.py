@@ -5225,15 +5225,16 @@ async function loadSkippedSignals(){
   }catch(e){ el.innerHTML = `<div class="error">로드 실패: ${esc(String(e))}</div>`; }
 }
 function renderSkippedSignals(rows){
-  const byCat = {};
-  for (const r of rows) byCat[r.category] = (byCat[r.category]||0)+1;
-  const catTxt = Object.entries(byCat).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${esc(k)} ${v}`).join(' · ');
   let h = `<div class="section-h2">🔻 진입 신호 (관찰·무거래) <span class="count">· ${rows.length}건</span></div>`;
-  h += `<div class="note">macross 가 모든 필터(BTC레짐·ADX·SMA200기울기·과확장·시간게이트)를 통과해 <b>실제로 진입했을 타이밍</b>. 관찰 모드라 실주문은 안 나감 — 신호만 수집. 데몬 정시신호가 아닌 <b>전략 자신의 평가</b> 기반. 봉당 dedup.<br>방향 분포: ${catTxt||'—'}</div>`;
+  h += `<div class="note">macross 가 모든 필터(BTC레짐·ADX·SMA200기울기·과확장·시간게이트)를 통과해 <b>실제로 진입했을 타이밍</b>. 관찰 모드라 실주문은 안 나감 — 신호만 수집. <b>SL=진입×1.02(위)/TP=진입×0.88(아래)</b>, 정적 2%/12% (데드숏 손익비 1:6) — 실제 진입 뷰와 동일. 봉당 dedup.</div>`;
   if (!rows.length) return h + '<div class="empty">아직 진입 신호 없음 (데드크로스는 변동성 구간에 몰려 발생 — 조용한 장에선 0건 정상)</div>';
-  h += '<table class="th-table"><thead><tr><th>시각(KST)</th><th>종목</th><th>방향</th><th>상세</th></tr></thead><tbody>';
+  h += '<table class="th-table"><thead><tr><th>신호시각(KST)</th><th>종목</th><th>방향</th><th class="num">진입가</th><th class="num">SL(위)</th><th class="num">TP(아래)</th></tr></thead><tbody>';
   for (const r of rows)
-    h += `<tr><td>${fmtKstFull(r.ts)}</td><td>${esc(r.symbol)}</td><td class="kind-entry">${esc(r.category)}</td><td style="color:var(--text3)">${esc(r.reason)}</td></tr>`;
+    h += `<tr><td>${fmtKstFull(r.ts)}</td><td>${esc(r.symbol)}</td>`
+       + `<td class="kind-entry">${esc(r.category || r.side || '—')}</td>`
+       + `<td class="num">${r.entry_price ?? '—'}</td>`
+       + `<td class="num">${r.sl_price ?? '—'}</td>`
+       + `<td class="num">${r.tp_price ?? '—'}</td></tr>`;
   return h + '</tbody></table>';
 }
 async function loadLiveEntries(){

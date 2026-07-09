@@ -125,6 +125,35 @@ def test_observe_only_entry_flows_to_macross_store(tmp_path):
     assert entries[0]["symbol"] == "SOLUSDT"
 
 
+def test_observe_entry_carries_price_and_sl_tp(tmp_path):
+    """관찰 진입 신호가 진입가 + SL/TP 라인까지 store 에 실려야 한다 (2026-07-09).
+
+    데드크로스 관찰 신호를 대시보드가 "실제 진입" 뷰와 동일 형식(진입가/SL/TP)으로
+    표시하려면, orchestrator 가 진입가(마지막 종가)를 실어보내고 store 가 SL/TP 를
+    계산해 기록해야 한다.
+    """
+    from src.dashboard.macross_signal_store import MacrossSignalStore, _SL_PCT, _TP_PCT
+
+    store = MacrossSignalStore(tmp_path / "sig.jsonl")
+    orch = AsyncStrategyOrchestrator(
+        Policy(policy_version=1, name="t"),
+        wal_observer=lambda ev: store.ingest(ev.event_type, ev.payload or {}),
+    )
+    orch.register_strategy("live-macross-regime-v1", _SellScanner())
+    orch._observe_only = {"live-macross-regime-v1"}
+    asyncio.run(orch.run_bar(pd.Timestamp("2026-01-01"), _snap()))
+
+    rows = store.recent()
+    assert len(rows) == 1
+    r = rows[0]
+    entry = r["entry_price"]
+    assert entry is not None and entry > 0          # 진입가 실림
+    # 숏: SL 은 진입가 위(+2%), TP 는 아래(−12%).
+    assert r["sl_price"] == round(entry * (1 + _SL_PCT), 8)
+    assert r["tp_price"] == round(entry * (1 - _TP_PCT), 8)
+    assert r["sl_price"] > entry > r["tp_price"]
+
+
 def test_macross_store_records_entry_only_not_hold(tmp_path):
     """진입(buy/sell) 신호만 수집 — hold/스킵은 노이즈라 기록 안 함 (2026-07-08).
 

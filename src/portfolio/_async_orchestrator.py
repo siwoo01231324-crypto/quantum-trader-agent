@@ -350,6 +350,7 @@ class AsyncStrategyOrchestrator:
         decision: str,
         reason: str,
         ts: object,
+        price: float | None = None,
     ) -> None:
         """Emit `strategy_evaluated` WAL event (#231 S5).
 
@@ -357,19 +358,25 @@ class AsyncStrategyOrchestrator:
         runtime visibility into on_bar invocation regardless of buy/sell/hold
         outcome. Used by AC0_strategy_dispatch + AC5 (24h dispatch ≥ 1000).
         Decision values: "buy" | "sell" | "hold" | "exception".
+
+        ``price``: 신호 시점 진입가(마지막 종가). observe_only 진입 신호가 대시보드에
+        SL/TP 라인을 계산·표시하려면 필요 — 없으면(None) payload 에서 생략.
         """
         if self._wal_observer is None:
             return
         ts_str = ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
+        payload = {
+            "strategy_id": strategy_id,
+            "symbol": symbol,
+            "decision": decision,
+            "reason": reason,
+        }
+        if price is not None:
+            payload["price"] = price
         ev = WALEvent(
             ts=ts_str,
             event_type=EVENT_STRATEGY_EVALUATED,
-            payload={
-                "strategy_id": strategy_id,
-                "symbol": symbol,
-                "decision": decision,
-                "reason": reason,
-            },
+            payload=payload,
         )
         try:
             self._wal_observer(ev)
@@ -550,10 +557,18 @@ class AsyncStrategyOrchestrator:
             # signal.reason 에 "|observe" 를 붙여 skip store 가 "관찰 진입포착" 으로
             # 분류할 수 있게 한다. macross pause 중 신호 타이밍 수집용(에어본 shadow).
             if sid in self._observe_only:
+                # 진입가(마지막 종가) — 대시보드가 SL/TP 라인을 계산·표시하게 실어보냄.
+                obs_price: float | None = None
+                try:
+                    _hist = (_universe_ohlcv or {}).get(order_symbol)
+                    if _hist is not None and len(_hist):
+                        obs_price = float(_hist["close"].iloc[-1])
+                except Exception:  # noqa: BLE001 — 가격 조회 실패가 신호 기록 안 깬다
+                    obs_price = None
                 self._emit_strategy_evaluated(
                     sid, symbol=order_symbol, decision=signal.action,
                     reason=(getattr(signal, "reason", None) or "entry") + "|observe",
-                    ts=ts,
+                    ts=ts, price=obs_price,
                 )
                 continue
 
