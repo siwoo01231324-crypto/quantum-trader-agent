@@ -5221,20 +5221,49 @@ async function loadSkippedSignals(){
     const r = await fetch('/api/macross_skipped_signals');
     const j = await r.json();
     if (j.error){ el.innerHTML = `<div class="error">${esc(j.error)}</div>`; return; }
-    el.innerHTML = renderSkippedSignals(j.signals || []);
+    el.innerHTML = renderSkippedSignals(j.signals || [], j.summary || {});
   }catch(e){ el.innerHTML = `<div class="error">로드 실패: ${esc(String(e))}</div>`; }
 }
-function renderSkippedSignals(rows){
+function renderSkippedSignals(rows, sm){
+  sm = sm || {};
   let h = `<div class="section-h2">🔻 진입 신호 (관찰·무거래) <span class="count">· ${rows.length}건</span></div>`;
-  h += `<div class="note">macross 가 모든 필터(BTC레짐·ADX·SMA200기울기·과확장·시간게이트)를 통과해 <b>실제로 진입했을 타이밍</b>. 관찰 모드라 실주문은 안 나감 — 신호만 수집. <b>SL=진입×1.02(위)/TP=진입×0.88(아래)</b>, 정적 2%/12% (데드숏 손익비 1:6) — 실제 진입 뷰와 동일. 봉당 dedup.</div>`;
+  // ── "실제 진입했다면" TP/SL 시뮬 요약 (에어본·데몬과 동일 엔진) ──
+  const wr = sm.win_rate==null?null:Math.round(sm.win_rate*100);
+  const slN = (sm.sl||0)+(sm.sl_first||0);
+  h += `<div class="stat-grid">
+    <div class="stat-tile ${wr==null?'':(wr>=50?'is-hero':'is-hero-bad')}">
+      <div class="stat-label">시뮬 승률 (실제 진입 가정)</div>
+      <div class="stat-val ${wr==null?'dim':(wr>=50?'green':'red')}">${wr==null?'—':wr+'%'}</div>
+      <div class="stat-sub">✅익절 ${sm.tp||0} / 🛑손절 ${slN} / ⏳시간종료 ${sm.timeout||0}</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-label">PF · net%</div>
+      <div class="stat-val ${sm.pf==null?'dim':(sm.pf>=1?'green':'red')}">${sm.pf==null?'—':Number(sm.pf).toFixed(2)}</div>
+      <div class="stat-sub">${sm.net_pct==null?'—':(sm.net_pct>=0?'+':'')+Number(sm.net_pct).toFixed(1)+'% (수수료後)'}</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-label">시뮬 완료 / 전체</div>
+      <div class="stat-val ${(sm.n?'':'dim')}">${sm.n||0} / ${rows.length}</div>
+      <div class="stat-sub">진행중·진입가없음 제외</div>
+    </div>
+  </div>`;
+  h += `<div class="note">macross 가 모든 필터(BTC레짐·ADX·SMA200기울기·과확장·시간게이트)를 통과해 <b>실제로 진입했을 타이밍</b>. 관찰 모드라 실주문 0 — 신호만 수집. <b>"실제 진입했다면" TP(진입×0.88 아래)/SL(진입×1.02 위) 를 전방 1h 봉으로 시뮬</b>(에어본·데몬과 동일 엔진, 손익비 2%/12%=1:6). 봉당 dedup. 진입가 없는 옛 신호(재시작 前)는 시뮬 제외.</div>`;
   if (!rows.length) return h + '<div class="empty">아직 진입 신호 없음 (데드크로스는 변동성 구간에 몰려 발생 — 조용한 장에선 0건 정상)</div>';
-  h += '<table class="th-table"><thead><tr><th>신호시각(KST)</th><th>종목</th><th>방향</th><th class="num">진입가</th><th class="num">SL(위)</th><th class="num">TP(아래)</th></tr></thead><tbody>';
-  for (const r of rows)
+  h += '<table class="th-table"><thead><tr><th>신호시각(KST)</th><th>종목</th><th>방향</th><th class="num">진입가</th><th class="num">SL(위)</th><th class="num">TP(아래)</th><th>결과</th><th class="num">손익%</th></tr></thead><tbody>';
+  for (const r of rows){
+    const oc = {TP:'✅ 익절', SL:'🛑 손절', SL_first:'🛑 손절', timeout:'⏳ 시간종료', pending:'⏳ 진행중'}[r.outcome]
+             || (r.entry_price ? '⏳ 진행중' : '—');
+    const pnl = r.pct;
+    const pnlTxt = (pnl==null) ? '—'
+      : (pnl>0 ? `<span style="color:var(--green)">+${Number(pnl).toFixed(2)}%</span>`
+               : `<span style="color:var(--red)">${Number(pnl).toFixed(2)}%</span>`);
     h += `<tr><td>${fmtKstFull(r.ts)}</td><td>${esc(r.symbol)}</td>`
        + `<td class="kind-entry">${esc(r.category || r.side || '—')}</td>`
        + `<td class="num">${r.entry_price ?? '—'}</td>`
        + `<td class="num">${r.sl_price ?? '—'}</td>`
-       + `<td class="num">${r.tp_price ?? '—'}</td></tr>`;
+       + `<td class="num">${r.tp_price ?? '—'}</td>`
+       + `<td>${oc}</td><td class="num">${pnlTxt}</td></tr>`;
+  }
   return h + '</tbody></table>';
 }
 async function loadLiveEntries(){
@@ -8313,16 +8342,52 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
 
     @app.get("/api/macross_skipped_signals")
     async def api_macross_skipped_signals():
-        """macross 스킵 신호 (크로스 감지+필터 hold) — /ma-cross '스킵 신호' 뷰용.
+        """macross 관찰 진입 신호 + "실제 진입했다면" TP/SL 시뮬 결과 (/ma-cross).
 
-        전략 실제 평가(strategy_evaluated) 기반, live_run._wal_observer 가 수집한
-        logs/macross/skipped_signals.jsonl 을 읽음. 데몬 정시신호 대체."""
+        전략 자신의 평가(strategy_evaluated) 로 수집한 진입 신호(entry)를 읽고,
+        진입가가 있는 신호는 전방 1h 봉으로 TP(12%)/SL(2%) 를 시뮬(에어본·데몬과
+        동일 _simulate_ma_cross) → 익절/손절/시간종료 판정 + 집계. 봉 부족(최근
+        신호)은 outcome="pending"(진행중). 진입가 없는 옛 신호는 시뮬 제외."""
         try:
             from src.dashboard.macross_signal_store import MacrossSignalStore
             store = MacrossSignalStore("logs/macross/skipped_signals.jsonl")
-            return {"signals": store.recent(300)}
+            signals = store.recent(300)
         except Exception as exc:  # noqa: BLE001
-            return {"error": str(exc), "signals": []}
+            return {"error": str(exc), "signals": [], "summary": {}}
+
+        import httpx as _httpx  # noqa: PLC0415
+        to_sim = [s for s in signals if s.get("entry_price")]
+        if to_sim:
+            sem = asyncio.Semaphore(20)
+
+            async def _sim_one(client, s):
+                try:
+                    async with sem:
+                        bars = await _fetch_1h_bars_after(client, s["symbol"], s["ts"])
+                    rec = {
+                        "symbol": s["symbol"], "ts": s["ts"],
+                        "close": float(s["entry_price"]),
+                        "cross": "death" if s.get("decision") == "sell" else "golden",
+                    }
+                    out = _simulate_ma_cross(rec, bars)  # 기본 TP12%/SL2% = macross
+                    if out is None:
+                        s["outcome"] = "pending"      # 봉 부족(최근 신호) → 진행중
+                    else:
+                        s["outcome"] = out["outcome"]
+                        s["pct"] = out["pct"]
+                        s["cross"] = rec["cross"]
+                except Exception:  # noqa: BLE001 — 개별 시뮬 실패가 뷰 안 깬다
+                    s["outcome"] = "pending"
+
+            try:
+                async with _httpx.AsyncClient() as client:
+                    await asyncio.gather(*(_sim_one(client, s) for s in to_sim))
+            except Exception:  # noqa: BLE001
+                pass
+        sims = [s for s in to_sim
+                if s.get("outcome") in ("TP", "SL", "SL_first", "timeout")]
+        summary = _aggregate_ma_cross_sims(sims)
+        return {"signals": signals, "summary": summary}
 
     @app.get("/api/macross_live_entries")
     async def api_macross_live_entries():
