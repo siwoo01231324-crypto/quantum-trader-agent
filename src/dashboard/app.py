@@ -8356,18 +8356,45 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
             return {"error": str(exc), "signals": [], "summary": {}}
 
         import httpx as _httpx  # noqa: PLC0415
-        to_sim = [s for s in signals if s.get("entry_price")]
+        # 모든 진입 신호 시뮬. 진입가 없는 옛 신호(재시작 前)는 backfill:
+        # 데드크로스는 신호시각 마지막 1h 종가에 진입 → 그 종가를 진입가로 채운다.
+        to_sim = list(signals)
         if to_sim:
             sem = asyncio.Semaphore(20)
 
             async def _sim_one(client, s):
                 try:
-                    async with sem:
-                        bars = await _fetch_1h_bars_after(client, s["symbol"], s["ts"])
+                    is_short = s.get("decision") == "sell"
+                    ep = s.get("entry_price")
+                    if ep:
+                        async with sem:
+                            bars = await _fetch_1h_bars_after(client, s["symbol"], s["ts"])
+                    else:
+                        # backfill — 신호시각 3h 前부터 fetch → 진입봉(≤ts 마지막)+이후봉.
+                        _t = datetime.fromisoformat(str(s["ts"]).replace("Z", "+00:00"))
+                        _tms = int(_t.timestamp() * 1000)
+                        async with sem:
+                            allb = await _fetch_1h_bars_after(
+                                client, s["symbol"], (_t - timedelta(hours=3)).isoformat(),
+                            )
+                        entry_b = [b for b in allb if b["open_time"] <= _tms]
+                        bars = [b for b in allb if b["open_time"] > _tms]
+                        if entry_b:
+                            ep = entry_b[-1]["close"]
+                            s["entry_price"] = ep
+                            s["sl_price"] = round(
+                                ep * (1 + MA_CROSS_SL_PCT) if is_short
+                                else ep * (1 - MA_CROSS_SL_PCT), 8)
+                            s["tp_price"] = round(
+                                ep * (1 - MA_CROSS_TP_PCT) if is_short
+                                else ep * (1 + MA_CROSS_TP_PCT), 8)
+                            s["backfilled"] = True
+                    if not ep:
+                        s["outcome"] = "pending"
+                        return
                     rec = {
-                        "symbol": s["symbol"], "ts": s["ts"],
-                        "close": float(s["entry_price"]),
-                        "cross": "death" if s.get("decision") == "sell" else "golden",
+                        "symbol": s["symbol"], "ts": s["ts"], "close": float(ep),
+                        "cross": "death" if is_short else "golden",
                     }
                     out = _simulate_ma_cross(rec, bars)  # 기본 TP12%/SL2% = macross
                     if out is None:
