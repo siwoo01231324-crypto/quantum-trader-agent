@@ -54,14 +54,14 @@ strategies:
   # 돌파 — SL=2ATR(거래소 backstop), 주청산=채널(봇 감시, SWING_CHANNEL_SWEEP).
   - id: live-donchian-breakout-btcgate
     class: backtest.strategies.live_donchian_breakout_btcgate.LiveDonchianBreakoutBtcGate
-    # 레버리지 5x. 2026-07-15: 투매반등과 동일 배율(1.5배) 상향 0.15→0.225.
-    # 단 터틀은 불장에 돌파 동시다발(top-30 중 8~10개)이라 투매(0.75)보다 작게 유지
-    # (동시폭주 대비 보수적 설계 보존). 5x→증거금 4.5%/포지션. 미리 상향(현재 횡보라
-    # 무거래 — 레인지 위로 터지면 발동). 총노출은 max_total_margin_pct 0.95 가 캡:
-    # 클러스터 8~10개×4.5% + 투매 3개×15% ≈ 90% 로 캡 근처 → 초과분 신규진입만 차단.
+    # 레버리지 5x. 2026-07-15: 사용자 요청 증거금 3%→10% 상향 (0.15→0.50, 명목50%).
+    # ⚠️ 돌파는 불장에 동시다발(top-30 중 8~10개)이라 증거금 10%면 클러스터가 캡을
+    # 즉시 소진: 8~10개×10% = 80~100% → max_total_margin_pct 0.95 에서 ~9개만 체결,
+    # 나머지+투매반등 신규진입 차단(강제청산 없음). 불장 상관 롱 대량노출 = 반전 시
+    # 동시 SL 위험 상승(이게 원래 소액유지 이유). 캡이 blowup 은 방어. 리스크 수용 전제.
     leverage: 5
     kwargs:
-      default_size: 0.225         # 명목22.5%(~$43) + leverage5x → 증거금~$8.5(4.5%). 동시다발 대비 소액
+      default_size: 0.50          # 명목50%(~$95) + leverage5x → 증거금~$19(10%). 클러스터 캡 주의
       breakout_lookback: 20
       exit_lookback: 10
       stop_atr_mult: 2.0
