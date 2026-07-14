@@ -54,12 +54,14 @@ strategies:
   # 돌파 — SL=2ATR(거래소 backstop), 주청산=채널(봇 감시, SWING_CHANNEL_SWEEP).
   - id: live-donchian-breakout-btcgate
     class: backtest.strategies.live_donchian_breakout_btcgate.LiveDonchianBreakoutBtcGate
-    # 레버리지 5x (2026-07-05) — 단 터틀은 불장에 돌파 동시다발(top-30 중 8~10개)이라
-    # default_size 0.15(명목15%~$28)로 투매(0.25)보다 보수적. 5x→증거금 3%(~$5.6)/포지션.
-    # 총노출은 max_total_margin_pct 0.95 가 캡. 청산선 ~−20% >> SL(2ATR ~−3%) 안전.
+    # 레버리지 5x. 2026-07-15: 투매반등과 동일 배율(1.5배) 상향 0.15→0.225.
+    # 단 터틀은 불장에 돌파 동시다발(top-30 중 8~10개)이라 투매(0.75)보다 작게 유지
+    # (동시폭주 대비 보수적 설계 보존). 5x→증거금 4.5%/포지션. 미리 상향(현재 횡보라
+    # 무거래 — 레인지 위로 터지면 발동). 총노출은 max_total_margin_pct 0.95 가 캡:
+    # 클러스터 8~10개×4.5% + 투매 3개×15% ≈ 90% 로 캡 근처 → 초과분 신규진입만 차단.
     leverage: 5
     kwargs:
-      default_size: 0.15          # 명목15%(~$28) + leverage5x → 증거금~$5.6(3%). 동시다발 폭주 대비 소액
+      default_size: 0.225         # 명목22.5%(~$43) + leverage5x → 증거금~$8.5(4.5%). 동시다발 대비 소액
       breakout_lookback: 20
       exit_lookback: 10
       stop_atr_mult: 2.0
