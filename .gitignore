@@ -89,3 +89,4 @@ docs/.obsidian/appearance.json
 # 배당·밸류 스크리너 라이브 출력 (도커 주간 갱신)
 reports/value_screener.json
 reports/value_screener_history.jsonl
+config/breakout_exclude.json

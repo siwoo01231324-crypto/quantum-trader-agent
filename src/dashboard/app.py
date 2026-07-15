@@ -8794,6 +8794,52 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
             SWING_LIVE_STRATEGY_IDS,
         )
 
+        # 2026-07-16 — 수동 돌파 진입(재량) 보유분을 /swing 에 display-only 표시.
+        # manual_trade.jsonl 의 open(청산가 없음) bitget 롱 중 note 에 "돌파" 포함분을
+        # 돌파 전략 보유행으로 append. source="수동" 태그라 sim 승률/PF 통계엔 안 섞임.
+        # 봇/주문 무관 — /manual 과 동일 소스, 유령/오염 위험 0. 실패해도 페이지 정상.
+        try:
+            import json as _mtjson  # noqa: PLC0415 — app.py 는 json 모듈레벨 미import
+            _mt = Path("logs/manual_trade.jsonl")
+            if _mt.exists() and isinstance(agg.get("trades"), list):
+                _man: dict[str, dict] = {}
+                for _ln in _mt.read_text(encoding="utf-8").splitlines():
+                    _ln = _ln.strip()
+                    if not _ln:
+                        continue
+                    try:
+                        _e = _mtjson.loads(_ln)
+                    except Exception:  # noqa: BLE001
+                        continue
+                    _p = _e.get("payload", _e)
+                    if (_e.get("event_type") == "manual_trade"
+                            and str(_p.get("kind", "")).lower() == "entry"
+                            and not _p.get("exit_price")
+                            and str(_p.get("venue", "")).lower() == "bitget"
+                            and "돌파" in str(_p.get("note", ""))):
+                        _man[str(_p.get("symbol"))] = {
+                            "entry_ts": _e.get("ts"), "exit_ts": None,
+                            "symbol": _p.get("symbol"),
+                            "side": str(_p.get("side", "buy")).lower(),
+                            "strategy": "live-donchian-breakout-btcgate",
+                            "strategy_label": "돌파 (추세추종·수동)",
+                            "venue": "bitget",
+                            "entry_price": _p.get("entry_price") or _p.get("price"),
+                            "exit_price": None, "ret": None,
+                            "status": "open", "status_label": "보유중 (수동)",
+                            "reason": None, "source": "수동",
+                        }
+                for _row in _man.values():
+                    agg["trades"].append(_row)
+                if _man:
+                    agg["trades"].sort(
+                        key=lambda r: str(r.get("exit_ts") or r.get("entry_ts") or ""),
+                        reverse=True,
+                    )
+                    agg["manual_held_count"] = len(_man)
+        except Exception:  # noqa: BLE001 — 수동 표시 실패가 /swing 을 깨지 않게
+            pass
+
         # 포착 신호 전수 (체결 무관 — 사이징서 드롭된 것도 포함). 윈도우 ts 필터.
         try:
             _sigs = _get_swing_signal_store().load_since(since_utc)

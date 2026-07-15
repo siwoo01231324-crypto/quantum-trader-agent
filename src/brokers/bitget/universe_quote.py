@@ -20,7 +20,12 @@ from src.brokers.bitget.market_ws import _CANDLE_INTERVAL_CHANNEL  # interval va
 
 log = logging.getLogger(__name__)
 
-_DEFAULT_LIMIT = 200
+# 2026-07-16 — 200→260. live-donchian-breakout-btcgate 는 EMA200 warmup 위해
+# MIN_HISTORY=205 봉을 요구하는데 200 봉만 공급되어 매 틱 warmup hold → 배포 이래
+# 진입 0건이었다(off-by-5). 260 봉이면 205 게이트 통과 + EMA200 충분히 warm.
+# capitulation(tail 윈도우)·macross(SMA200) 은 이득 or 무해. airborne 은 binance
+# universe_quote(별도 파일·별도 프로세스)라 무영향.
+_DEFAULT_LIMIT = 260
 _TIMEOUT = 15.0
 
 # 2026-06-05 — Bitget 미상장 종목 (Binance top-100 의 AIA/BONK/GUA/HEI/NOK/PHAROS/...)

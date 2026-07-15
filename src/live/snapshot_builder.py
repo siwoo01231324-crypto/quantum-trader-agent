@@ -47,6 +47,26 @@ def _empty_ohlcv() -> pd.DataFrame:
     return pd.DataFrame(columns=_OHLCV_COLUMNS).astype(float)
 
 
+# 2026-07-16 — tick buffer 는 항상 합성 1m 봉(append_tick). universe_cache 는
+# 전략이 요청한 interval(스윙=4h, airborne=1m). 같은 symbol 이 둘 다 있을 때
+# 무조건 buffer 로 덮으면(_.update) 4h 스윙 전략이 얕은 1m 버퍼를 받아 warmup 에
+# 갇힌다(돌파 배포 이래 진입 0 원인 #2). cache 봉 간격을 보고 판단: cache 가
+# intraday(≤5m)면 1m 버퍼가 호환·더 신선하므로 override(airborne 기존동작 보존),
+# cache 가 coarse(예 4h)면 buffer(1m)는 timeframe 불일치라 override 금지(cache 유지).
+_INTRADAY_MAX_INTERVAL = pd.Timedelta(minutes=5)
+
+
+def _dominant_bar_interval(df: pd.DataFrame) -> pd.Timedelta | None:
+    """DataFrame index 의 대표 봉 간격(마지막 두 봉 diff). 2봉 미만·비시계열 → None."""
+    if df is None or len(df) < 2:
+        return None
+    try:
+        delta = df.index[-1] - df.index[-2]
+    except (TypeError, IndexError):
+        return None
+    return delta if isinstance(delta, pd.Timedelta) and delta > pd.Timedelta(0) else None
+
+
 @dataclass
 class SnapshotBuilderConfig:
     warmup_bars: int = 1000
@@ -232,7 +252,13 @@ class SnapshotBuilder:
         # cache (350종 일봉) 를 merge — 같은 symbol 충돌 시 live buffer 우선.
         self._refresh_universe_cache_if_stale()
         ohlcv_history = {sym: buf for sym, buf in self._universe_cache.items()}
-        ohlcv_history.update(self._buffers)
+        # 같은 symbol 이 universe_cache 와 tick buffer 에 둘 다 있으면 interval 을
+        # 보고 결정 (위 _dominant_bar_interval 주석 참조). cache 부재 or intraday
+        # cache → buffer override; coarse(4h 등) cache → cache 유지(스윙 warmup 방지).
+        for sym, buf in self._buffers.items():
+            cache_interval = _dominant_bar_interval(self._universe_cache.get(sym))
+            if cache_interval is None or cache_interval <= _INTRADAY_MAX_INTERVAL:
+                ohlcv_history[sym] = buf
 
         factors = self._compute_factors(history_1m)
 
