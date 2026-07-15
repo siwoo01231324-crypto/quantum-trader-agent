@@ -182,7 +182,22 @@ class LiveDonchianBreakoutBtcGate(LiveScannerMixin):
         크립토 유니버스 상위 30 만 사용. → docs/specs/strategies 참조.
         """
         from src.portfolio.binance_universe import SWING_CRYPTO_UNIVERSE
-        return list(SWING_CRYPTO_UNIVERSE[:30])
+        universe = list(SWING_CRYPTO_UNIVERSE[:30])
+        # 2026-07-16 — 수동 보유 중인 종목 제외(봇 자동진입→네팅/TP·SL 덮어쓰기 방지).
+        # config/breakout_exclude.json {"exclude": ["ETHUSDT", ...]}. 파일 없으면 무시.
+        # 수동 포지션 청산 후 리스트에서 빼면 봇이 다시 그 종목 돌파 감시.
+        try:
+            import json as _json
+            from pathlib import Path as _Path
+            _f = _Path(__file__).resolve().parents[3] / "config" / "breakout_exclude.json"
+            if _f.exists():
+                _excl = {str(s).strip().upper()
+                         for s in _json.loads(_f.read_text(encoding="utf-8")).get("exclude", [])}
+                if _excl:
+                    universe = [s for s in universe if s.upper() not in _excl]
+        except Exception:  # noqa: BLE001 — 제외 설정 오류가 유니버스를 깨지 않게
+            pass
+        return universe
 
     def channel_exit_level(self, history: pd.DataFrame) -> float | None:
         """추세 청산 레벨 = Donchian(EXIT_LOOKBACK) 하단 = min(low[-(K+1):-1]).

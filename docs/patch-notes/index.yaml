@@ -15,6 +15,25 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.113"
+    date: "2026-07-16"
+    title: "돌파 전략 라이브 진입 부활 (2버그 fix) + 수동 포지션 채널 트레일 감시"
+    tags: [fix, feature]
+    summary: >
+      live-donchian-breakout-btcgate 가 배포 이래 라이브 진입 0건이던 2버그를
+      규명·수정 — 봇이 실제 돌파 진입 재개(ORDI 실체결 확인). 수동 재량 포지션용
+      채널 트레일링 감시(알림 전용) 신규 + 봇 겹침 방지.
+    items:
+      - "fix: 유니버스 4h fetch 200봉 < 돌파 MIN_HISTORY 205 → 매 틱 warmup hold. bitget universe_quote _DEFAULT_LIMIT 200→260."
+      - "fix: mark-price 틱 심볼(ETH/XRP/LINK 등) 4h 캐시가 얕은 1m 틱버퍼로 override → 4h 스윙전략 warmup. snapshot_builder 간격-인지 머지(cache 4h면 버퍼로 안 덮음, 1m airborne 무영향)."
+      - "feat: scripts/channel_trail_monitor.py — 수동 돌파 롱 채널 트레일링 감시(계산·알림만, 불변식 #6). Donchian10 하단 트레일업/청산 텔레그램, 15분 주기, 재부팅 자동시작(작업 스케줄러)."
+      - "feat: config/breakout_exclude.json(gitignore) — 수동 보유 종목을 봇 돌파 유니버스에서 제외(네팅/TP·SL 덮어쓰기 방지). 감시가 열린 포지션에 자동 동기화, 청산 시 자동 복원."
+      - "feat: /swing 대시보드에 수동 돌파 보유분 display-only 표시(source=수동, sim 승률/PF 통계 미오염)."
+      - "test: test_breakout_e2e.py — 진입신호→SL→채널청산 e2e 체인 박제 (+ snapshot merge/universe 회귀 테스트)."
+    refs:
+      - "src/backtest/strategies/live_donchian_breakout_btcgate.py"
+      - "src/live/snapshot_builder.py"
+
   - version: "v0.6.112"
     date: "2026-07-08"
     title: "한국주식 밸류·배당 스크리너 2종 (backtest) — 재무 펀더멘털 가치투자"

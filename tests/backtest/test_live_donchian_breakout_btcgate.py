@@ -72,9 +72,13 @@ class TestMarker:
     def test_universe_is_clean_crypto_top30(self):
         # 돌파 = 가장 유동적인 크립토 top-30 집중 (확대 시 엣지 열화).
         from src.portfolio.binance_universe import SWING_CRYPTO_UNIVERSE
+        base = list(SWING_CRYPTO_UNIVERSE[:30])
+        assert len(base) == 30
         uni = LiveDonchianBreakoutBtcGate.get_universe()
-        assert len(uni) == 30
-        assert uni == list(SWING_CRYPTO_UNIVERSE[:30])
+        # get_universe 는 클린 크립토 top-30 의 부분집합 — config/breakout_exclude.json
+        # 로 수동 보유 종목을 운영상 제외 가능(2026-07-16). 제외 없으면 == top-30.
+        assert set(uni) <= set(base)
+        assert len(uni) >= 1
         # 토큰화주식·상품·forex 가 섞이지 않는다 (오염 회귀 방지).
         bad = {"TSLAUSDT", "NVDAUSDT", "XAUUSDT", "XAGUSDT", "EURUSDT", "QQQUSDT"}
         assert not (set(uni) & bad)
