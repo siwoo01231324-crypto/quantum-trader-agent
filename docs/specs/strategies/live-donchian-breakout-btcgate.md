@@ -59,7 +59,7 @@ tags:
 불장 추세에서 번다 — 둘은 레짐 비상관이라 병렬 운용 시 분산효과로 합성 MDD 가 낮아진다
 (cap+breakout lev1: CAGR 24% / MDD 28% / Sharpe 1.0; cap 단독 9%/13%, breakout 단독 27%/25%).
 
-검증된 일봉 터틀([[project_turtle_daily_candidate]])의 4h 변형. **1h 돌파는 실패**(타임프레임)
+검증된 일봉 터틀(`project_turtle_daily_candidate`)의 4h 변형. **1h 돌파는 실패**(타임프레임)
 했으나 4h 는 random-vs-signal + 정직비용 통과. **BTC 레짐 게이트**가 핵심 — 베어장 가짜돌파를
 차단해 per-trade edge(+0.26→+0.56%) 와 MDD(39→25%) 를 동시에 개선.
 

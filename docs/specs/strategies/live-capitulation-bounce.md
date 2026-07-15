@@ -57,8 +57,8 @@ tags:
 
 크립토 인트라데이 스캘프는 **비용 벽**(수수료×레버리지가 매 거래 고정손실)으로 죽는다 —
 1m/5m/15m confluence 전수탐색에서 신호가 랜덤을 이겨도 거래당 움직임이 작아 정직비용을
-못 넘겼다 ([[project_intraday_cost_wall]]). 결론은 **스윙**: 거래당 큰 움직임이라 고정수수료
-비중이 작아 비용 벽을 정면 회피한다 (검증된 일봉 터틀 [[project_turtle_daily_candidate]] 과 동일 원리).
+못 넘겼다 (`project_intraday_cost_wall`). 결론은 **스윙**: 거래당 큰 움직임이라 고정수수료
+비중이 작아 비용 벽을 정면 회피한다 (검증된 일봉 터틀 `project_turtle_daily_candidate` 과 동일 원리).
 
 투매반등(capitulation bounce)은 그 스윙 신호 중 5y·정직비용·random-vs-signal 을 통과한
 평균회귀 셋업이다. 차트 해부(긴 아랫꼬리 투매바닥 반등)에서 도출.
