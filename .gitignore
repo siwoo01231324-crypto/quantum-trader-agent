@@ -90,3 +90,8 @@ docs/.obsidian/appearance.json
 reports/value_screener.json
 reports/value_screener_history.jsonl
 config/breakout_exclude.json
+
+# 스크래치/리서치 임시 스크립트 (_ prefix 관례) + 자동생성 리포트 (2026-07-16)
+scripts/_*.py
+scripts/analyze_regime_24h_vs_hours.py
+reports/auto_trading_report_*.md
