@@ -1,8 +1,9 @@
 ---
-type: spec
+type: spec-architecture
 id: post-only-maker-entry
-title: Post-Only Maker 진입 — 진입 수수료 60%↓ (왕복 약 30%↓)
-status: draft
+name: Post-Only Maker 진입 — 진입 수수료 60%↓ (왕복 약 30%↓)
+status: in-progress
+owner: siwoo
 created: 2026-05-22
 ---
 
