@@ -15,6 +15,23 @@
 # Add entries by APPENDING to the front of `versions`, not the end.
 
 versions:
+  - version: "v0.6.114"
+    date: "2026-07-16"
+    title: "스윙 사이징 축소 + 채널 트레일링 이익잠금 전용 (휩쏘 회귀 fix)"
+    tags: [fix, safety, chore]
+    summary: >
+      봇 진입 여지 확보를 위해 스윙 2전략 증거금을 축소하고, 수동 포지션 채널
+      트레일링을 "이익잠금 전용"으로 정정 — 손실구간에서 손절만 조여 휩쏘를
+      2배로 늘리던 로직 제거. 레포 스크래치 정리 동반.
+    items:
+      - "chore(swing): 사이징 축소 — 투매반등 default_size 0.75→0.50(증거금 15%→10%), 돌파 0.50→0.35(10%→7%). 계좌 총 증거금 86.9%(수동 재량 8개가 77% 점유)로 가용 $24 까지 축소돼 봇 신규진입 여지가 없던 상태. 기존 포지션 무영향."
+      - "fix(monitor): 채널 트레일링 이익잠금 전용 — 트레일업을 4조건(채널선 ≥ 진입가+0.2% 수수료 / > 현재 SL / > 지난 알림 / < 현재가−0.3%)으로 강화. 옛 로직은 채널선>SL 이기만 하면 '손절 올려' → 채널선이 진입가 아래여도 손절만 조여 휩쏘 2배·털리면 여전히 손실(실사례: ETH 하락 중 알림 — 옛 폭락 저점이 Donchian10 창에서 만료돼 채널선만 상승)."
+      - "fix(monitor): 시장가-위 SL 가드 신규 — 4h 마감 사이 급락 시 채널선이 현재가 위로 올라오면 SL 을 시장가 위에 거는 셈이라 즉시 체결·거래소 거절. 조건 (4) 로 차단."
+      - "chore(repo): scripts/_*.py(임시 리서치 53개)·자동리포트 gitignore + live-ppp-scalping-v1 status candidate→rejected(충실 1m bench PF 0.07~0.57·기대값 −0.20%·MDD −100% 비용벽)."
+    refs:
+      - "scripts/channel_trail_monitor.py"
+      - "configs/orchestrator/swing_mainnet.yaml"
+
   - version: "v0.6.113"
     date: "2026-07-16"
     title: "돌파 전략 라이브 진입 부활 (2버그 fix) + 수동 포지션 채널 트레일 감시"

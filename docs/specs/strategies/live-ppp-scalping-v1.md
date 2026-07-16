@@ -2,7 +2,7 @@
 type: strategy
 id: live-ppp-scalping-v1
 name: Live PPP Scalping v1 (EMA 60/120/240 배열+지지 + QPP StochRSI 크로스, bidir)
-status: candidate
+status: rejected
 paradigm: live-scanner
 instruments:
 - BINANCE_USDT_PERP_UNIVERSE
@@ -28,7 +28,7 @@ take_profit_pct: 0.03
 trailing_stop_pct: null
 profit_factor_bt: 0.871
 expectancy_bt: -0.00143
-verdict_5y: "CANDIDATE — 검증 미완(1차 bench 는 강의에 비충실). 1차 bench(15m · stop1.5%/tp3% 등 큰 청산폭 · 1분봉 미세진입 미반영)에서 4조합 PF 0.70~0.87 로 FAIL 했으나, 이는 강의의 실제 방식(1분봉 진입 + 매우 짧은 구조기반 익절: 다음이평/볼린저/1분 반대크로스, ROI 30%≈가격 0.6%@50x)과 청산폭·타임프레임이 어긋난 **비충실 파라미터** 결과라 판정 보류. 충실한 재검증(1m 봉 + HTF 레짐 + 소폭 구조청산 + 소폭 % 그리드) 후 확정 예정. profit_factor_bt/expectancy_bt 는 1차(비충실) 수치."
+verdict_5y: "REJECTED (2026-07-03 충실 1m bench, scripts/bench_ppp_scalping_1m_faithful.py, BTC+ETH 5y): 전 청산변형 PF 0.07~0.57(opp_cross 0.07/338k거래), 거래당 기대값 −0.20%(=왕복 20bp 비용과 동일 → gross 엣지 0), MDD −100%(전소). 순수 인트라데이 비용벽 — 자주 칠수록 더 죽음(1m<15m 0.70~0.87). 2주 페이퍼 승률 좋아보인 건 1개월 착시. 라이브·전략화 금지. [원 기록: CANDIDATE — 검증 미완(1차 bench 는 강의에 비충실). 1차 bench(15m · stop1.5%/tp3% 등 큰 청산폭 · 1분봉 미세진입 미반영)에서 4조합 PF 0.70~0.87 로 FAIL 했으나, 이는 강의의 실제 방식(1분봉 진입 + 매우 짧은 구조기반 익절: 다음이평/볼린저/1분 반대크로스, ROI 30%≈가격 0.6%@50x)과 청산폭·타임프레임이 어긋난 **비충실 파라미터** 결과라 판정 보류. 충실한 재검증(1m 봉 + HTF 레짐 + 소폭 구조청산 + 소폭 % 그리드) 후 확정 예정. profit_factor_bt/expectancy_bt 는 1차(비충실) 수치."
 verdict_1y: null
 summary_ko: |
   외부 유튜브 강의 "PPP 스캘핑 매매법"(1P/2P/3P)을 공개 표준 기술적지표로 독립

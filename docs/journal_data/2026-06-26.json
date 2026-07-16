@@ -1,7 +1,7 @@
 {
   "date_kst": "2026-06-26",
   "kst_window_start": "2026-06-26T00:00:00+09:00",
-  "now_kst": "2026-06-28T22:39:23.939234+09:00",
+  "now_kst": "2026-06-27T14:50:52.707448+09:00",
   "counts": {
     "auto_fills": 234,
     "auto_signals": 11414,
@@ -95558,7 +95558,7 @@
     "fetched_at": null,
     "pin_date": "",
     "top10": [],
-    "note": "Backfill at 2026-06-28T22:39:18.034491+09:00 — historical snapshot for 2026-06-26 23:50 KST was not captured. Routine 가 'today TOP10' 으로 쓰면 부정확할 수 있음. auto_fills + auto_signals 를 primary source 로 활용."
+    "note": "Backfill at 2026-06-27T14:50:48.091866+09:00 — historical snapshot for 2026-06-26 23:50 KST was not captured. Routine 가 'today TOP10' 으로 쓰면 부정확할 수 있음. auto_fills + auto_signals 를 primary source 로 활용."
   },
   "account_reconciliation": {
     "ok": true,
@@ -95566,15 +95566,15 @@
     "open_balance": 255.04701943,
     "close_balance": 266.00586255,
     "balance_delta": 10.958843120000012,
-    "trade_flow": 10.665909260000001,
-    "fees": -5.42527386,
+    "trade_flow": 10.6611243,
+    "fees": -5.43005882,
     "transfers_deposits": 0,
     "business_types": {
-      "sell": 120,
+      "sell": 121,
       "buy": 112,
       "contract_settle_fee": 1
     },
-    "n_bills": 233,
+    "n_bills": 234,
     "no_external_flow": true
   },
   "auto_pnl_ledger": {
@@ -95929,7 +95929,7 @@
   },
   "_backfill_meta": {
     "generated_by": "scripts/export_journal_for_date.py",
-    "generated_at_kst": "2026-06-28T22:39:23.939240+09:00",
+    "generated_at_kst": "2026-06-27T14:50:52.707454+09:00",
     "utc_window": [
       "2026-06-25T15:00:00+00:00",
       "2026-06-26T15:00:00+00:00"
@@ -95977,15 +95977,11 @@
       "D:\\project\\quantum-trader-agent\\logs\\shadow-bitget\\20260625T135452Z\\wal.jsonl",
       "D:\\project\\quantum-trader-agent\\logs\\shadow-bitget\\20260625T143130Z\\wal.jsonl",
       "D:\\project\\quantum-trader-agent\\logs\\shadow-bitget\\20260626T071103Z\\wal.jsonl",
-      "D:\\project\\quantum-trader-agent\\logs\\shadow-bitget\\20260626T071144Z\\wal.jsonl",
-      "D:\\project\\quantum-trader-agent\\logs\\shadow-bitget\\20260627T055622Z\\wal.jsonl",
-      "D:\\project\\quantum-trader-agent\\logs\\shadow-bitget\\20260627T061528Z\\wal.jsonl",
-      "D:\\project\\quantum-trader-agent\\logs\\shadow-bitget\\20260628T133519Z\\wal.jsonl",
-      "D:\\project\\quantum-trader-agent\\logs\\shadow-bitget\\20260628T133810Z\\wal.jsonl"
+      "D:\\project\\quantum-trader-agent\\logs\\shadow-bitget\\20260626T071144Z\\wal.jsonl"
     ],
     "docker_error": null,
     "airborne_source": "airborne_fire_store(history.jsonl)",
-    "airborne_store_count": 3677,
+    "airborne_store_count": 3520,
     "airborne_store_earliest": "2026-05-23T17:00:33+00:00",
     "airborne_docker_backfilled": 0
   }

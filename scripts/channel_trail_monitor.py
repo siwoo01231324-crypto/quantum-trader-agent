@@ -19,7 +19,10 @@
   - Bitget 실계좌 오픈 포지션(WATCH_SYMBOLS 중 롱) + 각 포지션에 걸린 실제 SL(plan
     order pos_loss)을 읽는다.
   - 4h 공개 캔들로 Donchian10 하단(= 트레일링 손절 레벨)을 계산.
-  - 트레일업(🟢): 채널선 > 현재 걸린 SL 이면 "손절을 채널선으로 올려라" 알림(위로만).
+  - 트레일업(🟢, **이익잠금 전용**): 채널선이 **진입가+수수료(0.2%) 위**로 올라왔고,
+    기존 SL 보다 위이며, 현재가보다 0.3% 이상 아래일 때만 "손절 올려" 알림.
+    → SL 이동은 항상 본전 이상을 잠근다. 채널선이 아직 진입가 아래면 **알림 안 함**
+    (초기 2ATR 손절 유지 — 손실구간에서 손절만 조이면 휩쏘 확률만 2배).
   - SL 안전망(🔴): 직전 마감 4h 종가가 채널 아래인데 포지션이 아직 열려있으면
     (= 터치 SL 미체결 의심) 즉시확인 경보.
   - 알림 dedup: logs/channel_trail_state.json 에 마지막 알림 채널/청산봉 기록.
@@ -55,6 +58,18 @@ log = logging.getLogger("channel_trail")
 EXIT_LOOKBACK = 10          # Donchian 하단 lookback (전략 exit_lookback 과 동일)
 BOUNDARY_OFFSET_SEC = 120   # 4h 마감 후 캔들 확정 대기 여유
 _EPS = 0.001                # 트레일업 최소 상향폭 (0.1%) — 미세변동 스팸 차단
+
+# ── 이익잠금 전용 트레일링 (2026-07-16, 사용자 정정) ──────────────────────────
+# 이전 로직은 채널선이 SL 위이기만 하면 무조건 "SL 올려" 알림 → 채널선이 아직
+# **진입가 아래**여도 손절선만 조여서(예: −3.4% → −2.3%) 휩쏘 확률만 2배 되고
+# 털리면 여전히 손실이었다. 사용자 의도는 "가격이 진입가 위로 충분히 올랐을 때
+# 이익을 확정하려고 SL 을 올리는 것" → SL 이동은 **항상 본전 이상을 잠글 때만**.
+#   · 채널선 < 진입가+수수료  → 알림 안 함 (초기 2ATR 손절 그대로, 휩쏘 회피)
+#   · 채널선 ≥ 진입가+수수료  → 그때부터 트레일업 (올리는 순간 최소 본전 확정)
+_FEE_BUFFER_PCT = 0.002     # 왕복 수수료+슬리피지 여유 (0.2%) — 이 위여야 실이익
+# 채널선이 현재가에 너무 붙거나 위면 SL 을 시장가 위/근처에 거는 셈 → 즉시 체결
+# ·거래소 거절. 최소 이 정도는 현재가 아래여야 트레일업 알림.
+_MIN_SL_GAP_PCT = 0.003     # 0.3%
 _DEFAULT_SYMBOLS = ["ETHUSDT", "ZECUSDT", "XRPUSDT", "LINKUSDT", "FILUSDT", "INJUSDT"]
 _STATE_PATH = _ROOT / "logs" / "channel_trail_state.json"
 _BASE = "https://api.bitget.com"
@@ -246,17 +261,25 @@ def run_check(symbols: list[str], *, dry_run: bool = False) -> list[str]:
             )
             continue
 
-        # ② 트레일업 — 채널선이 현재 걸린 SL 위 & 지난 알림보다 유의미하게 상승
+        # ② 트레일업 — **이익잠금 전용**. 아래 4조건 모두 만족해야 알림.
         if cur_sl is None:
             continue
+        entry = float(pos["entry"])
+        lock_floor = entry * (1 + _FEE_BUFFER_PCT)   # 이 위여야 올려도 실이익 확정
         last_alert = float(st.get("alerted_channel", 0) or 0)
-        if channel_now > cur_sl * (1 + _EPS) and channel_now > last_alert * (1 + _EPS):
+        last_price = float(candles[-1][4])           # 형성봉 현재가
+        if (
+            channel_now >= lock_floor                       # (1) 본전+수수료 위 = 이익 잠금
+            and channel_now > cur_sl * (1 + _EPS)           # (2) 기존 SL 보다 위 (래칫)
+            and channel_now > last_alert * (1 + _EPS)       # (3) 지난 알림 대비 유의미 상승(스팸 차단)
+            and channel_now < last_price * (1 - _MIN_SL_GAP_PCT)  # (4) 현재가보다 충분히 아래
+        ):
             st["alerted_channel"] = channel_now
-            gain = (channel_now / pos["entry"] - 1) * 100
+            gain = (channel_now / entry - 1) * 100
             alerts.append(
-                f"🟢 *{sym} 손절 올려* — 채널선 상승. 현재 SL {cur_sl:.5g} → "
-                f"*{channel_now:.5g}* 로 상향(진입 {pos['entry']:.5g} 대비 "
-                f"{gain:+.1f}%). 이익 잠금 트레일링."
+                f"🟢 *{sym} 손절 올려(이익확정)* — SL {cur_sl:.5g} → *{channel_now:.5g}* "
+                f"(진입 {entry:.5g} 대비 {gain:+.1f}% → 여기서 털려도 **이익**). "
+                f"현재가 {last_price:.5g}."
             )
 
     if alerts and not dry_run:
