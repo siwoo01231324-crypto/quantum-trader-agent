@@ -35,14 +35,16 @@ strategies:
   # 투매반등 — SL=꼬리저점, TP=2R (진입시 확정 동적값 → 거래소 라인). 채널청산 없음.
   - id: live-capitulation-bounce
     class: backtest.strategies.live_capitulation_bounce.LiveCapitulationBounce
-    # 레버리지 5x. default_size 0.75(명목75%~$142) + 5x → 증거금 15%(~$28)/포지션.
+    # 레버리지 5x. default_size 0.50(명목50%~$93) + 5x → 증거금 10%(~$19)/포지션.
+    # 2026-07-16: 0.75→0.50 축소 — 총 증거금이 캡(95%) 근접(86.9%)해 신규진입이
+    # 막히던 문제. 수동 재량 포지션 8개가 계좌 77% 점유 중이라 봇 몫 확보 필요.
     # 2026-07-14: 수익 상향 — 명목을 키워 P&L 1.5배(±둘다). 레버는 5x 유지(청산 ~−20%
     # 버퍼 그대로 — 10x 는 청산 버퍼 절반이라 급락매수 전략에 위험, 명목 같으면 수익 동일).
     # 07-01~13 실적: 투매반등 PF 1.68·10/4승(단 14건 표본 얇음)이라 2배(1.0)는 보류.
     # 총노출은 max_total_margin_pct 0.95 캡 + 실측 동시진입 ~3개(신호제한)라 여유.
     leverage: 5
     kwargs:
-      default_size: 0.75          # 명목75%(~$142) + leverage5x → 증거금~$28(15%). 저빈도라 동시노출 낮음
+      default_size: 0.50          # 명목50%(~$93) + leverage5x → 증거금~$19(10%). 2026-07-16 축소(0.75→0.50)
       n_dev: 2.5
       wick_mult: 1.5
       vol_mult: 2.0
@@ -54,14 +56,15 @@ strategies:
   # 돌파 — SL=2ATR(거래소 backstop), 주청산=채널(봇 감시, SWING_CHANNEL_SWEEP).
   - id: live-donchian-breakout-btcgate
     class: backtest.strategies.live_donchian_breakout_btcgate.LiveDonchianBreakoutBtcGate
-    # 레버리지 5x. 2026-07-15: 사용자 요청 증거금 3%→10% 상향 (0.15→0.50, 명목50%).
+    # 레버리지 5x. 2026-07-16: 0.50→0.35 축소 → 증거금 7%(~$13)/포지션.
+    # (07-15 에 0.15→0.50 으로 올렸으나 총 증거금 캡 근접으로 재조정.)
     # ⚠️ 돌파는 불장에 동시다발(top-30 중 8~10개)이라 증거금 10%면 클러스터가 캡을
     # 즉시 소진: 8~10개×10% = 80~100% → max_total_margin_pct 0.95 에서 ~9개만 체결,
     # 나머지+투매반등 신규진입 차단(강제청산 없음). 불장 상관 롱 대량노출 = 반전 시
     # 동시 SL 위험 상승(이게 원래 소액유지 이유). 캡이 blowup 은 방어. 리스크 수용 전제.
     leverage: 5
     kwargs:
-      default_size: 0.50          # 명목50%(~$95) + leverage5x → 증거금~$19(10%). 클러스터 캡 주의
+      default_size: 0.35          # 명목35%(~$65) + leverage5x → 증거금~$13(7%). 2026-07-16 축소(0.50→0.35)
       breakout_lookback: 20
       exit_lookback: 10
       stop_atr_mult: 2.0
