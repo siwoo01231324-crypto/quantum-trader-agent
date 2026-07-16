@@ -246,7 +246,15 @@ services:
   # cron_loop.sh 패턴 차용 (bash sleep loop). 평일 KST FETCH_HOUR_KST 에 cron_fetch_kis_daily.py
   # 실행 + 매 결과 Telegram, WEEKLY_DOW 요일에 kis_lake_monitor.py 로 누적 진척도 Telegram 발송.
   # 90거래일 누적 시 #153 (KIS 가설 본판정) 트리거 가능.
+  # ⏸ 2026-07-16 비활성 (KIS 전면 정리) — 운영이 크립토(Bitget/Binance)로 이전해
+  # KIS 1분봉 수집이 더 이상 소비되지 않는다(#153 본판정 미진행). `profiles` 로
+  # 게이트해 기본 `docker compose up -d` 에선 뜨지 않음. 되살리려면:
+  #   docker compose -f docker-compose.live.yml --profile kis up -d kis-1m-fetch-cron
+  # 라이브의 KIS *잔고 폴링* 도 함께 중단 — `QTA_KIS_ENABLED=1` 로만 재활성
+  # (src/dashboard/account_info.py `_kis_enabled`). EGW00201 로그 폭주(하루 6700+)가
+  # 진짜 에러를 묻던 문제 해소.
   kis-1m-fetch-cron:
+    profiles: ["kis"]
     build:
       context: .
       dockerfile: Dockerfile
