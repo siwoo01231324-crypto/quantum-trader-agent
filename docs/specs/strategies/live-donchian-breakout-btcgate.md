@@ -50,7 +50,7 @@ tags:
 
 # Live Donchian Breakout + BTC Regime Gate — 돌파 추세추종 롱 (4h 스윙)
 
-> 리서치 종결: `docs/work/active/swing-strategy-research-handoff.draft.md` (재개 #3~#5).
+> 리서치 종결: `docs/work/active/swing-strategy-research-handoff.md` (재개 #3~#5).
 > 짝 전략(평균회귀): [[live-capitulation-bounce]]. 메모리: `project_capitulation_bounce_edge_pass`.
 
 ## 동기
@@ -155,7 +155,7 @@ symbol-major 분리 검토" 로 플래그. KIS 경로 + orchestrator 미주입 f
    또는 collision-safe universe. env-guard default-off + sweep_timeouts 회귀박제.
 3. testnet 검증 → 활성화.
 
-**유니버스/사이징 확정(2026-06-30, `swing-strategy-research-handoff.draft.md`)**: 돌파=동적 top-N broad
+**유니버스/사이징 확정(2026-06-30, `swing-strategy-research-handoff.md`)**: 돌파=동적 top-N broad
 (EMA200+BTC게이트 생존편향 면역) / 투매반등=유동성 메이저 고정(falling knife 회피). 공통 제외
 토큰화주식·스테이블·레버토큰·신규<60일·저유동. 전략별 사이징 버킷 분리(공유 basket MDD↑). A: 둘 다
 cost wall 통과(net 10bp 투매+1.95%/돌파+1.06%). D: 페어 CAGR30%/MDD46%(→majors+버킷분리로 제어).

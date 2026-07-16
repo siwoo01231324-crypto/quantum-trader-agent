@@ -122,7 +122,7 @@ schtasks /Delete /TN "QTA-Screener-Fetch" /F
 | 누적 dates 가 동일 날짜 덮어쓰기 | fetch_today_1m 가 partition 덮어씀 | (현재 설계 한계) 같은 날 여러 번 실행해도 마지막 결과만 보존 |
 
 ## 출처
-- 옵션 A 결과: `03_pilot_report_2026-05-14.draft.md`
+- 옵션 A 결과: pilot 리포트 (이슈 #230 종결로 정리됨 — git 히스토리 참조)
 - Grid search: `scripts/grid_hts_cond.py` 출력 (≤10:30 + DTS = win 66.7%, +0.586%, 15 trades)
 - 검색식 캡처 3장: 사용자 제공 (2026-05-14, 이슈 #230)
 - KIS 분봉 API 당일 제한: #97 v5 검증

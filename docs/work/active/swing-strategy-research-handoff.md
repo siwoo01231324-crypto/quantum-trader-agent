@@ -1,6 +1,17 @@
+---
+type: work-done
+id: swing-strategy-research-handoff
+name: 인트라데이→스윙 전략 리서치 핸드오프 (2026-06-24)
+status: done
+owner: siwoo
+created: 2026-06-24
+---
+
 # 인트라데이→스윙 전략 리서치 핸드오프 (2026-06-24)
 
-> 다음 세션 재개용. `.draft.md` 라 invariant 검증 제외. 정식화 시 프론트매터 붙여 승격.
+> **리서치 종결 — 정식 승격(2026-07-16).** 결과물: `live-capitulation-bounce`(투매반등)
+> + `live-donchian-breakout-btcgate`(돌파) 2전략 라이브 가동. 두 전략 spec 이 본
+> 문서를 유니버스·사이징 확정 근거로 인용하므로 provenance 로 보존한다.
 
 ## 목표 (사용자 요청)
 "한 종목에 하루 몇 번씩 저~중 레버리지로 짧게 먹고 나오는, 안정적이지만 폭발적인 전략."

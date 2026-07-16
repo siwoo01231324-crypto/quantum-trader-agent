@@ -50,7 +50,7 @@ tags:
 
 # Live Capitulation Bounce — 투매반등 평균회귀 롱 (4h 스윙)
 
-> 리서치 종결 핸드오프: `docs/work/active/swing-strategy-research-handoff.draft.md` (재개 #1~#5).
+> 리서치 종결 핸드오프: `docs/work/active/swing-strategy-research-handoff.md` (재개 #1~#5).
 > 메모리: `project_capitulation_bounce_edge_pass`, `project_intraday_cost_wall`.
 
 ## 동기
@@ -153,7 +153,7 @@ symbol-major 분리 검토" 로 플래그. 투매반등은 채널청산 없음(�
    provider merge 를 symbol+interval-aware 로 수정(전략별 자기 interval 보장).
 2. testnet 검증 → 활성화. (채널청산 없어 sweep 배선 불요 — 고정 stop/TP override 로 라이브 fit 깨끗.)
 
-**유니버스/사이징 확정(2026-06-30, `swing-strategy-research-handoff.draft.md`)**: 돌파=동적 top-N broad
+**유니버스/사이징 확정(2026-06-30, `swing-strategy-research-handoff.md`)**: 돌파=동적 top-N broad
 (EMA200+BTC게이트 생존편향 면역) / 투매반등=유동성 메이저 고정(falling knife 회피). 공통 제외
 토큰화주식·스테이블·레버토큰·신규<60일·저유동. 전략별 사이징 버킷 분리(공유 basket MDD↑). A: 둘 다
 cost wall 통과(net 10bp 투매+1.95%/돌파+1.06%). D: 페어 CAGR30%/MDD46%(→majors+버킷분리로 제어).
