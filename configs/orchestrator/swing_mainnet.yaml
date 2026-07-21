@@ -92,20 +92,36 @@ strategies:
   # +2% SL 이 -12% TP 前 잘림(강한 추세하락 의존) ③ 헤지 미작동.
   # → 실거래 재개 선결: 강한 하락추세 or 클러스터링 수정(max_concurrent↓·SL완화).
   #    재개 시 아래 `observe_only` 만 제거(false)하면 즉시 실매매 복귀.
-  - id: live-macross-regime-v1
-    class: backtest.strategies.live_macross_regime_v1.LiveMacrossRegime
-    observe_only: true            # 👁 관찰 전용 — 신호 기록만, 실주문 0. 제거 시 실매매 복귀
-    leverage: 5
-    kwargs:
-      default_size: 0.25
-      allow_long: false
-      allow_short: true
-      kst_hour_gate: true
-      self_sma200_filter: true
-      overextension_max_pct: 0.10
-      stop_loss_pct: 0.02
-      take_profit_pct: 0.12
-      max_concurrent_positions: 8
+  #
+  # ❌ 2026-07-22 전면 제거(주석화) — **interval collision 사고**.
+  #   observe_only 는 주문만 막을 뿐 데이터 레이어는 못 막는다. 이 전략의
+  #   get_interval()="1h" + get_universe()=Bitget top-100 이 스윙(4h)보다 먼저
+  #   유니버스를 선점해, 스윙 4h 전략이 1h 봉을 먹고 돌았다.
+  #   경로: scripts/live_run.py `_bitget_provider` → `for interval in sorted(...)`
+  #         ("1h" < "4h") → `ohlcv.setdefault(sym, df)` = 먼저 온 쪽이 이김.
+  #         → src/live/snapshot_builder.py `ohlcv_history` → 진입(on_bar)·
+  #           청산(sweep_channel_exits) 양쪽 모두 1h 로 오염.
+  #   실측 피해(5y, risk1%/top_n8/lev1, top30):
+  #     cap4h+brk4h(설계)  PF 1.386 / 기대값 +1.044% / CAGR +34.9% / Sharpe 1.21
+  #     cap1h+brk1h(오염)  PF 1.005 / 기대값 +0.007% / CAGR  −3.0% / Sharpe 0.06
+  #   라이브 실현(거래소 ledger, 07-01~07-22 봇만): 64거래 PF 0.624 −$16.22.
+  #   혼합안(cap1h+brk4h)도 검증했으나 PF 1.265 / CAGR 28.9% 로 기존보다 열위.
+  #   재투입 선결: ohlcv_history 를 (symbol, interval) 로 분리해 전략이 자기
+  #   interval 데이터를 받게 하는 근본 수정. 그 전에는 절대 되살리지 말 것.
+  # - id: live-macross-regime-v1
+  #   class: backtest.strategies.live_macross_regime_v1.LiveMacrossRegime
+  #   observe_only: true          # 👁 관찰 전용 — 신호 기록만, 실주문 0
+  #   leverage: 5
+  #   kwargs:
+  #     default_size: 0.25
+  #     allow_long: false
+  #     allow_short: true
+  #     kst_hour_gate: true
+  #     self_sma200_filter: true
+  #     overextension_max_pct: 0.10
+  #     stop_loss_pct: 0.02
+  #     take_profit_pct: 0.12
+  #     max_concurrent_positions: 8
 
 capital_allocation:
   universe_scan_pct: 0.0
