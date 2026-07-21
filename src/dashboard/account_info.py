@@ -23,6 +23,22 @@ DEFAULT_BINANCE_BASE_URL_LIVE = "https://fapi.binance.com"
 _PNL_INCOME_TYPES = ("REALIZED_PNL", "COMMISSION", "FUNDING_FEE")
 
 
+def _kis_enabled() -> bool:
+    """KIS 잔고 조회 사용 여부. 기본 **비활성** (2026-07-16 — 운영 크립토 전환).
+
+    운영이 Bitget/Binance(크립토)로 이전한 뒤에도 이 provider 가 매 새로고침마다
+    KIS REST 를 때려 `EGW00201`(초당 거래건수 초과) 경고를 하루 수천 건씩(2026-07-16
+    기준 auth 3424 + rest 3345) 라이브 로그에 뿌렸다 — 크립토 거래엔 KIS 잔고가
+    전혀 안 쓰이는데도(USDT 사이징은 bitget/binance equity 사용). 로그 노이즈가
+    진짜 에러를 묻어 무의미.
+
+    KIS 모의계좌(kis-paper-shadow)로 주식을 돌릴 땐 `QTA_KIS_ENABLED=1` 로 켠다.
+    비활성 시 `fetch()` 의 kis 항목은 `{"ok": False, reason: "disabled"}` — 기존
+    per-broker fallback 경로가 그대로 처리(대시보드 KIS 카드만 '미사용' 표시).
+    """
+    return os.environ.get("QTA_KIS_ENABLED", "0").strip().lower() in ("1", "true", "yes")
+
+
 def aggregate_income_pnl(incomes: list, today_start_ms: int) -> tuple[float, float]:
     """`/fapi/v1/income` 레코드 → (일간 NET, 월간 NET).
 
@@ -145,8 +161,13 @@ class AccountInfoProvider:
             # Per-broker fallback (#231) — 한쪽 거래소 fetch 실패 시 이전
             # cache 의 그 거래소 응답을 재사용. ok=False 로 덮어쓰던 패턴 →
             # "잠깐 정보 → 조회중↔에러" 깜박임 방지.
-            kis = self._safe(self._fetch_kis, "KIS")
-            if not kis.get("ok") and prev_cache is not None:
+            # KIS 는 기본 비활성 (`_kis_enabled` 참조) — 크립토 운영에선 미사용인데
+            # 폴링만 돌아 EGW00201 로그 폭주. 켜려면 QTA_KIS_ENABLED=1.
+            kis = (
+                self._safe(self._fetch_kis, "KIS") if _kis_enabled()
+                else {"ok": False, "reason": "KIS disabled (QTA_KIS_ENABLED=0)"}
+            )
+            if _kis_enabled() and not kis.get("ok") and prev_cache is not None:
                 prev_kis = prev_cache.get("kis", {})
                 if prev_kis.get("ok"):
                     logger.debug("KIS fetch failed — reusing previous cache value")

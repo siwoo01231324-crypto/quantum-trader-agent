@@ -8800,7 +8800,9 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
         # 봇/주문 무관 — /manual 과 동일 소스, 유령/오염 위험 0. 실패해도 페이지 정상.
         try:
             import json as _mtjson  # noqa: PLC0415 — app.py 는 json 모듈레벨 미import
-            _mt = Path("logs/manual_trade.jsonl")
+            # repo_root 기준 — 하드코딩 상대경로는 CWD 의존 + 테스트가 _swing_repo_root
+            # 를 tmp 로 격리해도 실 레포 파일을 읽어 오염시킨다(2026-07-16 회귀 fix).
+            _mt = repo_root / "logs" / "manual_trade.jsonl"
             if _mt.exists() and isinstance(agg.get("trades"), list):
                 _man: dict[str, dict] = {}
                 for _ln in _mt.read_text(encoding="utf-8").splitlines():
@@ -8817,6 +8819,18 @@ def create_app(state: DashboardState | None = None) -> FastAPI:
                             and not _p.get("exit_price")
                             and str(_p.get("venue", "")).lower() == "bitget"
                             and "돌파" in str(_p.get("note", ""))):
+                        # 윈도우 귀속 — 라이브 미청산 포지션과 동일 의미론
+                        # (swing_live.aggregate: status=open 은 entry_ts < until 이면
+                        # '현재 보유'로 노출). 이 필터가 없으면 window=yesterday 에도
+                        # 오늘 수동진입이 뜬다(2026-07-16 회귀 fix).
+                        try:
+                            _ets = datetime.fromisoformat(str(_e.get("ts")))
+                            if _ets.tzinfo is None:
+                                _ets = _ets.replace(tzinfo=timezone.utc)
+                            if _ets >= until_utc:
+                                continue
+                        except (TypeError, ValueError):
+                            continue
                         _man[str(_p.get("symbol"))] = {
                             "entry_ts": _e.get("ts"), "exit_ts": None,
                             "symbol": _p.get("symbol"),
