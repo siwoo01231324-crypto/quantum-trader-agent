@@ -405,6 +405,23 @@ class TestCsTsmomPageHtml:
         assert "전체 진단" in html
         assert "renderFullTable" in html
 
+    def test_page_renders_hold_since_column(self):
+        """보유 시작일 컬럼 + 카드 줄 + 헬퍼가 페이지에 배선돼 있어야 한다."""
+        from src.dashboard.app import _render_cs_tsmom_page
+        html = _render_cs_tsmom_page()
+        assert "보유 시작" in html          # 테이블 헤더
+        assert "보유 수익" in html
+        assert "fmtHoldSince" in html      # JS 헬퍼
+        assert "fmtHoldRet" in html
+        assert "top-card-hold" in html     # 카드 하단 줄 CSS/마크업
+        assert "hold_since" in html        # 필드 참조
+
+    def test_page_warns_hold_is_signal_not_fill(self):
+        """신호 기준일 뿐 체결일이 아니라는 경고가 노트에 있어야 한다 (오해 방지)."""
+        from src.dashboard.app import _render_cs_tsmom_page
+        html = _render_cs_tsmom_page()
+        assert "체결일이 아니다" in html
+
     def test_page_has_pin_badge_and_refresh_button(self):
         from src.dashboard.app import _render_cs_tsmom_page
         html = _render_cs_tsmom_page()
@@ -459,3 +476,92 @@ class TestCsTsmomComputerCache:
         # Could be available=False with the math error, OR fetch may fail upstream
         # (no network in CI). Either way contract: never raises.
         assert isinstance(result.available, bool)
+
+
+class TestHoldSince:
+    """보유 시작일 역추적 (2026-09-28) — top-N 연속 편입 streak 의 첫 bar.
+
+    페이지가 오늘/어제 2-bar 만 보던 구조라 "언제부터 들고 있었나" 를 알 수 없던
+    문제. 같은 score/랭킹 식으로 과거 bar 를 뒤로 걸어가며 연속 in_top 구간의
+    시작을 찾는다. 추가 fetch 없음 (이미 받은 패널 재사용).
+    """
+
+    @staticmethod
+    def _ramp_panel(n: int = 300):
+        """AAA 계속 상승 / BBB 후반부만 상승 / CCC 하락 → streak 길이가 서로 다름."""
+        idx = pd.date_range("2024-01-01", periods=n, freq="D")
+        closes = pd.DataFrame(index=idx, columns=["AAA", "BBB", "CCC"], dtype=float)
+        for i in range(n):
+            closes.iloc[i] = [
+                100 + i * 0.5,                       # 전 구간 상승
+                100 if i < n - 40 else 100 + (i - (n - 40)) * 3.0,  # 후반 급등
+                100 - i * 0.2,                       # 하락
+            ]
+        qv = pd.DataFrame(2e7, index=idx, columns=closes.columns)
+        return closes, qv
+
+    def test_holders_get_hold_since_and_days(self):
+        closes, qv = self._ramp_panel()
+        rows = compute_signals_from_panels(closes, qv, top_n=2)
+        by = {r["symbol"]: r for r in rows}
+        aaa = by["AAA"]
+        assert aaa["in_top_today"] is True
+        assert aaa["hold_since"] is not None
+        assert aaa["hold_bars"] >= 1
+        assert aaa["hold_days"] >= 0
+        # hold_since 는 패널 인덱스에 실제로 존재하는 날짜여야 한다.
+        assert pd.Timestamp(aaa["hold_since"]).normalize() in closes.index.normalize()
+
+    def test_non_holders_have_null_hold_fields(self):
+        closes, qv = self._ramp_panel()
+        rows = compute_signals_from_panels(closes, qv, top_n=2)
+        ccc = {r["symbol"]: r for r in rows}["CCC"]
+        assert ccc["in_top_today"] is False
+        assert ccc["hold_since"] is None
+        assert ccc["hold_bars"] is None
+        assert ccc["hold_days"] is None
+
+    def test_enter_today_holds_one_bar(self):
+        """오늘 막 진입(ENTER)한 종목의 streak 은 정확히 1 bar = 오늘."""
+        closes, qv = self._ramp_panel()
+        rows = compute_signals_from_panels(closes, qv, top_n=2)
+        enters = [r for r in rows if r["signal"] == "ENTER"]
+        for r in enters:
+            assert r["hold_bars"] == 1
+            assert r["hold_since"] == str(closes.index[-1].date())
+            assert r["hold_days"] == 0
+
+    def test_longer_streak_beats_shorter(self):
+        """전 구간 상승한 AAA 의 streak 이 후반 급등한 BBB 보다 길어야 한다."""
+        closes, qv = self._ramp_panel()
+        rows = compute_signals_from_panels(closes, qv, top_n=2)
+        by = {r["symbol"]: r for r in rows}
+        assert by["AAA"]["in_top_today"] and by["BBB"]["in_top_today"]
+        assert by["AAA"]["hold_bars"] > by["BBB"]["hold_bars"]
+
+    def test_hold_return_pct_matches_closes(self):
+        closes, qv = self._ramp_panel()
+        rows = compute_signals_from_panels(closes, qv, top_n=2)
+        aaa = {r["symbol"]: r for r in rows}["AAA"]
+        start = pd.Timestamp(aaa["hold_since"])
+        px0 = float(closes.loc[closes.index.normalize() == start.normalize(), "AAA"].iloc[0])
+        px1 = float(closes.iloc[-1]["AAA"])
+        assert aaa["hold_close"] == pytest.approx(px0)
+        assert aaa["hold_ret_pct"] == pytest.approx((px1 / px0 - 1) * 100, abs=1e-9)
+
+    def test_streak_truncated_flag_when_walk_hits_panel_start(self):
+        """warmup 직후부터 계속 top 이면 진짜 시작일을 모른다 → truncated=True."""
+        # 패널을 짧게 (warmup + 3 bar) → 뒤로 걸어갈 여유가 거의 없음
+        closes, qv = self._ramp_panel(n=DEFAULT_LONG_LB + 3)
+        rows = compute_signals_from_panels(closes, qv, top_n=2)
+        aaa = {r["symbol"]: r for r in rows}["AAA"]
+        assert aaa["in_top_today"] is True
+        assert aaa["hold_truncated"] is True
+
+    def test_no_extra_fetch_pure_function(self):
+        """패널만 받아 계산 — 네트워크/디스크 접근 없이 순수 계산이어야 한다."""
+        closes, qv = self._ramp_panel()
+        before = closes.copy(), qv.copy()
+        compute_signals_from_panels(closes, qv, top_n=2)
+        pd.testing.assert_frame_equal(closes, before[0])   # 입력 불변
+        pd.testing.assert_frame_equal(qv, before[1])

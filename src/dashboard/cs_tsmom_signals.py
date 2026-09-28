@@ -14,6 +14,12 @@ Pine Script (cs-tsmom-crypto-daily 12-1m TS-Momentum) 와 *동일* score 정의�
   top_n    = eligible 중 score 상위 10
   signal   = today.in_top vs yesterday.in_top → ENTER / EXIT / HOLD / OUT
 
+보유 종목에는 "언제부터 들고 있나" (``hold_since`` / ``hold_bars`` /
+``hold_days`` / ``hold_ret_pct``) 를 함께 낸다 — 같은 랭킹 식으로 과거 bar 를
+뒤로 걸어가며 *연속* in_top 구간의 첫 bar 를 찾는 것. 추가 fetch 없음 (이미
+받은 패널 재사용). 주의: 이건 **신호 기준** 보유 시작이지 broker 체결일이
+아니다 (live 는 rebal_freq 주기라 실제 체결은 며칠 늦을 수 있음).
+
 production 의 ``backtest.strategies.cs_tsmom_kr_daily.score_panel`` 과 비트단위
 동일한 식 (crypto 버전이 그 함수를 재export 함). 백테스트와 대시보드/TV 가 모두
 같은 수식 → 디버깅·검증 일관성 보장.
@@ -42,6 +48,7 @@ DEFAULT_MIN_QUOTE_VOL = 10_000_000   # 1천만 USDT
 DEFAULT_LIQUIDITY_WIN = 60            # rolling-60d 평균 quote_vol
 
 _CACHE_TTL_SEC = 3600                 # 1시간 — score 는 일봉 close 마다만 바뀜
+MAX_HOLD_LOOKBACK = 400               # streak 역추적 최대 bar (비용 상한)
 
 
 def compute_signals_from_panels(
@@ -59,7 +66,10 @@ def compute_signals_from_panels(
     Returns (sorted by score desc — 양수만, 음수는 score asc 로 뒤에):
         [
           {symbol, last_close, last_ts, score, rank, in_top_today, in_top_yday,
-           liquid, signal: "ENTER"|"EXIT"|"HOLD"|"OUT"},
+           liquid, signal: "ENTER"|"EXIT"|"HOLD"|"OUT",
+           # 아래 4+1 필드는 in_top_today 인 종목만 채워지고 나머지는 None
+           hold_since, hold_bars, hold_days, hold_close, hold_ret_pct,
+           hold_truncated},
           ...
         ]
     """
@@ -86,6 +96,26 @@ def compute_signals_from_panels(
     in_top_yday, _, _ = _rank_row(i_today - 1)
     last_ts = closes.index[i_today]
     last_close = closes.iloc[i_today]
+
+    # ── 보유 시작일 역추적 ────────────────────────────────────────────────
+    # 오늘 in_top 인 종목만 대상으로, 연속 in_top 이 끊기는 지점까지 과거로
+    # 걸어간다. _rank_row 는 30컬럼 벡터연산이라 bar 당 비용이 미미하고, 아직
+    # 살아있는 holder 가 없으면 즉시 중단하므로 보통 수십 bar 만 돈다.
+    holders = [s for s in closes.columns if bool(in_top_today.get(s, False))]
+    streak_start: dict[Any, int] = {s: i_today for s in holders}
+    i_floor = max(long_lb, i_today - MAX_HOLD_LOOKBACK)   # 패널/비용 하한
+    active = set(holders)
+    j = i_today - 1
+    while active and j >= i_floor:
+        in_top_j, _, _ = _rank_row(j)
+        for sym in list(active):
+            if bool(in_top_j.get(sym, False)):
+                streak_start[sym] = j
+            else:
+                active.discard(sym)   # streak 종료 — 더 볼 필요 없음
+        j -= 1
+    # 루프가 하한에 막혀 끝난 종목 = 진짜 시작일을 모름 (패널이 더 필요)
+    truncated = set(active)
 
     # rank: score 양수 중 순위 (1 = 최고), 음수/NaN 은 None
     ranks = score_today.where(score_today > 0).rank(ascending=False, method="min")
@@ -129,6 +159,29 @@ def compute_signals_from_panels(
             reason = "out_of_top_n"   # score>0 인데 top-N 컷오프 밖
         else:
             reason = "ok"
+        # 보유 종목만 streak 필드 (미보유는 None — UI 에서 '—' 표기)
+        hold_i = streak_start.get(sym)
+        if hold_i is None:
+            hold_since = hold_bars = hold_days = hold_close = hold_ret = None
+            hold_trunc = False
+        else:
+            hold_ts = closes.index[hold_i]
+            hold_since = (hold_ts.date().isoformat()
+                          if hasattr(hold_ts, "date") else str(hold_ts))
+            hold_bars = i_today - hold_i + 1
+            try:
+                hold_days = int(
+                    (pd.Timestamp(last_ts).normalize()
+                     - pd.Timestamp(hold_ts).normalize()).days
+                )
+            except Exception:  # noqa: BLE001 — 비-datetime 인덱스 방어
+                hold_days = hold_bars - 1
+            hold_close = _safe_float(closes.iloc[hold_i].get(sym))
+            hold_ret = (
+                (sym_close / hold_close - 1) * 100
+                if (hold_close and sym_close is not None) else None
+            )
+            hold_trunc = sym in truncated
         rows.append({
             "symbol": str(sym),
             "last_close": sym_close,
@@ -140,6 +193,12 @@ def compute_signals_from_panels(
             "liquid": sym_liquid,
             "signal": sig,
             "reason": reason,
+            "hold_since": hold_since,
+            "hold_bars": hold_bars,
+            "hold_days": hold_days,
+            "hold_close": hold_close,
+            "hold_ret_pct": hold_ret,
+            "hold_truncated": hold_trunc,
         })
     # 정렬: in_top 우선, 그 다음 score desc; nan/음수는 뒤로.
     rows.sort(key=lambda r: (

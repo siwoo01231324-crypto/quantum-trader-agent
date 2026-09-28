@@ -4121,6 +4121,12 @@ tbody tr:hover{background:#1c2229}
 .top-card-close{font-size:.75rem;color:var(--text3);font-family:var(--mono);
   font-variant-numeric:tabular-nums}
 .top-card-sig{margin-top:2px}
+/* 보유 시작일 (2026-09-28) — 카드 하단 한 줄 + 테이블 컬럼 */
+.top-card-hold{font-size:.68rem;color:var(--text3);font-family:var(--mono);
+  margin-top:3px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.hold-cell{font-family:var(--mono);font-size:.74rem;white-space:nowrap}
+.hold-since{color:var(--text2)}
+.hold-age{color:var(--text3)}
 .top-empty{padding:30px;text-align:center;color:var(--text3);background:var(--surface);
   border-radius:6px;border:1px solid var(--border);font-size:.85rem}
 .note{color:var(--text3);font-size:.72rem;margin-top:10px;font-family:var(--mono);line-height:1.55}
@@ -4166,6 +4172,23 @@ function fmtClose(v){
   if(v==null||isNaN(v)) return '—';
   return Number(v).toLocaleString('ko-KR',{maximumFractionDigits:6});
 }
+// 보유 시작일 — 연속 top-N 편입 streak 의 첫 bar (신호 기준, 체결일 아님).
+function fmtHoldSince(r){
+  if(!r.hold_since) return '—';
+  const d = r.hold_days;
+  const dayTxt = (d==null) ? '' : (d===0 ? ' <span class="hold-age">(오늘)</span>'
+                                         : ` <span class="hold-age">(${d}일)</span>`);
+  const warn = r.hold_truncated
+    ? ' <span class="illiq" title="패널 시작까지 계속 편입 — 실제 시작일은 더 이전일 수 있음">≥</span>'
+    : '';
+  return `<span class="hold-since">${esc(r.hold_since)}</span>${dayTxt}${warn}`;
+}
+function fmtHoldRet(v){
+  if(v==null||isNaN(v)) return '—';
+  const cls = v>0?'score-pos':(v<0?'score-neg':'');
+  const sign = v>0?'+':'';
+  return `<span class="${cls}">${sign}${Number(v).toFixed(1)}%</span>`;
+}
 const REASON_LABELS = {
   'ok':             {text:'✓ 정상',         cls:'reason-ok'},
   'no_data':        {text:'데이터 없음',     cls:'reason-no_data'},
@@ -4202,6 +4225,7 @@ function renderTopCards(rows){
       <div class="top-card-sym">${esc(sym)}</div>
       <div class="top-card-score ${scoreCls}">${esc(scorePct)}</div>
       <div class="top-card-close">$${esc(fmtClose(r.last_close))}</div>
+      <div class="top-card-hold">${r.hold_since ? `보유 ${fmtHoldSince(r)} · ${fmtHoldRet(r.hold_ret_pct)}` : ''}</div>
     </div>`;
   }
 
@@ -4229,6 +4253,8 @@ function renderFullTable(rows){
       <td class="sym-cell">${esc(r.symbol)}</td>
       <td class="td-num">${fmtPct(r.score)}</td>
       <td class="td-num">${esc(fmtClose(r.last_close))}</td>
+      <td class="hold-cell">${fmtHoldSince(r)}</td>
+      <td class="td-num">${fmtHoldRet(r.hold_ret_pct)}</td>
       <td><span class="sig-badge sig-${esc(sig)}">${esc(sig)}</span></td>
       <td>${liq}</td>
       <td>${fmtReason(r.reason)}</td>
@@ -4237,11 +4263,13 @@ function renderFullTable(rows){
   return `<div class="section-h2">🔍 전체 진단 — 30종 score 테이블 <span class="count">· 디버깅용</span></div>
   <table><thead><tr>
     <th>Rank</th><th>Symbol</th><th class="td-num">Score (12-1m)</th>
-    <th class="td-num">Last Close</th><th>Signal</th><th>Liq</th><th>사유</th>
+    <th class="td-num">Last Close</th><th>보유 시작</th><th class="td-num">보유 수익</th>
+    <th>Signal</th><th>Liq</th><th>사유</th>
   </tr></thead><tbody>${trs}</tbody></table>
   <div class="note">
     Signal: <b>ENTER</b> = 어제 top10 외 → 오늘 top10 진입 (BUY). <b>HOLD</b> = 어제·오늘 모두 top10. <b>EXIT</b> = 어제 top10 → 오늘 이탈. <b>OUT</b> = 비보유.<br>
     사유 — <b>워밍업</b>: 252d lookback 데이터 부족 (신규 listing 등). <b>데이터 없음</b>: fetch 실패 또는 캐시 비어있음 → 우상단 ↻ 버튼 클릭. <b>거래량 부족</b>: 60d 평균 거래대금 &lt; 1천만 USDT. <b>모멘텀 음수</b>: 12-1m score ≤ 0 → 후보 제외. <b>top10 밖</b>: score 양수지만 cutoff 밖.<br>
+    <b>보유 시작</b>: 연속으로 top-N 에 편입돼 있던 구간의 첫 일봉 — 같은 랭킹 식으로 과거를 역추적한 값이라 <b>신호 기준</b>이고 broker 체결일이 아니다 (live 는 rebal 주기만큼 늦을 수 있음). <b>보유 수익</b>도 그날 종가 기준 가정치이지 실현손익이 아니다. <b>≥</b> 표시는 패널 시작(또는 400 bar 상한)까지 계속 편입돼 실제 시작일이 더 이전일 수 있다는 뜻.<br>
     실거래 wiring 무관, 대시보드 서버가 매일 자체 fetch + 계산 (1h 캐시). production 전략과 동일 score 식 + 동일 universe → TV Pine Script (cs-tsmom-crypto-daily 12-1m) 와 정확히 같은 숫자.
   </div>`;
 }
